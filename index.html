@@ -933,7 +933,7 @@
             transform: translateY(-2px);
         }
         
-        /* Payment Section - UPDATED */
+        /* Payment Section */
         .payment-section {
             background-color: white;
             border-radius: 12px;
@@ -1045,6 +1045,75 @@
             border-left: 4px solid #4CAF50;
         }
         
+        /* Facebook Messenger Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            animation: slideUp 0.3s;
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        /* Floating Messenger Button */
+        .messenger-float-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #0084FF;
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 20px rgba(0,132,255,0.3);
+            font-size: 30px;
+            transition: transform 0.3s;
+            z-index: 1000;
+            cursor: pointer;
+        }
+        
+        .messenger-float-btn:hover {
+            transform: scale(1.1);
+        }
+        
+        .messenger-tooltip {
+            position: absolute;
+            bottom: 70px;
+            right: 0;
+            background: #FF9800;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            display: none;
+        }
+        
         /* Messages */
         .message {
             padding: 15px;
@@ -1114,6 +1183,11 @@
             .qr-code-image {
                 width: 200px;
                 height: 200px;
+            }
+            
+            .modal-content {
+                width: 95%;
+                padding: 20px;
             }
         }
     </style>
@@ -1446,7 +1520,7 @@
                         <span id="cartTotal">$0.00</span>
                     </div>
                     
-                    <!-- Payment Section - UPDATED with ABA Pay -->
+                    <!-- Payment Section -->
                     <div class="payment-section" id="paymentSection" style="display: none;">
                         <h3>💳 Payment Methods</h3>
                         <p style="margin-bottom: 20px; color: #666;">Choose your preferred payment method</p>
@@ -1500,8 +1574,17 @@
                                     <li>Point camera at the QR code above</li>
                                     <li>Verify amount and merchant details</li>
                                     <li>Enter your PIN to confirm payment</li>
-                                    <li>Take screenshot of payment confirmation</li>
+                                    <li><strong>Take screenshot</strong> of payment confirmation</li>
+                                    <li><strong>Send screenshot</strong> to our Facebook Page: <a href="https://facebook.com/Goatkids" target="_blank" style="color: #0084FF;">facebook.com/Goatkids</a></li>
                                 </ol>
+                                
+                                <div style="margin-top: 15px; padding: 10px; background: #E8F4FD; border-radius: 6px; border-left: 3px solid #0084FF;">
+                                    <strong>💬 Quick Send:</strong> 
+                                    <button onclick="openMessengerDirectly()" 
+                                            style="background: #0084FF; color: white; border: none; padding: 8px 15px; border-radius: 5px; margin-left: 10px; cursor: pointer; font-size: 14px;">
+                                        Open Messenger Now
+                                    </button>
+                                </div>
                             </div>
                             
                             <div style="margin-top: 20px; text-align: center;">
@@ -1579,7 +1662,21 @@
         <p style="margin-top: 5px; font-size: 10px; color: #ccc;">
             MID: 121082011261392 | Member of KHOR
         </p>
+        <p style="margin-top: 5px; font-size: 10px; color: #ccc;">
+            Facebook: <a href="https://facebook.com/Goatkids" target="_blank" style="color: #0084FF;">facebook.com/Goatkids</a>
+        </p>
     </footer>
+    
+    <!-- Floating Facebook Messenger Button -->
+    <a href="https://m.me/Goatkids" 
+       target="_blank"
+       class="messenger-float-btn"
+       id="messengerFloatBtn">
+        💬
+    </a>
+    <div class="messenger-tooltip" id="messengerTooltip">
+        Send payment screenshot
+    </div>
 
     <script>
         // ============================
@@ -1673,6 +1770,7 @@
         
         let currentMode = 'user'; // 'user' or 'dev'
         let selectedPaymentMethod = null;
+        let currentOrderId = 'GK-' + Math.floor(1000 + Math.random() * 9000);
         
         function setMode(mode) {
             currentMode = mode;
@@ -1711,10 +1809,168 @@
         }
         
         // ============================
-        // PAYMENT SYSTEM - UPDATED with ABA PAY
+        // FACEBOOK MESSENGER INTEGRATION
         // ============================
         
-        let currentOrderId = 'GK-' + Math.floor(1000 + Math.random() * 9000);
+        // Initialize floating button hover effect
+        function initMessengerButton() {
+            const messengerBtn = document.getElementById('messengerFloatBtn');
+            const tooltip = document.getElementById('messengerTooltip');
+            
+            if (messengerBtn && tooltip) {
+                messengerBtn.addEventListener('mouseenter', () => {
+                    tooltip.style.display = 'block';
+                });
+                messengerBtn.addEventListener('mouseleave', () => {
+                    tooltip.style.display = 'none';
+                });
+            }
+        }
+        
+        // Open Messenger directly
+        function openMessengerDirectly() {
+            const total = parseFloat(document.getElementById('cartTotal').textContent.replace('$', '')).toFixed(2);
+            const message = encodeURIComponent(
+                `Order ${currentOrderId} - ABA PAY Payment\nAmount: $${total}\nPlease find my payment screenshot attached.`
+            );
+            
+            window.open(`https://m.me/Goatkids?text=${message}`, '_blank');
+            showMessage('Opening Messenger... Please send your payment screenshot.', 'info');
+        }
+        
+        // MARK AS PAID with Facebook Messenger integration
+        function markAsPaid() {
+            const total = parseFloat(document.getElementById('cartTotal').textContent.replace('$', '')).toFixed(2);
+            
+            const confirmMessage = `Have you completed the ABA PAY payment?\n\nOrder ID: ${currentOrderId}\nAmount: $${total}\nMerchant: Goat Kids by S.UNG\nMID: 121082011261392\n\nPlease take screenshot and send to our Facebook Page.`;
+            
+            if (confirm(confirmMessage)) {
+                showFacebookMessengerModal();
+            }
+        }
+        
+        // Show Facebook Messenger Modal
+        function showFacebookMessengerModal() {
+            const total = parseFloat(document.getElementById('cartTotal').textContent.replace('$', '')).toFixed(2);
+            
+            const modalHTML = `
+                <div class="modal-overlay" id="facebookModal">
+                    <div class="modal-content">
+                        <div style="background: linear-gradient(135deg, #0084FF 0%, #0066CC 100%); color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                            <div style="font-size: 48px;">💬</div>
+                            <h3 style="margin: 10px 0;">Send to Facebook Messenger</h3>
+                            <p style="opacity: 0.9;">Goat Kids Official Page</p>
+                        </div>
+                        
+                        <div style="text-align: left; margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #FF9800;">
+                            <h4 style="color: #333; margin-bottom: 10px;">📋 Include in your message:</h4>
+                            <div style="background: white; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 14px; border: 1px solid #ddd;">
+                                Order ID: ${currentOrderId}<br>
+                                Amount: $${total}<br>
+                                Date: ${new Date().toLocaleDateString('en-US', { 
+                                    year: 'numeric', 
+                                    month: 'short', 
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                })}
+                            </div>
+                        </div>
+                        
+                        <div style="margin: 25px 0;">
+                            <a href="https://m.me/Goatkids" 
+                               target="_blank"
+                               onclick="completeOrderAfterFacebook()"
+                               style="background: #0084FF; color: white; padding: 16px 40px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block; margin-bottom: 15px; width: 100%; box-sizing: border-box;">
+                                📱 Open Messenger Now
+                            </a>
+                            <p style="color: #666; font-size: 14px;">Click to open Messenger and send your screenshot</p>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button onclick="copyFacebookMessage()" 
+                                    style="flex: 1; background: #f0f0f0; color: #333; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
+                                📋 Copy Message
+                            </button>
+                            <button onclick="skipFacebookScreenshot()" 
+                                    style="flex: 1; background: #FF9800; color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
+                                Skip & Complete
+                            </button>
+                        </div>
+                        
+                        <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                            <button onclick="closeFacebookModal()" 
+                                    style="background: none; border: none; color: #666; cursor: pointer; font-size: 14px;">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Remove any existing modal first
+            const existingModal = document.getElementById('facebookModal');
+            if (existingModal) existingModal.remove();
+            
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+        }
+        
+        // Close Facebook modal
+        function closeFacebookModal() {
+            const modal = document.getElementById('facebookModal');
+            if (modal) modal.remove();
+        }
+        
+        // Copy Facebook message to clipboard
+        function copyFacebookMessage() {
+            const total = parseFloat(document.getElementById('cartTotal').textContent.replace('$', '')).toFixed(2);
+            const message = `[ABA PAY Payment Confirmation]\n\nOrder ID: ${currentOrderId}\nAmount: $${total}\nStore: Goat Kids by S.UNG\nDate: ${new Date().toLocaleDateString()}\n\n[Please attach payment screenshot]`;
+            
+            navigator.clipboard.writeText(message).then(() => {
+                showMessage('Message copied! Open Messenger and paste it.', 'success');
+            }).catch(err => {
+                // Fallback
+                const textArea = document.createElement('textarea');
+                textArea.value = message;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                showMessage('Message copied to clipboard!', 'success');
+            });
+        }
+        
+        // Complete order after Facebook screenshot sent
+        function completeOrderAfterFacebook() {
+            // Complete the order
+            completeOrder();
+            
+            // Close modal after delay
+            setTimeout(() => {
+                closeFacebookModal();
+            }, 1000);
+            
+            // Save to orders with Facebook flag
+            const orders = JSON.parse(localStorage.getItem('goatKidsOrders')) || [];
+            const lastOrder = orders[orders.length - 1];
+            if (lastOrder && lastOrder.id === currentOrderId) {
+                lastOrder.facebookContact = true;
+                lastOrder.facebookPage = 'facebook.com/Goatkids';
+                localStorage.setItem('goatKidsOrders', JSON.stringify(orders));
+            }
+        }
+        
+        // Skip Facebook screenshot
+        function skipFacebookScreenshot() {
+            if (confirm('Skip sending screenshot? We recommend sending it for faster order processing.')) {
+                completeOrder();
+                closeFacebookModal();
+            }
+        }
+        
+        // ============================
+        // PAYMENT SYSTEM
+        // ============================
         
         function proceedToPayment() {
             if (cart.length === 0) {
@@ -1774,13 +2030,11 @@
                 document.getElementById('abaPaymentMethod').classList.add('selected');
                 document.getElementById('abaPaymentBtn').style.display = 'block';
             } else if (method === 'cash') {
-                // Get the cash payment method (second one)
                 const cashMethod = document.querySelectorAll('.payment-method')[1];
                 if (cashMethod) cashMethod.classList.add('selected');
                 document.getElementById('cashPaymentBtn').style.display = 'block';
             }
             
-            // If no method selected, show payment methods
             if (!method) {
                 document.getElementById('paymentSection').querySelector('h3').textContent = '💳 Payment Methods';
                 document.getElementById('paymentSection').querySelector('p').textContent = 'Choose your preferred payment method';
@@ -1843,20 +2097,9 @@
             selectPaymentMethod('cash');
         }
         
-        function markAsPaid() {
-            const total = parseFloat(document.getElementById('cartTotal').textContent.replace('$', ''));
-            
-            const confirmMessage = `Have you completed the ABA PAY payment?\n\nOrder ID: ${currentOrderId}\nAmount: $${total.toFixed(2)}\nMerchant: Goat Kids by S.UNG\nMID: 121082011261392\n\nPlease save your payment confirmation for reference.`;
-            
-            if (confirm(confirmMessage)) {
-                showMessage(`ABA PAY payment confirmed! Order ${currentOrderId} will be processed soon.`, 'success');
-                completeOrder();
-            }
-        }
-        
         function confirmCashOrder() {
             const total = parseFloat(document.getElementById('cartTotal').textContent.replace('$', ''));
-            const codTotal = total + 2.00; // Add $2 COD fee
+            const codTotal = total + 2.00;
             
             const confirmMessage = `Confirm Cash on Delivery Order:\n\nOrder ID: ${currentOrderId}\nAmount to Pay: $${codTotal.toFixed(2)} (includes $2 COD fee)\n\nOur delivery person will collect payment when delivering your order.`;
             
@@ -3282,13 +3525,17 @@ Kids Floral Summer Dress, 24.99, https://images.unsplash.com/photo-1567095761054
             renderCart();
             updateCartCount();
             
+            // Initialize Messenger button
+            initMessengerButton();
+            
             showTab('store');
             
-            console.log('Goat Kids Store Loaded with ABA PAY System!');
+            console.log('Goat Kids Store Loaded with ABA PAY & Facebook Messenger Integration!');
             console.log('Current Mode:', currentMode);
             console.log('Products:', inventory.products.length);
             console.log('Cart items:', cart.length);
             console.log('ABA MID: 121082011261392');
+            console.log('Facebook Page: facebook.com/Goatkids');
         }
         
         // Start the application when page loads
@@ -3296,7 +3543,3 @@ Kids Floral Summer Dress, 24.99, https://images.unsplash.com/photo-1567095761054
     </script>
 </body>
 </html>
-
-
-
-
