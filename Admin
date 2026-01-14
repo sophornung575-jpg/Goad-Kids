@@ -1,0 +1,124 @@
+// ============================
+// ADMIN SYSTEM
+// ============================
+
+function showAdminLogin() {
+    document.getElementById('adminLoginModal').style.display = 'flex';
+}
+
+function closeAdminLogin() {
+    document.getElementById('adminLoginModal').style.display = 'none';
+}
+
+function adminLogin() {
+    const username = document.getElementById('adminUsername').value;
+    const password = document.getElementById('adminPassword').value;
+    
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+        isAdmin = true;
+        localStorage.setItem('goatKidsAdmin', 'true');
+        updateAdminUI(true); // Call function to update UI
+        closeAdminLogin();
+        showAdminPanel();
+        showMessage('Admin login successful!', 'success');
+    } else {
+        showMessage('Invalid username or password', 'error');
+    }
+}
+
+function adminLogout() {
+    isAdmin = false;
+    localStorage.removeItem('goatKidsAdmin');
+    updateAdminUI(false); // Call function to update UI
+    document.getElementById('adminPanel').classList.remove('show');
+    showTab('store');
+    showMessage('Logged out from admin panel', 'info');
+}
+
+// Function to update admin UI elements
+function updateAdminUI(isAdmin) {
+    if (isAdmin) {
+        // Show admin badge
+        document.getElementById('adminBadge').style.display = 'inline-block';
+        
+        // Show admin tab in navigation
+        document.getElementById('adminTabLink').style.display = 'block';
+        
+        // Show admin panel tab button
+        document.getElementById('adminTabBtn').style.display = 'block';
+        
+        // Show admin in mobile menu
+        document.getElementById('adminTabLink').style.display = 'block';
+    } else {
+        // Hide admin badge
+        document.getElementById('adminBadge').style.display = 'none';
+        
+        // Hide admin tab in navigation
+        document.getElementById('adminTabLink').style.display = 'none';
+        
+        // Hide admin panel tab button
+        document.getElementById('adminTabBtn').style.display = 'none';
+        
+        // Hide admin in mobile menu
+        document.getElementById('adminTabLink').style.display = 'none';
+    }
+}
+
+function showAdminPanel() {
+    if (!isAdmin) {
+        showAdminLogin();
+        return;
+    }
+    
+    // Hide all tab contents
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.getElementById('adminTabBtn').classList.add('active');
+    
+    // Update nav links
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+    });
+    
+    // Show admin panel
+    document.getElementById('adminPanel').classList.add('show');
+    renderInventoryTable();
+}
+
+// Initialize the application
+function init() {
+    if (!localStorage.getItem('goatKidsInventory')) {
+        saveInventory();
+    }
+    
+    // Check admin status
+    if (isAdmin) {
+        updateAdminUI(true); // Initialize admin UI
+    }
+    
+    renderStore();
+    renderCart();
+    updateCartCount();
+    updateStats();
+    
+    // Initialize floating button hover effect
+    const messengerBtn = document.querySelector('.messenger-float-btn');
+    const tooltip = document.getElementById('messengerTooltip');
+    
+    if (messengerBtn && tooltip) {
+        messengerBtn.addEventListener('mouseenter', () => {
+            tooltip.style.display = 'block';
+        });
+        messengerBtn.addEventListener('mouseleave', () => {
+            tooltip.style.display = 'none';
+        });
+    }
+    
+    showTab('store');
+}
