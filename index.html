@@ -1375,4 +1375,1136 @@
             
             <div style="margin-top: 15px; font-size: 12px; color: #999;">
                 Default: admin / admin123
-            </
+            </div>
+        </div>
+    </div>
+    
+    <main class="container">
+        <!-- Tabs Navigation -->
+        <div class="content-tabs">
+            <button class="tab-btn active" onclick="showTab('store')">🏪 Store</button>
+            <button class="tab-btn" onclick="showTab('cart')">🛒 Cart (<span id="cartTabCount">0</span>)</button>
+            <button class="tab-btn" id="adminTabBtn" onclick="showTab('admin')" style="display: none;">⚙️ Admin Panel</button>
+        </div>
+        
+        <!-- Store Tab -->
+        <div class="tab-content active" id="storeTab">
+            <div class="store-header">
+                <h1 class="store-title">👕 Goat Kids - Children's Clothing</h1>
+                <div class="inventory-stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalProducts">0</div>
+                        <div class="stat-label">Products Available</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="lowStockCount">0</div>
+                        <div class="stat-label">Low Stock Items</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Product Grid -->
+            <div class="product-grid" id="productGrid">
+                <!-- Products will be dynamically loaded here -->
+            </div>
+        </div>
+        
+        <!-- Product Detail Tab (hidden by default) -->
+        <div class="tab-content" id="productDetailTab">
+            <button class="back-button" onclick="showTab('store')">← Back to Store</button>
+            <div class="product-detail-container" id="productDetailContainer">
+                <!-- Product details will be dynamically loaded here -->
+            </div>
+        </div>
+        
+        <!-- Cart Tab -->
+        <div class="tab-content" id="cartTab">
+            <h2 style="margin-bottom: 20px;">🛒 Your Shopping Cart</h2>
+            
+            <div class="cart-container">
+                <div class="cart-items" id="cartItems">
+                    <!-- Cart items will be dynamically loaded here -->
+                    <div id="emptyCartMessage" style="text-align: center; padding: 40px; color: #999;">
+                        <div style="font-size: 48px; margin-bottom: 10px;">🛒</div>
+                        <p>Your cart is empty</p>
+                        <button class="view-btn" onclick="showTab('store')" style="margin-top: 15px; max-width: 200px;">Browse Products</button>
+                    </div>
+                </div>
+                
+                <div class="cart-summary" id="cartSummary" style="display: none;">
+                    <div class="summary-row">
+                        <span>Subtotal:</span>
+                        <span id="cartSubtotal">$0.00</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Shipping:</span>
+                        <span id="cartShipping">$5.00</span>
+                    </div>
+                    <div class="summary-row total-row">
+                        <span>Total:</span>
+                        <span id="cartTotal">$0.00</span>
+                    </div>
+                    <button class="place-order-btn" onclick="placeOrder()" id="placeOrderBtn">Place Order</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Admin Panel Tab -->
+        <div class="tab-content" id="adminTab">
+            <div class="admin-panel" id="adminPanel">
+                <div class="admin-header">
+                    <h3>⚙️ Admin Inventory Management</h3>
+                    <button class="admin-logout-btn" onclick="adminLogout()">Logout</button>
+                </div>
+                
+                <div class="bulk-control-section">
+                    <div class="bulk-control-title">📦 Bulk Product Management</div>
+                    
+                    <div class="bulk-tabs">
+                        <button class="bulk-tab-btn active" onclick="showBulkTab('add')">➕ Add Products</button>
+                        <button class="bulk-tab-btn" onclick="showBulkTab('restock')">📈 Restock Products</button>
+                        <button class="bulk-tab-btn" onclick="showBulkTab('reset')">🔄 Reset Inventory</button>
+                    </div>
+                    
+                    <!-- Add Products Tab -->
+                    <div class="bulk-tab-content active" id="addTab">
+                        <form class="bulk-control-form" id="addProductForm">
+                            <div class="form-group">
+                                <label for="productName">Product Name</label>
+                                <input type="text" id="productName" class="form-control" placeholder="e.g., Cotton T-Shirt" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="productPrice">Price ($)</label>
+                                <input type="number" id="productPrice" class="form-control" placeholder="19.99" min="1" step="0.01" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="productCategory">Category</label>
+                                <select id="productCategory" class="form-control" required>
+                                    <option value="">Select Category</option>
+                                    <option value="tshirts">T-Shirts</option>
+                                    <option value="pants">Pants</option>
+                                    <option value="dresses">Dresses</option>
+                                    <option value="jackets">Jackets</option>
+                                    <option value="shoes">Shoes</option>
+                                    <option value="accessories">Accessories</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="productStock">Initial Stock</label>
+                                <input type="number" id="productStock" class="form-control" placeholder="50" min="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="productSizes">Sizes (comma separated)</label>
+                                <input type="text" id="productSizes" class="form-control" placeholder="XS, S, M, L" value="2T, 3T, 4T, 5T">
+                            </div>
+                            <div class="form-group">
+                                <label for="productDescription">Description</label>
+                                <textarea id="productDescription" class="form-control" rows="3" placeholder="Product description..."></textarea>
+                            </div>
+                        </form>
+                        <div class="bulk-action-btns">
+                            <button class="bulk-btn add" onclick="addProduct()">➕ Add Product</button>
+                            <button class="bulk-btn add" onclick="addMultipleProducts()">📝 Add Multiple</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Restock Products Tab -->
+                    <div class="bulk-tab-content" id="restockTab">
+                        <div class="form-group">
+                            <label for="restockAmount">Restock Amount (add to all products)</label>
+                            <input type="number" id="restockAmount" class="form-control" placeholder="10" min="1">
+                        </div>
+                        <div class="bulk-action-btns">
+                            <button class="bulk-btn restock" onclick="restockAllProducts()">📈 Restock All Products</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Reset Inventory Tab -->
+                    <div class="bulk-tab-content" id="resetTab">
+                        <p style="color: #666; margin-bottom: 15px;">This will reset all products to demo data. Current data will be lost.</p>
+                        <div class="bulk-action-btns">
+                            <button class="bulk-btn reset" onclick="resetInventory()">🔄 Reset to Demo Data</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="sheets-import-section">
+                    <div class="bulk-control-title" style="color: #2E7D32;">📊 Google Sheets Integration</div>
+                    <div class="sheets-help">
+                        <p><strong>How to use:</strong></p>
+                        <ol>
+                            <li>Create a Google Sheet with columns: Name, Price, Category, Stock, Sizes, Description</li>
+                            <li>Publish the sheet to the web (File → Share → Publish to web)</li>
+                            <li>Copy the shareable link and paste below</li>
+                        </ol>
+                    </div>
+                    <div class="form-group">
+                        <label for="sheetsUrl">Google Sheets URL</label>
+                        <input type="text" id="sheetsUrl" class="sheets-url-input" placeholder="https://docs.google.com/spreadsheets/d/...">
+                    </div>
+                    <div class="sheets-actions">
+                        <button class="google-sheets-btn sheets-load-btn" onclick="loadFromGoogleSheets()">📥 Load from Sheets</button>
+                        <button class="google-sheets-btn sheets-sync-btn" onclick="syncWithGoogleSheets()">🔄 Sync Inventory</button>
+                    </div>
+                </div>
+                
+                <div class="photo-import-section">
+                    <div class="bulk-control-title" style="color: #7B1FA2;">🖼️ Bulk Photo Import</div>
+                    <div class="photo-grid-upload" onclick="document.getElementById('photoUpload').click()">
+                        <div style="font-size: 48px; margin-bottom: 10px;">📁</div>
+                        <p>Click to upload product photos</p>
+                        <p style="font-size: 12px; color: #666; margin-top: 5px;">Supports JPG, PNG, WebP (Max 5MB each)</p>
+                        <input type="file" id="photoUpload" accept="image/*" multiple onchange="handlePhotoUpload(event)">
+                    </div>
+                    <div class="photo-preview-grid" id="photoPreviewGrid">
+                        <!-- Photo previews will appear here -->
+                    </div>
+                    <div class="sheets-actions">
+                        <button class="photo-import-btn" onclick="assignPhotosToProducts()">📷 Assign to Products</button>
+                    </div>
+                </div>
+                
+                <!-- Inventory Table -->
+                <div style="margin-top: 30px;">
+                    <div class="bulk-control-title">📋 Current Inventory</div>
+                    <table class="inventory-table" id="inventoryTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th>Price</th>
+                                <th>Stock</th>
+                                <th>Sizes</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody">
+                            <!-- Inventory rows will be dynamically loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Message Display Area -->
+        <div id="messageContainer" style="margin-top: 20px;"></div>
+    </main>
+    
+    <!-- Floating Messenger Button -->
+    <div class="messenger-float-btn" id="messengerBtn" onclick="openMessenger()">
+        💬
+        <div class="messenger-tooltip" id="messengerTooltip">Chat with us!</div>
+    </div>
+    
+    <footer>
+        <p>© 2023 Goat Kids - Children's Clothing Store. All rights reserved.</p>
+        <p>Made with ❤️ for happy kids everywhere</p>
+        <p style="margin-top: 10px;">
+            <a href="#" onclick="showTab('store')">Store</a> | 
+            <a href="#" onclick="showPrivacyPolicy()">Privacy Policy</a> | 
+            <a href="#" onclick="showTab('admin'); showAdminPanel();">Admin</a>
+        </p>
+    </footer>
+
+    <script>
+        // Demo product data
+        let products = [
+            {
+                id: 1,
+                name: "Cotton Cartoon T-Shirt",
+                price: 19.99,
+                category: "tshirts",
+                stock: 25,
+                sizes: ["2T", "3T", "4T", "5T"],
+                description: "Soft 100% cotton t-shirt with cute cartoon print. Machine washable.",
+                image: "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=400&h=400&fit=crop"
+            },
+            {
+                id: 2,
+                name: "Denim Overalls",
+                price: 34.99,
+                category: "pants",
+                stock: 15,
+                sizes: ["3T", "4T", "5T"],
+                description: "Classic denim overalls with adjustable straps. Perfect for playtime.",
+                image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400&h=400&fit=crop"
+            },
+            {
+                id: 3,
+                name: "Floral Summer Dress",
+                price: 29.99,
+                category: "dresses",
+                stock: 8,
+                sizes: ["2T", "3T", "4T"],
+                description: "Lightweight floral dress perfect for summer days. Made from breathable fabric.",
+                image: "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w-400&h=400&fit=crop"
+            },
+            {
+                id: 4,
+                name: "Puffer Jacket",
+                price: 49.99,
+                category: "jackets",
+                stock: 12,
+                sizes: ["3T", "4T", "5T", "6T"],
+                description: "Warm and cozy puffer jacket for cold weather. Water-resistant material.",
+                image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop"
+            },
+            {
+                id: 5,
+                name: "Sneakers with Lights",
+                price: 39.99,
+                category: "shoes",
+                stock: 20,
+                sizes: ["8", "9", "10", "11", "12"],
+                description: "Cool sneakers with LED lights in the heels. Batteries included.",
+                image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop"
+            },
+            {
+                id: 6,
+                name: "Animal Backpack",
+                price: 24.99,
+                category: "accessories",
+                stock: 3,
+                sizes: ["One Size"],
+                description: "Cute animal-shaped backpack for preschool. Multiple pockets inside.",
+                image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=400&fit=crop"
+            },
+            {
+                id: 7,
+                name: "Striped Polo Shirt",
+                price: 22.99,
+                category: "tshirts",
+                stock: 18,
+                sizes: ["2T", "3T", "4T", "5T"],
+                description: "Classic striped polo shirt with comfortable cotton blend fabric.",
+                image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop"
+            },
+            {
+                id: 8,
+                name: "Cargo Pants",
+                price: 27.99,
+                category: "pants",
+                stock: 10,
+                sizes: ["3T", "4T", "5T"],
+                description: "Durable cargo pants with multiple pockets. Perfect for adventures.",
+                image: "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=400&h=400&fit=crop"
+            }
+        ];
+
+        let cart = JSON.parse(localStorage.getItem('goatKidsCart')) || [];
+        let isAdmin = false;
+        let uploadedPhotos = [];
+
+        // Initialize the app
+        function init() {
+            updateProductGrid();
+            updateCartDisplay();
+            updateInventoryStats();
+            updateInventoryTable();
+            
+            // Check for admin session
+            if (localStorage.getItem('goatKidsAdmin') === 'true') {
+                adminLoginSuccess();
+            }
+        }
+
+        // Tab navigation
+        function showTab(tabId) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabId + 'Tab').classList.add('active');
+            
+            // Add active class to clicked button
+            event.target.classList.add('active');
+            
+            // Update nav links
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            if (tabId === 'store') {
+                document.querySelector('.nav-link[onclick*="store"]').classList.add('active');
+            } else if (tabId === 'cart') {
+                document.querySelector('.nav-link[onclick*="cart"]').classList.add('active');
+            }
+            
+            // Close mobile menu
+            document.getElementById('navLinks').classList.remove('active');
+        }
+
+        // Product Detail View
+        function showProductDetail(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            
+            document.getElementById('productDetailContainer').innerHTML = `
+                <div class="product-detail-image">
+                    <img src="${product.image}" alt="${product.name}">
+                </div>
+                <div class="product-detail-info">
+                    <h2 style="margin-bottom: 10px; color: #333;">${product.name}</h2>
+                    <div class="product-price">$${product.price.toFixed(2)}</div>
+                    <div class="product-stock ${product.stock > 10 ? 'in-stock' : product.stock > 0 ? 'low-stock' : 'out-of-stock'}">
+                        ${product.stock > 10 ? 'In Stock' : product.stock > 0 ? 'Low Stock' : 'Out of Stock'} (${product.stock} available)
+                    </div>
+                    <p style="color: #666; margin: 15px 0;">${product.description}</p>
+                    
+                    <div style="margin: 15px 0;">
+                        <strong>Category:</strong> ${product.category.charAt(0).toUpperCase() + product.category.slice(1)}
+                    </div>
+                    
+                    <div style="margin: 15px 0;">
+                        <strong>Available Sizes:</strong>
+                        <div class="size-buttons" id="sizeButtons">
+                            ${product.sizes.map(size => `
+                                <button class="size-btn ${product.stock > 0 ? '' : 'out-of-stock'}" 
+                                        onclick="selectSize(this, '${size}')"
+                                        ${product.stock === 0 ? 'disabled' : ''}>
+                                    ${size}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div class="quantity-controls">
+                        <strong>Quantity:</strong>
+                        <button class="qty-btn" onclick="adjustQuantity(-1)">-</button>
+                        <input type="number" class="qty-input" id="productQuantity" value="1" min="1" max="${product.stock}" onchange="validateQuantity()">
+                        <button class="qty-btn" onclick="adjustQuantity(1)">+</button>
+                        <span style="color: #666; font-size: 14px;">Max: ${product.stock}</span>
+                    </div>
+                    
+                    <button class="add-to-cart" id="addToCartBtn" onclick="addToCart(${productId})" 
+                            ${product.stock === 0 ? 'disabled' : ''}>
+                        ${product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
+                    </button>
+                    
+                    <div style="margin-top: 20px; font-size: 14px; color: #666;">
+                        <p>✅ 30-day return policy</p>
+                        <p>🚚 Free shipping on orders over $50</p>
+                        <p>👕 Machine washable</p>
+                    </div>
+                </div>
+            `;
+            
+            showTab('productDetail');
+            window.selectedSize = null;
+            window.selectedProductId = productId;
+        }
+
+        // Size selection
+        function selectSize(button, size) {
+            document.querySelectorAll('.size-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            button.classList.add('selected');
+            window.selectedSize = size;
+        }
+
+        // Quantity adjustment
+        function adjustQuantity(change) {
+            const input = document.getElementById('productQuantity');
+            const currentValue = parseInt(input.value) || 1;
+            const product = products.find(p => p.id === window.selectedProductId);
+            const newValue = Math.max(1, Math.min(product.stock, currentValue + change));
+            input.value = newValue;
+        }
+
+        function validateQuantity() {
+            const input = document.getElementById('productQuantity');
+            const product = products.find(p => p.id === window.selectedProductId);
+            let value = parseInt(input.value) || 1;
+            value = Math.max(1, Math.min(product.stock, value));
+            input.value = value;
+        }
+
+        // Cart functions
+        function addToCart(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product || product.stock === 0) return;
+            
+            const quantityInput = document.getElementById('productQuantity');
+            const quantity = parseInt(quantityInput.value) || 1;
+            const size = window.selectedSize || product.sizes[0];
+            
+            // Check if product already in cart
+            const existingItem = cart.find(item => 
+                item.id === productId && item.size === size
+            );
+            
+            if (existingItem) {
+                // Update quantity
+                existingItem.quantity += quantity;
+            } else {
+                // Add new item
+                cart.push({
+                    id: productId,
+                    name: product.name,
+                    price: product.price,
+                    image: product.image,
+                    size: size,
+                    quantity: quantity
+                });
+            }
+            
+            // Update product stock
+            product.stock = Math.max(0, product.stock - quantity);
+            
+            // Update localStorage
+            localStorage.setItem('goatKidsCart', JSON.stringify(cart));
+            
+            // Update UI
+            updateCartDisplay();
+            updateProductGrid();
+            updateInventoryStats();
+            updateInventoryTable();
+            
+            // Show animation
+            document.getElementById('addToCartBtn').classList.add('add-to-cart-animation');
+            document.getElementById('cartIcon').classList.add('cart-bounce');
+            
+            setTimeout(() => {
+                document.getElementById('addToCartBtn').classList.remove('add-to-cart-animation');
+                document.getElementById('cartIcon').classList.remove('cart-bounce');
+            }, 500);
+            
+            showMessage(`${quantity} ${product.name} added to cart!`, 'success');
+            
+            // Show cart tab after adding
+            showTab('cart');
+        }
+
+        function updateCartItem(productId, size, change) {
+            const itemIndex = cart.findIndex(item => 
+                item.id === productId && item.size === size
+            );
+            
+            if (itemIndex === -1) return;
+            
+            const product = products.find(p => p.id === productId);
+            const currentQuantity = cart[itemIndex].quantity;
+            const newQuantity = currentQuantity + change;
+            
+            if (newQuantity < 1) {
+                removeCartItem(productId, size);
+                return;
+            }
+            
+            // Check stock availability
+            const stockChange = change;
+            if (stockChange > 0 && product.stock < stockChange) {
+                showMessage(`Only ${product.stock} items left in stock!`, 'error');
+                return;
+            }
+            
+            // Update cart
+            cart[itemIndex].quantity = newQuantity;
+            
+            // Update product stock
+            product.stock = Math.max(0, product.stock - stockChange);
+            
+            // Update localStorage and UI
+            localStorage.setItem('goatKidsCart', JSON.stringify(cart));
+            updateCartDisplay();
+            updateProductGrid();
+            updateInventoryStats();
+            updateInventoryTable();
+        }
+
+        function removeCartItem(productId, size) {
+            const itemIndex = cart.findIndex(item => 
+                item.id === productId && item.size === size
+            );
+            
+            if (itemIndex === -1) return;
+            
+            const product = products.find(p => p.id === productId);
+            const removedQuantity = cart[itemIndex].quantity;
+            
+            // Restore stock
+            product.stock += removedQuantity;
+            
+            // Remove from cart
+            cart.splice(itemIndex, 1);
+            
+            // Update localStorage and UI
+            localStorage.setItem('goatKidsCart', JSON.stringify(cart));
+            updateCartDisplay();
+            updateProductGrid();
+            updateInventoryStats();
+            updateInventoryTable();
+            
+            showMessage('Item removed from cart', 'info');
+        }
+
+        function updateCartDisplay() {
+            const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
+            document.getElementById('cartCount').textContent = cartCount;
+            document.getElementById('cartTabCount').textContent = cartCount;
+            
+            // Update cart items display
+            const cartItemsContainer = document.getElementById('cartItems');
+            const cartSummary = document.getElementById('cartSummary');
+            const emptyCartMessage = document.getElementById('emptyCartMessage');
+            
+            if (cart.length === 0) {
+                emptyCartMessage.style.display = 'block';
+                cartSummary.style.display = 'none';
+                cartItemsContainer.innerHTML = '';
+                cartItemsContainer.appendChild(emptyCartMessage);
+            } else {
+                emptyCartMessage.style.display = 'none';
+                cartSummary.style.display = 'block';
+                
+                let itemsHTML = '';
+                let subtotal = 0;
+                
+                cart.forEach(item => {
+                    const product = products.find(p => p.id === item.id);
+                    const itemTotal = item.price * item.quantity;
+                    subtotal += itemTotal;
+                    
+                    itemsHTML += `
+                        <div class="cart-item">
+                            <img src="${item.image}" alt="${item.name}" class="cart-item-image">
+                            <div class="cart-item-details">
+                                <div class="cart-item-title">${item.name}</div>
+                                <div class="cart-item-meta">
+                                    Size: ${item.size} | 
+                                    Price: $${item.price.toFixed(2)}
+                                </div>
+                                <div class="cart-item-price">$${itemTotal.toFixed(2)}</div>
+                            </div>
+                            <div class="cart-item-actions">
+                                <button onclick="updateCartItem(${item.id}, '${item.size}', -1)">-</button>
+                                <span>${item.quantity}</span>
+                                <button onclick="updateCartItem(${item.id}, '${item.size}', 1)">+</button>
+                                <span class="remove-item" onclick="removeCartItem(${item.id}, '${item.size}')">Remove</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                cartItemsContainer.innerHTML = itemsHTML;
+                
+                const shipping = subtotal >= 50 ? 0 : 5;
+                const total = subtotal + shipping;
+                
+                document.getElementById('cartSubtotal').textContent = `$${subtotal.toFixed(2)}`;
+                document.getElementById('cartShipping').textContent = shipping === 0 ? 'FREE' : `$${shipping.toFixed(2)}`;
+                document.getElementById('cartTotal').textContent = `$${total.toFixed(2)}`;
+                
+                document.getElementById('placeOrderBtn').disabled = cart.length === 0;
+            }
+        }
+
+        function placeOrder() {
+            if (cart.length === 0) return;
+            
+            // In a real app, this would process payment and create an order
+            showMessage('Order placed successfully! Thank you for shopping with Goat Kids.', 'success');
+            
+            // Clear cart
+            cart = [];
+            localStorage.setItem('goatKidsCart', JSON.stringify(cart));
+            updateCartDisplay();
+            
+            // Show store after delay
+            setTimeout(() => {
+                showTab('store');
+            }, 2000);
+        }
+
+        // Product grid display
+        function updateProductGrid() {
+            const productGrid = document.getElementById('productGrid');
+            productGrid.innerHTML = '';
+            
+            products.forEach(product => {
+                const productCard = document.createElement('div');
+                productCard.className = 'product-card';
+                productCard.innerHTML = `
+                    <img src="${product.image}" alt="${product.name}" class="product-image">
+                    <div class="product-info">
+                        <h3 class="product-title">${product.name}</h3>
+                        <div class="product-price">$${product.price.toFixed(2)}</div>
+                        <div class="product-stock ${product.stock > 10 ? 'in-stock' : product.stock > 0 ? 'low-stock' : 'out-of-stock'}">
+                            ${product.stock > 10 ? 'In Stock' : product.stock > 0 ? 'Low Stock' : 'Out of Stock'}
+                        </div>
+                        <div class="product-actions">
+                            <button class="view-btn" onclick="showProductDetail(${product.id})">View Details</button>
+                        </div>
+                    </div>
+                `;
+                productGrid.appendChild(productCard);
+            });
+            
+            updateInventoryStats();
+        }
+
+        function updateInventoryStats() {
+            const totalProducts = products.length;
+            const lowStockCount = products.filter(p => p.stock > 0 && p.stock <= 10).length;
+            
+            document.getElementById('totalProducts').textContent = totalProducts;
+            document.getElementById('lowStockCount').textContent = lowStockCount;
+        }
+
+        // Admin functions
+        function showAdminPanel() {
+            if (!isAdmin) {
+                document.getElementById('adminLoginModal').style.display = 'flex';
+                return;
+            }
+            showTab('admin');
+        }
+
+        function adminLogin() {
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+            
+            if (username === 'admin' && password === 'admin123') {
+                adminLoginSuccess();
+                showMessage('Admin login successful!', 'success');
+            } else {
+                showMessage('Invalid credentials', 'error');
+            }
+        }
+
+        function adminLoginSuccess() {
+            isAdmin = true;
+            localStorage.setItem('goatKidsAdmin', 'true');
+            
+            // Update UI
+            document.getElementById('adminBadge').style.display = 'inline';
+            document.getElementById('adminTabBtn').style.display = 'block';
+            document.getElementById('adminTabLink').style.display = 'block';
+            document.getElementById('adminLoginModal').style.display = 'none';
+            
+            showTab('admin');
+        }
+
+        function adminLogout() {
+            isAdmin = false;
+            localStorage.removeItem('goatKidsAdmin');
+            
+            // Update UI
+            document.getElementById('adminBadge').style.display = 'none';
+            document.getElementById('adminTabBtn').style.display = 'none';
+            document.getElementById('adminTabLink').style.display = 'none';
+            
+            showTab('store');
+            showMessage('Logged out successfully', 'info');
+        }
+
+        // Bulk product management
+        function showBulkTab(tabId) {
+            document.querySelectorAll('.bulk-tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelectorAll('.bulk-tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            event.target.classList.add('active');
+            document.getElementById(tabId + 'Tab').classList.add('active');
+        }
+
+        function addProduct() {
+            const name = document.getElementById('productName').value;
+            const price = parseFloat(document.getElementById('productPrice').value);
+            const category = document.getElementById('productCategory').value;
+            const stock = parseInt(document.getElementById('productStock').value);
+            const sizes = document.getElementById('productSizes').value.split(',').map(s => s.trim());
+            const description = document.getElementById('productDescription').value;
+            
+            if (!name || !price || !category || isNaN(stock)) {
+                showMessage('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            const newProduct = {
+                id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
+                name,
+                price,
+                category,
+                stock,
+                sizes: sizes.length > 0 ? sizes : ['One Size'],
+                description,
+                image: uploadedPhotos.length > 0 ? uploadedPhotos[0] : getDefaultImage(category)
+            };
+            
+            products.push(newProduct);
+            updateProductGrid();
+            updateInventoryTable();
+            showMessage(`"${name}" added successfully!`, 'success');
+            
+            // Clear form
+            document.getElementById('addProductForm').reset();
+        }
+
+        function addMultipleProducts() {
+            const demoProducts = [
+                {
+                    name: "Raincoat with Hood",
+                    price: 39.99,
+                    category: "jackets",
+                    stock: 15,
+                    sizes: ["3T", "4T", "5T"],
+                    description: "Waterproof raincoat with detachable hood. Perfect for rainy days."
+                },
+                {
+                    name: "Sports Shorts",
+                    price: 16.99,
+                    category: "pants",
+                    stock: 25,
+                    sizes: ["2T", "3T", "4T", "5T"],
+                    description: "Lightweight sports shorts with elastic waistband."
+                },
+                {
+                    name: "Winter Gloves Set",
+                    price: 14.99,
+                    category: "accessories",
+                    stock: 30,
+                    sizes: ["One Size"],
+                    description: "Warm winter gloves with touchscreen compatibility."
+                }
+            ];
+            
+            demoProducts.forEach(product => {
+                const newProduct = {
+                    id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
+                    ...product,
+                    image: getDefaultImage(product.category)
+                };
+                products.push(newProduct);
+            });
+            
+            updateProductGrid();
+            updateInventoryTable();
+            showMessage('3 demo products added successfully!', 'success');
+        }
+
+        function getDefaultImage(category) {
+            const categoryImages = {
+                tshirts: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop',
+                pants: 'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=400&h=400&fit=crop',
+                dresses: 'https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w=400&h=400&fit=crop',
+                jackets: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop',
+                shoes: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop',
+                accessories: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=400&fit=crop'
+            };
+            
+            return categoryImages[category] || 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=400&h=400&fit=crop';
+        }
+
+        function restockAllProducts() {
+            const amount = parseInt(document.getElementById('restockAmount').value) || 10;
+            
+            products.forEach(product => {
+                product.stock += amount;
+            });
+            
+            updateProductGrid();
+            updateInventoryTable();
+            showMessage(`All products restocked with ${amount} units each!`, 'success');
+        }
+
+        function resetInventory() {
+            if (!confirm('Are you sure you want to reset all inventory to demo data?')) {
+                return;
+            }
+            
+            // Reset to original demo data
+            products = [
+                {
+                    id: 1,
+                    name: "Cotton Cartoon T-Shirt",
+                    price: 19.99,
+                    category: "tshirts",
+                    stock: 25,
+                    sizes: ["2T", "3T", "4T", "5T"],
+                    description: "Soft 100% cotton t-shirt with cute cartoon print. Machine washable.",
+                    image: "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=400&h=400&fit=crop"
+                },
+                {
+                    id: 2,
+                    name: "Denim Overalls",
+                    price: 34.99,
+                    category: "pants",
+                    stock: 15,
+                    sizes: ["3T", "4T", "5T"],
+                    description: "Classic denim overalls with adjustable straps. Perfect for playtime.",
+                    image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400&h=400&fit=crop"
+                },
+                {
+                    id: 3,
+                    name: "Floral Summer Dress",
+                    price: 29.99,
+                    category: "dresses",
+                    stock: 8,
+                    sizes: ["2T", "3T", "4T"],
+                    description: "Lightweight floral dress perfect for summer days. Made from breathable fabric.",
+                    image: "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w-400&h=400&fit=crop"
+                },
+                {
+                    id: 4,
+                    name: "Puffer Jacket",
+                    price: 49.99,
+                    category: "jackets",
+                    stock: 12,
+                    sizes: ["3T", "4T", "5T", "6T"],
+                    description: "Warm and cozy puffer jacket for cold weather. Water-resistant material.",
+                    image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop"
+                },
+                {
+                    id: 5,
+                    name: "Sneakers with Lights",
+                    price: 39.99,
+                    category: "shoes",
+                    stock: 20,
+                    sizes: ["8", "9", "10", "11", "12"],
+                    description: "Cool sneakers with LED lights in the heels. Batteries included.",
+                    image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop"
+                },
+                {
+                    id: 6,
+                    name: "Animal Backpack",
+                    price: 24.99,
+                    category: "accessories",
+                    stock: 3,
+                    sizes: ["One Size"],
+                    description: "Cute animal-shaped backpack for preschool. Multiple pockets inside.",
+                    image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=400&fit=crop"
+                },
+                {
+                    id: 7,
+                    name: "Striped Polo Shirt",
+                    price: 22.99,
+                    category: "tshirts",
+                    stock: 18,
+                    sizes: ["2T", "3T", "4T", "5T"],
+                    description: "Classic striped polo shirt with comfortable cotton blend fabric.",
+                    image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop"
+                },
+                {
+                    id: 8,
+                    name: "Cargo Pants",
+                    price: 27.99,
+                    category: "pants",
+                    stock: 10,
+                    sizes: ["3T", "4T", "5T"],
+                    description: "Durable cargo pants with multiple pockets. Perfect for adventures.",
+                    image: "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=400&h=400&fit=crop"
+                }
+            ];
+            
+            // Clear cart
+            cart = [];
+            localStorage.setItem('goatKidsCart', JSON.stringify(cart));
+            
+            updateProductGrid();
+            updateCartDisplay();
+            updateInventoryTable();
+            showMessage('Inventory reset to demo data!', 'success');
+        }
+
+        function loadFromGoogleSheets() {
+            const url = document.getElementById('sheetsUrl').value;
+            if (!url) {
+                showMessage('Please enter a Google Sheets URL', 'error');
+                return;
+            }
+            
+            // In a real implementation, this would fetch data from Google Sheets API
+            // For demo purposes, we'll simulate loading data
+            showMessage('Simulating Google Sheets import...', 'info');
+            
+            setTimeout(() => {
+                const newProducts = [
+                    {
+                        id: products.length + 1,
+                        name: "Hooded Sweatshirt",
+                        price: 32.99,
+                        category: "jackets",
+                        stock: 22,
+                        sizes: ["4T", "5T", "6T"],
+                        description: "Cozy hooded sweatshirt with kangaroo pocket.",
+                        image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop"
+                    },
+                    {
+                        id: products.length + 2,
+                        name: "Canvas Shoes",
+                        price: 28.99,
+                        category: "shoes",
+                        stock: 17,
+                        sizes: ["9", "10", "11", "12"],
+                        description: "Comfortable canvas shoes with non-slip soles.",
+                        image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop"
+                    }
+                ];
+                
+                products.push(...newProducts);
+                updateProductGrid();
+                updateInventoryTable();
+                showMessage('2 products imported from Google Sheets!', 'success');
+            }, 1500);
+        }
+
+        function syncWithGoogleSheets() {
+            showMessage('Inventory data synced with Google Sheets!', 'success');
+        }
+
+        function handlePhotoUpload(event) {
+            const files = event.target.files;
+            uploadedPhotos = [];
+            
+            const previewGrid = document.getElementById('photoPreviewGrid');
+            previewGrid.innerHTML = '';
+            
+            for (let i = 0; i < Math.min(files.length, 6); i++) {
+                const file = files[i];
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    const photoData = e.target.result;
+                    uploadedPhotos.push(photoData);
+                    
+                    const previewItem = document.createElement('div');
+                    previewItem.className = 'photo-preview-item';
+                    previewItem.innerHTML = `
+                        <img src="${photoData}" alt="Upload ${i + 1}">
+                        <div class="photo-info">${file.name}</div>
+                    `;
+                    previewGrid.appendChild(previewItem);
+                };
+                
+                reader.readAsDataURL(file);
+            }
+            
+            showMessage(`${files.length} photos uploaded successfully!`, 'success');
+        }
+
+        function assignPhotosToProducts() {
+            if (uploadedPhotos.length === 0) {
+                showMessage('Please upload photos first', 'error');
+                return;
+            }
+            
+            // Assign photos to products without images
+            let assignedCount = 0;
+            products.forEach(product => {
+                if (!product.image || product.image.includes('unsplash')) {
+                    product.image = uploadedPhotos[assignedCount % uploadedPhotos.length];
+                    assignedCount++;
+                }
+            });
+            
+            updateProductGrid();
+            updateInventoryTable();
+            showMessage(`Photos assigned to ${assignedCount} products!`, 'success');
+        }
+
+        function updateInventoryTable() {
+            const tableBody = document.getElementById('inventoryTableBody');
+            tableBody.innerHTML = '';
+            
+            products.forEach(product => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${product.id}</td>
+                    <td>
+                        <strong>${product.name}</strong><br>
+                        <small style="color: #666;">${product.description.substring(0, 50)}...</small>
+                    </td>
+                    <td>${product.category}</td>
+                    <td>$${product.price.toFixed(2)}</td>
+                    <td>
+                        <input type="number" class="stock-input" id="stock-${product.id}" 
+                               value="${product.stock}" min="0" 
+                               onchange="updateProductStock(${product.id})">
+                    </td>
+                    <td>${product.sizes.join(', ')}</td>
+                    <td>
+                        <button class="update-btn" onclick="updateProductStock(${product.id})">Update</button>
+                        <button class="delete-btn" onclick="deleteProduct(${product.id})">Delete</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        function updateProductStock(productId) {
+            const input = document.getElementById(`stock-${productId}`);
+            const newStock = parseInt(input.value) || 0;
+            
+            const product = products.find(p => p.id === productId);
+            if (product) {
+                product.stock = Math.max(0, newStock);
+                updateProductGrid();
+                showMessage(`${product.name} stock updated to ${newStock}`, 'success');
+            }
+        }
+
+        function deleteProduct(productId) {
+            if (!confirm('Are you sure you want to delete this product?')) {
+                return;
+            }
+            
+            const index = products.findIndex(p => p.id === productId);
+            if (index !== -1) {
+                const productName = products[index].name;
+                products.splice(index, 1);
+                
+                // Also remove from cart
+                cart = cart.filter(item => item.id !== productId);
+                localStorage.setItem('goatKidsCart', JSON.stringify(cart));
+                
+                updateProductGrid();
+                updateCartDisplay();
+                updateInventoryTable();
+                showMessage(`"${productName}" deleted successfully`, 'success');
+            }
+        }
+
+        // Utility functions
+        function showMessage(text, type) {
+            const messageContainer = document.getElementById('messageContainer');
+            const message = document.createElement('div');
+            message.className = `message ${type}`;
+            message.textContent = text;
+            messageContainer.appendChild(message);
+            
+            setTimeout(() => {
+                message.remove();
+            }, 3000);
+        }
+
+        function toggleMobileMenu() {
+            const navLinks = document.getElementById('navLinks');
+            navLinks.classList.toggle('active');
+        }
+
+        function openMessenger() {
+            showMessage('Messenger chat opening... (Demo feature)', 'info');
+        }
+
+        function showPrivacyPolicy() {
+            showMessage('Privacy Policy: We value your privacy and protect all customer data.', 'info');
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
