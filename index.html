@@ -97,19 +97,6 @@
             color: white;
         }
         
-        .cart-count {
-            background-color: #FF6B35;
-            color: white;
-            font-size: 12px;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-left: 5px;
-        }
-        
         .mobile-menu-btn {
             display: none;
             background: none;
@@ -257,8 +244,7 @@
         }
         
         .btn {
-            flex: 1;
-            padding: 10px;
+            padding: 10px 15px;
             border: none;
             border-radius: 6px;
             font-weight: 600;
@@ -390,43 +376,6 @@
             font-size: 14px;
             margin-bottom: 20px;
             line-height: 1.5;
-        }
-        
-        /* Spreadsheet Import */
-        .spreadsheet-upload-area {
-            border: 2px dashed #4A90E2;
-            border-radius: 10px;
-            padding: 40px 20px;
-            text-align: center;
-            background-color: #f0f7ff;
-            cursor: pointer;
-            transition: all 0.3s;
-            margin-bottom: 20px;
-        }
-        
-        .spreadsheet-upload-area:hover {
-            background-color: #e6f0ff;
-        }
-        
-        .upload-icon {
-            font-size: 48px;
-            color: #4A90E2;
-            margin-bottom: 15px;
-        }
-        
-        .upload-text {
-            color: #666;
-            margin-bottom: 10px;
-        }
-        
-        .upload-hint {
-            color: #999;
-            font-size: 14px;
-            margin-top: 10px;
-        }
-        
-        .file-input {
-            display: none;
         }
         
         /* Photo Management */
@@ -610,6 +559,94 @@
             border: 1px solid #ffeaa7;
         }
         
+        /* Edit Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .modal-title {
+            font-size: 20px;
+            color: #333;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #666;
+            cursor: pointer;
+        }
+        
+        /* Photo Assignment */
+        .photo-assignment {
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .photo-select-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 6px;
+        }
+        
+        .photo-select-item {
+            cursor: pointer;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+        
+        .photo-select-item:hover {
+            border-color: #4A90E2;
+        }
+        
+        .photo-select-item.selected {
+            border-color: #FF6B35;
+        }
+        
+        .photo-select-item img {
+            width: 100%;
+            height: 100px;
+            object-fit: cover;
+        }
+        
         /* Responsive */
         @media (max-width: 768px) {
             .mobile-menu-btn {
@@ -630,6 +667,10 @@
             
             .import-methods {
                 grid-template-columns: 1fr;
+            }
+            
+            .btn-group {
+                flex-direction: column;
             }
         }
     </style>
@@ -679,9 +720,8 @@
                     <div class="stat-value" id="lowStockCount">0</div>
                     <div class="stat-label">Low Stock Items</div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="avgPrice">$0.00</div>
-                    <div class="stat-label">Average Price</div>
+                <div class="stat-value" id="avgPrice">$0.00</div>
+                <div class="stat-label">Average Price</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value" id="totalStock">0</div>
@@ -715,83 +755,54 @@
                 <!-- Messages -->
                 <div id="messageArea"></div>
                 
-                <!-- SIMPLE BULK IMPORT -->
+                <!-- PHOTO MANAGEMENT SECTION -->
                 <div class="bulk-import-section">
                     <h3 class="section-title">
-                        <i class="fas fa-file-import"></i>
-                        Simple Bulk Import
+                        <i class="fas fa-images"></i>
+                        Photo Management
                     </h3>
                     
-                    <!-- CSV Text Import -->
-                    <div class="form-group">
-                        <label class="form-label">
-                            <i class="fas fa-file-csv"></i> Import Products (CSV Format)
-                        </label>
-                        <textarea id="csvData" class="form-control" rows="6" placeholder="Paste CSV data here:
-name,price,stock,category
-Cotton T-Shirt,19.99,25,tshirts
-Denim Overalls,34.99,15,pants"></textarea>
-                        <p class="upload-hint">Format: name,price,stock,category (one product per line)</p>
-                    </div>
-                    
-                    <div class="btn-group">
-                        <button class="btn-admin btn-green" onclick="importCSV()">
-                            <i class="fas fa-upload"></i> Import Products
-                        </button>
-                        <button class="btn-admin btn-blue" onclick="downloadTemplate()">
-                            <i class="fas fa-download"></i> Download Template
-                        </button>
-                        <button class="btn-admin btn-red" onclick="clearAllProducts()">
-                            <i class="fas fa-trash"></i> Clear All Products
-                        </button>
-                    </div>
-                    
                     <!-- Photo Upload -->
-                    <div style="margin-top: 30px;">
-                        <h4 class="section-subtitle">
-                            <i class="fas fa-images"></i> Upload Product Photos
-                        </h4>
-                        
-                        <div class="photo-upload-area">
-                            <div class="upload-icon">
-                                <i class="fas fa-cloud-upload-alt"></i>
-                            </div>
-                            <p class="upload-text">
-                                <strong>Click to upload product photos</strong>
-                            </p>
-                            <p class="upload-hint" style="margin-bottom: 15px;">
-                                JPG or PNG files (Max 2MB each)
-                            </p>
-                            <input type="file" id="photoFiles" class="file-input" 
-                                   accept="image/*" multiple 
-                                   onchange="handlePhotoUpload(event)">
-                            <button class="btn-admin btn-purple" onclick="document.getElementById('photoFiles').click()">
-                                <i class="fas fa-folder-open"></i> Select Photos
-                            </button>
+                    <div class="photo-upload-area">
+                        <div class="upload-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
                         </div>
-                        
-                        <div id="photoPreview" style="display: none;">
-                            <h5 style="margin-bottom: 15px; color: #333;">
-                                <i class="fas fa-images"></i> Uploaded Photos
-                            </h5>
-                            <div class="photo-preview-grid" id="photoPreviewGrid">
-                                <!-- Photos will be previewed here -->
-                            </div>
-                            <div class="btn-group" style="margin-top: 20px;">
-                                <button class="btn-admin btn-blue" onclick="autoAssignPhotos()">
-                                    <i class="fas fa-magic"></i> Auto-Assign Photos
-                                </button>
-                                <button class="btn-admin btn-red" onclick="clearPhotoUploads()">
-                                    <i class="fas fa-trash"></i> Clear Photos
-                                </button>
-                            </div>
+                        <p class="upload-text">
+                            <strong>Upload Product Photos</strong>
+                        </p>
+                        <p class="upload-hint" style="margin-bottom: 15px;">
+                            JPG or PNG files (Max 2MB each)
+                        </p>
+                        <input type="file" id="photoFiles" class="file-input" 
+                               accept="image/*" multiple 
+                               onchange="handlePhotoUpload(event)">
+                        <button class="btn-admin btn-purple" onclick="document.getElementById('photoFiles').click()">
+                            <i class="fas fa-folder-open"></i> Select Photos
+                        </button>
+                    </div>
+                    
+                    <!-- Uploaded Photos -->
+                    <div id="photoPreview" style="display: none;">
+                        <h4 class="section-subtitle">
+                            <i class="fas fa-images"></i> Uploaded Photos
+                        </h4>
+                        <div class="photo-preview-grid" id="photoPreviewGrid">
+                            <!-- Photos will be previewed here -->
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn-admin btn-blue" onclick="autoAssignPhotos()">
+                                <i class="fas fa-magic"></i> Auto-Assign Photos
+                            </button>
+                            <button class="btn-admin btn-red" onclick="clearPhotoUploads()">
+                                <i class="fas fa-trash"></i> Clear Photos
+                            </button>
                         </div>
                     </div>
                     
                     <!-- Quick Product Add -->
                     <div style="margin-top: 30px;">
                         <h4 class="section-subtitle">
-                            <i class="fas fa-plus-circle"></i> Add Single Product
+                            <i class="fas fa-plus-circle"></i> Add New Product
                         </h4>
                         
                         <div class="form-group">
@@ -801,7 +812,12 @@ Denim Overalls,34.99,15,pants"></textarea>
                                 <input type="number" id="productStock" class="form-control" placeholder="Stock" min="0">
                             </div>
                             <input type="text" id="productCategory" class="form-control" placeholder="Category (tshirts, pants, etc)" style="margin-bottom: 10px;">
-                            <input type="text" id="productImage" class="form-control" placeholder="Image URL (optional)">
+                            <div class="btn-group" style="margin-bottom: 10px;">
+                                <button class="btn-admin btn-outline" onclick="showPhotoSelectorForNewProduct()">
+                                    <i class="fas fa-image"></i> Select Photo
+                                </button>
+                                <input type="text" id="productImageUrl" class="form-control" placeholder="Or enter image URL">
+                            </div>
                         </div>
                         
                         <div class="btn-group">
@@ -819,7 +835,7 @@ Denim Overalls,34.99,15,pants"></textarea>
                 <div style="margin-top: 40px;">
                     <h3 class="section-title">
                         <i class="fas fa-clipboard-list"></i>
-                        Current Inventory (${products.length} products)
+                        Current Inventory (<span id="productCount">0</span> products)
                     </h3>
                     
                     <div class="btn-group" style="margin-bottom: 20px;">
@@ -829,12 +845,16 @@ Denim Overalls,34.99,15,pants"></textarea>
                         <button class="btn-admin btn-green" onclick="refreshInventory()">
                             <i class="fas fa-sync"></i> Refresh
                         </button>
+                        <button class="btn-admin btn-orange" onclick="showCSVImport()">
+                            <i class="fas fa-file-import"></i> Import CSV
+                        </button>
                     </div>
                     
                     <div style="overflow-x: auto;">
                         <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
                             <thead>
                                 <tr style="background-color: #f8f9fa; text-align: left;">
+                                    <th style="padding: 12px 15px; border-bottom: 2px solid #eee;">Image</th>
                                     <th style="padding: 12px 15px; border-bottom: 2px solid #eee;">Product</th>
                                     <th style="padding: 12px 15px; border-bottom: 2px solid #eee;">Category</th>
                                     <th style="padding: 12px 15px; border-bottom: 2px solid #eee;">Price</th>
@@ -852,24 +872,101 @@ Denim Overalls,34.99,15,pants"></textarea>
         </div>
     </main>
 
+    <!-- Edit Product Modal -->
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Edit Product</h3>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            
+            <div id="editForm">
+                <!-- Edit form will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Photo Selector Modal -->
+    <div class="modal" id="photoSelectorModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Select Photo</h3>
+                <button class="modal-close" onclick="closePhotoSelector()">&times;</button>
+            </div>
+            
+            <div class="photo-assignment">
+                <div class="form-group">
+                    <label class="form-label">Uploaded Photos</label>
+                    <div class="photo-select-grid" id="photoSelectorGrid">
+                        <!-- Photos will be loaded here -->
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Or enter image URL</label>
+                    <input type="text" id="selectedImageUrl" class="form-control" placeholder="https://example.com/image.jpg">
+                </div>
+                
+                <div class="btn-group">
+                    <button class="btn-admin btn-green" onclick="confirmPhotoSelection()">
+                        <i class="fas fa-check"></i> Use Selected Photo
+                    </button>
+                    <button class="btn-admin btn-red" onclick="closePhotoSelector()">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CSV Import Modal -->
+    <div class="modal" id="csvImportModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Import Products from CSV</h3>
+                <button class="modal-close" onclick="closeCSVImportModal()">&times;</button>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Paste CSV Data</label>
+                <textarea id="csvData" class="form-control" rows="10" placeholder="name,price,stock,category,image_url
+Cotton T-Shirt,19.99,25,tshirts,https://example.com/tshirt.jpg
+Denim Overalls,34.99,15,pants,https://example.com/overalls.jpg"></textarea>
+                <p class="upload-hint">Format: name,price,stock,category,image_url (one product per line)</p>
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn-admin btn-green" onclick="importCSV()">
+                    <i class="fas fa-upload"></i> Import Products
+                </button>
+                <button class="btn-admin btn-blue" onclick="downloadTemplate()">
+                    <i class="fas fa-download"></i> Download Template
+                </button>
+                <button class="btn-admin btn-red" onclick="closeCSVImportModal()">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Admin Login Modal -->
-    <div class="modal-overlay" id="loginModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
-        <div class="modal-content" style="background-color: white; padding: 30px; border-radius: 12px; max-width: 400px; width: 90%;">
+    <div class="modal" id="loginModal">
+        <div class="modal-content">
             <h3 style="margin-bottom: 15px;">Admin Login</h3>
             <p style="margin-bottom: 20px; color: #666;">Enter admin credentials</p>
             
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Username</label>
-                <input type="text" id="loginUsername" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;" value="admin">
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input type="text" id="loginUsername" class="form-control" value="admin">
             </div>
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Password</label>
-                <input type="password" id="loginPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;" value="admin123">
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" id="loginPassword" class="form-control" value="admin123">
             </div>
             
-            <div style="display: flex; gap: 10px;">
-                <button class="btn-primary" style="flex: 1;" onclick="adminLogin()">Login</button>
-                <button class="btn-outline" style="flex: 1;" onclick="closeLoginModal()">Cancel</button>
+            <div class="btn-group">
+                <button class="btn-admin btn-green" onclick="adminLogin()">Login</button>
+                <button class="btn-admin btn-outline" onclick="closeLoginModal()">Cancel</button>
             </div>
         </div>
     </div>
@@ -879,10 +976,13 @@ Denim Overalls,34.99,15,pants"></textarea>
         let products = [];
         let uploadedPhotos = [];
         let isAdmin = false;
+        let currentProductId = null;
+        let selectedPhotoForNewProduct = null;
 
         // Load products from localStorage on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadProductsFromStorage();
+            loadPhotosFromStorage();
             updateUI();
             
             // Mobile menu toggle
@@ -943,6 +1043,21 @@ Denim Overalls,34.99,15,pants"></textarea>
             localStorage.setItem('goatKidsProducts', JSON.stringify(products));
         }
 
+        // ========== PHOTO FUNCTIONS ==========
+        function loadPhotosFromStorage() {
+            const saved = localStorage.getItem('goatKidsPhotos');
+            if (saved) {
+                uploadedPhotos = JSON.parse(saved);
+                if (uploadedPhotos.length > 0) {
+                    showPhotoPreview();
+                }
+            }
+        }
+
+        function savePhotosToStorage() {
+            localStorage.setItem('goatKidsPhotos', JSON.stringify(uploadedPhotos));
+        }
+
         // ========== UI FUNCTIONS ==========
         function showTab(tabId) {
             // Hide all tabs
@@ -977,6 +1092,9 @@ Denim Overalls,34.99,15,pants"></textarea>
             
             // Update stats
             updateStats();
+            
+            // Update product count
+            document.getElementById('productCount').textContent = products.length;
         }
 
         function updateProductGrid() {
@@ -1022,7 +1140,7 @@ Denim Overalls,34.99,15,pants"></textarea>
             if (products.length === 0) {
                 tableBody.innerHTML = `
                     <tr>
-                        <td colspan="5" style="text-align: center; padding: 30px; color: #666;">
+                        <td colspan="6" style="text-align: center; padding: 30px; color: #666;">
                             <i class="fas fa-box-open" style="font-size: 24px; margin-bottom: 10px; display: block;"></i>
                             No products in inventory
                         </td>
@@ -1036,19 +1154,17 @@ Denim Overalls,34.99,15,pants"></textarea>
                 row.style.borderBottom = '1px solid #eee';
                 row.innerHTML = `
                     <td style="padding: 12px 15px;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <img src="${product.image}" alt="${product.name}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;">
-                            <span>${product.name}</span>
-                        </div>
+                        <img src="${product.image}" alt="${product.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;">
                     </td>
+                    <td style="padding: 12px 15px; font-weight: 500;">${product.name}</td>
                     <td style="padding: 12px 15px;">${product.category}</td>
                     <td style="padding: 12px 15px;">$${product.price.toFixed(2)}</td>
                     <td style="padding: 12px 15px;">${product.stock}</td>
                     <td style="padding: 12px 15px;">
-                        <button class="btn-admin btn-blue btn-sm" onclick="editProduct(${product.id})" style="padding: 5px 10px; margin-right: 5px;">
+                        <button class="btn-admin btn-blue btn-sm" onclick="openEditModal(${product.id})" style="padding: 6px 12px; margin-right: 5px;">
                             <i class="fas fa-edit"></i> Edit
                         </button>
-                        <button class="btn-admin btn-red btn-sm" onclick="deleteProduct(${product.id})" style="padding: 5px 10px;">
+                        <button class="btn-admin btn-red btn-sm" onclick="deleteProduct(${product.id})" style="padding: 6px 12px;">
                             <i class="fas fa-trash"></i> Delete
                         </button>
                     </td>
@@ -1069,12 +1185,6 @@ Denim Overalls,34.99,15,pants"></textarea>
             document.getElementById('lowStockCount').textContent = lowStockCount;
             document.getElementById('avgPrice').textContent = `$${avgPrice}`;
             document.getElementById('totalStock').textContent = totalStock;
-            
-            // Update inventory title
-            const title = document.querySelector('.section-title:nth-of-type(2)');
-            if (title) {
-                title.innerHTML = `<i class="fas fa-clipboard-list"></i> Current Inventory (${products.length} products)`;
-            }
         }
 
         // ========== ADMIN FUNCTIONS ==========
@@ -1120,146 +1230,181 @@ Denim Overalls,34.99,15,pants"></textarea>
             showMessage('Logged out successfully', 'info');
         }
 
-        // ========== IMPORT FUNCTIONS ==========
-        function importCSV() {
-            const csvText = document.getElementById('csvData').value.trim();
-            if (!csvText) {
-                showMessage('Please enter CSV data', 'error');
-                return;
-            }
+        // ========== EDIT PRODUCT MODAL ==========
+        function openEditModal(productId) {
+            currentProductId = productId;
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
             
-            const lines = csvText.split('\n').filter(line => line.trim() !== '');
-            if (lines.length < 2) {
-                showMessage('CSV data must have at least a header and one product', 'error');
-                return;
-            }
-            
-            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-            let importedCount = 0;
-            let errorCount = 0;
-            
-            for (let i = 1; i < lines.length; i++) {
-                try {
-                    const values = lines[i].split(',').map(v => v.trim());
-                    if (values.length < 3) {
-                        errorCount++;
-                        continue;
-                    }
+            const editForm = document.getElementById('editForm');
+            editForm.innerHTML = `
+                <div class="form-group">
+                    <label class="form-label">Product Name</label>
+                    <input type="text" id="editName" class="form-control" value="${product.name}">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Price</label>
+                    <input type="number" id="editPrice" class="form-control" value="${product.price}" step="0.01" min="0">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Stock</label>
+                    <input type="number" id="editStock" class="form-control" value="${product.stock}" min="0">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Category</label>
+                    <input type="text" id="editCategory" class="form-control" value="${product.category}">
+                </div>
+                
+                <div class="photo-assignment">
+                    <label class="form-label">Current Photo</label>
+                    <div style="text-align: center; margin: 15px 0;">
+                        <img src="${product.image}" alt="${product.name}" style="max-width: 200px; max-height: 200px; border-radius: 8px;">
+                    </div>
                     
-                    // Create product object
-                    const product = {
-                        id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
-                        name: values[0] || 'Unnamed Product',
-                        price: parseFloat(values[1]) || 0,
-                        stock: parseInt(values[2]) || 0,
-                        category: values[3] || 'uncategorized',
-                        image: getDefaultImage(values[3] || 'uncategorized')
-                    };
+                    <label class="form-label">Change Photo</label>
+                    <div class="btn-group" style="margin-bottom: 15px;">
+                        <button class="btn-admin btn-outline" onclick="showPhotoSelector(${productId})">
+                            <i class="fas fa-image"></i> Select from Uploaded Photos
+                        </button>
+                        <button class="btn-admin btn-outline" onclick="useDefaultImage(${productId})">
+                            <i class="fas fa-image"></i> Use Default Image
+                        </button>
+                    </div>
                     
-                    // Validate product
-                    if (product.name && !isNaN(product.price) && product.price > 0) {
-                        products.push(product);
-                        importedCount++;
-                    } else {
-                        errorCount++;
-                    }
-                } catch (error) {
-                    errorCount++;
-                    console.error('Error importing product:', error);
-                }
-            }
+                    <div class="form-group">
+                        <label class="form-label">Or enter image URL</label>
+                        <input type="text" id="editImageUrl" class="form-control" placeholder="https://example.com/image.jpg" value="${product.image}">
+                    </div>
+                </div>
+                
+                <div class="btn-group">
+                    <button class="btn-admin btn-green" onclick="saveProductChanges()">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                    <button class="btn-admin btn-red" onclick="closeEditModal()">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            `;
             
-            saveProductsToStorage();
-            updateUI();
-            
-            if (importedCount > 0) {
-                showMessage(`Successfully imported ${importedCount} products${errorCount > 0 ? ` (${errorCount} errors)` : ''}`, 'success');
-            } else {
-                showMessage('No products were imported. Check your CSV format.', 'error');
-            }
+            document.getElementById('editModal').style.display = 'flex';
         }
 
-        function downloadTemplate() {
-            const template = `name,price,stock,category
-Cotton T-Shirt,19.99,25,tshirts
-Denim Overalls,34.99,15,pants
-Floral Summer Dress,29.99,8,dresses
-Puffer Jacket,49.99,12,jackets
-Sneakers with Lights,39.99,20,shoes`;
-            
-            const blob = new Blob([template], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'goat-kids-template.csv';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-            
-            showMessage('Template downloaded!', 'success');
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+            currentProductId = null;
         }
 
-        function addSingleProduct() {
-            const name = document.getElementById('productName').value.trim();
-            const price = parseFloat(document.getElementById('productPrice').value);
-            const stock = parseInt(document.getElementById('productStock').value);
-            const category = document.getElementById('productCategory').value.trim() || 'uncategorized';
-            const image = document.getElementById('productImage').value.trim();
+        function saveProductChanges() {
+            const product = products.find(p => p.id === currentProductId);
+            if (!product) return;
+            
+            const name = document.getElementById('editName').value.trim();
+            const price = parseFloat(document.getElementById('editPrice').value);
+            const stock = parseInt(document.getElementById('editStock').value);
+            const category = document.getElementById('editCategory').value.trim();
+            const imageUrl = document.getElementById('editImageUrl').value.trim();
             
             if (!name || isNaN(price) || price <= 0) {
                 showMessage('Please enter a valid product name and price', 'error');
                 return;
             }
             
-            const product = {
-                id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
-                name: name,
-                price: price,
-                stock: isNaN(stock) ? 0 : stock,
-                category: category,
-                image: image || getDefaultImage(category)
-            };
+            product.name = name;
+            product.price = price;
+            product.stock = isNaN(stock) ? 0 : stock;
+            product.category = category || 'uncategorized';
+            product.image = imageUrl || product.image;
             
-            products.push(product);
             saveProductsToStorage();
             updateUI();
-            
-            // Clear form
-            document.getElementById('productName').value = '';
-            document.getElementById('productPrice').value = '';
-            document.getElementById('productStock').value = '';
-            document.getElementById('productCategory').value = '';
-            document.getElementById('productImage').value = '';
-            
-            showMessage(`"${name}" added to inventory`, 'success');
+            closeEditModal();
+            showMessage('Product updated successfully', 'success');
         }
 
-        function loadSampleProducts() {
-            loadDefaultProducts();
-            updateUI();
-            showMessage('Sample products loaded', 'success');
+        function showPhotoSelector(productId) {
+            currentProductId = productId;
+            const photoGrid = document.getElementById('photoSelectorGrid');
+            photoGrid.innerHTML = '';
+            
+            // Add uploaded photos
+            uploadedPhotos.forEach((photo, index) => {
+                const photoItem = document.createElement('div');
+                photoItem.className = 'photo-select-item';
+                photoItem.onclick = () => selectPhotoForEdit(index);
+                photoItem.innerHTML = `
+                    <img src="${photo.dataUrl}" alt="Photo ${index + 1}">
+                `;
+                photoGrid.appendChild(photoItem);
+            });
+            
+            // Clear selection
+            document.getElementById('selectedImageUrl').value = '';
+            
+            document.getElementById('photoSelectorModal').style.display = 'flex';
         }
 
-        function clearAllProducts() {
-            if (confirm('Are you sure you want to delete ALL products? This cannot be undone!')) {
-                products = [];
-                saveProductsToStorage();
-                updateUI();
-                showMessage('All products cleared', 'info');
+        function selectPhotoForEdit(photoIndex) {
+            // Remove selected class from all items
+            document.querySelectorAll('.photo-select-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            // Add selected class to clicked item
+            const items = document.querySelectorAll('.photo-select-item');
+            if (items[photoIndex]) {
+                items[photoIndex].classList.add('selected');
+                
+                // Set the image URL in edit form
+                if (currentProductId) {
+                    document.getElementById('editImageUrl').value = uploadedPhotos[photoIndex].dataUrl;
+                }
             }
         }
 
-        // ========== PHOTO FUNCTIONS ==========
+        function confirmPhotoSelection() {
+            const imageUrl = document.getElementById('selectedImageUrl').value.trim();
+            
+            if (currentProductId) {
+                // For editing existing product
+                if (imageUrl) {
+                    document.getElementById('editImageUrl').value = imageUrl;
+                }
+                closePhotoSelector();
+            } else {
+                // For new product
+                if (imageUrl) {
+                    selectedPhotoForNewProduct = imageUrl;
+                    document.getElementById('productImageUrl').value = imageUrl;
+                }
+                closePhotoSelector();
+            }
+        }
+
+        function closePhotoSelector() {
+            document.getElementById('photoSelectorModal').style.display = 'none';
+        }
+
+        function useDefaultImage(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            
+            const defaultImage = getDefaultImage(product.category);
+            document.getElementById('editImageUrl').value = defaultImage;
+            showMessage('Default image selected', 'info');
+        }
+
+        // ========== PHOTO UPLOAD FUNCTIONS ==========
         function handlePhotoUpload(event) {
             const files = event.target.files;
             if (!files || files.length === 0) return;
             
-            const previewGrid = document.getElementById('photoPreviewGrid');
-            previewGrid.innerHTML = '';
-            
-            // Process up to 5 files
-            const maxFiles = Math.min(files.length, 5);
+            // Process up to 10 files
+            const maxFiles = Math.min(files.length, 10);
+            let processedCount = 0;
             
             for (let i = 0; i < maxFiles; i++) {
                 const file = files[i];
@@ -1281,46 +1426,34 @@ Sneakers with Lights,39.99,20,shoes`;
                         id: uploadedPhotos.length + 1,
                         name: file.name,
                         dataUrl: e.target.result,
-                        size: (file.size / 1024).toFixed(1) + ' KB'
+                        size: (file.size / 1024).toFixed(1) + ' KB',
+                        uploaded: new Date().toISOString()
                     };
                     
                     uploadedPhotos.push(photoData);
+                    processedCount++;
                     
-                    const previewItem = document.createElement('div');
-                    previewItem.className = 'photo-preview-item';
-                    previewItem.innerHTML = `
-                        <button class="remove-photo" onclick="removePhoto(${photoData.id})">
-                            <i class="fas fa-times"></i>
-                        </button>
-                        <img src="${e.target.result}" alt="${file.name}">
-                        <div class="photo-filename">${file.name}</div>
-                    `;
-                    previewGrid.appendChild(previewItem);
+                    // When all files are processed
+                    if (processedCount === maxFiles) {
+                        savePhotosToStorage();
+                        showPhotoPreview();
+                        showMessage(`${uploadedPhotos.length} photos uploaded`, 'success');
+                    }
                 };
                 
                 reader.readAsDataURL(file);
             }
-            
-            if (uploadedPhotos.length > 0) {
-                document.getElementById('photoPreview').style.display = 'block';
-                showMessage(`${uploadedPhotos.length} photos loaded`, 'success');
-            }
         }
 
-        function removePhoto(photoId) {
-            uploadedPhotos = uploadedPhotos.filter(p => p.id !== photoId);
-            updatePhotoPreview();
-        }
-
-        function updatePhotoPreview() {
+        function showPhotoPreview() {
             const previewGrid = document.getElementById('photoPreviewGrid');
             previewGrid.innerHTML = '';
             
-            uploadedPhotos.forEach(photo => {
+            uploadedPhotos.forEach((photo, index) => {
                 const previewItem = document.createElement('div');
                 previewItem.className = 'photo-preview-item';
                 previewItem.innerHTML = `
-                    <button class="remove-photo" onclick="removePhoto(${photo.id})">
+                    <button class="remove-photo" onclick="removePhoto(${index})">
                         <i class="fas fa-times"></i>
                     </button>
                     <img src="${photo.dataUrl}" alt="${photo.name}">
@@ -1329,9 +1462,16 @@ Sneakers with Lights,39.99,20,shoes`;
                 previewGrid.appendChild(previewItem);
             });
             
-            if (uploadedPhotos.length === 0) {
-                document.getElementById('photoPreview').style.display = 'none';
+            if (uploadedPhotos.length > 0) {
+                document.getElementById('photoPreview').style.display = 'block';
             }
+        }
+
+        function removePhoto(photoIndex) {
+            uploadedPhotos.splice(photoIndex, 1);
+            savePhotosToStorage();
+            showPhotoPreview();
+            showMessage('Photo removed', 'info');
         }
 
         function autoAssignPhotos() {
@@ -1340,28 +1480,41 @@ Sneakers with Lights,39.99,20,shoes`;
                 return;
             }
             
+            if (products.length === 0) {
+                showMessage('No products to assign photos to', 'warning');
+                return;
+            }
+            
             let assigned = 0;
             
-            uploadedPhotos.forEach(photo => {
+            uploadedPhotos.forEach((photo, photoIndex) => {
                 const photoName = photo.name.toLowerCase().replace(/[^a-z0-9]/g, '');
                 
                 // Try to find matching product by name
-                const product = products.find(p => {
+                const productIndex = products.findIndex(p => {
                     const productName = p.name.toLowerCase().replace(/[^a-z0-9]/g, '');
                     return photoName.includes(productName.substring(0, 5)) ||
                            productName.includes(photoName.substring(0, 5));
                 });
                 
-                if (product) {
-                    product.image = photo.dataUrl;
+                if (productIndex !== -1) {
+                    products[productIndex].image = photo.dataUrl;
                     assigned++;
+                    
+                    // Remove the photo since it's been assigned
+                    uploadedPhotos.splice(photoIndex, 1);
                 }
             });
             
-            saveProductsToStorage();
-            updateUI();
-            
-            showMessage(`Assigned ${assigned} photos to products`, 'success');
+            if (assigned > 0) {
+                saveProductsToStorage();
+                savePhotosToStorage();
+                updateUI();
+                showPhotoPreview();
+                showMessage(`Assigned ${assigned} photos to products`, 'success');
+            } else {
+                showMessage('No photos could be automatically assigned', 'info');
+            }
         }
 
         function clearPhotoUploads() {
@@ -1369,6 +1522,7 @@ Sneakers with Lights,39.99,20,shoes`;
             
             if (confirm(`Clear all ${uploadedPhotos.length} uploaded photos?`)) {
                 uploadedPhotos = [];
+                savePhotosToStorage();
                 document.getElementById('photoPreview').style.display = 'none';
                 document.getElementById('photoFiles').value = '';
                 showMessage('All photos cleared', 'info');
@@ -1376,26 +1530,83 @@ Sneakers with Lights,39.99,20,shoes`;
         }
 
         // ========== PRODUCT MANAGEMENT ==========
-        function editProduct(productId) {
-            const product = products.find(p => p.id === productId);
-            if (!product) return;
+        function addSingleProduct() {
+            const name = document.getElementById('productName').value.trim();
+            const price = parseFloat(document.getElementById('productPrice').value);
+            const stock = parseInt(document.getElementById('productStock').value);
+            const category = document.getElementById('productCategory').value.trim() || 'uncategorized';
+            const imageUrl = document.getElementById('productImageUrl').value.trim();
             
-            const newName = prompt('Enter new product name:', product.name);
-            if (newName !== null) product.name = newName;
-            
-            const newPrice = prompt('Enter new price:', product.price);
-            if (newPrice !== null && !isNaN(parseFloat(newPrice))) {
-                product.price = parseFloat(newPrice);
+            if (!name || isNaN(price) || price <= 0) {
+                showMessage('Please enter a valid product name and price', 'error');
+                return;
             }
             
-            const newStock = prompt('Enter new stock quantity:', product.stock);
-            if (newStock !== null && !isNaN(parseInt(newStock))) {
-                product.stock = parseInt(newStock);
-            }
+            const product = {
+                id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
+                name: name,
+                price: price,
+                stock: isNaN(stock) ? 0 : stock,
+                category: category,
+                image: imageUrl || getDefaultImage(category)
+            };
             
+            products.push(product);
             saveProductsToStorage();
             updateUI();
-            showMessage('Product updated', 'success');
+            
+            // Clear form
+            document.getElementById('productName').value = '';
+            document.getElementById('productPrice').value = '';
+            document.getElementById('productStock').value = '';
+            document.getElementById('productCategory').value = '';
+            document.getElementById('productImageUrl').value = '';
+            selectedPhotoForNewProduct = null;
+            
+            showMessage(`"${name}" added to inventory`, 'success');
+        }
+
+        function showPhotoSelectorForNewProduct() {
+            currentProductId = null;
+            const photoGrid = document.getElementById('photoSelectorGrid');
+            photoGrid.innerHTML = '';
+            
+            // Add uploaded photos
+            uploadedPhotos.forEach((photo, index) => {
+                const photoItem = document.createElement('div');
+                photoItem.className = 'photo-select-item';
+                photoItem.onclick = () => selectPhotoForNewProduct(index);
+                photoItem.innerHTML = `
+                    <img src="${photo.dataUrl}" alt="Photo ${index + 1}">
+                `;
+                photoGrid.appendChild(photoItem);
+            });
+            
+            // Clear selection
+            document.getElementById('selectedImageUrl').value = '';
+            
+            document.getElementById('photoSelectorModal').style.display = 'flex';
+        }
+
+        function selectPhotoForNewProduct(photoIndex) {
+            // Remove selected class from all items
+            document.querySelectorAll('.photo-select-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            // Add selected class to clicked item
+            const items = document.querySelectorAll('.photo-select-item');
+            if (items[photoIndex]) {
+                items[photoIndex].classList.add('selected');
+                selectedPhotoForNewProduct = uploadedPhotos[photoIndex].dataUrl;
+                document.getElementById('productImageUrl').value = uploadedPhotos[photoIndex].dataUrl;
+            }
+        }
+
+        function loadSampleProducts() {
+            loadDefaultProducts();
+            updateUI();
+            showMessage('Sample products loaded', 'success');
         }
 
         function deleteProduct(productId) {
@@ -1446,6 +1657,95 @@ Sneakers with Lights,39.99,20,shoes`;
             window.URL.revokeObjectURL(url);
             
             showMessage('Inventory exported as CSV', 'success');
+        }
+
+        // ========== CSV IMPORT ==========
+        function showCSVImport() {
+            document.getElementById('csvImportModal').style.display = 'flex';
+        }
+
+        function closeCSVImportModal() {
+            document.getElementById('csvImportModal').style.display = 'none';
+        }
+
+        function importCSV() {
+            const csvText = document.getElementById('csvData').value.trim();
+            if (!csvText) {
+                showMessage('Please enter CSV data', 'error');
+                return;
+            }
+            
+            const lines = csvText.split('\n').filter(line => line.trim() !== '');
+            if (lines.length < 2) {
+                showMessage('CSV data must have at least a header and one product', 'error');
+                return;
+            }
+            
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            let importedCount = 0;
+            let errorCount = 0;
+            
+            for (let i = 1; i < lines.length; i++) {
+                try {
+                    const values = lines[i].split(',').map(v => v.trim());
+                    if (values.length < 3) {
+                        errorCount++;
+                        continue;
+                    }
+                    
+                    // Create product object
+                    const product = {
+                        id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
+                        name: values[0] || 'Unnamed Product',
+                        price: parseFloat(values[1]) || 0,
+                        stock: parseInt(values[2]) || 0,
+                        category: values[3] || 'uncategorized',
+                        image: values[4] || getDefaultImage(values[3] || 'uncategorized')
+                    };
+                    
+                    // Validate product
+                    if (product.name && !isNaN(product.price) && product.price > 0) {
+                        products.push(product);
+                        importedCount++;
+                    } else {
+                        errorCount++;
+                    }
+                } catch (error) {
+                    errorCount++;
+                    console.error('Error importing product:', error);
+                }
+            }
+            
+            saveProductsToStorage();
+            updateUI();
+            closeCSVImportModal();
+            
+            if (importedCount > 0) {
+                showMessage(`Successfully imported ${importedCount} products${errorCount > 0 ? ` (${errorCount} errors)` : ''}`, 'success');
+            } else {
+                showMessage('No products were imported. Check your CSV format.', 'error');
+            }
+        }
+
+        function downloadTemplate() {
+            const template = `name,price,stock,category,image_url
+Cotton T-Shirt,19.99,25,tshirts,https://example.com/tshirt.jpg
+Denim Overalls,34.99,15,pants,https://example.com/overalls.jpg
+Floral Summer Dress,29.99,8,dresses,https://example.com/dress.jpg
+Puffer Jacket,49.99,12,jackets,https://example.com/jacket.jpg
+Sneakers with Lights,39.99,20,shoes,https://example.com/shoes.jpg`;
+            
+            const blob = new Blob([template], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'goat-kids-template.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            showMessage('Template downloaded!', 'success');
         }
 
         // ========== HELPER FUNCTIONS ==========
