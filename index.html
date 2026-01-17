@@ -12,11 +12,11 @@ header{background:#fff;padding:15px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
 .flex{display:flex;justify-content:space-between;align-items:center}
 nav button{margin-left:10px;border:none;background:#eee;padding:8px 14px;border-radius:6px;cursor:pointer}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:20px}
-.card{background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,.1)}
+.card{background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,.1);position:relative;}
 .card img{width:100%;height:180px;object-fit:cover}
 .card-body{padding:12px}
 .price{color:#ff6b35;font-weight:bold}
-.btn{padding:8px 14px;border:none;border-radius:6px;cursor:pointer}
+.btn{padding:8px 14px;border:none;border-radius:6px;cursor:pointer;margin-top:5px}
 .btn-orange{background:#ff6b35;color:#fff}
 .btn-blue{background:#4a90e2;color:#fff}
 .btn-red{background:#e74c3c;color:#fff}
@@ -27,6 +27,8 @@ input,textarea,select{width:100%;padding:8px;margin-bottom:8px}
 .cart-item{display:flex;justify-content:space-between;margin-bottom:6px}
 .preview{width:100%;height:160px;object-fit:cover;border-radius:6px;margin-bottom:8px}
 .order{background:#fff;padding:10px;margin-bottom:10px;border-radius:6px}
+.alert-stock{color:red;font-weight:bold;margin-top:5px}
+.edit-btn{background:#4a90e2;color:#fff;width:100%;margin-top:5px}
 </style>
 </head>
 <body>
@@ -61,6 +63,10 @@ input,textarea,select{width:100%;padding:8px;margin-bottom:8px}
 
 <h3>Order History</h3>
 <div id="orders"></div>
+
+<h3>Edit Products</h3>
+<div id="editProducts"></div>
+
 <button class="btn btn-red" onclick="logout()">Logout</button>
 </section>
 
@@ -97,28 +103,25 @@ input,textarea,select{width:100%;padding:8px;margin-bottom:8px}
 </div>
 
 <script>
-// DOM Elements
 const productGrid = document.getElementById("productGrid");
 const cartCount = document.getElementById("cartCount");
 const store = document.getElementById("store");
 const admin = document.getElementById("admin");
 const loginModal = document.getElementById("loginModal");
 const cartModal = document.getElementById("cartModal");
+const editProductsDiv = document.getElementById("editProducts");
 const image = document.getElementById("image");
 const preview = document.getElementById("preview");
 const PAYWAY_LINK = "https://link.payway.com.kh/08407860s";
 const PAGE_NAME = "Goatkids";
-
 document.getElementById("payText").textContent = "Click here to pay";
 document.getElementById("payText").href = PAYWAY_LINK;
 
-// Data
 let products = JSON.parse(localStorage.getItem("products")) || [];
 let cart = JSON.parse(localStorage.getItem("cart")) || [];
 let orders = JSON.parse(localStorage.getItem("orders")) || [];
 let isAdmin = localStorage.getItem("admin")==="true";
 
-// IMAGE PREVIEW
 image.onchange = e => {
     const file = e.target.files[0];
     if(!file) return;
@@ -130,8 +133,7 @@ image.onchange = e => {
     reader.readAsDataURL(file);
 };
 
-// RESIZE IMAGE
-function resizeImage(base64, max=600){
+function resizeImage(base64,max=600){
     return new Promise(res=>{
         const img=new Image();
         img.onload=()=>{
@@ -152,6 +154,7 @@ function openAdmin(){
     store.classList.add("hidden");
     admin.classList.remove("hidden");
     renderOrders();
+    renderEditProducts();
 }
 
 function login(){
@@ -173,37 +176,49 @@ function logout(){
 }
 
 // ADD PRODUCT
-async function addProduct(){
-    const nameInput = document.getElementById("name");
-    const priceInput = document.getElementById("price");
-    const stockInput = document.getElementById("stock");
-    const sizeInput = document.getElementById("size");
+async function addProduct(editId=null){
+    const nameInput=document.getElementById("name");
+    const priceInput=document.getElementById("price");
+    const stockInput=document.getElementById("stock");
+    const sizeInput=document.getElementById("size");
 
-    if(!image.files[0]) return alert("Select image");
-    const base64 = await resizeImage(preview.src);
-    const sizeValues = sizeInput.value.split(",").map(s=>s.trim()).filter(s=>s);
+    if(editId===null && !image.files[0]) return alert("Select image");
+    let base64=null;
+    if(image.files[0]) base64=await resizeImage(preview.src);
 
-    products.push({
-        id: Date.now(),
-        name: nameInput.value,
-        price: +priceInput.value,
-        stock: +stockInput.value,
-        sizes: sizeValues,
-        image: base64
-    });
+    const sizeValues=sizeInput.value.split(",").map(s=>s.trim()).filter(s=>s);
+
+    if(editId!==null){
+        // Edit existing product
+        const p=products.find(x=>x.id===editId);
+        p.name=nameInput.value;
+        p.price=+priceInput.value;
+        p.stock=+stockInput.value;
+        p.sizes=sizeValues;
+        if(base64) p.image=base64;
+    } else {
+        products.push({
+            id: Date.now(),
+            name:nameInput.value,
+            price:+priceInput.value,
+            stock:+stockInput.value,
+            sizes:sizeValues,
+            image:base64
+        });
+    }
+
     localStorage.setItem("products",JSON.stringify(products));
-
     nameInput.value=priceInput.value=stockInput.value=sizeInput.value=image.value="";
     preview.classList.add("hidden");
-
-    render(); // immediately show new product
+    render();
+    renderEditProducts();
 }
 
 // RENDER PRODUCTS
 function render(){
     productGrid.innerHTML="";
     products.forEach(p=>{
-        let sizeOptions = p.sizes.map(s=>`<option value="${s}">${s}</option>`).join("");
+        let sizeOptions=p.sizes.map(s=>`<option value="${s}">${s}</option>`).join("");
         productGrid.innerHTML+=`
         <div class="card">
             <img src="${p.image}">
@@ -213,6 +228,7 @@ function render(){
                 <div>Stock: ${p.stock}</div>
                 <select id="sizeSelect-${p.id}">${sizeOptions}</select>
                 <button class="btn btn-orange" onclick="addToCart(${p.id})" ${p.stock===0?"disabled":""}>Add to Cart</button>
+                ${p.stock===0?'<div class="alert-stock">Out of Stock!</div>':''}
             </div>
         </div>`;
     });
@@ -221,11 +237,11 @@ function render(){
 
 // CART FUNCTIONS
 function addToCart(id){
-    const p = products.find(x=>x.id===id);
-    const selectedSize = document.getElementById(`sizeSelect-${id}`).value || "N/A";
+    const p=products.find(x=>x.id===id);
+    const selectedSize=document.getElementById(`sizeSelect-${id}`).value||"N/A";
     if(p.stock<=0) return alert("Out of stock!");
 
-    const item = cart.find(i=>i.id===id && i.size===selectedSize);
+    const item=cart.find(i=>i.id===id && i.size===selectedSize);
     if(item) item.qty++; 
     else cart.push({id:p.id,name:p.name,price:p.price,size:selectedSize,qty:1});
 
@@ -236,7 +252,7 @@ function addToCart(id){
 }
 
 function updateCartCount(){
-    cartCount.textContent = cart.reduce((s,i)=>s+i.qty,0);
+    cartCount.textContent=cart.reduce((s,i)=>s+i.qty,0);
 }
 
 function openCart(){ renderCart(); cartModal.style.display="flex"; }
@@ -248,8 +264,8 @@ function renderCart(){
         total+=i.price*i.qty;
         html+=`<div class="cart-item"><span>${i.name} (${i.size}) x ${i.qty}</span><span>$${(i.price*i.qty).toFixed(2)}</span></div>`;
     });
-    cartItems.innerHTML = html || "<p>Empty</p>";
-    cartTotal.textContent = "Total: $"+total.toFixed(2);
+    cartItems.innerHTML=html||"<p>Empty</p>";
+    cartTotal.textContent="Total: $"+total.toFixed(2);
 }
 
 // SEND ORDER
@@ -290,6 +306,31 @@ function renderOrders(){
             Total: $${o.total}
         </div>`;
     });
+}
+
+// ADMIN EDIT PRODUCTS
+function renderEditProducts(){
+    editProductsDiv.innerHTML="";
+    products.forEach(p=>{
+        editProductsDiv.innerHTML+=`
+        <div class="order">
+            ${p.name} - $${p.price} - Stock: ${p.stock}
+            <button class="edit-btn" onclick="editProduct(${p.id})">Edit</button>
+        </div>`;
+    });
+}
+
+function editProduct(id){
+    const p=products.find(x=>x.id===id);
+    document.getElementById("name").value=p.name;
+    document.getElementById("price").value=p.price;
+    document.getElementById("stock").value=p.stock;
+    document.getElementById("size").value=p.sizes.join(",");
+    preview.src=p.image;
+    preview.classList.remove("hidden");
+    addProduct.editId=id;
+    // override addProduct to edit
+    addProduct = (async(editId=id)=> await addProduct(editId));
 }
 
 // INITIAL RENDER
