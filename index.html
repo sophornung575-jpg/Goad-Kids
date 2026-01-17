@@ -1,1318 +1,244 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GOAT KIDS - Children's Clothing Store</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        /* All CSS styles are already present in the original code */
-        /* They remain unchanged */
-    </style>
+<meta charset="UTF-8">
+<title>Advanced Store</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+*{box-sizing:border-box;font-family:Segoe UI,system-ui}
+body{margin:0;background:#f5f6f8}
+header{background:#fff;padding:15px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.container{max-width:1200px;margin:auto;padding:20px}
+.flex{display:flex;justify-content:space-between;align-items:center}
+nav button{margin-left:10px;border:none;background:#eee;padding:8px 14px;border-radius:6px;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:20px}
+.card{background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,.1)}
+.card img{width:100%;height:180px;object-fit:cover}
+.card-body{padding:12px}
+.price{color:#ff6b35;font-weight:bold}
+.btn{padding:8px 14px;border:none;border-radius:6px;cursor:pointer}
+.btn-orange{background:#ff6b35;color:#fff}
+.btn-blue{background:#4a90e2;color:#fff}
+.btn-red{background:#e74c3c;color:#fff}
+.hidden{display:none}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center}
+.modal-content{background:#fff;padding:20px;border-radius:10px;width:90%;max-width:420px}
+input,textarea{width:100%;padding:8px;margin-bottom:8px}
+.cart-item{display:flex;justify-content:space-between;margin-bottom:6px}
+.preview{width:100%;height:160px;object-fit:cover;border-radius:6px;margin-bottom:8px}
+.order{background:#fff;padding:10px;margin-bottom:10px;border-radius:6px}
+</style>
 </head>
+
 <body>
-    <!-- Header -->
-    <header>
-        <div class="header-container">
-            <div class="logo">
-                <span class="logo-icon">🐐</span>
-                <span>GOAT KIDS</span>
-                <span id="adminBadge" class="admin-badge" style="display: none;">ADMIN</span>
-            </div>
-            
-            <button class="mobile-menu-btn" id="mobileMenuBtn">
-                <i class="fas fa-bars"></i>
-            </button>
-            
-            <nav id="mainNav">
-                <a href="#" class="nav-link active" onclick="showTab('store')">
-                    <i class="fas fa-store"></i>
-                    <span>Store</span>
-                </a>
-                <a href="#" class="nav-link" onclick="showTab('cart')">
-                    <i class="fas fa-shopping-cart"></i>
-                    <span>Cart</span>
-                    <span class="cart-count" id="cartCountNav">0</span>
-                </a>
-                <a href="#" class="nav-link" onclick="showTab('admin')" id="adminNavLink" style="display: none;">
-                    <i class="fas fa-cog"></i>
-                    <span>Admin Panel</span>
-                </a>
-            </nav>
-        </div>
-    </header>
 
-    <!-- Main Content -->
-    <main class="container">
-        <!-- Store Tab -->
-        <div id="storeTab" class="tab-content active">
-            <div class="store-header">
-                <h1>Children's Clothing Store</h1>
-                <p>High-quality, comfortable clothing for kids of all ages</p>
-            </div>
-            
-            <div class="stats-container">
-                <div class="stat-card">
-                    <div class="stat-value" id="totalProducts">0</div>
-                    <div class="stat-label">Products Available</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="lowStockCount">0</div>
-                    <div class="stat-label">Low Stock Items</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="avgPrice">$0.00</div>
-                    <div class="stat-label">Average Price</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="totalStock">0</div>
-                    <div class="stat-label">Total Items in Stock</div>
-                </div>
-            </div>
-            
-            <div class="product-grid" id="productGrid">
-                <!-- Products will be loaded here -->
-            </div>
-        </div>
-        
-        <!-- Cart Tab -->
-        <div id="cartTab" class="tab-content">
-            <div class="cart-container">
-                <h2 class="cart-title">
-                    <i class="fas fa-shopping-cart"></i>
-                    Shopping Cart
-                </h2>
-                
-                <div class="cart-items" id="cartItems">
-                    <div class="cart-empty" id="emptyCart">
-                        <div class="cart-empty-icon">
-                            <i class="fas fa-shopping-cart"></i>
-                        </div>
-                        <h3>Your cart is empty</h3>
-                        <p>Add some products from the store</p>
-                        <button class="btn btn-primary" onclick="showTab('store')" style="margin-top: 15px;">
-                            <i class="fas fa-store"></i> Browse Store
-                        </button>
-                    </div>
-                    
-                    <div id="cartItemsList" style="display: none;">
-                        <!-- Cart items will be loaded here -->
-                    </div>
-                </div>
-                
-                <div class="cart-summary" id="cartSummary" style="display: none;">
-                    <div class="cart-totals">
-                        <div class="cart-total-row">
-                            <span>Subtotal</span>
-                            <span id="cartSubtotal">$0.00</span>
-                        </div>
-                        <div class="cart-total-row">
-                            <span>Shipping</span>
-                            <span id="cartShipping">$5.00</span>
-                        </div>
-                        <div class="cart-total-row">
-                            <span>Total</span>
-                            <span id="cartTotal">$0.00</span>
-                        </div>
-                    </div>
-                    
-                    <div class="checkout-form">
-                        <h3 class="checkout-title">
-                            <i class="fas fa-user"></i>
-                            Customer Information
-                        </h3>
-                        
-                        <div class="form-group">
-                            <input type="text" id="customerName" class="form-control" placeholder="Your Name" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <input type="tel" id="customerPhone" class="form-control" placeholder="Phone Number" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <textarea id="customerAddress" class="form-control" rows="3" placeholder="Delivery Address" required></textarea>
-                        </div>
-                        
-                        <div class="form-group">
-                            <textarea id="customerNotes" class="form-control" rows="2" placeholder="Order Notes (optional)"></textarea>
-                        </div>
-                        
-                        <button class="messenger-btn" onclick="sendOrderToMessenger()">
-                            <i class="fab fa-facebook-messenger"></i>
-                            Send Order via Messenger
-                        </button>
-                        
-                        <p style="text-align: center; margin-top: 15px; color: #666; font-size: 14px;">
-                            <i class="fas fa-info-circle"></i>
-                            You'll be redirected to Messenger to confirm your order
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Admin Tab -->
-        <div id="adminTab" class="tab-content">
-            <div class="admin-container">
-                <div class="admin-header">
-                    <h2 class="admin-title">
-                        <i class="fas fa-cog"></i>
-                        Admin Panel
-                    </h2>
-                    <div>
-                        <button class="btn-admin btn-blue" onclick="showTab('store')">
-                            <i class="fas fa-store"></i> Back to Store
-                        </button>
-                        <button class="admin-logout" onclick="adminLogout()">
-                            <i class="fas fa-sign-out-alt"></i> Logout
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Messages -->
-                <div id="messageArea"></div>
-                
-                <!-- PHOTO MANAGEMENT SECTION -->
-                <div class="bulk-import-section">
-                    <h3 class="section-title">
-                        <i class="fas fa-images"></i>
-                        Photo Management
-                    </h3>
-                    
-                    <!-- Photo Upload -->
-                    <div class="photo-upload-area">
-                        <div class="upload-icon">
-                            <i class="fas fa-cloud-upload-alt"></i>
-                        </div>
-                        <p class="upload-text">
-                            <strong>Upload Product Photos</strong>
-                        </p>
-                        <p class="upload-hint" style="margin-bottom: 15px;">
-                            JPG or PNG files (Max 2MB each)
-                        </p>
-                        <input type="file" id="photoFiles" class="file-input" 
-                               accept="image/*" multiple 
-                               onchange="handlePhotoUpload(event)">
-                        <button class="btn-admin btn-purple" onclick="document.getElementById('photoFiles').click()">
-                            <i class="fas fa-folder-open"></i> Select Photos
-                        </button>
-                    </div>
-                    
-                    <!-- Uploaded Photos -->
-                    <div id="photoPreview" style="display: none;">
-                        <h4 class="section-subtitle">
-                            <i class="fas fa-images"></i> Uploaded Photos
-                        </h4>
-                        <div class="photo-preview-grid" id="photoPreviewGrid">
-                            <!-- Photos will be previewed here -->
-                        </div>
-                        <div class="btn-group">
-                            <button class="btn-admin btn-blue" onclick="autoAssignPhotos()">
-                                <i class="fas fa-magic"></i> Auto-Assign Photos
-                            </button>
-                            <button class="btn-admin btn-red" onclick="clearPhotoUploads()">
-                                <i class="fas fa-trash"></i> Clear Photos
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- Quick Product Add -->
-                    <div style="margin-top: 30px;">
-                        <h4 class="section-subtitle">
-                            <i class="fas fa-plus-circle"></i> Add New Product
-                        </h4>
-                        
-                        <div class="form-group">
-                            <input type="text" id="productName" class="form-control" placeholder="Product Name" style="margin-bottom: 10px;">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                                <input type="number" id="productPrice" class="form-control" placeholder="Price" step="0.01" min="0">
-                                <input type="number" id="productStock" class="form-control" placeholder="Stock" min="0">
-                            </div>
-                            <input type="text" id="productCategory" class="form-control" placeholder="Category (tshirts, pants, etc)" style="margin-bottom: 10px;">
-                            <div class="btn-group" style="margin-bottom: 10px;">
-                                <button class="btn-admin btn-outline" onclick="showPhotoSelectorForNewProduct()">
-                                    <i class="fas fa-image"></i> Select Photo
-                                </button>
-                                <input type="text" id="productImageUrl" class="form-control" placeholder="Or enter image URL">
-                            </div>
-                        </div>
-                        
-                        <div class="btn-group">
-                            <button class="btn-admin btn-green" onclick="addSingleProduct()">
-                                <i class="fas fa-plus"></i> Add Product
-                            </button>
-                            <button class="btn-admin btn-blue" onclick="loadSampleProducts()">
-                                <i class="fas fa-download"></i> Load Sample Products
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Current Inventory -->
-                <div style="margin-top: 40px;">
-                    <h3 class="section-title">
-                        <i class="fas fa-clipboard-list"></i>
-                        Current Inventory (<span id="productCount">0</span> products)
-                    </h3>
-                    
-                    <div class="btn-group" style="margin-bottom: 20px;">
-                        <button class="btn-admin btn-blue" onclick="exportInventory()">
-                            <i class="fas fa-file-export"></i> Export Inventory
-                        </button>
-                        <button class="btn-admin btn-green" onclick="refreshInventory()">
-                            <i class="fas fa-sync"></i> Refresh
-                        </button>
-                        <button class="btn-admin btn-orange" onclick="showCSVImport()">
-                            <i class="fas fa-file-import"></i> Import CSV
-                        </button>
-                    </div>
-                    
-                    <div style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-                            <thead>
-                                <tr style="background-color: #f8f9fa; text-align: left;">
-                                    <th style="padding: 12px 15px; border-bottom: 2px solid #eee;">Image</th>
-                                    <th style="padding: 12px 15px; border-bottom: 2px solid #eee;">Product</th>
-                                    <th style="padding: 12px 15px; border-bottom: 2px solid #eee;">Category</th>
-                                    <th style="padding: 12px 15px; border-bottom: 2px solid #eee;">Price</th>
-                                    <th style="padding: 12px 15px; border-bottom: 2px solid #eee;">Stock</th>
-                                    <th style="padding: 12px 15px; border-bottom: 2px solid #eee;">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="inventoryTableBody">
-                                <!-- Inventory will be loaded here -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
+<header>
+<div class="container flex">
+<b>🛒 My Store</b>
+<nav>
+<button onclick="openCart()">Cart (<span id="cartCount">0</span>)</button>
+<button onclick="openAdmin()">Admin</button>
+</nav>
+</div>
+</header>
 
-    <!-- Edit Product Modal -->
-    <div class="modal" id="editModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title">Edit Product</h3>
-                <button class="modal-close" onclick="closeEditModal()">&times;</button>
-            </div>
-            
-            <div id="editForm">
-                <!-- Edit form will be loaded here -->
-            </div>
-        </div>
-    </div>
+<div class="container">
 
-    <!-- Photo Selector Modal -->
-    <div class="modal" id="photoSelectorModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title">Select Photo</h3>
-                <button class="modal-close" onclick="closePhotoSelector()">&times;</button>
-            </div>
-            
-            <div class="photo-assignment">
-                <div class="form-group">
-                    <label class="form-label">Uploaded Photos</label>
-                    <div class="photo-select-grid" id="photoSelectorGrid">
-                        <!-- Photos will be loaded here -->
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Or enter image URL</label>
-                    <input type="text" id="selectedImageUrl" class="form-control" placeholder="https://example.com/image.jpg">
-                </div>
-                
-                <div class="btn-group">
-                    <button class="btn-admin btn-green" onclick="confirmPhotoSelection()">
-                        <i class="fas fa-check"></i> Use Selected Photo
-                    </button>
-                    <button class="btn-admin btn-red" onclick="closePhotoSelector()">
-                        <i class="fas fa-times"></i> Cancel
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
+<!-- STORE -->
+<section id="store">
+<div class="grid" id="productGrid"></div>
+</section>
 
-    <!-- CSV Import Modal -->
-    <div class="modal" id="csvImportModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title">Import Products from CSV</h3>
-                <button class="modal-close" onclick="closeCSVImportModal()">&times;</button>
-            </div>
-            
-            <div class="bulk-import-section">
-                <h4 class="section-subtitle">
-                    <i class="fas fa-file-csv"></i> CSV Format
-                </h4>
-                <p style="margin-bottom: 15px; color: #666;">
-                    Your CSV should have the following columns: <strong>name, price, stock, category, image_url</strong><br>
-                    First row should be headers. Example:
-                </p>
-                
-                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; overflow-x: auto;">
-                    <code style="font-family: monospace; color: #333;">
-                        name,price,stock,category,image_url<br>
-                        "Blue T-Shirt",15.99,25,tshirts,https://example.com/tshirt1.jpg<br>
-                        "Denim Jeans",29.99,15,pants,https://example.com/jeans1.jpg
-                    </code>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Upload CSV File</label>
-                    <input type="file" id="csvFileInput" accept=".csv" class="form-control">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Or paste CSV data</label>
-                    <textarea id="csvDataTextarea" class="form-control" rows="8" placeholder="Paste your CSV data here..."></textarea>
-                </div>
-                
-                <div class="btn-group">
-                    <button class="btn-admin btn-green" onclick="processCSVImport()">
-                        <i class="fas fa-upload"></i> Import CSV
-                    </button>
-                    <button class="btn-admin btn-blue" onclick="downloadCSVTemplate()">
-                        <i class="fas fa-download"></i> Download Template
-                    </button>
-                    <button class="btn-admin btn-red" onclick="closeCSVImportModal()">
-                        <i class="fas fa-times"></i> Cancel
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
+<!-- ADMIN -->
+<section id="admin" class="hidden">
+<h2>Admin Panel</h2>
 
-    <script>
-        // State Management
-        let products = [];
-        let cart = [];
-        let uploadedPhotos = [];
-        let isAdmin = localStorage.getItem('goatKidsAdmin') === 'true';
-        let selectedProductForEditing = null;
-        let photoSelectionContext = null;
-        let selectedPhotoForProduct = null;
+<input id="name" placeholder="Product name">
+<input id="price" type="number" placeholder="Price">
+<input id="stock" type="number" placeholder="Stock">
+<input type="file" id="image" accept="image/*">
+<img id="preview" class="preview hidden">
 
-        // DOM Elements
-        const cartCountNav = document.getElementById('cartCountNav');
-        const adminNavLink = document.getElementById('adminNavLink');
-        const adminBadge = document.getElementById('adminBadge');
-        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-        const mainNav = document.getElementById('mainNav');
-        
-        // Initialize the app
-        function init() {
-            checkAdminStatus();
-            loadProducts();
-            loadCart();
-            setupEventListeners();
-            showTab('store');
-        }
+<button class="btn btn-orange" onclick="addProduct()">Add Product</button>
 
-        // Event Listeners
-        function setupEventListeners() {
-            mobileMenuBtn.addEventListener('click', () => {
-                mainNav.classList.toggle('active');
-            });
-            
-            document.addEventListener('click', (e) => {
-                if (!mainNav.contains(e.target) && !mobileMenuBtn.contains(e.target)) {
-                    mainNav.classList.remove('active');
-                }
-            });
-            
-            // Handle Enter key in admin product form
-            document.getElementById('productName')?.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') addSingleProduct();
-            });
-        }
+<h3>Order History</h3>
+<div id="orders"></div>
 
-        // Tab Navigation
-        function showTab(tabName) {
-            // Hide all tabs
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
-            // Remove active class from all nav links
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.classList.remove('active');
-            });
-            
-            // Show selected tab
-            if (tabName === 'store') {
-                document.getElementById('storeTab').classList.add('active');
-                document.querySelector('.nav-link[onclick*="store"]').classList.add('active');
-                refreshStoreStats();
-            } else if (tabName === 'cart') {
-                document.getElementById('cartTab').classList.add('active');
-                document.querySelector('.nav-link[onclick*="cart"]').classList.add('active');
-                renderCart();
-            } else if (tabName === 'admin') {
-                if (!isAdmin) {
-                    adminLogin();
-                    return;
-                }
-                document.getElementById('adminTab').classList.add('active');
-                document.querySelector('.nav-link[onclick*="admin"]').classList.add('active');
-                refreshInventory();
-            }
-            
-            mainNav.classList.remove('active');
-        }
+<button class="btn btn-red" onclick="logout()">Logout</button>
+</section>
 
-        // ADMIN FUNCTIONS
-        function checkAdminStatus() {
-            if (isAdmin) {
-                adminNavLink.style.display = 'flex';
-                adminBadge.style.display = 'inline-block';
-            } else {
-                adminNavLink.style.display = 'none';
-                adminBadge.style.display = 'none';
-            }
-        }
+</div>
 
-        function adminLogin() {
-            const password = prompt('Enter admin password:');
-            if (password === 'admin123') {
-                isAdmin = true;
-                localStorage.setItem('goatKidsAdmin', 'true');
-                checkAdminStatus();
-                showTab('admin');
-                showMessage('Admin login successful!', 'success');
-            } else if (password) {
-                alert('Incorrect password!');
-            }
-        }
+<!-- LOGIN -->
+<div class="modal" id="loginModal">
+<div class="modal-content">
+<h3>Admin Login</h3>
+<input id="user" value="admin">
+<input id="pass" type="password" value="admin123">
+<button class="btn btn-blue" onclick="login()">Login</button>
+</div>
+</div>
 
-        function adminLogout() {
-            isAdmin = false;
-            localStorage.removeItem('goatKidsAdmin');
-            checkAdminStatus();
-            showTab('store');
-            showMessage('Admin logged out.', 'info');
-        }
+<!-- CART -->
+<div class="modal" id="cartModal">
+<div class="modal-content">
+<h3>Your Cart</h3>
+<div id="cartItems"></div>
+<h4 id="cartTotal"></h4>
 
-        // PRODUCT MANAGEMENT
-        function loadProducts() {
-            const savedProducts = localStorage.getItem('goatKidsProducts');
-            if (savedProducts) {
-                products = JSON.parse(savedProducts);
-            } else {
-                loadSampleProducts();
-            }
-            renderProducts();
-            refreshStoreStats();
-        }
+<h4>Customer Info</h4>
+<input id="cname" placeholder="Full Name">
+<input id="cphone" placeholder="Phone Number">
+<textarea id="caddr" placeholder="Delivery Address"></textarea>
 
-        function loadSampleProducts() {
-            products = [
-                {
-                    id: 1,
-                    name: "Blue Dinosaur T-Shirt",
-                    price: 14.99,
-                    stock: 15,
-                    category: "tshirts",
-                    image: "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=400&h=300&fit=crop"
-                },
-                {
-                    id: 2,
-                    name: "Denim Overall Pants",
-                    price: 29.99,
-                    stock: 8,
-                    category: "pants",
-                    image: "https://images.unsplash.com/photo-1590372948123-1cb519acab7c?w=400&h=300&fit=crop"
-                },
-                {
-                    id: 3,
-                    name: "Cotton Hoodie",
-                    price: 24.99,
-                    stock: 12,
-                    category: "hoodies",
-                    image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400&h=300&fit=crop"
-                },
-                {
-                    id: 4,
-                    name: "Rainbow Sneakers",
-                    price: 34.99,
-                    stock: 3,
-                    category: "shoes",
-                    image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=300&fit=crop"
-                },
-                {
-                    id: 5,
-                    name: "Animal Print Cap",
-                    price: 12.99,
-                    stock: 20,
-                    category: "accessories",
-                    image: "https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=400&h=300&fit=crop"
-                },
-                {
-                    id: 6,
-                    name: "Soft Cotton Pajamas",
-                    price: 22.99,
-                    stock: 6,
-                    category: "pajamas",
-                    image: "https://images.unsplash.com/photo-1592243739234-1c8b8de87a3c?w=400&h=300&fit=crop"
-                }
-            ];
-            saveProducts();
-            renderProducts();
-            refreshStoreStats();
-            refreshInventory();
-            showMessage('Sample products loaded successfully!', 'success');
-        }
+<p><b>Payment:</b><br>💳 ABA / KHQR<br><span id="payText"></span></p>
 
-        function saveProducts() {
-            localStorage.setItem('goatKidsProducts', JSON.stringify(products));
-        }
+<button class="btn btn-blue" onclick="sendOrder()">📩 Order via Messenger</button>
+<button class="btn btn-red" onclick="closeCart()">Close</button>
+</div>
+</div>
 
-        function renderProducts() {
-            const productGrid = document.getElementById('productGrid');
-            productGrid.innerHTML = '';
-            
-            products.forEach(product => {
-                const stockClass = product.stock > 10 ? 'in-stock' : 
-                                  product.stock > 0 ? 'low-stock' : 'out-of-stock';
-                const stockText = product.stock > 10 ? 'In Stock' : 
-                                 product.stock > 0 ? `Low Stock (${product.stock})` : 'Out of Stock';
-                
-                const productCard = document.createElement('div');
-                productCard.className = 'product-card';
-                productCard.innerHTML = `
-                    <img src="${product.image}" alt="${product.name}" class="product-image" onerror="this.src='https://images.unsplash.com/photo-1564069114553-7215e1ff1890?w=400&h=300&fit=crop'">
-                    <div class="product-info">
-                        <div class="product-title">${product.name}</div>
-                        <div class="product-price">$${product.price.toFixed(2)}</div>
-                        <span class="product-stock ${stockClass}">${stockText}</span>
-                        <div class="product-actions">
-                            <button class="btn btn-primary" onclick="addToCart(${product.id})" ${product.stock === 0 ? 'disabled' : ''}>
-                                <i class="fas fa-cart-plus"></i> Add to Cart
-                            </button>
-                            ${isAdmin ? `<button class="btn btn-outline" onclick="editProduct(${product.id})">
-                                <i class="fas fa-edit"></i>
-                            </button>` : ''}
-                        </div>
-                    </div>
-                `;
-                productGrid.appendChild(productCard);
-            });
-        }
+<script>
+const PAGE_NAME="YOUR_PAGE_USERNAME";
+const ABA_INFO="ABA: 123 456 789 | Name: GOAT KIDS";
 
-        function refreshStoreStats() {
-            const totalProducts = products.length;
-            const lowStockCount = products.filter(p => p.stock > 0 && p.stock <= 10).length;
-            const avgPrice = products.length > 0 ? 
-                products.reduce((sum, p) => sum + p.price, 0) / products.length : 0;
-            const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
-            
-            document.getElementById('totalProducts').textContent = totalProducts;
-            document.getElementById('lowStockCount').textContent = lowStockCount;
-            document.getElementById('avgPrice').textContent = `$${avgPrice.toFixed(2)}`;
-            document.getElementById('totalStock').textContent = totalStock;
-        }
+let products=JSON.parse(localStorage.getItem("products"))||[];
+let cart=JSON.parse(localStorage.getItem("cart"))||[];
+let orders=JSON.parse(localStorage.getItem("orders"))||[];
+let isAdmin=localStorage.getItem("admin")==="true";
 
-        // CART FUNCTIONS
-        function loadCart() {
-            const savedCart = localStorage.getItem('goatKidsCart');
-            if (savedCart) {
-                cart = JSON.parse(savedCart);
-                updateCartCount();
-            }
-        }
+payText.textContent=ABA_INFO;
 
-        function saveCart() {
-            localStorage.setItem('goatKidsCart', JSON.stringify(cart));
-            updateCartCount();
-        }
+image.onchange=e=>{
+const file=e.target.files[0];
+if(!file)return;
+const reader=new FileReader();
+reader.onload=()=>{preview.src=reader.result;preview.classList.remove("hidden");};
+reader.readAsDataURL(file);
+};
 
-        function updateCartCount() {
-            const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-            cartCountNav.textContent = totalItems;
-        }
+function resizeImage(base64,max=600){
+return new Promise(res=>{
+const img=new Image();
+img.onload=()=>{
+const scale=Math.min(max/img.width,max/img.height,1);
+const c=document.createElement("canvas");
+c.width=img.width*scale;
+c.height=img.height*scale;
+c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+res(c.toDataURL("image/jpeg",0.8));
+};
+img.src=base64;
+});
+}
 
-        function addToCart(productId) {
-            const product = products.find(p => p.id === productId);
-            if (!product) return;
-            
-            if (product.stock === 0) {
-                showMessage('This product is out of stock!', 'error');
-                return;
-            }
-            
-            const existingItem = cart.find(item => item.productId === productId);
-            
-            if (existingItem) {
-                if (existingItem.quantity >= product.stock) {
-                    showMessage(`Only ${product.stock} items available in stock!`, 'error');
-                    return;
-                }
-                existingItem.quantity++;
-            } else {
-                cart.push({
-                    productId,
-                    quantity: 1,
-                    name: product.name,
-                    price: product.price,
-                    image: product.image
-                });
-            }
-            
-            saveCart();
-            showMessage(`${product.name} added to cart!`, 'success');
-        }
+function openAdmin(){
+if(!isAdmin){loginModal.style.display="flex";return;}
+store.classList.add("hidden");
+admin.classList.remove("hidden");
+renderOrders();
+}
 
-        function removeFromCart(productId) {
-            cart = cart.filter(item => item.productId !== productId);
-            saveCart();
-            renderCart();
-            showMessage('Item removed from cart.', 'info');
-        }
+function login(){
+if(user.value==="admin"&&pass.value==="admin123"){
+isAdmin=true;
+localStorage.setItem("admin","true");
+loginModal.style.display="none";
+openAdmin();
+}else alert("Wrong login");
+}
 
-        function updateQuantity(productId, change) {
-            const item = cart.find(item => item.productId === productId);
-            if (!item) return;
-            
-            const product = products.find(p => p.id === productId);
-            if (!product) return;
-            
-            const newQuantity = item.quantity + change;
-            
-            if (newQuantity < 1) {
-                removeFromCart(productId);
-                return;
-            }
-            
-            if (newQuantity > product.stock) {
-                showMessage(`Only ${product.stock} items available in stock!`, 'error');
-                return;
-            }
-            
-            item.quantity = newQuantity;
-            saveCart();
-            renderCart();
-        }
+function logout(){
+isAdmin=false;
+localStorage.removeItem("admin");
+admin.classList.add("hidden");
+store.classList.remove("hidden");
+}
 
-        function renderCart() {
-            const cartItemsList = document.getElementById('cartItemsList');
-            const emptyCart = document.getElementById('emptyCart');
-            const cartSummary = document.getElementById('cartSummary');
-            
-            if (cart.length === 0) {
-                cartItemsList.style.display = 'none';
-                cartSummary.style.display = 'none';
-                emptyCart.style.display = 'block';
-                return;
-            }
-            
-            emptyCart.style.display = 'none';
-            cartItemsList.style.display = 'block';
-            cartSummary.style.display = 'block';
-            
-            cartItemsList.innerHTML = '';
-            let subtotal = 0;
-            
-            cart.forEach(item => {
-                const itemTotal = item.price * item.quantity;
-                subtotal += itemTotal;
-                
-                const cartItem = document.createElement('div');
-                cartItem.className = 'cart-item';
-                cartItem.innerHTML = `
-                    <img src="${item.image}" alt="${item.name}" class="cart-item-image" onerror="this.src='https://images.unsplash.com/photo-1564069114553-7215e1ff1890?w=400&h=300&fit=crop'">
-                    <div class="cart-item-details">
-                        <div class="cart-item-name">${item.name}</div>
-                        <div class="cart-item-price">$${item.price.toFixed(2)} each</div>
-                        <div class="cart-item-quantity">
-                            <button class="quantity-btn" onclick="updateQuantity(${item.productId}, -1)">
-                                <i class="fas fa-minus"></i>
-                            </button>
-                            <span>${item.quantity}</span>
-                            <button class="quantity-btn" onclick="updateQuantity(${item.productId}, 1)">
-                                <i class="fas fa-plus"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="cart-item-total">$${itemTotal.toFixed(2)}</div>
-                    <button class="remove-item" onclick="removeFromCart(${item.productId})">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                `;
-                cartItemsList.appendChild(cartItem);
-            });
-            
-            const shipping = 5.00;
-            const total = subtotal + shipping;
-            
-            document.getElementById('cartSubtotal').textContent = `$${subtotal.toFixed(2)}`;
-            document.getElementById('cartShipping').textContent = `$${shipping.toFixed(2)}`;
-            document.getElementById('cartTotal').textContent = `$${total.toFixed(2)}`;
-        }
+async function addProduct(){
+if(!image.files[0])return alert("Select image");
+const base64=await resizeImage(preview.src);
+products.push({id:Date.now(),name:name.value,price:+price.value,stock:+stock.value,image:base64});
+localStorage.setItem("products",JSON.stringify(products));
+name.value=price.value=stock.value=image.value="";
+preview.classList.add("hidden");
+render();
+}
 
-        function sendOrderToMessenger() {
-            const name = document.getElementById('customerName').value;
-            const phone = document.getElementById('customerPhone').value;
-            const address = document.getElementById('customerAddress').value;
-            const notes = document.getElementById('customerNotes').value;
-            
-            if (!name || !phone || !address) {
-                showMessage('Please fill in all required fields!', 'error');
-                return;
-            }
-            
-            // Build order summary
-            let orderSummary = `🛍️ *NEW ORDER FROM GOAT KIDS* 🛍️\n\n`;
-            orderSummary += `👤 *Customer:* ${name}\n`;
-            orderSummary += `📞 *Phone:* ${phone}\n`;
-            orderSummary += `🏠 *Address:* ${address}\n`;
-            if (notes) orderSummary += `📝 *Notes:* ${notes}\n`;
-            orderSummary += `\n🛒 *Order Items:*\n`;
-            
-            let total = 5.00;
-            cart.forEach(item => {
-                const itemTotal = item.price * item.quantity;
-                total += itemTotal;
-                orderSummary += `• ${item.name} x${item.quantity}: $${itemTotal.toFixed(2)}\n`;
-            });
-            
-            orderSummary += `\n🚚 *Shipping:* $5.00\n`;
-            orderSummary += `💰 *Total:* $${total.toFixed(2)}\n`;
-            orderSummary += `\n🆔 *Order ID:* GOAT-${Date.now().toString().slice(-6)}`;
-            
-            // Encode for WhatsApp
-            const encodedMessage = encodeURIComponent(orderSummary);
-            const whatsappNumber = "1234567890"; // REPLACE WITH YOUR NUMBER
-            
-            // Open WhatsApp in new tab
-            window.open(`https://wa.me/${whatsappNumber}?text=${encodedMessage}`, '_blank');
-            
-            // Clear cart after order
-            cart = [];
-            saveCart();
-            renderCart();
-            
-            // Clear form
-            document.getElementById('customerName').value = '';
-            document.getElementById('customerPhone').value = '';
-            document.getElementById('customerAddress').value = '';
-            document.getElementById('customerNotes').value = '';
-            
-            showMessage('Order sent successfully! Check WhatsApp to confirm.', 'success');
-        }
+function addToCart(id){
+const p=products.find(x=>x.id===id);
+const item=cart.find(i=>i.id===id);
+item?item.qty++:cart.push({id:p.id,name:p.name,price:p.price,qty:1});
+localStorage.setItem("cart",JSON.stringify(cart));
+updateCartCount();
+}
 
-        // ADMIN INVENTORY FUNCTIONS
-        function refreshInventory() {
-            document.getElementById('productCount').textContent = products.length;
-            
-            const tableBody = document.getElementById('inventoryTableBody');
-            tableBody.innerHTML = '';
-            
-            products.forEach(product => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td style="padding: 12px 15px; border-bottom: 1px solid #eee;">
-                        <img src="${product.image}" alt="${product.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;" onerror="this.src='https://images.unsplash.com/photo-1564069114553-7215e1ff1890?w=100&h=100&fit=crop'">
-                    </td>
-                    <td style="padding: 12px 15px; border-bottom: 1px solid #eee;">${product.name}</td>
-                    <td style="padding: 12px 15px; border-bottom: 1px solid #eee;">
-                        <span style="background-color: #e9ecef; padding: 3px 8px; border-radius: 12px; font-size: 12px;">
-                            ${product.category}
-                        </span>
-                    </td>
-                    <td style="padding: 12px 15px; border-bottom: 1px solid #eee;">$${product.price.toFixed(2)}</td>
-                    <td style="padding: 12px 15px; border-bottom: 1px solid #eee;">
-                        <span class="product-stock ${product.stock > 10 ? 'in-stock' : product.stock > 0 ? 'low-stock' : 'out-of-stock'}">
-                            ${product.stock}
-                        </span>
-                    </td>
-                    <td style="padding: 12px 15px; border-bottom: 1px solid #eee;">
-                        <button class="btn-outline" onclick="editProduct(${product.id})" style="padding: 5px 10px; margin-right: 5px;">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn-outline" onclick="deleteProduct(${product.id})" style="padding: 5px 10px; color: #dc3545;">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                `;
-                tableBody.appendChild(row);
-            });
-        }
+function render(){
+productGrid.innerHTML="";
+products.forEach(p=>{
+productGrid.innerHTML+=`
+<div class="card">
+<img src="${p.image}">
+<div class="card-body">
+<h4>${p.name}</h4>
+<div class="price">$${p.price}</div>
+<button class="btn btn-orange" onclick="addToCart(${p.id})">Add to Cart</button>
+</div>
+</div>`;
+});
+updateCartCount();
+}
 
-        function editProduct(productId) {
-            if (!isAdmin) {
-                adminLogin();
-                return;
-            }
-            
-            selectedProductForEditing = products.find(p => p.id === productId);
-            if (!selectedProductForEditing) return;
-            
-            const editForm = document.getElementById('editForm');
-            editForm.innerHTML = `
-                <div class="form-group">
-                    <label class="form-label">Product Name</label>
-                    <input type="text" id="editName" class="form-control" value="${selectedProductForEditing.name}">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Category</label>
-                    <input type="text" id="editCategory" class="form-control" value="${selectedProductForEditing.category}">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Price</label>
-                    <input type="number" id="editPrice" class="form-control" step="0.01" min="0" value="${selectedProductForEditing.price}">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Stock</label>
-                    <input type="number" id="editStock" class="form-control" min="0" value="${selectedProductForEditing.stock}">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Product Image</label>
-                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                        <button class="btn-outline" onclick="showPhotoSelector('edit')" style="flex: 1;">
-                            <i class="fas fa-image"></i> Select from Uploads
-                        </button>
-                        <input type="text" id="editImageUrl" class="form-control" value="${selectedProductForEditing.image}" placeholder="Image URL">
-                    </div>
-                    <div id="currentImagePreview" style="text-align: center;">
-                        <img src="${selectedProductForEditing.image}" alt="Current" style="max-width: 200px; max-height: 150px; border-radius: 8px; margin-top: 10px;" onerror="this.src='https://images.unsplash.com/photo-1564069114553-7215e1ff1890?w=400&h=300&fit=crop'">
-                    </div>
-                </div>
-                
-                <div class="btn-group">
-                    <button class="btn-admin btn-green" onclick="saveProductEdit()">
-                        <i class="fas fa-save"></i> Save Changes
-                    </button>
-                    <button class="btn-admin btn-blue" onclick="closeEditModal()">
-                        <i class="fas fa-times"></i> Cancel
-                    </button>
-                </div>
-            `;
-            
-            document.getElementById('editModal').style.display = 'flex';
-        }
+function updateCartCount(){
+cartCount.textContent=cart.reduce((s,i)=>s+i.qty,0);
+}
 
-        function saveProductEdit() {
-            if (!selectedProductForEditing) return;
-            
-            const name = document.getElementById('editName').value;
-            const category = document.getElementById('editCategory').value;
-            const price = parseFloat(document.getElementById('editPrice').value);
-            const stock = parseInt(document.getElementById('editStock').value);
-            let image = document.getElementById('editImageUrl').value;
-            
-            if (!name || !category || isNaN(price) || isNaN(stock)) {
-                showMessage('Please fill in all fields correctly!', 'error');
-                return;
-            }
-            
-            if (selectedPhotoForProduct && photoSelectionContext === 'edit') {
-                image = selectedPhotoForProduct;
-                selectedPhotoForProduct = null;
-            }
-            
-            selectedProductForEditing.name = name;
-            selectedProductForEditing.category = category;
-            selectedProductForEditing.price = price;
-            selectedProductForEditing.stock = stock;
-            if (image) selectedProductForEditing.image = image;
-            
-            saveProducts();
-            renderProducts();
-            refreshInventory();
-            refreshStoreStats();
-            closeEditModal();
-            
-            showMessage('Product updated successfully!', 'success');
-        }
+function openCart(){
+renderCart();
+cartModal.style.display="flex";
+}
+function closeCart(){cartModal.style.display="none";}
 
-        function deleteProduct(productId) {
-            if (!confirm('Are you sure you want to delete this product?')) return;
-            
-            products = products.filter(p => p.id !== productId);
-            saveProducts();
-            renderProducts();
-            refreshInventory();
-            refreshStoreStats();
-            
-            showMessage('Product deleted successfully!', 'success');
-        }
+function renderCart(){
+let t=0,h="";
+cart.forEach(i=>{t+=i.price*i.qty;h+=`<div class="cart-item"><span>${i.name} x ${i.qty}</span><span>$${(i.price*i.qty).toFixed(2)}</span></div>`});
+cartItems.innerHTML=h||"<p>Empty</p>";
+cartTotal.textContent="Total: $"+t.toFixed(2);
+}
 
-        function closeEditModal() {
-            document.getElementById('editModal').style.display = 'none';
-            selectedProductForEditing = null;
-            selectedPhotoForProduct = null;
-        }
+function sendOrder(){
+if(!cname.value||!cphone.value||!caddr.value)return alert("Fill customer info");
+let msg=`🛒 New Order%0A👤 ${cname.value}%0A📞 ${cphone.value}%0A📍 ${caddr.value}%0A%0A`;
+let total=0;
+cart.forEach(i=>{msg+=`${i.name} x ${i.qty} = $${(i.price*i.qty).toFixed(2)}%0A`;total+=i.price*i.qty;});
+msg+=`%0A💰 Total: $${total}%0A💳 ${ABA_INFO}`;
 
-        // PHOTO MANAGEMENT
-        function handlePhotoUpload(event) {
-            const files = event.target.files;
-            if (!files || files.length === 0) return;
-            
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                if (file.size > 2 * 1024 * 1024) {
-                    showMessage(`File ${file.name} is too large (max 2MB)`, 'error');
-                    continue;
-                }
-                
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    uploadedPhotos.push({
-                        name: file.name,
-                        url: e.target.result,
-                        id: Date.now() + i
-                    });
-                    
-                    updatePhotoPreview();
-                };
-                reader.readAsDataURL(file);
-            }
-            
-            document.getElementById('photoPreview').style.display = 'block';
-            showMessage(`${files.length} photos uploaded successfully!`, 'success');
-        }
+orders.push({date:new Date().toLocaleString(),name:cname.value,phone:cphone.value,total,items:[...cart]});
+localStorage.setItem("orders",JSON.stringify(orders));
 
-        function updatePhotoPreview() {
-            const previewGrid = document.getElementById('photoPreviewGrid');
-            previewGrid.innerHTML = '';
-            
-            uploadedPhotos.forEach(photo => {
-                const previewItem = document.createElement('div');
-                previewItem.className = 'photo-preview-item';
-                previewItem.innerHTML = `
-                    <img src="${photo.url}" alt="${photo.name}">
-                    <div class="photo-filename">${photo.name}</div>
-                    <button class="remove-photo" onclick="removePhoto(${photo.id})">
-                        <i class="fas fa-times"></i>
-                    </button>
-                `;
-                previewGrid.appendChild(previewItem);
-            });
-        }
+window.open(`https://m.me/${PAGE_NAME}?text=${msg}`,"_blank");
+cart=[];
+localStorage.removeItem("cart");
+closeCart();
+renderOrders();
+updateCartCount();
+}
 
-        function removePhoto(photoId) {
-            uploadedPhotos = uploadedPhotos.filter(p => p.id !== photoId);
-            updatePhotoPreview();
-            
-            if (uploadedPhotos.length === 0) {
-                document.getElementById('photoPreview').style.display = 'none';
-            }
-        }
+function renderOrders(){
+orders.innerHTML="";
+orders.forEach(o=>{
+orders.innerHTML+=`
+<div class="order">
+<b>${o.date}</b><br>
+${o.name} (${o.phone})<br>
+Total: $${o.total}
+</div>`;
+});
+}
 
-        function clearPhotoUploads() {
-            if (confirm('Clear all uploaded photos?')) {
-                uploadedPhotos = [];
-                document.getElementById('photoPreview').style.display = 'none';
-                document.getElementById('photoFiles').value = '';
-                showMessage('All photos cleared.', 'info');
-            }
-        }
+render();
+</script>
 
-        function showPhotoSelector(context) {
-            photoSelectionContext = context;
-            const selectorGrid = document.getElementById('photoSelectorGrid');
-            selectorGrid.innerHTML = '';
-            
-            uploadedPhotos.forEach(photo => {
-                const selectItem = document.createElement('div');
-                selectItem.className = 'photo-select-item';
-                selectItem.innerHTML = `<img src="${photo.url}" alt="${photo.name}">`;
-                selectItem.onclick = () => {
-                    document.querySelectorAll('.photo-select-item').forEach(item => {
-                        item.classList.remove('selected');
-                    });
-                    selectItem.classList.add('selected');
-                    selectedPhotoForProduct = photo.url;
-                };
-                selectorGrid.appendChild(selectItem);
-            });
-            
-            document.getElementById('photoSelectorModal').style.display = 'flex';
-        }
-
-        function showPhotoSelectorForNewProduct() {
-            if (uploadedPhotos.length === 0) {
-                showMessage('Please upload photos first!', 'warning');
-                return;
-            }
-            showPhotoSelector('new');
-        }
-
-        function confirmPhotoSelection() {
-            if (selectedPhotoForProduct) {
-                if (photoSelectionContext === 'edit') {
-                    document.getElementById('editImageUrl').value = selectedPhotoForProduct;
-                    document.getElementById('currentImagePreview').innerHTML = `
-                        <img src="${selectedPhotoForProduct}" alt="Selected" style="max-width: 200px; max-height: 150px; border-radius: 8px; margin-top: 10px;">
-                    `;
-                } else if (photoSelectionContext === 'new') {
-                    document.getElementById('productImageUrl').value = selectedPhotoForProduct;
-                }
-            }
-            closePhotoSelector();
-        }
-
-        function closePhotoSelector() {
-            document.getElementById('photoSelectorModal').style.display = 'none';
-            photoSelectionContext = null;
-            selectedPhotoForProduct = null;
-        }
-
-        function autoAssignPhotos() {
-            if (uploadedPhotos.length === 0) {
-                showMessage('No photos to assign!', 'warning');
-                return;
-            }
-            
-            if (products.length === 0) {
-                showMessage('No products to assign photos to!', 'warning');
-                return;
-            }
-            
-            let assignedCount = 0;
-            products.forEach((product, index) => {
-                if (index < uploadedPhotos.length && !product.image.startsWith('http')) {
-                    product.image = uploadedPhotos[index].url;
-                    assignedCount++;
-                }
-            });
-            
-            saveProducts();
-            renderProducts();
-            refreshInventory();
-            
-            showMessage(`Assigned ${assignedCount} photos to products!`, 'success');
-        }
-
-        // NEW PRODUCT FUNCTIONS
-        function addSingleProduct() {
-            const name = document.getElementById('productName').value;
-            const price = parseFloat(document.getElementById('productPrice').value);
-            const stock = parseInt(document.getElementById('productStock').value);
-            const category = document.getElementById('productCategory').value;
-            let imageUrl = document.getElementById('productImageUrl').value;
-            
-            if (!name || isNaN(price) || isNaN(stock) || !category) {
-                showMessage('Please fill in all required fields!', 'error');
-                return;
-            }
-            
-            if (!imageUrl && selectedPhotoForProduct) {
-                imageUrl = selectedPhotoForProduct;
-            }
-            
-            if (!imageUrl && uploadedPhotos.length > 0) {
-                imageUrl = uploadedPhotos[0].url;
-            }
-            
-            if (!imageUrl) {
-                imageUrl = 'https://images.unsplash.com/photo-1564069114553-7215e1ff1890?w=400&h=300&fit=crop';
-            }
-            
-            const newProduct = {
-                id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
-                name,
-                price,
-                stock,
-                category,
-                image: imageUrl
-            };
-            
-            products.push(newProduct);
-            saveProducts();
-            renderProducts();
-            refreshInventory();
-            refreshStoreStats();
-            
-            // Clear form
-            document.getElementById('productName').value = '';
-            document.getElementById('productPrice').value = '';
-            document.getElementById('productStock').value = '';
-            document.getElementById('productCategory').value = '';
-            document.getElementById('productImageUrl').value = '';
-            selectedPhotoForProduct = null;
-            
-            showMessage('Product added successfully!', 'success');
-        }
-
-        // CSV IMPORT/EXPORT
-        function showCSVImport() {
-            if (!isAdmin) {
-                adminLogin();
-                return;
-            }
-            document.getElementById('csvImportModal').style.display = 'flex';
-        }
-
-        function closeCSVImportModal() {
-            document.getElementById('csvImportModal').style.display = 'none';
-            document.getElementById('csvFileInput').value = '';
-            document.getElementById('csvDataTextarea').value = '';
-        }
-
-        function downloadCSVTemplate() {
-            const headers = ['name', 'price', 'stock', 'category', 'image_url'];
-            const sampleData = [
-                ['Blue T-Shirt', '15.99', '25', 'tshirts', 'https://example.com/tshirt1.jpg'],
-                ['Denim Jeans', '29.99', '15', 'pants', 'https://example.com/jeans1.jpg']
-            ];
-            
-            let csvContent = headers.join(',') + '\n';
-            sampleData.forEach(row => {
-                csvContent += row.join(',') + '\n';
-            });
-            
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'goat_kids_template.csv';
-            a.click();
-            
-            showMessage('Template downloaded!', 'success');
-        }
-
-        function exportInventory() {
-            const headers = ['ID', 'Name', 'Category', 'Price', 'Stock', 'Image URL'];
-            const csvRows = [headers];
-            
-            products.forEach(product => {
-                csvRows.push([
-                    product.id,
-                    `"${product.name}"`,
-                    product.category,
-                    product.price.toFixed(2),
-                    product.stock,
-                    product.image
-                ]);
-            });
-            
-            const csvContent = csvRows.map(row => row.join(',')).join('\n');
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `goat_kids_inventory_${new Date().toISOString().split('T')[0]}.csv`;
-            a.click();
-            
-            showMessage('Inventory exported successfully!', 'success');
-        }
-
-        function processCSVImport() {
-            const fileInput = document.getElementById('csvFileInput');
-            const textarea = document.getElementById('csvDataTextarea');
-            
-            let csvData = '';
-            
-            if (fileInput.files.length > 0) {
-                const file = fileInput.files[0];
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    csvData = e.target.result;
-                    importCSVData(csvData);
-                };
-                reader.readAsText(file);
-            } else if (textarea.value.trim()) {
-                csvData = textarea.value;
-                importCSVData(csvData);
-            } else {
-                showMessage('Please provide CSV data!', 'error');
-            }
-        }
-
-        function importCSVData(csvData) {
-            try {
-                const lines = csvData.split('\n').filter(line => line.trim());
-                if (lines.length < 2) {
-                    showMessage('CSV must have headers and at least one data row', 'error');
-                    return;
-                }
-                
-                const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-                const nameIndex = headers.indexOf('name');
-                const priceIndex = headers.indexOf('price');
-                const stockIndex = headers.indexOf('stock');
-                const categoryIndex = headers.indexOf('category');
-                const imageIndex = headers.indexOf('image_url');
-                
-                if (nameIndex === -1 || priceIndex === -1 || stockIndex === -1) {
-                    showMessage('CSV must have name, price, and stock columns', 'error');
-                    return;
-                }
-                
-                let importedCount = 0;
-                for (let i = 1; i < lines.length; i++) {
-                    const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-                    
-                    const name = values[nameIndex];
-                    const price = parseFloat(values[priceIndex]);
-                    const stock = parseInt(values[stockIndex]);
-                    const category = categoryIndex !== -1 ? values[categoryIndex] : 'uncategorized';
-                    const image = imageIndex !== -1 ? values[imageIndex] : 
-                        'https://images.unsplash.com/photo-1564069114553-7215e1ff1890?w=400&h=300&fit=crop';
-                    
-                    if (name && !isNaN(price) && !isNaN(stock)) {
-                        const newProduct = {
-                            id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
-                            name,
-                            price,
-                            stock,
-                            category,
-                            image
-                        };
-                        products.push(newProduct);
-                        importedCount++;
-                    }
-                }
-                
-                if (importedCount > 0) {
-                    saveProducts();
-                    renderProducts();
-                    refreshInventory();
-                    refreshStoreStats();
-                    
-                    closeCSVImportModal();
-                    showMessage(`Successfully imported ${importedCount} products!`, 'success');
-                } else {
-                    showMessage('No valid products found in CSV', 'error');
-                }
-            } catch (error) {
-                showMessage('Error parsing CSV: ' + error.message, 'error');
-            }
-        }
-
-        // UTILITY FUNCTIONS
-        function showMessage(text, type) {
-            const messageArea = document.getElementById('messageArea');
-            const message = document.createElement('div');
-            message.className = `message message-${type}`;
-            message.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span>${text}</span>
-                    <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; color: inherit; cursor: pointer;">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-            `;
-            messageArea.appendChild(message);
-            
-            setTimeout(() => {
-                if (message.parentElement) {
-                    message.remove();
-                }
-            }, 5000);
-        }
-
-        // Initialize the application
-        document.addEventListener('DOMContentLoaded', init);
-    </script>
 </body>
 </html>
