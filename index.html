@@ -23,7 +23,7 @@ nav button{margin-left:10px;border:none;background:#eee;padding:8px 14px;border-
 .hidden{display:none}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center}
 .modal-content{background:#fff;padding:20px;border-radius:10px;width:90%;max-width:420px}
-input,textarea{width:100%;padding:8px;margin-bottom:8px}
+input,textarea,select{width:100%;padding:8px;margin-bottom:8px}
 .cart-item{display:flex;justify-content:space-between;margin-bottom:6px}
 .preview{width:100%;height:160px;object-fit:cover;border-radius:6px;margin-bottom:8px}
 .order{background:#fff;padding:10px;margin-bottom:10px;border-radius:6px}
@@ -54,6 +54,7 @@ input,textarea{width:100%;padding:8px;margin-bottom:8px}
 <input id="name" placeholder="Product name">
 <input id="price" type="number" placeholder="Price">
 <input id="stock" type="number" placeholder="Stock">
+<input id="size" placeholder="Sizes (comma separated, e.g. S,M,L)">
 <input type="file" id="image" accept="image/*">
 <img id="preview" class="preview hidden">
 <button class="btn btn-orange" onclick="addProduct()">Add Product</button>
@@ -163,17 +164,44 @@ function logout(){
 async function addProduct(){
     if(!image.files[0]) return alert("Select image");
     const base64 = await resizeImage(preview.src);
-    products.push({id:Date.now(),name:name.value,price:+price.value,stock:+stock.value,image:base64});
+
+    const sizeValues = size.value.split(",").map(s => s.trim()).filter(s=>s);
+
+    products.push({
+        id: Date.now(),
+        name: name.value,
+        price: +price.value,
+        stock: +stock.value,
+        sizes: sizeValues,
+        image: base64
+    });
+
     localStorage.setItem("products",JSON.stringify(products));
-    name.value=price.value=stock.value=image.value="";
+
+    // Reset admin inputs
+    name.value=price.value=stock.value=size.value=image.value="";
     preview.classList.add("hidden");
     render();
 }
 
 function addToCart(id){
     const p = products.find(x=>x.id===id);
-    const item = cart.find(i=>i.id===id);
-    item ? item.qty++ : cart.push({id:p.id,name:p.name,price:p.price,qty:1});
+    const selectedSize = document.getElementById(`sizeSelect-${id}`).value || "N/A";
+
+    const item = cart.find(i => i.id === id && i.size === selectedSize);
+
+    if(item){
+        item.qty++;
+    } else {
+        cart.push({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            size: selectedSize,
+            qty: 1
+        });
+    }
+
     localStorage.setItem("cart",JSON.stringify(cart));
     updateCartCount();
 }
@@ -181,12 +209,14 @@ function addToCart(id){
 function render(){
     productGrid.innerHTML="";
     products.forEach(p=>{
+        let sizeOptions = p.sizes.map(s=>`<option value="${s}">${s}</option>`).join("");
         productGrid.innerHTML+=`
         <div class="card">
             <img src="${p.image}">
             <div class="card-body">
                 <h4>${p.name}</h4>
                 <div class="price">$${p.price}</div>
+                <select id="sizeSelect-${p.id}">${sizeOptions}</select>
                 <button class="btn btn-orange" onclick="addToCart(${p.id})">Add to Cart</button>
             </div>
         </div>`;
@@ -207,8 +237,8 @@ function closeCart(){cartModal.style.display="none";}
 function renderCart(){
     let t=0, h="";
     cart.forEach(i=>{
-        t+=i.price*i.qty;
-        h+=`<div class="cart-item"><span>${i.name} x ${i.qty}</span><span>$${(i.price*i.qty).toFixed(2)}</span></div>`;
+        t += i.price * i.qty;
+        h += `<div class="cart-item"><span>${i.name} (${i.size}) x ${i.qty}</span><span>$${(i.price*i.qty).toFixed(2)}</span></div>`;
     });
     cartItems.innerHTML = h || "<p>Empty</p>";
     cartTotal.textContent = "Total: $"+t.toFixed(2);
@@ -223,7 +253,7 @@ function sendOrder(){
     let msg=`🛒 New Order%0A👤 ${cname.value}%0A📞 ${cphone.value}%0A📍 ${caddr.value}%0A%0A`;
     let total=0;
     cart.forEach(i=>{
-        msg+=`${i.name} x ${i.qty} = $${(i.price*i.qty).toFixed(2)}%0A`;
+        msg+=`${i.name} (${i.size}) x ${i.qty} = $${(i.price*i.qty).toFixed(2)}%0A`;
         total+=i.price*i.qty;
     });
     msg+=`%0A💰 Total: $${total}%0A💳 Pay online: ${PAYWAY_LINK}`;
