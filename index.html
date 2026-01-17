@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GOAT KIDS - Children's Clothing Store</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/dropzone@5.9.3/dist/dropzone.min.css">
+    <!-- Add SheetJS for Excel support -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -1052,6 +1053,19 @@
                             </li>
                         </ul>
                     </div>
+                    
+                    <!-- Additional Tools -->
+                    <div class="btn-group" style="margin-top: 20px;">
+                        <button class="btn-admin btn-orange" onclick="exportAllData()">
+                            <i class="fas fa-database"></i> Export All Data
+                        </button>
+                        <button class="btn-admin btn-red" onclick="clearAllStorage()">
+                            <i class="fas fa-trash"></i> Clear All Data
+                        </button>
+                        <button class="btn-admin btn-blue" onclick="showBackupInfo()">
+                            <i class="fas fa-info-circle"></i> Backup Info
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- Spreadsheet Import Section -->
@@ -1073,7 +1087,7 @@
                             <strong>Drop your spreadsheet here or click to browse</strong>
                         </p>
                         <p class="upload-hint">
-                            Supports: Excel (.xlsx, .xls), CSV (.csv), Google Sheets (export as .xlsx)
+                            Supports: Excel (.xlsx, .xls), CSV (.csv) - Max 5MB
                         </p>
                         <input type="file" id="spreadsheetFile" class="file-input" 
                                accept=".xlsx,.xls,.csv,.txt" 
@@ -1171,7 +1185,7 @@
                             <strong>Upload product photos in bulk</strong>
                         </p>
                         <p class="upload-hint" style="margin-bottom: 15px;">
-                            Supported formats: JPG, PNG, WebP (Max 5MB each)
+                            Supported formats: JPG, PNG, WebP (Max 5MB each) - Max 20 photos
                         </p>
                         <input type="file" id="photoFiles" class="file-input" 
                                accept="image/*" multiple 
@@ -1193,8 +1207,8 @@
                             <button class="btn-admin btn-blue" onclick="autoAssignPhotos()">
                                 <i class="fas fa-magic"></i> Auto-Assign by Filename
                             </button>
-                            <button class="btn-admin btn-green" onclick="uploadPhotosToServer()">
-                                <i class="fas fa-cloud-upload-alt"></i> Upload to Server
+                            <button class="btn-admin btn-green" onclick="saveAllToStorage()">
+                                <i class="fas fa-save"></i> Save to Browser Storage
                             </button>
                             <button class="btn-admin btn-red" onclick="clearPhotoUploads()">
                                 <i class="fas fa-trash"></i> Clear All
@@ -1235,6 +1249,11 @@
                     <h4 class="section-subtitle">
                         <i class="fas fa-cloud"></i> Online Synchronization
                     </h4>
+                    
+                    <div class="message message-info">
+                        <i class="fas fa-info-circle"></i>
+                        Online sync requires a backend server. For client-side operation, use spreadsheet upload instead.
+                    </div>
                     
                     <!-- Google Sheets Integration -->
                     <div class="form-group">
@@ -1319,6 +1338,9 @@
                         <button class="btn-admin btn-green" onclick="refreshInventory()">
                             <i class="fas fa-sync"></i> Refresh
                         </button>
+                        <button class="btn-admin btn-orange" onclick="addNewProduct()">
+                            <i class="fas fa-plus"></i> Add New Product
+                        </button>
                     </div>
                     <div style="overflow-x: auto;">
                         <table class="inventory-table" id="inventoryTable">
@@ -1402,16 +1424,55 @@
     </div>
 
     <script>
-        // Demo product data
+        // ========== GLOBAL VARIABLES ==========
         let products = [];
         let cart = JSON.parse(localStorage.getItem('goatKidsCart')) || [];
         let isAdmin = localStorage.getItem('goatKidsAdmin') === 'true';
-        
-        // Spreadsheet import data
         let spreadsheetData = null;
         let uploadedPhotos = [];
+
+        // ========== INITIALIZATION ==========
+        document.addEventListener('DOMContentLoaded', function() {
+            loadProducts();
+            loadSavedPhotos();
+            loadSavedSpreadsheet();
+            
+            initApp();
+            
+            // Mobile menu toggle
+            document.getElementById('mobileMenuBtn').addEventListener('click', function() {
+                document.getElementById('mainNav').classList.toggle('active');
+            });
+            
+            // Check if admin session exists
+            if (isAdmin) {
+                showAdminUI();
+            }
+            
+            // Auto-save every 30 seconds
+            setInterval(saveAllToStorage, 30000);
+        });
+
+        function initApp() {
+            updateProductGrid();
+            updateCartDisplay();
+            updateInventoryStats();
+            updateInventoryTable();
+            populateProductSelect();
+        }
+
+        // ========== DATA LOADING ==========
+        function loadProducts() {
+            const savedProducts = localStorage.getItem('goatKidsProducts');
+            if (savedProducts) {
+                products = JSON.parse(savedProducts);
+                console.log('Loaded products from localStorage:', products.length);
+            } else {
+                loadDemoProducts();
+                saveProductsToStorage();
+            }
+        }
         
-        // Initialize with demo data
         function loadDemoProducts() {
             products = [
                 {
@@ -1504,32 +1565,72 @@
                 }
             ];
         }
-
-        // Initialize the application
-        document.addEventListener('DOMContentLoaded', function() {
-            loadDemoProducts();
-            initApp();
-            
-            // Mobile menu toggle
-            document.getElementById('mobileMenuBtn').addEventListener('click', function() {
-                document.getElementById('mainNav').classList.toggle('active');
-            });
-            
-            // Check if admin session exists
-            if (isAdmin) {
-                showAdminUI();
+        
+        function loadSavedPhotos() {
+            const savedPhotos = localStorage.getItem('goatKidsPhotos');
+            if (savedPhotos) {
+                uploadedPhotos = JSON.parse(savedPhotos);
+                console.log('Loaded photos from localStorage:', uploadedPhotos.length);
+                
+                if (uploadedPhotos.length > 0) {
+                    updatePhotoPreviewFromStorage();
+                }
             }
-        });
-
-        function initApp() {
-            updateProductGrid();
-            updateCartDisplay();
-            updateInventoryStats();
-            updateInventoryTable();
-            populateProductSelect();
+        }
+        
+        function loadSavedSpreadsheet() {
+            const savedSpreadsheet = localStorage.getItem('goatKidsSpreadsheet');
+            if (savedSpreadsheet) {
+                spreadsheetData = JSON.parse(savedSpreadsheet);
+                enableImportButtons();
+                console.log('Loaded spreadsheet data from localStorage');
+            }
         }
 
-        // Tab navigation
+        // ========== STORAGE FUNCTIONS ==========
+        function saveAllToStorage() {
+            saveProductsToStorage();
+            savePhotosToStorage();
+            saveSpreadsheetToStorage();
+            localStorage.setItem('goatKidsCart', JSON.stringify(cart));
+        }
+        
+        function saveProductsToStorage() {
+            localStorage.setItem('goatKidsProducts', JSON.stringify(products));
+        }
+        
+        function savePhotosToStorage() {
+            const photosToSave = uploadedPhotos.map(photo => ({
+                id: photo.id,
+                name: photo.name,
+                dataUrl: photo.dataUrl,
+                assigned: photo.assigned,
+                assignedProductId: photo.assignedProductId,
+                size: photo.size,
+                uploaded: photo.uploaded
+            }));
+            localStorage.setItem('goatKidsPhotos', JSON.stringify(photosToSave));
+        }
+        
+        function saveSpreadsheetToStorage() {
+            if (spreadsheetData) {
+                localStorage.setItem('goatKidsSpreadsheet', JSON.stringify(spreadsheetData));
+            }
+        }
+        
+        function clearAllStorage() {
+            if (confirm('Clear ALL saved data (products, photos, spreadsheet)? This cannot be undone!')) {
+                localStorage.removeItem('goatKidsProducts');
+                localStorage.removeItem('goatKidsPhotos');
+                localStorage.removeItem('goatKidsSpreadsheet');
+                localStorage.removeItem('goatKidsCart');
+                
+                // Reload page
+                location.reload();
+            }
+        }
+
+        // ========== UI FUNCTIONS ==========
         function showTab(tabId) {
             // Hide all tabs
             document.querySelectorAll('.tab-content').forEach(tab => {
@@ -1554,26 +1655,21 @@
                 document.querySelector('.nav-link[onclick*="store"]').classList.add('active');
             } else if (tabId === 'cart') {
                 document.querySelector('.nav-link[onclick*="cart"]').classList.add('active');
-            } else if (tabId === 'admin') {
-                document.querySelector('.nav-link[onclick*="admin"]').classList.add('active');
             }
             
             // Close mobile menu
             document.getElementById('mainNav').classList.remove('active');
         }
 
-        // Import method navigation
         function showImportMethod(method) {
-            // Hide all import method sections
             document.querySelectorAll('.import-method-content').forEach(section => {
                 section.style.display = 'none';
             });
             
-            // Show selected method
             document.getElementById(method + 'ImportSection').style.display = 'block';
         }
 
-        // Product Grid
+        // ========== PRODUCT GRID ==========
         function updateProductGrid() {
             const productGrid = document.getElementById('productGrid');
             productGrid.innerHTML = '';
@@ -1601,12 +1697,11 @@
             });
         }
 
-        // Cart functionality
+        // ========== CART FUNCTIONS ==========
         function addToCart(productId) {
             const product = products.find(p => p.id === productId);
             if (!product || product.stock === 0) return;
             
-            // Check if product is already in cart
             const existingItem = cart.find(item => item.id === productId);
             
             if (existingItem) {
@@ -1627,19 +1722,15 @@
                 });
             }
             
-            // Update product stock
             product.stock -= 1;
             
-            // Save to localStorage
             localStorage.setItem('goatKidsCart', JSON.stringify(cart));
             
-            // Update UI
             updateCartDisplay();
             updateProductGrid();
             updateInventoryStats();
             updateInventoryTable();
             
-            // Show message
             showMessage(`${product.name} added to cart!`, 'success');
         }
 
@@ -1648,7 +1739,7 @@
             document.getElementById('cartCountNav').textContent = cartCount;
         }
 
-        // Inventory stats
+        // ========== INVENTORY STATS ==========
         function updateInventoryStats() {
             const totalProducts = products.length;
             const lowStockCount = products.filter(p => p.stock > 0 && p.stock <= 10).length;
@@ -1659,7 +1750,7 @@
             document.getElementById('totalStock').textContent = totalStock;
         }
 
-        // Admin functions
+        // ========== ADMIN FUNCTIONS ==========
         function showAdminPanel() {
             if (!isAdmin) {
                 document.getElementById('loginModal').style.display = 'flex';
@@ -1704,8 +1795,7 @@
             showMessage('Logged out successfully', 'info');
         }
 
-        // SPREADSHEET IMPORT FUNCTIONALITY
-
+        // ========== SPREADSHEET IMPORT ==========
         function handleDragOver(e) {
             e.preventDefault();
             e.stopPropagation();
@@ -1736,103 +1826,118 @@
             }
         }
 
-        function handleSpreadsheetFile(file) {
+        async function handleSpreadsheetFile(file) {
             const fileName = file.name.toLowerCase();
-            const fileSize = (file.size / 1024 / 1024).toFixed(2); // MB
+            const fileSize = (file.size / 1024 / 1024).toFixed(2);
             
-            if (fileSize > 10) {
-                showMessage('File size too large. Maximum size is 10MB.', 'error');
+            if (fileSize > 5) {
+                showMessage('File size too large. Maximum size is 5MB for client-side processing.', 'error');
                 return;
             }
             
             showMessage(`Processing ${file.name}...`, 'info');
             
-            // Simulate file processing
-            setTimeout(() => {
-                // For demo purposes, we'll create mock data
-                // In a real app, you would use a library like SheetJS to parse Excel files
+            try {
                 if (fileName.endsWith('.csv') || fileName.endsWith('.txt')) {
-                    parseCSVFile(file);
+                    await parseCSVFile(file);
                 } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-                    parseExcelFile(file);
+                    await parseExcelFile(file);
                 } else {
                     showMessage('Unsupported file format. Please upload CSV or Excel files.', 'error');
                 }
-            }, 1000);
+            } catch (error) {
+                showMessage(`Error processing file: ${error.message}`, 'error');
+                console.error('File processing error:', error);
+            }
         }
 
-        function parseCSVFile(file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const content = e.target.result;
-                const rows = content.split('\n').map(row => row.split(','));
+        async function parseCSVFile(file) {
+            const text = await readFileAsText(file);
+            const rows = text.split('\n').filter(row => row.trim() !== '');
+            
+            if (rows.length > 0) {
+                let delimiter = ',';
+                if (rows[0].includes(';') && !rows[0].includes(',')) delimiter = ';';
+                else if (rows[0].includes('\t') && !rows[0].includes(',')) delimiter = '\t';
                 
-                if (rows.length > 0) {
-                    const headers = rows[0].map(h => h.trim().toLowerCase());
-                    spreadsheetData = [];
+                const headers = rows[0].split(delimiter).map(h => h.trim().toLowerCase().replace(/"/g, ''));
+                spreadsheetData = [];
+                
+                for (let i = 1; i < Math.min(rows.length, 1000); i++) {
+                    let values = [];
+                    let inQuotes = false;
+                    let currentValue = '';
                     
-                    for (let i = 1; i < Math.min(rows.length, 100); i++) {
-                        if (rows[i].length === headers.length) {
-                            const rowData = {};
-                            headers.forEach((header, index) => {
-                                rowData[header] = rows[i][index] ? rows[i][index].trim() : '';
-                            });
-                            spreadsheetData.push(rowData);
+                    for (let char of rows[i]) {
+                        if (char === '"') {
+                            inQuotes = !inQuotes;
+                        } else if (char === delimiter && !inQuotes) {
+                            values.push(currentValue.trim().replace(/"/g, ''));
+                            currentValue = '';
+                        } else {
+                            currentValue += char;
                         }
                     }
+                    values.push(currentValue.trim().replace(/"/g, ''));
                     
-                    enableImportButtons();
-                    showMessage(`Successfully loaded ${spreadsheetData.length} products from CSV`, 'success');
+                    if (values.length >= headers.length) {
+                        const rowData = {};
+                        headers.forEach((header, index) => {
+                            rowData[header] = values[index] || '';
+                        });
+                        spreadsheetData.push(rowData);
+                    }
                 }
-            };
-            reader.readAsText(file);
+                
+                enableImportButtons();
+                saveSpreadsheetToStorage();
+                showMessage(`Successfully loaded ${spreadsheetData.length} products from CSV`, 'success');
+            }
         }
 
-        function parseExcelFile(file) {
-            // In a real app, use SheetJS or similar library
-            // For demo, we'll create mock data
-            const mockData = [
-                {
-                    name: "Raincoat with Hood",
-                    price: "39.99",
-                    category: "jackets",
-                    stock: "15",
-                    sizes: "3T,4T,5T",
-                    description: "Waterproof raincoat with detachable hood",
-                    image_url: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop"
-                },
-                {
-                    name: "Sports Shorts",
-                    price: "16.99",
-                    category: "pants",
-                    stock: "25",
-                    sizes: "2T,3T,4T,5T",
-                    description: "Lightweight sports shorts with elastic waistband",
-                    image_url: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400&h=400&fit=crop"
-                },
-                {
-                    name: "Winter Gloves Set",
-                    price: "14.99",
-                    category: "accessories",
-                    stock: "30",
-                    sizes: "One Size",
-                    description: "Warm winter gloves with touchscreen compatibility",
-                    image_url: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=400&fit=crop"
-                },
-                {
-                    name: "Cotton Cartoon T-Shirt",
-                    price: "22.99",
-                    category: "tshirts",
-                    stock: "35",
-                    sizes: "2T,3T,4T,5T",
-                    description: "Updated stock for popular t-shirt",
-                    image_url: "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=400&h=400&fit=crop"
-                }
-            ];
-            
-            spreadsheetData = mockData;
-            enableImportButtons();
-            showMessage(`Successfully loaded ${spreadsheetData.length} products from Excel file`, 'success');
+        async function parseExcelFile(file) {
+            try {
+                const data = await readFileAsArrayBuffer(file);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                
+                spreadsheetData = XLSX.utils.sheet_to_json(worksheet, { raw: true });
+                
+                spreadsheetData = spreadsheetData.map(row => {
+                    const newRow = {};
+                    Object.keys(row).forEach(key => {
+                        const cleanKey = key.toString().toLowerCase().trim().replace(/[^\w\s]/gi, '');
+                        newRow[cleanKey] = row[key];
+                    });
+                    return newRow;
+                });
+                
+                enableImportButtons();
+                saveSpreadsheetToStorage();
+                showMessage(`Successfully loaded ${spreadsheetData.length} products from Excel`, 'success');
+                
+            } catch (error) {
+                throw new Error(`Excel parse error: ${error.message}`);
+            }
+        }
+
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(new Error('Failed to read file'));
+                reader.readAsText(file);
+            });
+        }
+
+        function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(new Error('Failed to read file'));
+                reader.readAsArrayBuffer(file);
+            });
         }
 
         function enableImportButtons() {
@@ -1851,23 +1956,23 @@
             const previewInfo = document.getElementById('previewInfo');
             const previewContainer = document.getElementById('spreadsheetPreview');
             
-            // Get headers from first row
             const headers = Object.keys(spreadsheetData[0]);
             
-            // Create table header
             let tableHTML = '<thead><tr>';
             headers.forEach(header => {
-                tableHTML += `<th>${header.replace('_', ' ').toUpperCase()}</th>`;
+                tableHTML += `<th>${header.replace(/_/g, ' ').toUpperCase()}</th>`;
             });
             tableHTML += '</tr></thead><tbody>';
             
-            // Add first 10 rows
             const rowCount = Math.min(spreadsheetData.length, 10);
             for (let i = 0; i < rowCount; i++) {
                 tableHTML += '<tr>';
                 headers.forEach(header => {
-                    const value = spreadsheetData[i][header] || '';
-                    tableHTML += `<td>${value.length > 50 ? value.substring(0, 50) + '...' : value}</td>`;
+                    let value = spreadsheetData[i][header];
+                    if (value === null || value === undefined) value = '';
+                    if (typeof value === 'object') value = JSON.stringify(value);
+                    value = value.toString();
+                    tableHTML += `<td title="${value}">${value.length > 30 ? value.substring(0, 30) + '...' : value}</td>`;
                 });
                 tableHTML += '</tr>';
             }
@@ -1895,7 +2000,6 @@
                 return;
             }
             
-            // Show progress
             const progressContainer = document.getElementById('progressContainer');
             const progressFill = document.getElementById('progressFill');
             const progressText = document.getElementById('progressText');
@@ -1912,25 +2016,23 @@
             
             const processNext = (index) => {
                 if (index >= spreadsheetData.length) {
-                    // Import complete
                     progressFill.style.width = '100%';
                     progressText.textContent = 'Import complete!';
                     
-                    // Update UI
                     updateProductGrid();
                     updateInventoryStats();
                     updateInventoryTable();
                     populateProductSelect();
+                    saveProductsToStorage();
                     
-                    // Show summary
                     setTimeout(() => {
                         let summary = `Import complete: ${created} created, ${updated} updated, ${skipped} skipped`;
                         if (errors.length > 0) {
                             summary += `, ${errors.length} errors`;
+                            console.warn('Import errors:', errors);
                         }
-                        showMessage(summary, 'success');
+                        showMessage(summary, errors.length > 0 ? 'warning' : 'success');
                         
-                        // Hide progress after delay
                         setTimeout(() => {
                             progressContainer.style.display = 'none';
                         }, 3000);
@@ -1942,59 +2044,54 @@
                 const row = spreadsheetData[index];
                 processed++;
                 
-                // Update progress
                 const progress = Math.round((processed / spreadsheetData.length) * 100);
                 progressFill.style.width = `${progress}%`;
                 progressText.textContent = `Processing ${processed} of ${spreadsheetData.length}...`;
                 
                 try {
-                    // Validate required fields
-                    if (!row.name || !row.price || !row.category || !row.stock) {
-                        errors.push(`Row ${index + 1}: Missing required fields`);
+                    if (!row.name || !row.price) {
+                        errors.push(`Row ${index + 1}: Missing required fields (name, price)`);
                         skipped++;
                         processNext(index + 1);
                         return;
                     }
                     
-                    const productName = row.name.trim();
+                    const productName = row.name.toString().trim();
                     const price = parseFloat(row.price);
-                    const category = row.category.trim().toLowerCase();
-                    const stock = parseInt(row.stock);
+                    const category = row.category ? row.category.toString().trim().toLowerCase() : 'uncategorized';
+                    const stock = parseInt(row.stock) || 0;
                     
                     if (isNaN(price) || price <= 0) {
-                        errors.push(`Row ${index + 1}: Invalid price`);
+                        errors.push(`Row ${index + 1}: Invalid price "${row.price}"`);
                         skipped++;
                         processNext(index + 1);
                         return;
                     }
                     
                     if (isNaN(stock) || stock < 0) {
-                        errors.push(`Row ${index + 1}: Invalid stock quantity`);
+                        errors.push(`Row ${index + 1}: Invalid stock quantity "${row.stock}"`);
                         skipped++;
                         processNext(index + 1);
                         return;
                     }
                     
-                    // Check if product exists
                     const existingIndex = products.findIndex(p => 
                         p.name.toLowerCase() === productName.toLowerCase()
                     );
                     
                     if (existingIndex >= 0) {
-                        // Update existing product
                         if (updateExisting) {
                             products[existingIndex].price = price;
                             products[existingIndex].stock = stock;
                             products[existingIndex].category = category;
                             products[existingIndex].sizes = row.sizes ? 
-                                row.sizes.split(',').map(s => s.trim()) : 
+                                row.sizes.toString().split(',').map(s => s.trim()) : 
                                 getDefaultSizes(category);
                             products[existingIndex].description = row.description || 
                                 products[existingIndex].description;
                             
-                            // Update photo if column exists and has value
                             if (photoColumn && row[photoColumn]) {
-                                products[existingIndex].image = row[photoColumn];
+                                products[existingIndex].image = row[photoColumn].toString();
                             }
                             
                             products[existingIndex].lastUpdated = new Date().toISOString().split('T')[0];
@@ -2003,7 +2100,6 @@
                             skipped++;
                         }
                     } else {
-                        // Create new product
                         if (createNew) {
                             const newProduct = {
                                 id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
@@ -2012,12 +2108,12 @@
                                 category: category,
                                 stock: stock,
                                 sizes: row.sizes ? 
-                                    row.sizes.split(',').map(s => s.trim()) : 
+                                    row.sizes.toString().split(',').map(s => s.trim()) : 
                                     getDefaultSizes(category),
                                 description: row.description || 
                                     `High-quality ${category} for kids. Made from comfortable materials.`,
                                 image: (photoColumn && row[photoColumn]) ? 
-                                    row[photoColumn] : 
+                                    row[photoColumn].toString() : 
                                     getDefaultImage(category),
                                 lastUpdated: new Date().toISOString().split('T')[0]
                             };
@@ -2029,8 +2125,7 @@
                         }
                     }
                     
-                    // Process next row after a small delay
-                    setTimeout(() => processNext(index + 1), 50);
+                    setTimeout(() => processNext(index + 1), 10);
                     
                 } catch (error) {
                     errors.push(`Row ${index + 1}: ${error.message}`);
@@ -2039,10 +2134,334 @@
                 }
             };
             
-            // Start processing
             processNext(0);
         }
 
+        function testPhotoUrls() {
+            if (!spreadsheetData || spreadsheetData.length === 0) {
+                showMessage('No data to test. Please upload a spreadsheet first.', 'warning');
+                return;
+            }
+            
+            const photoColumn = document.getElementById('photoColumnSelect').value;
+            if (!photoColumn) {
+                showMessage('No photo column selected', 'warning');
+                return;
+            }
+            
+            let validUrls = 0;
+            let invalidUrls = 0;
+            let missingUrls = 0;
+            
+            spreadsheetData.forEach((row, index) => {
+                if (row[photoColumn]) {
+                    const url = row[photoColumn].toString();
+                    if (url.startsWith('http') && 
+                       (url.includes('.jpg') || url.includes('.png') || 
+                        url.includes('.jpeg') || url.includes('.webp') || 
+                        url.includes('unsplash.com') || url.includes('images.unsplash.com'))) {
+                        validUrls++;
+                    } else {
+                        invalidUrls++;
+                    }
+                } else {
+                    missingUrls++;
+                }
+            });
+            
+            const message = `Photo URL check: ${validUrls} valid, ${invalidUrls} invalid, ${missingUrls} missing`;
+            showMessage(message, invalidUrls === 0 ? 'success' : 'warning');
+        }
+
+        function clearSpreadsheetData() {
+            spreadsheetData = null;
+            localStorage.removeItem('goatKidsSpreadsheet');
+            document.getElementById('spreadsheetPreview').style.display = 'none';
+            document.getElementById('processBtn').disabled = true;
+            document.getElementById('previewBtn').disabled = true;
+            document.getElementById('testPhotosBtn').disabled = true;
+            document.getElementById('progressContainer').style.display = 'none';
+            document.getElementById('spreadsheetFile').value = '';
+            
+            showMessage('Spreadsheet data cleared', 'info');
+        }
+
+        // ========== PHOTO MANAGEMENT ==========
+        function handlePhotoUpload(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+            
+            const maxFiles = Math.min(files.length, 20);
+            let filesProcessed = 0;
+            
+            showMessage(`Processing ${maxFiles} photos...`, 'info');
+            
+            const previewGrid = document.getElementById('photoPreviewGrid');
+            previewGrid.innerHTML = '';
+            document.getElementById('photoSelect').innerHTML = '';
+            
+            for (let i = 0; i < maxFiles; i++) {
+                const file = files[i];
+                
+                if (!file.type.startsWith('image/')) {
+                    showMessage(`Skipped ${file.name}: Not an image file`, 'warning');
+                    continue;
+                }
+                
+                if (file.size > 5 * 1024 * 1024) {
+                    showMessage(`Skipped ${file.name}: File too large (max 5MB)`, 'warning');
+                    continue;
+                }
+                
+                const reader = new FileReader();
+                
+                reader.onload = (function(file) {
+                    return function(e) {
+                        const photoData = {
+                            id: uploadedPhotos.length + 1,
+                            file: file,
+                            name: file.name,
+                            size: formatFileSize(file.size),
+                            type: file.type,
+                            dataUrl: e.target.result,
+                            uploaded: new Date().toISOString(),
+                            assigned: false
+                        };
+                        
+                        uploadedPhotos.push(photoData);
+                        
+                        const previewItem = document.createElement('div');
+                        previewItem.className = 'photo-preview-item';
+                        previewItem.innerHTML = `
+                            <button class="remove-photo" onclick="removePhoto(${photoData.id})">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <img src="${e.target.result}" alt="${file.name}">
+                            <div class="photo-filename">${file.name}</div>
+                        `;
+                        previewGrid.appendChild(previewItem);
+                        
+                        const option = document.createElement('option');
+                        option.value = photoData.id;
+                        option.textContent = file.name;
+                        document.getElementById('photoSelect').appendChild(option);
+                        
+                        filesProcessed++;
+                        
+                        if (filesProcessed === maxFiles) {
+                            document.getElementById('photoPreview').style.display = 'block';
+                            savePhotosToStorage();
+                            showMessage(`Loaded ${maxFiles} photos`, 'success');
+                        }
+                    };
+                })(file);
+                
+                reader.readAsDataURL(file);
+            }
+            
+            if (filesProcessed === 0 && files.length > 0) {
+                showMessage('No valid image files were found', 'warning');
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function updatePhotoPreviewFromStorage() {
+            const previewGrid = document.getElementById('photoPreviewGrid');
+            previewGrid.innerHTML = '';
+            document.getElementById('photoSelect').innerHTML = '';
+            
+            uploadedPhotos.forEach(photo => {
+                const previewItem = document.createElement('div');
+                previewItem.className = 'photo-preview-item';
+                previewItem.innerHTML = `
+                    <button class="remove-photo" onclick="removePhoto(${photo.id})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <img src="${photo.dataUrl}" alt="${photo.name}">
+                    <div class="photo-filename">${photo.name}</div>
+                `;
+                previewGrid.appendChild(previewItem);
+                
+                const option = document.createElement('option');
+                option.value = photo.id;
+                option.textContent = photo.name;
+                document.getElementById('photoSelect').appendChild(option);
+            });
+            
+            if (uploadedPhotos.length > 0) {
+                document.getElementById('photoPreview').style.display = 'block';
+            }
+        }
+
+        function removePhoto(photoId) {
+            uploadedPhotos = uploadedPhotos.filter(p => p.id !== photoId);
+            
+            const photoSelect = document.getElementById('photoSelect');
+            const option = Array.from(photoSelect.options).find(opt => parseInt(opt.value) === photoId);
+            if (option) option.remove();
+            
+            updatePhotoPreviewFromStorage();
+            savePhotosToStorage();
+            
+            showMessage('Photo removed', 'info');
+        }
+
+        function autoAssignPhotos() {
+            let assigned = 0;
+            
+            uploadedPhotos.forEach(photo => {
+                const photoName = photo.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                
+                const product = products.find(p => {
+                    const productName = p.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    return photoName.includes(productName.substring(0, Math.min(productName.length, 10))) ||
+                           productName.includes(photoName.substring(0, Math.min(photoName.length, 10)));
+                });
+                
+                if (product) {
+                    product.image = photo.dataUrl;
+                    photo.assigned = true;
+                    photo.assignedProductId = product.id;
+                    assigned++;
+                }
+            });
+            
+            updateProductGrid();
+            updateInventoryTable();
+            saveProductsToStorage();
+            savePhotosToStorage();
+            
+            showMessage(`Auto-assigned ${assigned} photos to products`, 'success');
+        }
+
+        function assignPhotoToProduct() {
+            const productId = parseInt(document.getElementById('productSelect').value);
+            const photoId = parseInt(document.getElementById('photoSelect').value);
+            
+            if (!productId || !photoId) {
+                showMessage('Please select both a product and a photo', 'warning');
+                return;
+            }
+            
+            const product = products.find(p => p.id === productId);
+            const photo = uploadedPhotos.find(p => p.id === photoId);
+            
+            if (product && photo) {
+                product.image = photo.dataUrl;
+                photo.assigned = true;
+                photo.assignedProductId = product.id;
+                
+                updateProductGrid();
+                updateInventoryTable();
+                saveProductsToStorage();
+                savePhotosToStorage();
+                
+                showMessage(`Assigned photo to "${product.name}"`, 'success');
+            }
+        }
+
+        function assignAllPhotosAutomatically() {
+            let assigned = 0;
+            
+            uploadedPhotos.forEach(photo => {
+                if (photo.assigned) return;
+                
+                const photoName = photo.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                
+                let bestMatch = null;
+                let bestScore = 0;
+                
+                products.forEach(product => {
+                    const productName = product.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    
+                    let score = 0;
+                    const minLength = Math.min(productName.length, photoName.length, 20);
+                    
+                    for (let i = 1; i <= minLength; i++) {
+                        const productSubstring = productName.substring(0, i);
+                        const photoSubstring = photoName.substring(0, i);
+                        
+                        if (productSubstring === photoSubstring) {
+                            score = i;
+                        }
+                    }
+                    
+                    if (photoName.includes(productName)) {
+                        score += 10;
+                    }
+                    if (productName.includes(photoName)) {
+                        score += 10;
+                    }
+                    
+                    if (score > bestScore && score > 3) {
+                        bestScore = score;
+                        bestMatch = product;
+                    }
+                });
+                
+                if (bestMatch) {
+                    bestMatch.image = photo.dataUrl;
+                    photo.assigned = true;
+                    photo.assignedProductId = bestMatch.id;
+                    assigned++;
+                }
+            });
+            
+            updateProductGrid();
+            updateInventoryTable();
+            saveProductsToStorage();
+            savePhotosToStorage();
+            
+            showMessage(`Auto-assigned ${assigned} photos to products`, 'success');
+        }
+
+        function clearPhotoUploads() {
+            if (uploadedPhotos.length === 0) return;
+            
+            if (confirm(`Clear all ${uploadedPhotos.length} uploaded photos?`)) {
+                uploadedPhotos = [];
+                document.getElementById('photoPreview').style.display = 'none';
+                document.getElementById('photoSelect').innerHTML = '';
+                localStorage.removeItem('goatKidsPhotos');
+                showMessage('All photos cleared', 'info');
+            }
+        }
+
+        // ========== ONLINE SYNC (MOCKED) ==========
+        function connectGoogleSheets() {
+            const url = document.getElementById('googleSheetsUrl').value;
+            if (!url) {
+                showMessage('Please enter a Google Sheets URL', 'warning');
+                return;
+            }
+            
+            showMessage('Note: Google Sheets integration requires a backend server. For client-side only, please upload spreadsheet files directly.', 'info');
+        }
+
+        function syncFromGoogleSheets() {
+            showMessage('Online sync requires a backend server. Please use spreadsheet upload instead.', 'info');
+        }
+
+        function testApiConnection() {
+            showMessage('API integration requires a backend server. For client-side, use spreadsheet upload.', 'info');
+        }
+
+        function importFromApi() {
+            showMessage('API integration requires a backend server. For client-side, use spreadsheet upload.', 'info');
+        }
+
+        function setupAutoSync() {
+            showMessage('Auto-sync requires a backend server. For client-side, please upload files manually.', 'info');
+        }
+
+        // ========== UTILITY FUNCTIONS ==========
         function getDefaultSizes(category) {
             switch(category) {
                 case 'shoes': return ['8', '9', '10', '11', '12'];
@@ -2064,184 +2483,6 @@
             return images[category] || 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=400&h=400&fit=crop';
         }
 
-        function testPhotoUrls() {
-            if (!spreadsheetData || spreadsheetData.length === 0) {
-                showMessage('No data to test. Please upload a spreadsheet first.', 'warning');
-                return;
-            }
-            
-            const photoColumn = document.getElementById('photoColumnSelect').value;
-            if (!photoColumn) {
-                showMessage('No photo column selected', 'warning');
-                return;
-            }
-            
-            let validUrls = 0;
-            let invalidUrls = 0;
-            
-            spreadsheetData.forEach((row, index) => {
-                if (row[photoColumn]) {
-                    const url = row[photoColumn];
-                    // Simple URL validation
-                    if (url.startsWith('http') && (url.includes('.jpg') || url.includes('.png') || 
-                        url.includes('.jpeg') || url.includes('.webp') || url.includes('unsplash') || 
-                        url.includes('images.unsplash.com'))) {
-                        validUrls++;
-                    } else {
-                        invalidUrls++;
-                        console.warn(`Invalid photo URL at row ${index + 1}: ${url}`);
-                    }
-                }
-            });
-            
-            showMessage(`Photo URL test: ${validUrls} valid, ${invalidUrls} invalid URLs`, 
-                       invalidUrls === 0 ? 'success' : 'warning');
-        }
-
-        function clearSpreadsheetData() {
-            spreadsheetData = null;
-            document.getElementById('spreadsheetPreview').style.display = 'none';
-            document.getElementById('processBtn').disabled = true;
-            document.getElementById('previewBtn').disabled = true;
-            document.getElementById('testPhotosBtn').disabled = true;
-            document.getElementById('progressContainer').style.display = 'none';
-            document.getElementById('spreadsheetFile').value = '';
-            
-            showMessage('Spreadsheet data cleared', 'info');
-        }
-
-        // PHOTO MANAGEMENT FUNCTIONS
-
-        function handlePhotoUpload(event) {
-            const files = event.target.files;
-            if (!files || files.length === 0) return;
-            
-            uploadedPhotos = [];
-            const previewGrid = document.getElementById('photoPreviewGrid');
-            previewGrid.innerHTML = '';
-            
-            // Process each file
-            for (let i = 0; i < files.length && i < 20; i++) { // Limit to 20 files
-                const file = files[i];
-                const reader = new FileReader();
-                
-                reader.onload = function(e) {
-                    const photoData = {
-                        id: uploadedPhotos.length + 1,
-                        file: file,
-                        dataUrl: e.target.result,
-                        name: file.name,
-                        size: (file.size / 1024).toFixed(1) + ' KB',
-                        assigned: false
-                    };
-                    
-                    uploadedPhotos.push(photoData);
-                    
-                    // Create preview
-                    const previewItem = document.createElement('div');
-                    previewItem.className = 'photo-preview-item';
-                    previewItem.innerHTML = `
-                        <button class="remove-photo" onclick="removePhoto(${photoData.id})">
-                            <i class="fas fa-times"></i>
-                        </button>
-                        <img src="${e.target.result}" alt="${file.name}">
-                        <div class="photo-filename">${file.name}</div>
-                    `;
-                    previewGrid.appendChild(previewItem);
-                    
-                    // Add to photo select dropdown
-                    const option = document.createElement('option');
-                    option.value = photoData.id;
-                    option.textContent = file.name;
-                    document.getElementById('photoSelect').appendChild(option);
-                };
-                
-                reader.readAsDataURL(file);
-            }
-            
-            document.getElementById('photoPreview').style.display = 'block';
-            showMessage(`Loaded ${Math.min(files.length, 20)} photos`, 'success');
-        }
-
-        function removePhoto(photoId) {
-            uploadedPhotos = uploadedPhotos.filter(p => p.id !== photoId);
-            
-            // Remove from dropdown
-            const photoSelect = document.getElementById('photoSelect');
-            const option = Array.from(photoSelect.options).find(opt => parseInt(opt.value) === photoId);
-            if (option) option.remove();
-            
-            // Update preview
-            updatePhotoPreview();
-        }
-
-        function updatePhotoPreview() {
-            const previewGrid = document.getElementById('photoPreviewGrid');
-            previewGrid.innerHTML = '';
-            
-            uploadedPhotos.forEach(photo => {
-                const previewItem = document.createElement('div');
-                previewItem.className = 'photo-preview-item';
-                previewItem.innerHTML = `
-                    <button class="remove-photo" onclick="removePhoto(${photo.id})">
-                        <i class="fas fa-times"></i>
-                    </button>
-                    <img src="${photo.dataUrl}" alt="${photo.name}">
-                    <div class="photo-filename">${photo.name}</div>
-                `;
-                previewGrid.appendChild(previewItem);
-            });
-            
-            if (uploadedPhotos.length === 0) {
-                document.getElementById('photoPreview').style.display = 'none';
-            }
-        }
-
-        function autoAssignPhotos() {
-            let assigned = 0;
-            
-            uploadedPhotos.forEach(photo => {
-                const photoName = photo.name.toLowerCase();
-                
-                // Try to find matching product by name
-                const product = products.find(p => 
-                    photoName.includes(p.name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 20))
-                );
-                
-                if (product) {
-                    product.image = photo.dataUrl;
-                    photo.assigned = true;
-                    assigned++;
-                    showMessage(`Assigned "${photo.name}" to "${product.name}"`, 'info');
-                }
-            });
-            
-            updateProductGrid();
-            updateInventoryTable();
-            showMessage(`Auto-assigned ${assigned} photos to products`, 'success');
-        }
-
-        function uploadPhotosToServer() {
-            if (uploadedPhotos.length === 0) {
-                showMessage('No photos to upload', 'warning');
-                return;
-            }
-            
-            showMessage(`Uploading ${uploadedPhotos.length} photos to server...`, 'info');
-            
-            // Simulate upload
-            setTimeout(() => {
-                showMessage('Photos uploaded successfully! You can now use the URLs in your spreadsheet.', 'success');
-            }, 2000);
-        }
-
-        function clearPhotoUploads() {
-            uploadedPhotos = [];
-            document.getElementById('photoPreview').style.display = 'none';
-            document.getElementById('photoSelect').innerHTML = '';
-            showMessage('All photos cleared', 'info');
-        }
-
         function populateProductSelect() {
             const productSelect = document.getElementById('productSelect');
             productSelect.innerHTML = '';
@@ -2253,202 +2494,6 @@
                 productSelect.appendChild(option);
             });
         }
-
-        function assignPhotoToProduct() {
-            const productId = parseInt(document.getElementById('productSelect').value);
-            const photoId = parseInt(document.getElementById('photoSelect').value);
-            
-            if (!productId || !photoId) {
-                showMessage('Please select both a product and a photo', 'warning');
-                return;
-            }
-            
-            const product = products.find(p => p.id === productId);
-            const photo = uploadedPhotos.find(p => p.id === photoId);
-            
-            if (product && photo) {
-                product.image = photo.dataUrl;
-                photo.assigned = true;
-                
-                updateProductGrid();
-                updateInventoryTable();
-                showMessage(`Assigned photo to "${product.name}"`, 'success');
-            }
-        }
-
-        function assignAllPhotosAutomatically() {
-            // Simple matching based on product name in filename
-            let assigned = 0;
-            
-            uploadedPhotos.forEach(photo => {
-                const photoName = photo.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                
-                // Find best matching product
-                let bestMatch = null;
-                let bestScore = 0;
-                
-                products.forEach(product => {
-                    const productName = product.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                    
-                    // Simple matching algorithm
-                    let score = 0;
-                    for (let i = 0; i < Math.min(productName.length, 20); i++) {
-                        if (photoName.includes(productName.substring(0, i + 1))) {
-                            score = i + 1;
-                        }
-                    }
-                    
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestMatch = product;
-                    }
-                });
-                
-                if (bestMatch && bestScore > 5) { // Minimum 5 character match
-                    bestMatch.image = photo.dataUrl;
-                    photo.assigned = true;
-                    assigned++;
-                }
-            });
-            
-            updateProductGrid();
-            updateInventoryTable();
-            showMessage(`Auto-assigned ${assigned} photos to products`, 'success');
-        }
-
-        // ONLINE SYNC FUNCTIONS
-
-        function connectGoogleSheets() {
-            const url = document.getElementById('googleSheetsUrl').value;
-            if (!url) {
-                showMessage('Please enter a Google Sheets URL', 'warning');
-                return;
-            }
-            
-            showMessage('Connecting to Google Sheets...', 'info');
-            
-            // Simulate connection
-            setTimeout(() => {
-                showMessage('Connected to Google Sheets successfully!', 'success');
-            }, 1500);
-        }
-
-        function syncFromGoogleSheets() {
-            showMessage('Syncing from Google Sheets...', 'info');
-            
-            // Simulate sync
-            setTimeout(() => {
-                showMessage('Sync completed successfully!', 'success');
-            }, 2000);
-        }
-
-        function testApiConnection() {
-            const endpoint = document.getElementById('apiEndpoint').value;
-            if (!endpoint) {
-                showMessage('Please enter an API endpoint', 'warning');
-                return;
-            }
-            
-            showMessage('Testing API connection...', 'info');
-            
-            // Simulate connection test
-            setTimeout(() => {
-                showMessage('API connection successful!', 'success');
-            }, 1500);
-        }
-
-        function importFromApi() {
-            showMessage('Importing from API...', 'info');
-            
-            // Simulate import
-            setTimeout(() => {
-                // Add some mock data from API
-                const newProduct = {
-                    id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
-                    name: "API Imported Jacket",
-                    price: 59.99,
-                    category: "jackets",
-                    stock: 8,
-                    sizes: ["3T", "4T", "5T"],
-                    description: "Imported via API connection",
-                    image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop",
-                    lastUpdated: new Date().toISOString().split('T')[0]
-                };
-                
-                products.push(newProduct);
-                updateProductGrid();
-                updateInventoryStats();
-                updateInventoryTable();
-                populateProductSelect();
-                
-                showMessage('Successfully imported from API!', 'success');
-            }, 2000);
-        }
-
-        function setupAutoSync() {
-            const frequency = document.querySelector('input[name="syncFrequency"]:checked').value;
-            const frequencies = {
-                manual: "Manual",
-                hourly: "Every hour",
-                daily: "Every day",
-                weekly: "Every week"
-            };
-            
-            showMessage(`Auto-sync set to: ${frequencies[frequency]}`, 'success');
-        }
-
-        // TEMPLATE FUNCTIONS
-
-        function downloadTemplate(type) {
-            showMessage(`Downloading ${type.toUpperCase()} template...`, 'info');
-            
-            // Create template data
-            let templateData = '';
-            
-            if (type === 'csv') {
-                templateData = 'name,price,category,stock,sizes,description,image_url\n';
-                templateData += 'Cotton T-Shirt,19.99,tshirts,25,2T,3T,4T,5T,Soft cotton t-shirt,https://example.com/tshirt.jpg\n';
-                templateData += 'Denim Overalls,34.99,pants,15,3T,4T,5T,Classic overalls,https://example.com/overalls.jpg';
-            }
-            
-            // Create download link
-            const blob = new Blob([templateData], { type: type === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `goat-kids-template.${type}`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-            
-            showMessage(`Template downloaded successfully!`, 'success');
-        }
-
-        function showTemplateFormat() {
-            const format = `
-Required Fields:
-- name: Product name (e.g., "Cotton T-Shirt")
-- price: Price in dollars (e.g., "19.99")
-- category: Product category (e.g., "tshirts", "pants", "dresses")
-- stock: Available quantity (e.g., "25")
-
-Optional Fields:
-- sizes: Comma-separated sizes (e.g., "2T,3T,4T,5T")
-- description: Product description
-- image_url: URL to product photo
-- photo_url: Alternative photo URL field
-
-Example CSV format:
-name,price,category,stock,sizes,description,image_url
-Cotton T-Shirt,19.99,tshirts,25,2T,3T,4T,5T,Soft cotton t-shirt,https://example.com/tshirt.jpg
-Denim Overalls,34.99,pants,15,3T,4T,5T,Classic overalls,https://example.com/overalls.jpg
-            `;
-            
-            alert(format);
-        }
-
-        // INVENTORY TABLE FUNCTIONS
 
         function updateInventoryTable() {
             const tableBody = document.getElementById('inventoryTableBody');
@@ -2488,6 +2533,7 @@ Denim Overalls,34.99,pants,15,3T,4T,5T,Classic overalls,https://example.com/over
                 product.lastUpdated = new Date().toISOString().split('T')[0];
                 updateProductGrid();
                 updateInventoryTable();
+                saveProductsToStorage();
                 showMessage('Product updated successfully!', 'success');
             }
             
@@ -2498,6 +2544,7 @@ Denim Overalls,34.99,pants,15,3T,4T,5T,Classic overalls,https://example.com/over
                 updateProductGrid();
                 updateInventoryTable();
                 updateInventoryStats();
+                saveProductsToStorage();
                 showMessage('Stock updated successfully!', 'success');
             }
         }
@@ -2512,7 +2559,6 @@ Denim Overalls,34.99,pants,15,3T,4T,5T,Classic overalls,https://example.com/over
                 const productName = products[index].name;
                 products.splice(index, 1);
                 
-                // Remove from cart
                 cart = cart.filter(item => item.id !== productId);
                 localStorage.setItem('goatKidsCart', JSON.stringify(cart));
                 
@@ -2521,8 +2567,49 @@ Denim Overalls,34.99,pants,15,3T,4T,5T,Classic overalls,https://example.com/over
                 updateInventoryStats();
                 updateInventoryTable();
                 populateProductSelect();
+                saveProductsToStorage();
                 showMessage(`"${productName}" deleted from inventory`, 'success');
             }
+        }
+
+        function addNewProduct() {
+            const name = prompt('Enter product name:');
+            if (!name) return;
+            
+            const price = parseFloat(prompt('Enter product price:'));
+            if (isNaN(price) || price <= 0) {
+                showMessage('Invalid price', 'error');
+                return;
+            }
+            
+            const stock = parseInt(prompt('Enter stock quantity:'));
+            if (isNaN(stock) || stock < 0) {
+                showMessage('Invalid stock quantity', 'error');
+                return;
+            }
+            
+            const category = prompt('Enter category (tshirts, pants, dresses, jackets, shoes, accessories):', 'tshirts');
+            
+            const newProduct = {
+                id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
+                name: name,
+                price: price,
+                category: category || 'tshirts',
+                stock: stock,
+                sizes: getDefaultSizes(category),
+                description: `New ${category || 'product'} added manually`,
+                image: getDefaultImage(category),
+                lastUpdated: new Date().toISOString().split('T')[0]
+            };
+            
+            products.push(newProduct);
+            updateProductGrid();
+            updateInventoryStats();
+            updateInventoryTable();
+            populateProductSelect();
+            saveProductsToStorage();
+            
+            showMessage(`"${name}" added to inventory`, 'success');
         }
 
         function exportInventory() {
@@ -2568,7 +2655,86 @@ Denim Overalls,34.99,pants,15,3T,4T,5T,Classic overalls,https://example.com/over
             showMessage('Inventory refreshed', 'info');
         }
 
-        // UTILITY FUNCTIONS
+        function downloadTemplate(type) {
+            showMessage(`Downloading ${type.toUpperCase()} template...`, 'info');
+            
+            let templateData = '';
+            
+            if (type === 'csv') {
+                templateData = 'name,price,category,stock,sizes,description,image_url\n';
+                templateData += 'Cotton T-Shirt,19.99,tshirts,25,"2T,3T,4T,5T",Soft cotton t-shirt,https://example.com/tshirt.jpg\n';
+                templateData += 'Denim Overalls,34.99,pants,15,"3T,4T,5T",Classic overalls,https://example.com/overalls.jpg';
+            } else {
+                // For Excel, we'd need to create a proper Excel file
+                templateData = 'name,price,category,stock,sizes,description,image_url\n';
+                templateData += 'Cotton T-Shirt,19.99,tshirts,25,"2T,3T,4T,5T",Soft cotton t-shirt,https://example.com/tshirt.jpg\n';
+                templateData += 'Denim Overalls,34.99,pants,15,"3T,4T,5T",Classic overalls,https://example.com/overalls.jpg';
+            }
+            
+            const blob = new Blob([templateData], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `goat-kids-template.${type === 'excel' ? 'xlsx' : 'csv'}`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            showMessage(`Template downloaded successfully!`, 'success');
+        }
+
+        function showTemplateFormat() {
+            const format = `
+Required Fields:
+- name: Product name (e.g., "Cotton T-Shirt")
+- price: Price in dollars (e.g., "19.99")
+- category: Product category (e.g., "tshirts", "pants", "dresses")
+- stock: Available quantity (e.g., "25")
+
+Optional Fields:
+- sizes: Comma-separated sizes (e.g., "2T,3T,4T,5T")
+- description: Product description
+- image_url: URL to product photo
+- photo_url: Alternative photo URL field
+
+Example CSV format:
+name,price,category,stock,sizes,description,image_url
+Cotton T-Shirt,19.99,tshirts,25,"2T,3T,4T,5T",Soft cotton t-shirt,https://example.com/tshirt.jpg
+Denim Overalls,34.99,pants,15,"3T,4T,5T",Classic overalls,https://example.com/overalls.jpg
+            `;
+            
+            alert(format);
+        }
+
+        function exportAllData() {
+            const data = {
+                products: products,
+                photos: uploadedPhotos.map(p => ({ 
+                    name: p.name, 
+                    assigned: p.assigned,
+                    assignedProductId: p.assignedProductId 
+                })),
+                spreadsheet: spreadsheetData ? spreadsheetData.slice(0, 10) : null,
+                exported: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(data, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = `goat-kids-data-${new Date().toISOString().split('T')[0]}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+            
+            showMessage('Data exported successfully', 'success');
+        }
+
+        function showBackupInfo() {
+            alert('Data Backup Information:\n\n1. All data is automatically saved to your browser\'s localStorage\n2. Data persists between page refreshes\n3. Use "Export All Data" to backup to a file\n4. Clear browser cache will delete all data\n5. For permanent storage, consider adding a backend server');
+        }
 
         function showMessage(text, type) {
             const messageArea = document.getElementById('messageArea');
@@ -2582,7 +2748,6 @@ Denim Overalls,34.99,pants,15,3T,4T,5T,Classic overalls,https://example.com/over
             
             messageArea.appendChild(message);
             
-            // Remove after 5 seconds
             setTimeout(() => {
                 message.style.animation = 'slideIn 0.3s reverse';
                 setTimeout(() => {
@@ -2594,7 +2759,7 @@ Denim Overalls,34.99,pants,15,3T,4T,5T,Classic overalls,https://example.com/over
         }
 
         function showPrivacyPolicy() {
-            alert('Privacy Policy:\n\nWe value your privacy. All customer data is protected and never shared with third parties without consent.\n\nFor more information, contact us at privacy@goatkids.com');
+            alert('Privacy Policy:\n\nWe value your privacy. All data is stored locally in your browser and never sent to any server.\n\nNo personal information is collected or shared.');
         }
     </script>
 </body>
