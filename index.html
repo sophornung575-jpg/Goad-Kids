@@ -167,11 +167,13 @@ const cancelEditBtn = document.getElementById("cancelEditBtn");
 const PAYWAY_LINK = "https://link.payway.com.kh/08407860s";
 const PAGE_NAME = "Goatkids";
 
+// Load data from localStorage
 let products = JSON.parse(localStorage.getItem("products")) || [];
 let cart = JSON.parse(localStorage.getItem("cart")) || [];
 let orders = JSON.parse(localStorage.getItem("orders")) || [];
 let isAdmin = localStorage.getItem("admin") === "true";
 let currentEditId = null;
+let currentImageData = null; // Store the image data temporarily
 
 // Initialize
 document.getElementById("payText").textContent = "PayWay";
@@ -198,16 +200,18 @@ imageInput.onchange = async (e) => {
     }
     
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
         // Check image dimensions
         const img = new Image();
-        img.onload = () => {
+        img.onload = async () => {
             if (img.width > 4000 || img.height > 4000) {
                 showImageError("Image dimensions too large! Maximum is 4000x4000 pixels");
                 imageInput.value = "";
             } else {
+                // Resize and store the image
                 preview.src = reader.result;
                 preview.classList.remove("hidden");
+                currentImageData = await resizeImage(reader.result);
             }
         };
         img.src = reader.result;
@@ -220,6 +224,7 @@ function showImageError(message) {
     imageError.classList.remove("hidden");
     imageInput.value = "";
     preview.classList.add("hidden");
+    currentImageData = null;
 }
 
 async function resizeImage(base64, max = 600) {
@@ -230,7 +235,8 @@ async function resizeImage(base64, max = 600) {
             const canvas = document.createElement("canvas");
             canvas.width = img.width * scale;
             canvas.height = img.height * scale;
-            canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             resolve(canvas.toDataURL("image/jpeg", 0.8));
         };
         img.src = base64;
@@ -281,13 +287,25 @@ async function saveProduct() {
     const size = document.getElementById("size").value;
     
     // Validation
-    if (!name) return alert("Product name is required");
-    if (isNaN(price) || price < 0) return alert("Please enter a valid price (minimum 0)");
-    if (isNaN(stock) || stock < 0) return alert("Please enter a valid stock quantity (minimum 0)");
+    if (!name) {
+        alert("Product name is required");
+        return;
+    }
     
-    let base64 = null;
-    if (imageInput.files[0]) {
-        base64 = await resizeImage(preview.src);
+    if (isNaN(price) || price < 0) {
+        alert("Please enter a valid price (minimum 0)");
+        return;
+    }
+    
+    if (isNaN(stock) || stock < 0) {
+        alert("Please enter a valid stock quantity (minimum 0)");
+        return;
+    }
+    
+    // For NEW products, require an image
+    if (currentEditId === null && !currentImageData) {
+        alert("Please select an image for the new product");
+        return;
     }
     
     const sizeValues = size.split(",").map(s => s.trim()).filter(s => s);
@@ -295,31 +313,43 @@ async function saveProduct() {
     if (currentEditId !== null) {
         // Update existing product
         const product = products.find(p => p.id === currentEditId);
-        product.name = name;
-        product.price = price;
-        product.stock = stock;
-        product.sizes = sizeValues;
-        if (base64) product.image = base64;
+        if (product) {
+            product.name = name;
+            product.price = price;
+            product.stock = stock;
+            product.sizes = sizeValues;
+            
+            // Only update image if a new one was selected
+            if (currentImageData) {
+                product.image = currentImageData;
+            }
+        }
     } else {
         // Add new product
-        if (!imageInput.files[0]) {
-            return alert("Please select an image for new product");
-        }
-        
-        products.push({
+        const newProduct = {
             id: Date.now(),
             name: name,
             price: price,
             stock: stock,
             sizes: sizeValues,
-            image: base64
-        });
+            image: currentImageData
+        };
+        
+        products.push(newProduct);
+        console.log("Added new product:", newProduct); // Debug log
     }
     
+    // Save to localStorage
     localStorage.setItem("products", JSON.stringify(products));
+    console.log("Products in localStorage:", products); // Debug log
+    
+    // Reset and refresh
     resetForm();
     render();
     renderEditProducts();
+    
+    // Show success message
+    alert(currentEditId !== null ? "Product updated successfully!" : "Product added successfully!");
 }
 
 function editProduct(id) {
@@ -334,6 +364,7 @@ function editProduct(id) {
     if (product.image) {
         preview.src = product.image;
         preview.classList.remove("hidden");
+        currentImageData = product.image; // Store current image
     }
     
     currentEditId = id;
@@ -348,9 +379,11 @@ function resetForm() {
     document.getElementById("stock").value = "";
     document.getElementById("size").value = "";
     imageInput.value = "";
+    preview.src = "";
     preview.classList.add("hidden");
     imageError.classList.add("hidden");
     currentEditId = null;
+    currentImageData = null;
     saveProductBtn.textContent = "Add Product";
     saveProductBtn.className = "btn btn-orange";
     cancelEditBtn.classList.add("hidden");
@@ -365,26 +398,29 @@ function render() {
     productGrid.innerHTML = "";
     
     if (products.length === 0) {
-        productGrid.innerHTML = '<p style="text-align: center; grid-column: 1/-1;">No products available. Add some in admin panel!</p>';
+        productGrid.innerHTML = '<p style="text-align: center; grid-column: 1/-1; padding: 40px;">No products available. Add some in admin panel!</p>';
         return;
     }
     
+    console.log("Rendering products:", products); // Debug log
+    
     products.forEach(product => {
-        const sizeOptions = product.sizes.map(size => 
-            `<option value="${size}">${size}</option>`
-        ).join("");
+        const sizeOptions = product.sizes && product.sizes.length > 0 
+            ? product.sizes.map(size => `<option value="${size}">${size}</option>`).join("")
+            : '<option value="N/A">N/A</option>';
         
         const isOutOfStock = product.stock === 0;
+        const productImage = product.image || getDefaultImage();
         
-        productGrid.innerHTML += `
+        const productCard = `
         <div class="card">
-            <img src="${product.image || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23f0f0f0"/><text x="50" y="50" text-anchor="middle" dy=".3em" fill="%23999">No Image</text></svg>'}">
+            <img src="${productImage}" alt="${product.name}">
             <div class="card-body">
                 <h4>${product.name}</h4>
                 <div class="price">$${product.price.toFixed(2)}</div>
                 <div>Stock: ${product.stock}</div>
                 <select id="sizeSelect-${product.id}">
-                    ${sizeOptions || '<option value="N/A">N/A</option>'}
+                    ${sizeOptions}
                 </select>
                 <button class="btn btn-orange" onclick="addToCart(${product.id})" 
                     ${isOutOfStock ? 'disabled' : ''}>
@@ -393,9 +429,16 @@ function render() {
                 ${isOutOfStock ? '<div class="alert-stock">Out of Stock!</div>' : ''}
             </div>
         </div>`;
+        
+        productGrid.innerHTML += productCard;
     });
     
     updateCartCount();
+}
+
+// Helper function for default image
+function getDefaultImage() {
+    return 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iIGZpbGw9IiM5OTkiIGZvbnQtZmFtaWx5PSJBcmlhbCI+UHJvZHVjdDwvdGV4dD48L3N2Zz4=';
 }
 
 // Cart Functions
@@ -406,7 +449,7 @@ function addToCart(id) {
         return;
     }
     
-    const selectedSize = document.getElementById(`sizeSelect-${id}`).value || "N/A";
+    const selectedSize = document.getElementById(`sizeSelect-${id}`)?.value || "N/A";
     const existingItem = cart.find(item => item.id === id && item.size === selectedSize);
     
     if (existingItem) {
@@ -469,7 +512,7 @@ function renderCart() {
             </div>
             <div>
                 $${itemTotal.toFixed(2)}
-                <button onclick="removeFromCart(${index})" style="margin-left: 10px; color: #e74c3c; border: none; background: none; cursor: pointer;">×</button>
+                <button onclick="removeFromCart(${index})" style="margin-left: 10px; color: #e74c3c; border: none; background: none; cursor: pointer; font-size: 18px;">×</button>
             </div>
         </div>`;
     });
@@ -542,11 +585,7 @@ function sendOrder() {
     
     localStorage.setItem("orders", JSON.stringify(orders));
     
-    // Clear cart and update stock
-    cart.forEach(item => {
-        // Stock was already updated when items were added to cart
-    });
-    
+    // Clear cart
     cart = [];
     localStorage.removeItem("cart");
     
@@ -592,7 +631,7 @@ function renderEditProducts() {
         <div class="order">
             <strong>${product.name}</strong><br>
             Price: $${product.price.toFixed(2)} | Stock: ${product.stock}<br>
-            Sizes: ${product.sizes.join(", ") || "N/A"}<br>
+            Sizes: ${product.sizes ? product.sizes.join(", ") : "N/A"}<br>
             <button class="edit-btn" onclick="editProduct(${product.id})">Edit</button>
         </div>`;
     });
