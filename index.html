@@ -50,16 +50,31 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
 .image-upload-label { display: block; cursor: pointer; color: #666; }
 .image-upload-label:hover { color: #4a90e2; }
 .image-upload-icon { font-size: 40px; margin-bottom: 10px; }
+/* Secret admin access area - invisible */
+.secret-admin-area { 
+    position: fixed; 
+    top: 0; 
+    right: 0; 
+    width: 100px; 
+    height: 40px; 
+    background: transparent; 
+    z-index: 10000; 
+    cursor: pointer; 
+}
 </style>
 </head>
 <body>
+
+<!-- Secret admin unlock area (invisible in top-right corner) -->
+<div class="secret-admin-area" onclick="unlockAdmin()" title="Click to unlock admin"></div>
 
 <header>
 <div class="container flex">
 <b>🛒 My Store</b>
 <nav>
 <button onclick="openCart()">Cart (<span id="cartCount">0</span>)</button>
-<button onclick="openAdmin()">Admin</button>
+<!-- Admin button is hidden by default -->
+<button id="adminBtn" onclick="openAdmin()" style="display: none;">Admin</button>
 </nav>
 </div>
 </header>
@@ -203,15 +218,18 @@ const imageError = document.getElementById("imageError");
 const saveProductBtn = document.getElementById("saveProductBtn");
 const cancelEditBtn = document.getElementById("cancelEditBtn");
 const passwordMessage = document.getElementById("passwordMessage");
+const adminBtn = document.getElementById("adminBtn");
 
 const PAYWAY_LINK = "https://link.payway.com.kh/08407860s";
 const PAGE_NAME = "Goatkids";
+const SECRET_UNLOCK_PASSWORD = "admin123"; // Change this to your preferred password
 
 // Load data from localStorage
 let products = JSON.parse(localStorage.getItem("products")) || [];
 let cart = JSON.parse(localStorage.getItem("cart")) || [];
 let orders = JSON.parse(localStorage.getItem("orders")) || [];
 let isAdmin = localStorage.getItem("admin") === "true";
+let adminUnlocked = localStorage.getItem("adminUnlocked") === "true";
 let currentEditId = null;
 let currentImageData = null;
 
@@ -224,7 +242,21 @@ if (!localStorage.getItem("adminPassword")) {
 document.getElementById("payText").textContent = "PayWay";
 document.getElementById("payText").href = PAYWAY_LINK;
 
-// Enhanced Image Handling with better resizing
+// Secret Admin Unlock Function
+function unlockAdmin() {
+    const password = prompt("Enter admin unlock password:");
+    
+    if (password === SECRET_UNLOCK_PASSWORD) {
+        adminUnlocked = true;
+        localStorage.setItem("adminUnlocked", "true");
+        adminBtn.style.display = "inline-block";
+        alert("✓ Admin access unlocked! Admin button is now visible.");
+    } else if (password) {
+        alert("✗ Incorrect password!");
+    }
+}
+
+// Image Handling
 imageInput.onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -260,7 +292,7 @@ imageInput.onchange = async (e) => {
             preview.classList.remove("hidden");
             
             // Resize for storage (optimized for product display)
-            currentImageData = await resizeImage(reader.result, 800, 800); // Max 800x800 for better quality
+            currentImageData = await resizeImage(reader.result, 800, 800);
         };
         img.src = reader.result;
     };
@@ -367,6 +399,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Admin Functions
 function openAdmin() {
+    if (!adminUnlocked) {
+        unlockAdmin();
+        return;
+    }
+    
     if (!isAdmin) {
         loginModal.style.display = "flex";
         return;
@@ -578,7 +615,7 @@ function render() {
     products.forEach(product => {
         const sizeOptions = product.sizes && product.sizes.length > 0 
             ? product.sizes.map(size => `<option value="${size}">${size}</option>`).join("")
-            : '<option value="N/A">N/A</option>';
+            : '<option value="">One Size</option>';
         
         const sizeTags = product.sizes && product.sizes.length > 0 
             ? `<div class="product-sizes">${product.sizes.map(size => `<span class="size-tag">${size}</span>`).join("")}</div>`
@@ -839,6 +876,11 @@ function renderEditProducts() {
 function init() {
     render();
     updateCartCount();
+    
+    // Show admin button if previously unlocked
+    if (adminUnlocked) {
+        adminBtn.style.display = "inline-block";
+    }
     
     if (isAdmin) {
         store.classList.add("hidden");
