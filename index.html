@@ -162,7 +162,7 @@ function logout(){
 }
 
 async function addProduct(){
-    const sizeInput = document.getElementById("size"); // FIX: size reference
+    const sizeInput = document.getElementById("size"); // size reference
 
     if(!image.files[0]) return alert("Select image");
     const base64 = await resizeImage(preview.src);
@@ -190,6 +190,8 @@ function addToCart(id){
     const p = products.find(x=>x.id===id);
     const selectedSize = document.getElementById(`sizeSelect-${id}`).value || "N/A";
 
+    if(p.stock <= 0) return alert("Out of stock!");
+
     const item = cart.find(i => i.id === id && i.size === selectedSize);
 
     if(item){
@@ -204,7 +206,11 @@ function addToCart(id){
         });
     }
 
+    // Reduce stock
+    p.stock--;
+    localStorage.setItem("products", JSON.stringify(products));
     localStorage.setItem("cart",JSON.stringify(cart));
+    render(); // re-render to show updated stock
     updateCartCount();
 }
 
@@ -218,8 +224,9 @@ function render(){
             <div class="card-body">
                 <h4>${p.name}</h4>
                 <div class="price">$${p.price}</div>
+                <div>Stock: ${p.stock}</div>
                 <select id="sizeSelect-${p.id}">${sizeOptions}</select>
-                <button class="btn btn-orange" onclick="addToCart(${p.id})">Add to Cart</button>
+                <button class="btn btn-orange" onclick="addToCart(${p.id})" ${p.stock === 0 ? "disabled" : ""}>Add to Cart</button>
             </div>
         </div>`;
     });
