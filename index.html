@@ -97,26 +97,28 @@ input,textarea,select{width:100%;padding:8px;margin-bottom:8px}
 </div>
 
 <script>
+// DOM Elements
 const productGrid = document.getElementById("productGrid");
+const cartCount = document.getElementById("cartCount");
 const store = document.getElementById("store");
 const admin = document.getElementById("admin");
-const cartCount = document.getElementById("cartCount");
-const cartItems = document.getElementById("cartItems");
-const cartTotal = document.getElementById("cartTotal");
-
-const PAGE_NAME = "Goatkids";
+const loginModal = document.getElementById("loginModal");
+const cartModal = document.getElementById("cartModal");
+const image = document.getElementById("image");
+const preview = document.getElementById("preview");
 const PAYWAY_LINK = "https://link.payway.com.kh/08407860s";
+const PAGE_NAME = "Goatkids";
+
 document.getElementById("payText").textContent = "Click here to pay";
 document.getElementById("payText").href = PAYWAY_LINK;
 
+// Data
 let products = JSON.parse(localStorage.getItem("products")) || [];
 let cart = JSON.parse(localStorage.getItem("cart")) || [];
 let orders = JSON.parse(localStorage.getItem("orders")) || [];
 let isAdmin = localStorage.getItem("admin")==="true";
 
-const image = document.getElementById("image");
-const preview = document.getElementById("preview");
-
+// IMAGE PREVIEW
 image.onchange = e => {
     const file = e.target.files[0];
     if(!file) return;
@@ -128,6 +130,7 @@ image.onchange = e => {
     reader.readAsDataURL(file);
 };
 
+// RESIZE IMAGE
 function resizeImage(base64, max=600){
     return new Promise(res=>{
         const img=new Image();
@@ -143,17 +146,18 @@ function resizeImage(base64, max=600){
     });
 }
 
+// ADMIN FUNCTIONS
 function openAdmin(){
-    if(!isAdmin){loginModal.style.display="flex";return;}
+    if(!isAdmin){loginModal.style.display="flex"; return;}
     store.classList.add("hidden");
     admin.classList.remove("hidden");
     renderOrders();
 }
 
 function login(){
-    const user=document.getElementById("user");
-    const pass=document.getElementById("pass");
-    if(user.value==="admin"&&pass.value==="admin123"){
+    const user=document.getElementById("user").value;
+    const pass=document.getElementById("pass").value;
+    if(user==="admin" && pass==="admin123"){
         isAdmin=true;
         localStorage.setItem("admin","true");
         loginModal.style.display="none";
@@ -168,59 +172,34 @@ function logout(){
     store.classList.remove("hidden");
 }
 
+// ADD PRODUCT
 async function addProduct(){
-    const sizeInput = document.getElementById("size"); // size reference
+    const nameInput = document.getElementById("name");
+    const priceInput = document.getElementById("price");
+    const stockInput = document.getElementById("stock");
+    const sizeInput = document.getElementById("size");
 
     if(!image.files[0]) return alert("Select image");
     const base64 = await resizeImage(preview.src);
-
-    const sizeValues = sizeInput.value.split(",").map(s => s.trim()).filter(s=>s);
+    const sizeValues = sizeInput.value.split(",").map(s=>s.trim()).filter(s=>s);
 
     products.push({
         id: Date.now(),
-        name: name.value,
-        price: +price.value,
-        stock: +stock.value,
+        name: nameInput.value,
+        price: +priceInput.value,
+        stock: +stockInput.value,
         sizes: sizeValues,
         image: base64
     });
-
     localStorage.setItem("products",JSON.stringify(products));
 
-    // Reset admin inputs
-    name.value = price.value = stock.value = sizeInput.value = image.value = "";
+    nameInput.value=priceInput.value=stockInput.value=sizeInput.value=image.value="";
     preview.classList.add("hidden");
-    render();
+
+    render(); // immediately show new product
 }
 
-function addToCart(id){
-    const p = products.find(x=>x.id===id);
-    const selectedSize = document.getElementById(`sizeSelect-${id}`).value || "N/A";
-
-    if(p.stock <= 0) return alert("Out of stock!");
-
-    const item = cart.find(i => i.id === id && i.size === selectedSize);
-
-    if(item){
-        item.qty++;
-    } else {
-        cart.push({
-            id: p.id,
-            name: p.name,
-            price: p.price,
-            size: selectedSize,
-            qty: 1
-        });
-    }
-
-    // Reduce stock
-    p.stock--;
-    localStorage.setItem("products", JSON.stringify(products));
-    localStorage.setItem("cart",JSON.stringify(cart));
-    render(); // re-render to show updated stock
-    updateCartCount();
-}
-
+// RENDER PRODUCTS
 function render(){
     productGrid.innerHTML="";
     products.forEach(p=>{
@@ -233,40 +212,54 @@ function render(){
                 <div class="price">$${p.price}</div>
                 <div>Stock: ${p.stock}</div>
                 <select id="sizeSelect-${p.id}">${sizeOptions}</select>
-                <button class="btn btn-orange" onclick="addToCart(${p.id})" ${p.stock === 0 ? "disabled" : ""}>Add to Cart</button>
+                <button class="btn btn-orange" onclick="addToCart(${p.id})" ${p.stock===0?"disabled":""}>Add to Cart</button>
             </div>
         </div>`;
     });
     updateCartCount();
 }
 
+// CART FUNCTIONS
+function addToCart(id){
+    const p = products.find(x=>x.id===id);
+    const selectedSize = document.getElementById(`sizeSelect-${id}`).value || "N/A";
+    if(p.stock<=0) return alert("Out of stock!");
+
+    const item = cart.find(i=>i.id===id && i.size===selectedSize);
+    if(item) item.qty++; 
+    else cart.push({id:p.id,name:p.name,price:p.price,size:selectedSize,qty:1});
+
+    p.stock--;
+    localStorage.setItem("products",JSON.stringify(products));
+    localStorage.setItem("cart",JSON.stringify(cart));
+    render();
+}
+
 function updateCartCount(){
     cartCount.textContent = cart.reduce((s,i)=>s+i.qty,0);
 }
 
-function openCart(){
-    renderCart();
-    cartModal.style.display="flex";
-}
-function closeCart(){cartModal.style.display="none";}
+function openCart(){ renderCart(); cartModal.style.display="flex"; }
+function closeCart(){ cartModal.style.display="none"; }
 
 function renderCart(){
-    let t=0, h="";
+    let total=0, html="";
     cart.forEach(i=>{
-        t += i.price * i.qty;
-        h += `<div class="cart-item"><span>${i.name} (${i.size}) x ${i.qty}</span><span>$${(i.price*i.qty).toFixed(2)}</span></div>`;
+        total+=i.price*i.qty;
+        html+=`<div class="cart-item"><span>${i.name} (${i.size}) x ${i.qty}</span><span>$${(i.price*i.qty).toFixed(2)}</span></div>`;
     });
-    cartItems.innerHTML = h || "<p>Empty</p>";
-    cartTotal.textContent = "Total: $"+t.toFixed(2);
+    cartItems.innerHTML = html || "<p>Empty</p>";
+    cartTotal.textContent = "Total: $"+total.toFixed(2);
 }
 
+// SEND ORDER
 function sendOrder(){
-    const cname=document.getElementById("cname");
-    const cphone=document.getElementById("cphone");
-    const caddr=document.getElementById("caddr");
-    if(!cname.value || !cphone.value || !caddr.value) return alert("Fill customer info");
+    const cname=document.getElementById("cname").value;
+    const cphone=document.getElementById("cphone").value;
+    const caddr=document.getElementById("caddr").value;
+    if(!cname || !cphone || !caddr) return alert("Fill customer info");
 
-    let msg=`🛒 New Order%0A👤 ${cname.value}%0A📞 ${cphone.value}%0A📍 ${caddr.value}%0A%0A`;
+    let msg=`🛒 New Order%0A👤 ${cname}%0A📞 ${cphone}%0A📍 ${caddr}%0A%0A`;
     let total=0;
     cart.forEach(i=>{
         msg+=`${i.name} (${i.size}) x ${i.qty} = $${(i.price*i.qty).toFixed(2)}%0A`;
@@ -274,17 +267,18 @@ function sendOrder(){
     });
     msg+=`%0A💰 Total: $${total}%0A💳 Pay online: ${PAYWAY_LINK}`;
 
-    orders.push({date:new Date().toLocaleString(),name:cname.value,phone:cphone.value,total,items:[...cart]});
+    orders.push({date:new Date().toLocaleString(),name:cname,phone:cphone,total,items:[...cart]});
     localStorage.setItem("orders",JSON.stringify(orders));
 
     window.open(`https://m.me/${PAGE_NAME}?text=${msg}`,"_blank");
-    cart=[]; 
+    cart=[];
     localStorage.removeItem("cart");
     closeCart();
     renderOrders();
     updateCartCount();
 }
 
+// ORDERS
 function renderOrders(){
     const ordersDiv=document.getElementById("orders");
     ordersDiv.innerHTML="";
@@ -298,9 +292,10 @@ function renderOrders(){
     });
 }
 
+// INITIAL RENDER
 render();
+updateCartCount();
 </script>
 
 </body>
 </html>
-
