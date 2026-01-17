@@ -2,41 +2,30 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>GOAT KIDS Store</title>
+<title>Simple Store</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 <style>
 *{box-sizing:border-box;font-family:Segoe UI,system-ui}
-body{margin:0;background:#f6f7f9;color:#333}
-header{background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.1);position:sticky;top:0;z-index:10}
+body{margin:0;background:#f5f6f8}
+header{background:#fff;padding:15px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
 .container{max-width:1200px;margin:auto;padding:20px}
-.flex{display:flex;align-items:center;justify-content:space-between}
-.logo{font-size:22px;font-weight:bold}
-nav a,nav button{margin-right:10px;text-decoration:none;color:#555;font-weight:600;background:none;border:none;cursor:pointer}
-nav a.active{color:#FF6B35}
+.flex{display:flex;justify-content:space-between;align-items:center}
+nav button{margin-left:10px;border:none;background:#eee;padding:8px 14px;border-radius:6px;cursor:pointer}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:20px}
-.card{background:#fff;border-radius:10px;box-shadow:0 4px 10px rgba(0,0,0,.08);overflow:hidden}
+.card{background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,.1)}
 .card img{width:100%;height:180px;object-fit:cover}
-.card-body{padding:15px}
-.price{color:#FF6B35;font-weight:bold}
-.stock{font-size:13px;margin:6px 0}
-.btn{padding:8px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:600}
-.btn-orange{background:#FF6B35;color:#fff}
-.btn-blue{background:#4A90E2;color:#fff}
-.btn-red{background:#dc3545;color:#fff}
-.btn-outline{background:none;border:1px solid #ccc}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin-bottom:20px}
-.stat{background:#fff;padding:15px;border-radius:10px;text-align:center}
-.stat h2{color:#FF6B35;margin:5px 0}
+.card-body{padding:12px}
+.price{color:#ff6b35;font-weight:bold}
+.btn{padding:8px 14px;border:none;border-radius:6px;cursor:pointer}
+.btn-orange{background:#ff6b35;color:#fff}
+.btn-blue{background:#4a90e2;color:#fff}
+.btn-red{background:#e74c3c;color:#fff}
 .hidden{display:none}
-table{width:100%;border-collapse:collapse}
-th,td{padding:10px;border-bottom:1px solid #eee;text-align:left}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center}
-.modal-content{background:#fff;padding:25px;border-radius:10px;width:90%;max-width:500px}
+.modal-content{background:#fff;padding:20px;border-radius:10px;width:90%;max-width:400px}
 input{width:100%;padding:8px;margin-bottom:10px}
-.cart-item{display:flex;justify-content:space-between;margin-bottom:8px}
+.cart-item{display:flex;justify-content:space-between;margin-bottom:6px}
 </style>
 </head>
 
@@ -44,11 +33,10 @@ input{width:100%;padding:8px;margin-bottom:10px}
 
 <header>
 <div class="container flex">
-<div class="logo">G GOAT KIDS</div>
+<b>🛒 My Store</b>
 <nav>
-<a onclick="showStore()" id="storeLink" class="active">Store</a>
-<a onclick="showAdmin()" id="adminLink" class="hidden">Admin</a>
-<button onclick="openCart()">🛒 Cart (<span id="cartCount">0</span>)</button>
+<button onclick="openCart()">Cart (<span id="cartCount">0</span>)</button>
+<button onclick="openAdmin()">Admin</button>
 </nav>
 </div>
 </header>
@@ -57,116 +45,108 @@ input{width:100%;padding:8px;margin-bottom:10px}
 
 <!-- STORE -->
 <section id="store">
-<div class="stats">
-<div class="stat"><h2 id="totalProducts">0</h2><p>Products</p></div>
-<div class="stat"><h2 id="lowStock">0</h2><p>Low Stock</p></div>
-<div class="stat"><h2 id="totalStock">0</h2><p>Total Stock</p></div>
-<div class="stat"><h2 id="avgPrice">$0</h2><p>Avg Price</p></div>
-</div>
-
 <div class="grid" id="productGrid"></div>
 </section>
 
 <!-- ADMIN -->
-<section id="admin" class="show">
+<section id="admin" class="hidden">
 <h2>Admin Panel</h2>
 
 <input id="name" placeholder="Product name">
 <input id="price" type="number" placeholder="Price">
 <input id="stock" type="number" placeholder="Stock">
-<input id="category" placeholder="Category">
-<input id="image" placeholder="Image URL">
+<input type="file" id="image" accept="image/*">
 
 <button class="btn btn-orange" onclick="addProduct()">Add Product</button>
 
-<h3 style="margin-top:30px">Inventory</h3>
-<table>
-<thead>
-<tr><th>Name</th><th>Price</th><th>Stock</th><th>Action</th></tr>
-</thead>
+<h3 style="margin-top:20px">Products</h3>
+<table width="100%">
 <tbody id="tableBody"></tbody>
 </table>
 
-<button class="btn btn-red" style="margin-top:20px" onclick="logout()">Logout</button>
+<button class="btn btn-red" onclick="logout()">Logout</button>
 </section>
 
 </div>
 
-<!-- LOGIN MODAL -->
+<!-- LOGIN -->
 <div class="modal" id="loginModal">
 <div class="modal-content">
 <h3>Admin Login</h3>
-<input id="user" value="admin">
-<input id="pass" type="password" value="admin123">
+<input id="user" placeholder="Username" value="admin">
+<input id="pass" type="password" placeholder="Password" value="admin123">
 <button class="btn btn-blue" onclick="login()">Login</button>
 </div>
 </div>
 
-<!-- CART MODAL -->
+<!-- CART -->
 <div class="modal" id="cartModal">
 <div class="modal-content">
 <h3>Your Cart</h3>
 <div id="cartItems"></div>
 <h4 id="cartTotal"></h4>
-<button class="btn btn-blue" onclick="sendToMessenger()">📩 Order via Messenger</button>
+<button class="btn btn-blue" onclick="sendOrder()">📩 Order via Messenger</button>
 <button class="btn btn-red" onclick="closeCart()">Close</button>
 </div>
 </div>
 
 <script>
+const PAGE_NAME = "YOUR_PAGE_USERNAME";
+
 let products = JSON.parse(localStorage.getItem("products")) || [];
 let cart = JSON.parse(localStorage.getItem("cart")) || [];
 let isAdmin = localStorage.getItem("admin")==="true";
 
-function save(){
+function saveProducts(){
 localStorage.setItem("products",JSON.stringify(products));
-update();
+render();
 }
 function saveCart(){
 localStorage.setItem("cart",JSON.stringify(cart));
 updateCartCount();
 }
-function showStore(){
-store.classList.remove("hidden");
-admin.classList.add("hidden");
-}
-function showAdmin(){
+
+function openAdmin(){
 if(!isAdmin){loginModal.style.display="flex";return;}
 store.classList.add("hidden");
 admin.classList.remove("hidden");
 }
 function login(){
-if(user.value==="admin"&&pass.value==="admin123"){
+if(user.value==="admin" && pass.value==="admin123"){
 isAdmin=true;
 localStorage.setItem("admin","true");
-adminLink.classList.remove("hidden");
 loginModal.style.display="none";
-showAdmin();
+openAdmin();
 }else alert("Wrong login");
 }
 function logout(){
 isAdmin=false;
 localStorage.removeItem("admin");
-adminLink.classList.add("hidden");
-showStore();
+admin.classList.add("hidden");
+store.classList.remove("hidden");
 }
 
 function addProduct(){
+const file=image.files[0];
+if(!file)return alert("Select image");
+const reader=new FileReader();
+reader.onload=e=>{
 products.push({
 id:Date.now(),
 name:name.value,
 price:+price.value,
 stock:+stock.value,
-category:category.value,
-image:image.value||defaultImg()
+image:e.target.result
 });
-save();
-name.value=price.value=stock.value=category.value=image.value="";
+saveProducts();
+name.value=price.value=stock.value=image.value="";
+};
+reader.readAsDataURL(file);
 }
 
-function removeProduct(id){
+function deleteProduct(id){
 products=products.filter(p=>p.id!==id);
-save();
+saveProducts();
 }
 
 function addToCart(id){
@@ -178,26 +158,18 @@ saveCart();
 alert("Added to cart");
 }
 
-function update(){
+function render(){
 productGrid.innerHTML="";
 tableBody.innerHTML="";
-let totalStock=0,totalPrice=0,low=0;
-
 products.forEach(p=>{
-totalStock+=p.stock;
-totalPrice+=p.price;
-if(p.stock>0&&p.stock<=10)low++;
-
 productGrid.innerHTML+=`
 <div class="card">
 <img src="${p.image}">
 <div class="card-body">
 <h4>${p.name}</h4>
 <div class="price">$${p.price}</div>
-<div class="stock">Stock: ${p.stock}</div>
-<button class="btn btn-orange" onclick="addToCart(${p.id})">
-<i class="fas fa-cart-plus"></i> Add to Cart
-</button>
+<div>Stock: ${p.stock}</div>
+<button class="btn btn-orange" onclick="addToCart(${p.id})">Add to Cart</button>
 </div>
 </div>`;
 
@@ -206,14 +178,9 @@ tableBody.innerHTML+=`
 <td>${p.name}</td>
 <td>$${p.price}</td>
 <td>${p.stock}</td>
-<td><button class="btn btn-red" onclick="removeProduct(${p.id})">Delete</button></td>
+<td><button class="btn btn-red" onclick="deleteProduct(${p.id})">Delete</button></td>
 </tr>`;
 });
-
-totalProducts.textContent=products.length;
-lowStock.textContent=low;
-totalStock.textContent=totalStock;
-avgPrice.textContent="$"+(products.length?(totalPrice/products.length).toFixed(2):0);
 updateCartCount();
 }
 
@@ -237,8 +204,8 @@ cartItems.innerHTML=html||"<p>Cart is empty</p>";
 cartTotal.textContent="Total: $"+total.toFixed(2);
 }
 
-function sendToMessenger(){
-if(cart.length===0)return alert("Cart is empty");
+function sendOrder(){
+if(cart.length===0)return alert("Cart empty");
 let msg="🛒 New Order%0A%0A";
 let total=0;
 cart.forEach(i=>{
@@ -246,20 +213,14 @@ msg+=`${i.name} x ${i.qty} = $${(i.price*i.qty).toFixed(2)}%0A`;
 total+=i.price*i.qty;
 });
 msg+=`%0A💰 Total: $${total.toFixed(2)}`;
-window.open(`https://m.me/YOUR_PAGE_USERNAME?text=${msg}`,"_blank");
+window.open(`https://m.me/${PAGE_NAME}?text=${msg}`,"_blank");
 cart=[];
 saveCart();
 closeCart();
 }
 
-function defaultImg(){
-return "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=400";
-}
-
-if(isAdmin)adminLink.classList.remove("hidden");
-update();
+render();
 </script>
 
 </body>
 </html>
-
