@@ -73,7 +73,6 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
 <b>🛒 My Store</b>
 <nav>
 <button onclick="openCart()">Cart (<span id="cartCount">0</span>)</button>
-<!-- Admin button is hidden by default -->
 <button id="adminBtn" onclick="openAdmin()" style="display: none;">Admin</button>
 <button onclick="forceRefresh()" style="background: #ff6b35; color: white;">🔄 Refresh</button>
 </nav>
@@ -224,7 +223,7 @@ const adminBtn = document.getElementById("adminBtn");
 
 const PAYWAY_LINK = "https://link.payway.com.kh/08407860s";
 const PAGE_NAME = "Goatkids";
-const SECRET_UNLOCK_PASSWORD = "admin123"; // Change this to your preferred password
+const SECRET_UNLOCK_PASSWORD = "admin123";
 
 // Load data from localStorage - FIXED: Always load fresh data
 function loadData() {
@@ -237,12 +236,14 @@ function loadData() {
 }
 
 // Initialize variables
+let products = [], cart = [], orders = [];
+let isAdmin = false, adminUnlocked = false;
 let currentEditId = null;
 let currentImageData = null;
 
 // Initialize admin credentials if not set
 if (!localStorage.getItem("adminPassword")) {
-    localStorage.setItem("adminPassword", "admin123"); // Default password
+    localStorage.setItem("adminPassword", "admin123");
 }
 
 // Initialize
@@ -273,7 +274,7 @@ function unlockAdmin() {
 
 // View switching functions
 function showStore() {
-    loadData(); // Reload fresh data
+    loadData();
     admin.classList.add("hidden");
     store.classList.remove("hidden");
     render();
@@ -293,13 +294,11 @@ imageInput.onchange = async (e) => {
     
     imageError.classList.add("hidden");
     
-    // Validate file type
     if (!file.type.startsWith('image/')) {
         showImageError("Please select an image file (JPEG, PNG, etc.)");
         return;
     }
     
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
         showImageError("Image too large! Maximum size is 5MB");
         return;
@@ -309,7 +308,6 @@ imageInput.onchange = async (e) => {
     reader.onload = async () => {
         const img = new Image();
         img.onload = async () => {
-            // Suggest optimal size
             if (img.width < 400 || img.height < 400) {
                 imageError.textContent = `Image is small (${img.width}x${img.height}px). For best quality, use images at least 800x800px.`;
                 imageError.classList.remove("hidden");
@@ -317,11 +315,9 @@ imageInput.onchange = async (e) => {
                 imageError.style.background = "#fff4e6";
             }
             
-            // Show preview
             preview.src = reader.result;
             preview.classList.remove("hidden");
             
-            // Resize for storage (optimized for product display)
             currentImageData = await resizeImage(reader.result, 800, 800);
         };
         img.src = reader.result;
@@ -344,7 +340,6 @@ async function resizeImage(base64, maxWidth = 800, maxHeight = 800) {
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
-            // Calculate new dimensions maintaining aspect ratio
             let width = img.width;
             let height = img.height;
             
@@ -358,18 +353,15 @@ async function resizeImage(base64, maxWidth = 800, maxHeight = 800) {
                 height = maxHeight;
             }
             
-            // Create canvas with optimal dimensions
             const canvas = document.createElement("canvas");
             canvas.width = width;
             canvas.height = height;
             
-            // Use higher quality rendering
             const ctx = canvas.getContext("2d");
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
             
-            // Convert to JPEG with good quality
             resolve(canvas.toDataURL("image/jpeg", 0.85));
         };
         img.src = base64;
@@ -422,10 +414,8 @@ function changePassword() {
     const confirmPass = document.getElementById("confirmPass").value;
     const storedPassword = localStorage.getItem("adminPassword");
     
-    // Clear previous messages
     passwordMessage.classList.add("hidden");
     
-    // Validation
     if (!oldPass || !newPass || !confirmPass) {
         showPasswordMessage("Please fill in all fields", "error");
         return;
@@ -446,10 +436,8 @@ function changePassword() {
         return;
     }
     
-    // Save new password
     localStorage.setItem("adminPassword", newPass);
     
-    // Clear fields
     document.getElementById("oldPass").value = "";
     document.getElementById("newPass").value = "";
     document.getElementById("confirmPass").value = "";
@@ -468,7 +456,6 @@ function showPasswordMessage(message, type) {
         passwordMessage.classList.add("alert-error");
     }
     
-    // Auto-hide success messages after 3 seconds
     if (type === "success") {
         setTimeout(() => {
             passwordMessage.classList.add("hidden");
@@ -527,7 +514,7 @@ async function saveProduct() {
     }
     
     localStorage.setItem("products", JSON.stringify(products));
-    loadData(); // Reload fresh data
+    loadData();
     resetForm();
     renderEditProducts();
     alert(currentEditId !== null ? "Product updated successfully!" : "Product added successfully!\n\nClick 'View Store' button to see your products.");
@@ -539,7 +526,6 @@ function deleteProduct(id) {
         return;
     }
     
-    // Check if product is in any cart
     let productInCart = false;
     cart.forEach(item => {
         if (item.id === id) {
@@ -551,23 +537,20 @@ function deleteProduct(id) {
         if (!confirm("This product is currently in someone's cart. Deleting it will remove it from all carts. Continue?")) {
             return;
         }
-        // Remove from cart
         cart = cart.filter(item => item.id !== id);
         localStorage.setItem("cart", JSON.stringify(cart));
         updateCartCount();
     }
     
-    // Remove product from products array
     const initialLength = products.length;
     products = products.filter(p => p.id !== id);
     
     if (products.length < initialLength) {
         localStorage.setItem("products", JSON.stringify(products));
-        loadData(); // Reload fresh data
+        loadData();
         renderEditProducts();
         alert("Product deleted successfully!");
         
-        // If we're editing the deleted product, reset the form
         if (currentEditId === id) {
             resetForm();
         }
@@ -713,7 +696,7 @@ function addToCart(id) {
     product.stock--;
     localStorage.setItem("products", JSON.stringify(products));
     localStorage.setItem("cart", JSON.stringify(cart));
-    loadData(); // Reload fresh data
+    loadData();
     render();
 }
 
@@ -791,7 +774,7 @@ function removeFromCart(index) {
     cart.splice(index, 1);
     localStorage.setItem("products", JSON.stringify(products));
     localStorage.setItem("cart", JSON.stringify(cart));
-    loadData(); // Reload fresh data
+    loadData();
     render();
     renderCart();
 }
@@ -845,7 +828,7 @@ function sendOrder() {
     localStorage.setItem("orders", JSON.stringify(orders));
     cart = [];
     localStorage.removeItem("cart");
-    loadData(); // Reload fresh data
+    loadData();
     updateCartCount();
     window.open(`https://m.me/${PAGE_NAME}?text=${message}`, '_blank');
     closeCart();
@@ -902,28 +885,41 @@ function renderEditProducts() {
     });
 }
 
-// Initialization
+// Initialization - FIXED VERSION
 function init() {
-    loadData(); // Load fresh data on init
+    console.log("=== INIT START ===");
+    loadData();
+    
+    // DEBUG: Log initial state
+    console.log("Initial State - isAdmin:", isAdmin, "products count:", products.length);
+    
+    // Render products FIRST for everyone
     render();
     updateCartCount();
     
     // Show admin button if previously unlocked
     if (adminUnlocked) {
         adminBtn.style.display = "inline-block";
+        console.log("Admin button unlocked and shown.");
     }
     
+    // CRITICAL FIX: Always start in STORE view for public visitors
+    // Only show Admin Panel if explicitly logged in as admin
     if (isAdmin) {
+        console.log("User is admin, showing admin panel.");
         showAdmin();
     } else {
-        showStore();
+        console.log("User is NOT admin, forcing store view.");
+        // Force the correct public view
+        store.classList.remove("hidden");
+        admin.classList.add("hidden");
+        // Ensure products are rendered (they should be from render() above)
     }
+    
+    console.log("=== INIT COMPLETE ===");
 }
 
 init();
 </script>
 </body>
 </html>
-
-
-
