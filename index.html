@@ -2,239 +2,248 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Goat Kids Store</title>
+<title>Advanced Store</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
-body{margin:0;font-family:system-ui;background:#f5f6f8}
-header{background:#fff;padding:15px;box-shadow:0 2px 6px rgba(0,0,0,.1)}
-.container{max-width:1200px;margin:auto}
-button{padding:8px 14px;border:none;border-radius:6px;cursor:pointer}
-.btn-blue{background:#007bff;color:#fff}
-.btn-gray{background:#ddd}
+*{box-sizing:border-box;font-family:Segoe UI,system-ui}
+body{margin:0;background:#f5f6f8}
+header{background:#fff;padding:15px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.container{max-width:1200px;margin:auto;padding:20px}
+.flex{display:flex;justify-content:space-between;align-items:center}
+nav button{margin-left:10px;border:none;background:#eee;padding:8px 14px;border-radius:6px;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:20px}
+.card{background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.1)}
+.card img{width:100%;height:250px;object-fit:cover}
+.card-body{padding:15px}
+.price{color:#ff6b35;font-weight:bold}
+.btn{padding:10px;border:none;border-radius:6px;cursor:pointer;margin-top:8px}
+.btn-orange{background:#ff6b35;color:#fff}
+.btn-blue{background:#4a90e2;color:#fff}
+.btn-red{background:#e74c3c;color:#fff}
 .hidden{display:none}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:15px}
-.card{background:#fff;padding:10px;border-radius:8px}
-.modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center}
-.modal-content{background:#fff;padding:20px;border-radius:8px;width:300px}
-input{width:100%;padding:8px;margin:6px 0}
-.dashboard{display:flex;gap:20px;margin-bottom:20px}
-</style>
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
+.modal-content{background:#fff;padding:20px;border-radius:10px;width:90%;max-width:500px}
+input,textarea,select{width:100%;padding:10px;margin-bottom:10px}
+.cart-item{display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:10px 0}
 
-<!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+/* FIXED: admin unlock area no longer blocks header */
+.secret-admin-area{
+  position:fixed;
+  top:0;
+  right:0;
+  width:120px;
+  height:40px;
+  z-index:200;
+}
+</style>
 </head>
 
 <body>
 
+<div class="secret-admin-area" onclick="unlockAdmin()"></div>
+
 <header>
-  <div class="container" style="display:flex;justify-content:space-between">
-    <b>🛒 Goat Kids Store</b>
-    <div>
-      <button onclick="openCart()">Cart (<span id="cartCount">0</span>)</button>
-      <button id="adminBtn" onclick="openAdmin()">Admin</button>
-    </div>
-  </div>
+<div class="container flex">
+<b>🛒 My Store</b>
+<nav>
+<button onclick="openCart()">Cart (<span id="cartCount">0</span>)</button>
+<button id="adminBtn" onclick="openAdmin()" style="display:none">Admin</button>
+</nav>
+</div>
 </header>
 
 <div class="container">
 
-<!-- STORE -->
-<div id="store">
-  <h2>Products</h2>
-  <div class="grid" id="productGrid"></div>
-</div>
+<section id="store">
+<div class="grid" id="productGrid"></div>
+</section>
 
-<!-- ADMIN -->
-<div id="admin" class="hidden">
-  <h2>Admin Dashboard</h2>
+<section id="admin" class="hidden">
+<h2>Admin Panel</h2>
+<input id="name" placeholder="Product name">
+<input id="price" type="number" placeholder="Price">
+<input id="stock" type="number" placeholder="Stock">
+<input id="size" placeholder="Sizes (S,M,L)">
+<input type="file" id="image">
+<img id="preview" style="width:100%;max-height:200px;object-fit:contain">
+<button class="btn btn-orange" onclick="saveProduct()">Save</button>
 
-  <div class="dashboard">
-    <div>Total Orders: <b id="totalOrders">0</b></div>
-    <div>Revenue: <b id="revenue">$0</b></div>
-  </div>
+<h3>Orders</h3>
+<div id="orders"></div>
 
-  <h3>Add Product</h3>
-  <input id="pName" placeholder="Name">
-  <input id="pPrice" type="number" placeholder="Price">
-  <input id="pStock" type="number" placeholder="Stock">
-  <input id="pImage" placeholder="Image URL">
-  <button class="btn-blue" onclick="addProduct()">Add</button>
-
-  <h3>Orders</h3>
-  <div id="orderList"></div>
-</div>
+<button class="btn btn-red" onclick="logout()">Logout</button>
+</section>
 
 </div>
 
-<!-- LOGIN MODAL -->
+<!-- LOGIN -->
 <div class="modal" id="loginModal">
-  <div class="modal-content">
-    <h3>Admin Login</h3>
-    <input id="loginEmail" type="email" placeholder="Email">
-    <input id="loginPassword" type="password" placeholder="Password">
-    <button class="btn-blue" onclick="adminLogin()">Login</button>
-    <button class="btn-gray" onclick="closeModal()">Cancel</button>
-  </div>
+<div class="modal-content">
+<h3>Admin Login</h3>
+<input id="user" value="admin">
+<input id="pass" type="password">
+<button class="btn btn-blue" onclick="login()">Login</button>
+</div>
 </div>
 
-<!-- CART MODAL -->
+<!-- CART -->
 <div class="modal" id="cartModal">
-  <div class="modal-content">
-    <h3>Checkout</h3>
-    <div id="cartItems"></div>
-    <b>Total: $<span id="cartTotal">0</span></b>
+<div class="modal-content">
+<h3>Cart</h3>
+<div id="cartItems"></div>
+<h4 id="cartTotal"></h4>
 
-    <input id="cName" placeholder="Name">
-    <input id="cPhone" placeholder="Phone">
-    <input id="cAddress" placeholder="Address">
+<input id="cname" placeholder="Name">
+<input id="cphone" placeholder="Phone">
+<textarea id="caddr" placeholder="Address"></textarea>
 
-    <img id="khqrImg" style="width:220px;margin:10px 0">
-
-    <button class="btn-blue" onclick="placeOrder()">Place Order</button>
-    <button class="btn-gray" onclick="closeCart()">Close</button>
-  </div>
+<button class="btn btn-orange" onclick="sendOrder()">Send Order</button>
+<button class="btn btn-red" onclick="closeCart()">Close</button>
+</div>
 </div>
 
 <script>
-// 🔥 FIREBASE CONFIG (REPLACE)
-firebase.initializeApp({
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID"
-});
+const productGrid=document.getElementById("productGrid");
+const cartCount=document.getElementById("cartCount");
+const admin=document.getElementById("admin");
+const store=document.getElementById("store");
+const adminBtn=document.getElementById("adminBtn");
 
-const auth = firebase.auth();
-const db = firebase.firestore();
+let products=JSON.parse(localStorage.getItem("products"))||[];
+let cart=JSON.parse(localStorage.getItem("cart"))||[];
+let orders=JSON.parse(localStorage.getItem("orders"))||[];
+let isAdmin=localStorage.getItem("admin")==="true";
+let adminUnlocked=localStorage.getItem("adminUnlocked")==="true";
 
-// STATE
-let cart = [];
-let products = [];
+const PAYWAY_LINK="https://link.payway.com.kh/08407860s";
+const PAGE_NAME="Goatkids";
+const SECRET_UNLOCK_PASSWORD="admin123";
 
-// ---------------- STORE ----------------
-db.collection("products").onSnapshot(snap=>{
-  products = [];
-  productGrid.innerHTML = "";
-  snap.forEach(doc=>{
-    const p = {id:doc.id,...doc.data()};
-    products.push(p);
-    productGrid.innerHTML += `
-      <div class="card">
-        <img src="${p.image}" style="width:100%">
-        <b>${p.name}</b>
-        <p>$${p.price}</p>
-        <button onclick="addToCart('${p.id}')">Add</button>
-      </div>`;
+if(!localStorage.getItem("adminPassword")){
+  localStorage.setItem("adminPassword","admin123");
+}
+
+function unlockAdmin(){
+  const p=prompt("Admin password");
+  if(p===SECRET_UNLOCK_PASSWORD){
+    adminUnlocked=true;
+    localStorage.setItem("adminUnlocked","true");
+    adminBtn.style.display="inline-block";
+    alert("Admin unlocked");
+  }
+}
+
+function openAdmin(){
+  if(!adminUnlocked)return unlockAdmin();
+  if(!isAdmin)return document.getElementById("loginModal").style.display="flex";
+  store.classList.add("hidden");
+  admin.classList.remove("hidden");
+  renderOrders();
+}
+
+function login(){
+  const pass=document.getElementById("pass").value;
+  if(pass===localStorage.getItem("adminPassword")){
+    isAdmin=true;
+    localStorage.setItem("admin","true");
+    document.getElementById("loginModal").style.display="none";
+    openAdmin();
+  }else alert("Wrong password");
+}
+
+function logout(){
+  isAdmin=false;
+  localStorage.removeItem("admin");
+  admin.classList.add("hidden");
+  store.classList.remove("hidden");
+}
+
+document.getElementById("image").onchange=e=>{
+  const r=new FileReader();
+  r.onload=()=>document.getElementById("preview").src=r.result;
+  r.readAsDataURL(e.target.files[0]);
+};
+
+function saveProduct(){
+  products.push({
+    id:Date.now(),
+    name:name.value,
+    price:+price.value,
+    stock:+stock.value,
+    sizes:size.value?size.value.split(","):[],
+    image:preview.src
   });
-});
+  localStorage.setItem("products",JSON.stringify(products));
+  render();
+}
+
+function render(){
+  productGrid.innerHTML="";
+  products.forEach(p=>{
+    productGrid.innerHTML+=`
+    <div class="card">
+      <img src="${p.image}">
+      <div class="card-body">
+        <b>${p.name}</b>
+        <div class="price">$${p.price}</div>
+        <select id="s${p.id}">
+          ${p.sizes.length?p.sizes.map(s=>`<option>${s}</option>`).join(""):`<option>One Size</option>`}
+        </select>
+        <button class="btn btn-orange" onclick="addToCart(${p.id})">Add</button>
+      </div>
+    </div>`;
+  });
+  updateCartCount();
+}
 
 function addToCart(id){
-  const p = products.find(x=>x.id===id);
-  cart.push({...p,qty:1});
-  cartCount.textContent = cart.length;
+  const p=products.find(x=>x.id===id);
+  cart.push({id:p.id,name:p.name,price:p.price,size:document.getElementById("s"+id).value,qty:1});
+  localStorage.setItem("cart",JSON.stringify(cart));
+  updateCartCount();
 }
 
-// ---------------- CART ----------------
-function openCart(){
-  cartModal.style.display="flex";
-  renderCart();
+function updateCartCount(){
+  cartCount.textContent=cart.length;
 }
-function closeCart(){ cartModal.style.display="none"; }
+
+function openCart(){
+  renderCart();
+  cartModal.style.display="flex";
+}
+function closeCart(){cartModal.style.display="none";}
 
 function renderCart(){
-  cartItems.innerHTML="";
   let total=0;
+  cartItems.innerHTML="";
   cart.forEach(i=>{
     total+=i.price*i.qty;
-    cartItems.innerHTML+=`<div>${i.name} - $${i.price}</div>`;
+    cartItems.innerHTML+=`<div class="cart-item">${i.name} (${i.size})</div>`;
   });
-  cartTotal.textContent=total.toFixed(2);
+  cartTotal.textContent="Total $"+total;
 }
 
-function generateKHQR(amount, orderId){
-  return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=ABA|${orderId}|${amount}`;
-}
-
-// ---------------- ORDER ----------------
-function placeOrder(){
-  const order = {
-    customerName:cName.value,
-    phone:cPhone.value,
-    address:cAddress.value,
-    items:cart,
-    total:parseFloat(cartTotal.textContent),
-    status:"pending",
-    createdAt:firebase.firestore.FieldValue.serverTimestamp()
-  };
-
-  db.collection("orders").add(order).then(ref=>{
-    khqrImg.src = generateKHQR(order.total, ref.id);
-    cart=[];
-    cartCount.textContent=0;
+function sendOrder(){
+  // FIX: stock reduced only after order
+  cart.forEach(item=>{
+    const p=products.find(x=>x.id===item.id);
+    if(p)p.stock-=item.qty;
   });
+  localStorage.setItem("products",JSON.stringify(products));
+  cart=[];
+  localStorage.removeItem("cart");
+  render();
+  closeCart();
+  window.open(`https://m.me/${PAGE_NAME}`);
 }
 
-// ---------------- ADMIN ----------------
-function openAdmin(){ loginModal.style.display="flex"; }
-function closeModal(){ loginModal.style.display="none"; }
-
-function adminLogin(){
-  auth.signInWithEmailAndPassword(loginEmail.value, loginPassword.value)
-    .then(u=>checkAdmin(u.user.uid))
-    .catch(e=>alert(e.message));
+function renderOrders(){
+  orders.innerHTML="";
 }
 
-function checkAdmin(uid){
-  db.collection("admins").doc(uid).get().then(doc=>{
-    if(doc.exists){
-      loginModal.style.display="none";
-      store.classList.add("hidden");
-      admin.classList.remove("hidden");
-      loadOrders();
-    } else {
-      alert("Not admin");
-      auth.signOut();
-    }
-  });
-}
-
-function addProduct(){
-  db.collection("products").add({
-    name:pName.value,
-    price:+pPrice.value,
-    stock:+pStock.value,
-    image:pImage.value
-  });
-}
-
-// ---------------- ORDERS ----------------
-function loadOrders(){
-  db.collection("orders").onSnapshot(snap=>{
-    orderList.innerHTML="";
-    let totalOrders=0,revenue=0;
-
-    snap.forEach(doc=>{
-      const o=doc.data(); totalOrders++;
-      if(o.status==="paid") revenue+=o.total;
-
-      orderList.innerHTML+=`
-        <div class="card">
-          <b>${o.customerName}</b> - ${o.status}
-          <button onclick="updateOrder('${doc.id}','paid')">Paid</button>
-          <button onclick="updateOrder('${doc.id}','shipped')">Shipped</button>
-        </div>`;
-    });
-
-    totalOrdersEl.textContent=totalOrders;
-    revenueEl.textContent="$"+revenue.toFixed(2);
-  });
-}
-
-function updateOrder(id,status){
-  db.collection("orders").doc(id).update({status});
-}
+render();
+if(adminUnlocked)adminBtn.style.display="inline-block";
 </script>
 
 </body>
