@@ -556,6 +556,48 @@ async function saveProduct() {
     alert(currentEditId !== null ? "Product updated successfully!" : "Product added successfully!");
 }
 
+// DELETE PRODUCT FUNCTION
+function deleteProduct(id) {
+    if (!confirm("Are you sure you want to delete this product? This action cannot be undone.")) {
+        return;
+    }
+    
+    // Check if product is in any cart
+    let productInCart = false;
+    cart.forEach(item => {
+        if (item.id === id) {
+            productInCart = true;
+        }
+    });
+    
+    if (productInCart) {
+        if (!confirm("This product is currently in someone's cart. Deleting it will remove it from all carts. Continue?")) {
+            return;
+        }
+        // Remove from cart
+        cart = cart.filter(item => item.id !== id);
+        localStorage.setItem("cart", JSON.stringify(cart));
+    }
+    
+    // Remove product from products array
+    const initialLength = products.length;
+    products = products.filter(p => p.id !== id);
+    
+    if (products.length < initialLength) {
+        localStorage.setItem("products", JSON.stringify(products));
+        render();
+        renderEditProducts();
+        alert("Product deleted successfully!");
+        
+        // If we're editing the deleted product, reset the form
+        if (currentEditId === id) {
+            resetForm();
+        }
+    } else {
+        alert("Product not found!");
+    }
+}
+
 function editProduct(id) {
     const product = products.find(p => p.id === id);
     if (!product) return;
@@ -847,7 +889,7 @@ function renderOrders() {
     `).join("");
 }
 
-// Admin Edit Products List
+// Admin Edit Products List with DELETE buttons
 function renderEditProducts() {
     editProductsDiv.innerHTML = "";
     
@@ -866,7 +908,10 @@ function renderEditProducts() {
                     Price: $${product.price.toFixed(2)} | Stock: ${product.stock}<br>
                     Sizes: ${product.sizes ? product.sizes.join(", ") : "N/A"}
                 </div>
-                <button class="edit-btn" onclick="editProduct(${product.id})" style="width: auto; padding: 8px 16px;">Edit</button>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-blue" onclick="editProduct(${product.id})" style="padding: 8px 16px;">Edit</button>
+                    <button class="btn btn-red" onclick="deleteProduct(${product.id})" style="padding: 8px 16px;">Delete</button>
+                </div>
             </div>
         </div>`;
     });
