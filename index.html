@@ -61,6 +61,35 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
     z-index: 10000; 
     cursor: pointer; 
 }
+    
+    /* Your existing CSS above... */
+
+.image-upload-icon { font-size: 40px; margin-bottom: 10px; }
+
+/* Secret admin access area - invisible */
+.secret-admin-area { 
+    position: fixed; 
+    top: 0; 
+    right: 0; 
+    width: 100px; 
+    height: 40px; 
+    background: transparent; 
+    z-index: 10000; 
+    cursor: pointer; 
+}
+
+/* === ADD THESE NEW RULES HERE === */
+/* Force store visibility by default */
+#store {
+    display: block !important;
+}
+
+/* Properly hide admin/store when they have 'hidden' class */
+#admin.hidden, #store.hidden {
+    display: none !important;
+}
+/* === END OF NEW RULES === */
+    
 </style>
 </head>
 <body>
@@ -885,36 +914,41 @@ function renderEditProducts() {
     });
 }
 
-// Initialization - FIXED VERSION
+// Initialization - FIXED VERSION FOR PUBLIC VIEW
 function init() {
-    console.log("=== INIT START ===");
-    loadData();
+    console.log("=== PAGE LOAD INIT ===");
     
-    // DEBUG: Log initial state
-    console.log("Initial State - isAdmin:", isAdmin, "products count:", products.length);
+    // Load data from localStorage
+    products = JSON.parse(localStorage.getItem("products")) || [];
+    cart = JSON.parse(localStorage.getItem("cart")) || [];
+    orders = JSON.parse(localStorage.getItem("orders")) || [];
+    isAdmin = localStorage.getItem("admin") === "true";
+    adminUnlocked = localStorage.getItem("adminUnlocked") === "true";
     
-    // Render products FIRST for everyone
-    render();
-    updateCartCount();
+    console.log("Loaded:", products.length, "products");
+    console.log("User is admin:", isAdmin);
     
-    // Show admin button if previously unlocked
-    if (adminUnlocked) {
+    // ALWAYS start by showing the store to everyone
+    // Force store section to be visible
+    store.classList.remove("hidden");
+    admin.classList.add("hidden");
+    
+    // Only show admin panel if user is explicitly logged in as admin
+    if (isAdmin && adminUnlocked) {
+        console.log("Admin is logged in, showing admin panel...");
         adminBtn.style.display = "inline-block";
-        console.log("Admin button unlocked and shown.");
-    }
-    
-    // CRITICAL FIX: Always start in STORE view for public visitors
-    // Only show Admin Panel if explicitly logged in as admin
-    if (isAdmin) {
-        console.log("User is admin, showing admin panel.");
-        showAdmin();
+        // Admin can switch to admin panel via button
     } else {
-        console.log("User is NOT admin, forcing store view.");
-        // Force the correct public view
+        console.log("Showing public store view...");
+        // Make sure store is visible for public users
         store.classList.remove("hidden");
         admin.classList.add("hidden");
-        // Ensure products are rendered (they should be from render() above)
+        adminBtn.style.display = "none";
     }
+    
+    // Render products regardless of admin status
+    render();
+    updateCartCount();
     
     console.log("=== INIT COMPLETE ===");
 }
@@ -923,3 +957,4 @@ init();
 </script>
 </body>
 </html>
+
