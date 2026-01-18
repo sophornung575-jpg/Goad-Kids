@@ -26,8 +26,10 @@ nav button:hover { background: #ddd; }
 .btn-red { background: linear-gradient(135deg, #e74c3c, #ff6b5c); color: #fff; }
 .btn-gray { background: linear-gradient(135deg, #95a5a6, #b4c0c1); color: #fff; }
 .btn-green { background: linear-gradient(135deg, #27ae60, #2ecc71); color: #fff; }
+.btn-purple { background: linear-gradient(135deg, #9b59b6, #8e44ad); color: #fff; }
 .hidden { display: none !important; }
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
+.modal.active { display: flex !important; }
 .modal-content { background: #fff; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
 input, textarea, select { width: 100%; padding: 10px; margin-bottom: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2; box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1); }
@@ -61,12 +63,30 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
     z-index: 10000; 
     cursor: pointer; 
 }
-/* FIXED CSS RULES FOR VISIBILITY */
-#store {
-    display: block !important;
+/* FIXED VISIBILITY RULES */
+#store, #admin {
+    display: block;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s;
 }
-#admin.hidden, #store.hidden {
+#store.hidden, #admin.hidden {
     display: none !important;
+    opacity: 0;
+    visibility: hidden;
+}
+/* Debug panel */
+.debug-panel {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    z-index: 9999;
+    max-width: 300px;
 }
 </style>
 </head>
@@ -82,6 +102,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
 <button onclick="openCart()">Cart (<span id="cartCount">0</span>)</button>
 <button id="adminBtn" onclick="openAdmin()" style="display: none;">Admin</button>
 <button onclick="forceRefresh()" style="background: #ff6b35; color: white;">🔄 Refresh</button>
+<button onclick="toggleDebug()" style="background: #9b59b6; color: white;">🐛 Debug</button>
 </nav>
 </div>
 </header>
@@ -90,7 +111,9 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
 
 <!-- STORE -->
 <section id="store">
-<div class="grid" id="productGrid"></div>
+<div class="grid" id="productGrid">
+<!-- Products will be loaded here -->
+</div>
 </section>
 
 <!-- ADMIN -->
@@ -174,6 +197,7 @@ Click to upload image or drag & drop
 <input id="pass" type="password" placeholder="Enter password">
 </div>
 <button class="btn btn-blue" onclick="login()">Login</button>
+<button class="btn btn-gray" onclick="closeModal('loginModal')" style="margin-left: 10px;">Cancel</button>
 </div>
 </div>
 
@@ -211,8 +235,16 @@ Click to upload image or drag & drop
 </div>
 </div>
 
+<!-- DEBUG PANEL -->
+<div id="debugPanel" class="debug-panel hidden">
+<h4 style="margin: 0 0 5px 0;">Debug Info</h4>
+<div id="debugInfo"></div>
+</div>
+
 <script>
-// Global Variables
+// ====================
+// GLOBAL VARIABLES
+// ====================
 const productGrid = document.getElementById("productGrid");
 const cartCount = document.getElementById("cartCount");
 const store = document.getElementById("store");
@@ -227,42 +259,163 @@ const saveProductBtn = document.getElementById("saveProductBtn");
 const cancelEditBtn = document.getElementById("cancelEditBtn");
 const passwordMessage = document.getElementById("passwordMessage");
 const adminBtn = document.getElementById("adminBtn");
+const debugPanel = document.getElementById("debugPanel");
+const debugInfo = document.getElementById("debugInfo");
 
 const PAYWAY_LINK = "https://link.payway.com.kh/08407860s";
 const PAGE_NAME = "Goatkids";
 const SECRET_UNLOCK_PASSWORD = "admin123";
 
-// Load data from localStorage
-function loadData() {
-    products = JSON.parse(localStorage.getItem("products")) || [];
-    cart = JSON.parse(localStorage.getItem("cart")) || [];
-    orders = JSON.parse(localStorage.getItem("orders")) || [];
-    isAdmin = localStorage.getItem("admin") === "true";
-    adminUnlocked = localStorage.getItem("adminUnlocked") === "true";
-    console.log("Data loaded. Products:", products.length);
-}
-
-// Initialize variables
-let products = [], cart = [], orders = [];
-let isAdmin = false, adminUnlocked = false;
+// Initialize global data
+let products = [];
+let cart = [];
+let orders = [];
+let isAdmin = false;
+let adminUnlocked = false;
 let currentEditId = null;
 let currentImageData = null;
+
+// ====================
+// CORE FUNCTIONS
+// ====================
+
+// Load data from localStorage with validation
+function loadData() {
+    try {
+        // Load products
+        const productsData = localStorage.getItem("products");
+        if (productsData) {
+            products = JSON.parse(productsData);
+            if (!Array.isArray(products)) {
+                console.warn("Products data is not an array, resetting...");
+                products = [];
+                localStorage.setItem("products", JSON.stringify(products));
+            }
+        } else {
+            products = [];
+        }
+        
+        // Load cart
+        const cartData = localStorage.getItem("cart");
+        if (cartData) {
+            cart = JSON.parse(cartData);
+            if (!Array.isArray(cart)) cart = [];
+        } else {
+            cart = [];
+        }
+        
+        // Load orders
+        const ordersData = localStorage.getItem("orders");
+        if (ordersData) {
+            orders = JSON.parse(ordersData);
+            if (!Array.isArray(orders)) orders = [];
+        } else {
+            orders = [];
+        }
+        
+        // Load admin states
+        isAdmin = localStorage.getItem("admin") === "true";
+        adminUnlocked = localStorage.getItem("adminUnlocked") === "true";
+        
+        console.log("Data loaded. Products:", products.length);
+        console.log("Cart:", cart.length, "items");
+        console.log("Orders:", orders.length);
+        console.log("Admin:", isAdmin, "Unlocked:", adminUnlocked);
+        
+        updateDebugInfo();
+        
+    } catch (error) {
+        console.error("Error loading data:", error);
+        resetAllData();
+    }
+}
+
+// Reset all data to defaults
+function resetAllData() {
+    products = [];
+    cart = [];
+    orders = [];
+    isAdmin = false;
+    adminUnlocked = false;
+    
+    localStorage.setItem("products", JSON.stringify(products));
+    localStorage.setItem("cart", JSON.stringify(cart));
+    localStorage.setItem("orders", JSON.stringify(orders));
+    localStorage.removeItem("admin");
+    localStorage.removeItem("adminUnlocked");
+    
+    if (!localStorage.getItem("adminPassword")) {
+        localStorage.setItem("adminPassword", "admin123");
+    }
+    
+    console.log("All data reset to defaults");
+}
 
 // Initialize admin credentials if not set
 if (!localStorage.getItem("adminPassword")) {
     localStorage.setItem("adminPassword", "admin123");
 }
 
-// Initialize
-loadData();
-document.getElementById("payText").textContent = "PayWay";
-document.getElementById("payText").href = PAYWAY_LINK;
+// ====================
+// VIEW MANAGEMENT
+// ====================
 
-// Helper function to force refresh
-function forceRefresh() {
+// Show public store view
+function showStore() {
+    console.log("showStore() called");
     loadData();
+    
+    // Hide admin, show store
+    admin.classList.add("hidden");
+    store.classList.remove("hidden");
+    
+    // Re-render products
     render();
-    alert(`Refreshed! Found ${products.length} products`);
+    
+    console.log("Store view activated");
+    updateDebugInfo();
+}
+
+// Show admin panel
+function showAdmin() {
+    console.log("showAdmin() called");
+    
+    // Only show admin if properly authenticated AND unlocked
+    if (!isAdmin || !adminUnlocked) {
+        console.log("Admin not authenticated or unlocked, showing login");
+        openAdmin();
+        return;
+    }
+    
+    // Hide store, show admin
+    store.classList.add("hidden");
+    admin.classList.remove("hidden");
+    
+    // Load admin data
+    renderOrders();
+    renderEditProducts();
+    
+    console.log("Admin panel activated");
+    updateDebugInfo();
+}
+
+// Open admin (with login check)
+function openAdmin() {
+    console.log("openAdmin() called");
+    
+    if (!adminUnlocked) {
+        console.log("Admin not unlocked, prompting for unlock");
+        unlockAdmin();
+        return;
+    }
+    
+    if (!isAdmin) {
+        console.log("Admin not logged in, showing login modal");
+        showModal('loginModal');
+        return;
+    }
+    
+    showAdmin();
 }
 
 // Secret Admin Unlock Function
@@ -274,27 +427,45 @@ function unlockAdmin() {
         localStorage.setItem("adminUnlocked", "true");
         adminBtn.style.display = "inline-block";
         alert("✓ Admin access unlocked! Admin button is now visible.");
+        console.log("Admin unlocked successfully");
+        updateDebugInfo();
     } else if (password) {
         alert("✗ Incorrect password!");
+        console.log("Incorrect unlock password entered");
     }
 }
 
-// View switching functions
-function showStore() {
-    loadData();
-    admin.classList.add("hidden");
-    store.classList.remove("hidden");
-    render();
+// ====================
+// MODAL FUNCTIONS
+// ====================
+
+function showModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.add('active');
+    }
 }
 
-function showAdmin() {
-    store.classList.add("hidden");
-    admin.classList.remove("hidden");
-    renderOrders();
-    renderEditProducts();
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove('active');
+    }
 }
 
-// Image Handling
+function openCart() {
+    renderCart();
+    showModal('cartModal');
+}
+
+function closeCart() {
+    closeModal('cartModal');
+}
+
+// ====================
+// IMAGE HANDLING
+// ====================
+
 imageInput.onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -342,7 +513,6 @@ function showImageError(message) {
     currentImageData = null;
 }
 
-// Enhanced resize function with aspect ratio preservation
 async function resizeImage(base64, maxWidth = 800, maxHeight = 800) {
     return new Promise((resolve) => {
         const img = new Image();
@@ -375,19 +545,9 @@ async function resizeImage(base64, maxWidth = 800, maxHeight = 800) {
     });
 }
 
-// Admin Functions
-function openAdmin() {
-    if (!adminUnlocked) {
-        unlockAdmin();
-        return;
-    }
-    
-    if (!isAdmin) {
-        loginModal.style.display = "flex";
-        return;
-    }
-    showAdmin();
-}
+// ====================
+// AUTHENTICATION
+// ====================
 
 function login() {
     const user = document.getElementById("user").value;
@@ -397,24 +557,25 @@ function login() {
     if (user === "admin" && pass === storedPassword) {
         isAdmin = true;
         localStorage.setItem("admin", "true");
-        loginModal.style.display = "none";
-        openAdmin();
+        closeModal('loginModal');
+        showAdmin();
+        console.log("Admin logged in successfully");
+        updateDebugInfo();
     } else {
         alert("Invalid username or password");
+        console.log("Login failed");
     }
 }
 
 function logout() {
     isAdmin = false;
     localStorage.removeItem("admin");
-    admin.classList.add("hidden");
-    store.classList.remove("hidden");
+    showStore();
     resetForm();
-    loadData();
-    render();
+    console.log("Admin logged out");
+    updateDebugInfo();
 }
 
-// Password Change Function
 function changePassword() {
     const oldPass = document.getElementById("oldPass").value;
     const newPass = document.getElementById("newPass").value;
@@ -470,7 +631,10 @@ function showPasswordMessage(message, type) {
     }
 }
 
-// Product Management
+// ====================
+// PRODUCT MANAGEMENT
+// ====================
+
 async function saveProduct() {
     const name = document.getElementById("name").value.trim();
     const price = parseFloat(document.getElementById("price").value);
@@ -524,10 +688,13 @@ async function saveProduct() {
     loadData();
     resetForm();
     renderEditProducts();
-    alert(currentEditId !== null ? "Product updated successfully!" : "Product added successfully!\n\nClick 'View Store' button to see your products.");
+    
+    const message = currentEditId !== null 
+        ? "Product updated successfully!" 
+        : "Product added successfully!\n\nClick 'View Store' button to see your products.";
+    alert(message);
 }
 
-// DELETE PRODUCT FUNCTION
 function deleteProduct(id) {
     if (!confirm("Are you sure you want to delete this product? This action cannot be undone.")) {
         return;
@@ -607,12 +774,25 @@ function cancelEdit() {
     resetForm();
 }
 
-// Enhanced Render Products with better image display - FIXED
+// ====================
+// RENDER FUNCTIONS
+// ====================
+
 function render() {
-    console.log("Rendering products...", products);
+    console.log("render() called - Rendering products...", products);
     productGrid.innerHTML = "";
     
-    if (!products || products.length === 0) {
+    // Validate products array
+    if (!Array.isArray(products)) {
+        console.error("Products is not an array, resetting...");
+        products = [];
+        localStorage.setItem("products", JSON.stringify(products));
+    }
+    
+    // Filter out invalid products
+    const validProducts = products.filter(p => p && p.id && p.name);
+    
+    if (validProducts.length === 0) {
         productGrid.innerHTML = `
             <div style="text-align: center; grid-column: 1/-1; padding: 60px 20px; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,.05);">
                 <div style="font-size: 60px; margin-bottom: 20px;">🛍️</div>
@@ -620,12 +800,13 @@ function render() {
                 <p style="color: #999; margin-bottom: 20px;">Add some products in the admin panel to get started!</p>
                 <button class="btn btn-blue" onclick="openAdmin()">Go to Admin Panel</button>
             </div>`;
+        console.log("No valid products to render");
         return;
     }
     
-    products.forEach(product => {
-        if (!product) return;
-        
+    console.log(`Rendering ${validProducts.length} valid products`);
+    
+    validProducts.forEach(product => {
         const sizeOptions = product.sizes && product.sizes.length > 0 
             ? product.sizes.map(size => `<option value="${size}">${size}</option>`).join("")
             : '<option value="">One Size</option>';
@@ -662,63 +843,11 @@ function render() {
     });
     
     updateCartCount();
+    console.log("Products rendered successfully");
 }
 
 function getDefaultImage() {
     return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAwIiBoZWlnaHQ9IjgwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjQiIGZpbGw9IiM5OTkiPk5vIEltYWdlPC90ZXh0Pjwvc3ZnPg==';
-}
-
-// Cart Functions
-function addToCart(id) {
-    const product = products.find(p => p.id === id);
-    if (!product || product.stock <= 0) {
-        alert("This product is out of stock!");
-        return;
-    }
-    
-    const selectedSize = document.getElementById(`sizeSelect-${id}`)?.value;
-    if (!selectedSize || selectedSize === "") {
-        alert("Please select a size first!");
-        return;
-    }
-    
-    const existingItem = cart.find(item => item.id === id && item.size === selectedSize);
-    
-    if (existingItem) {
-        if (existingItem.qty >= product.stock) {
-            alert("Not enough stock available!");
-            return;
-        }
-        existingItem.qty++;
-    } else {
-        cart.push({
-            id: product.id,
-            name: product.name,
-            price: product.price,
-            size: selectedSize,
-            qty: 1
-        });
-    }
-    
-    product.stock--;
-    localStorage.setItem("products", JSON.stringify(products));
-    localStorage.setItem("cart", JSON.stringify(cart));
-    loadData();
-    render();
-}
-
-function updateCartCount() {
-    const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
-    cartCount.textContent = totalItems;
-}
-
-function openCart() {
-    renderCart();
-    cartModal.style.display = "flex";
-}
-
-function closeCart() {
-    cartModal.style.display = "none";
 }
 
 function renderCart() {
@@ -770,6 +899,100 @@ function renderCart() {
         </div>`;
 }
 
+function renderOrders() {
+    const ordersDiv = document.getElementById("orders");
+    if (orders.length === 0) {
+        ordersDiv.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No orders yet.</p>';
+        return;
+    }
+    ordersDiv.innerHTML = orders.map(order => `
+        <div class="order">
+            <strong>Order #${order.id}</strong><br>
+            <small>${order.date}</small><br>
+            ${order.name} (${order.phone})<br>
+            ${order.address}<br>
+            Total: <b style="color: #ff6b35;">$${order.total.toFixed(2)}</b><br>
+            Status: <span style="color: ${(order.status || 'pending') === 'pending' ? '#e67e22' : '#27ae60'}; font-weight: bold;">
+                ${(order.status || 'pending').toUpperCase()}
+            </span>
+        </div>
+    `).join("");
+}
+
+function renderEditProducts() {
+    editProductsDiv.innerHTML = "";
+    
+    if (products.length === 0) {
+        editProductsDiv.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No products to edit.</p>';
+        return;
+    }
+    
+    products.forEach(product => {
+        editProductsDiv.innerHTML += `
+        <div class="order">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <img src="${product.image || getDefaultImage()}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 6px;">
+                <div style="flex: 1;">
+                    <strong>${product.name}</strong><br>
+                    Price: $${product.price.toFixed(2)} | Stock: ${product.stock}<br>
+                    Sizes: ${product.sizes ? product.sizes.join(", ") : "N/A"}
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-blue" onclick="editProduct(${product.id})" style="padding: 8px 16px;">Edit</button>
+                    <button class="btn btn-red" onclick="deleteProduct(${product.id})" style="padding: 8px 16px;">Delete</button>
+                </div>
+            </div>
+        </div>`;
+    });
+}
+
+// ====================
+// CART FUNCTIONS
+// ====================
+
+function addToCart(id) {
+    const product = products.find(p => p.id === id);
+    if (!product || product.stock <= 0) {
+        alert("This product is out of stock!");
+        return;
+    }
+    
+    const selectedSize = document.getElementById(`sizeSelect-${id}`)?.value;
+    if (!selectedSize || selectedSize === "") {
+        alert("Please select a size first!");
+        return;
+    }
+    
+    const existingItem = cart.find(item => item.id === id && item.size === selectedSize);
+    
+    if (existingItem) {
+        if (existingItem.qty >= product.stock) {
+            alert("Not enough stock available!");
+            return;
+        }
+        existingItem.qty++;
+    } else {
+        cart.push({
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            size: selectedSize,
+            qty: 1
+        });
+    }
+    
+    product.stock--;
+    localStorage.setItem("products", JSON.stringify(products));
+    localStorage.setItem("cart", JSON.stringify(cart));
+    loadData();
+    render();
+}
+
+function updateCartCount() {
+    const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
+    cartCount.textContent = totalItems;
+}
+
 function removeFromCart(index) {
     const item = cart[index];
     const product = products.find(p => p.id === item.id);
@@ -785,6 +1008,10 @@ function removeFromCart(index) {
     render();
     renderCart();
 }
+
+// ====================
+// ORDER FUNCTIONS
+// ====================
 
 function payViaPayWay() {
     window.open(PAYWAY_LINK, '_blank');
@@ -843,107 +1070,128 @@ function sendOrder() {
     renderOrders();
 }
 
-// Order History - FIXED VERSION
-function renderOrders() {
-    const ordersDiv = document.getElementById("orders");
-    if (orders.length === 0) {
-        ordersDiv.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No orders yet.</p>';
-        return;
-    }
-    ordersDiv.innerHTML = orders.map(order => `
-        <div class="order">
-            <strong>Order #${order.id}</strong><br>
-            <small>${order.date}</small><br>
-            ${order.name} (${order.phone})<br>
-            ${order.address}<br>
-            Total: <b style="color: #ff6b35;">$${order.total.toFixed(2)}</b><br>
-            Status: <span style="color: ${(order.status || 'pending') === 'pending' ? '#e67e22' : '#27ae60'}; font-weight: bold;">
-                ${(order.status || 'pending').toUpperCase()}
-            </span>
-        </div>
-    `).join("");
-}
+// ====================
+// DEBUG & UTILITY FUNCTIONS
+// ====================
 
-// Admin Edit Products List with DELETE buttons
-function renderEditProducts() {
-    editProductsDiv.innerHTML = "";
-    
-    if (products.length === 0) {
-        editProductsDiv.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No products to edit.</p>';
-        return;
-    }
-    
-    products.forEach(product => {
-        editProductsDiv.innerHTML += `
-        <div class="order">
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <img src="${product.image || getDefaultImage()}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 6px;">
-                <div style="flex: 1;">
-                    <strong>${product.name}</strong><br>
-                    Price: $${product.price.toFixed(2)} | Stock: ${product.stock}<br>
-                    Sizes: ${product.sizes ? product.sizes.join(", ") : "N/A"}
-                </div>
-                <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-blue" onclick="editProduct(${product.id})" style="padding: 8px 16px;">Edit</button>
-                    <button class="btn btn-red" onclick="deleteProduct(${product.id})" style="padding: 8px 16px;">Delete</button>
-                </div>
-            </div>
-        </div>`;
-    });
-}
-
-// Initialization - FIXED VERSION FOR PUBLIC VIEW
-function init() {
-    console.log("=== PAGE LOAD INIT ===");
-    
-    // Load data from localStorage
+function forceRefresh() {
+    console.log("=== FORCE REFRESH ===");
     loadData();
-    
-    console.log("Loaded:", products.length, "products");
-    console.log("User is admin:", isAdmin);
-    console.log("Admin unlocked:", adminUnlocked);
-    
-    // Render products regardless of admin status
     render();
     updateCartCount();
     
-    // Show admin button if previously unlocked
+    const message = `✅ Refreshed!
+• Products: ${products.length}
+• Cart items: ${cart.length}
+• Orders: ${orders.length}
+• Admin: ${isAdmin ? 'Yes' : 'No'}
+• Admin Unlocked: ${adminUnlocked ? 'Yes' : 'No'}`;
+    
+    alert(message);
+    console.log(message);
+}
+
+function updateDebugInfo() {
+    debugInfo.innerHTML = `
+        Products: ${products.length}<br>
+        Cart: ${cart.length} items<br>
+        Orders: ${orders.length}<br>
+        Admin: ${isAdmin ? '✅' : '❌'}<br>
+        Unlocked: ${adminUnlocked ? '✅' : '❌'}<br>
+        Store: ${store.classList.contains('hidden') ? '❌' : '✅'}<br>
+        Admin Panel: ${admin.classList.contains('hidden') ? '❌' : '✅'}
+    `;
+}
+
+function toggleDebug() {
+    debugPanel.classList.toggle('hidden');
+}
+
+function debugState() {
+    console.group("=== DEBUG STATE ===");
+    console.log("Products:", products);
+    console.log("Cart:", cart);
+    console.log("Orders:", orders);
+    console.log("isAdmin:", isAdmin);
+    console.log("adminUnlocked:", adminUnlocked);
+    console.log("Store visible:", !store.classList.contains("hidden"));
+    console.log("Admin visible:", !admin.classList.contains("hidden"));
+    console.groupEnd();
+    
+    alert(`Debug Info:
+Products: ${products.length}
+Cart: ${cart.length} items
+Admin: ${isAdmin ? 'Yes' : 'No'}
+Unlocked: ${adminUnlocked ? 'Yes' : 'No'}
+Store Hidden: ${store.classList.contains("hidden")}
+Admin Hidden: ${admin.classList.contains("hidden")}`);
+}
+
+// ====================
+// INITIALIZATION
+// ====================
+
+function init() {
+    console.log("=== PAGE LOAD INIT ===");
+    
+    // Initialize PayWay link
+    document.getElementById("payText").textContent = "PayWay";
+    document.getElementById("payText").href = PAYWAY_LINK;
+    
+    // Load all data
+    loadData();
+    
+    console.log(`Loaded: ${products.length} products`);
+    console.log(`User is admin: ${isAdmin}`);
+    console.log(`Admin unlocked: ${adminUnlocked}`);
+    
+    // Render products (always do this first)
+    render();
+    
+    // Show/hide admin button based on unlock status
     if (adminUnlocked) {
         adminBtn.style.display = "inline-block";
         console.log("Admin button shown (unlocked)");
+    } else {
+        adminBtn.style.display = "none";
+        console.log("Admin button hidden (locked)");
     }
     
-    // CRITICAL: Always show store for public visitors
-    // Only show admin panel if user is explicitly logged in as admin AND has unlocked admin
+    // Determine which view to show
     if (isAdmin && adminUnlocked) {
         console.log("Admin is logged in and unlocked, showing admin panel...");
         showAdmin();
     } else {
         console.log("Showing public store view...");
-        // Make sure store is visible for public users
-        store.classList.remove("hidden");
-        admin.classList.add("hidden");
-        
-        // Hide admin button for public users if not unlocked
-        if (!adminUnlocked) {
-            adminBtn.style.display = "none";
-        }
+        showStore();
     }
+    
+    // Update debug panel
+    updateDebugInfo();
     
     console.log("=== INIT COMPLETE ===");
 }
 
-// Initialize the application
-init();
+// Initialize on DOM ready
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(init, 100);
+});
 
-// Extra safety: Force store view on page load for public users
-window.addEventListener('DOMContentLoaded', function() {
-    // If user is not admin, ensure store is visible
-    if (!isAdmin) {
-        store.classList.remove('hidden');
-        admin.classList.add('hidden');
+// Handle page visibility changes
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        loadData();
+        if (!admin.classList.contains('hidden')) {
+            renderOrders();
+            renderEditProducts();
+        } else {
+            render();
+        }
     }
 });
+
+// Initialize now
+init();
 </script>
 </body>
 </html>
