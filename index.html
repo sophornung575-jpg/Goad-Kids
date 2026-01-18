@@ -61,35 +61,13 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
     z-index: 10000; 
     cursor: pointer; 
 }
-    
-    /* Your existing CSS above... */
-
-.image-upload-icon { font-size: 40px; margin-bottom: 10px; }
-
-/* Secret admin access area - invisible */
-.secret-admin-area { 
-    position: fixed; 
-    top: 0; 
-    right: 0; 
-    width: 100px; 
-    height: 40px; 
-    background: transparent; 
-    z-index: 10000; 
-    cursor: pointer; 
-}
-
-/* === ADD THESE NEW RULES HERE === */
-/* Force store visibility by default */
+/* FIXED CSS RULES FOR VISIBILITY */
 #store {
     display: block !important;
 }
-
-/* Properly hide admin/store when they have 'hidden' class */
 #admin.hidden, #store.hidden {
     display: none !important;
 }
-/* === END OF NEW RULES === */
-    
 </style>
 </head>
 <body>
@@ -254,7 +232,7 @@ const PAYWAY_LINK = "https://link.payway.com.kh/08407860s";
 const PAGE_NAME = "Goatkids";
 const SECRET_UNLOCK_PASSWORD = "admin123";
 
-// Load data from localStorage - FIXED: Always load fresh data
+// Load data from localStorage
 function loadData() {
     products = JSON.parse(localStorage.getItem("products")) || [];
     cart = JSON.parse(localStorage.getItem("cart")) || [];
@@ -919,42 +897,53 @@ function init() {
     console.log("=== PAGE LOAD INIT ===");
     
     // Load data from localStorage
-    products = JSON.parse(localStorage.getItem("products")) || [];
-    cart = JSON.parse(localStorage.getItem("cart")) || [];
-    orders = JSON.parse(localStorage.getItem("orders")) || [];
-    isAdmin = localStorage.getItem("admin") === "true";
-    adminUnlocked = localStorage.getItem("adminUnlocked") === "true";
+    loadData();
     
     console.log("Loaded:", products.length, "products");
     console.log("User is admin:", isAdmin);
-    
-    // ALWAYS start by showing the store to everyone
-    // Force store section to be visible
-    store.classList.remove("hidden");
-    admin.classList.add("hidden");
-    
-    // Only show admin panel if user is explicitly logged in as admin
-    if (isAdmin && adminUnlocked) {
-        console.log("Admin is logged in, showing admin panel...");
-        adminBtn.style.display = "inline-block";
-        // Admin can switch to admin panel via button
-    } else {
-        console.log("Showing public store view...");
-        // Make sure store is visible for public users
-        store.classList.remove("hidden");
-        admin.classList.add("hidden");
-        adminBtn.style.display = "none";
-    }
+    console.log("Admin unlocked:", adminUnlocked);
     
     // Render products regardless of admin status
     render();
     updateCartCount();
     
+    // Show admin button if previously unlocked
+    if (adminUnlocked) {
+        adminBtn.style.display = "inline-block";
+        console.log("Admin button shown (unlocked)");
+    }
+    
+    // CRITICAL: Always show store for public visitors
+    // Only show admin panel if user is explicitly logged in as admin AND has unlocked admin
+    if (isAdmin && adminUnlocked) {
+        console.log("Admin is logged in and unlocked, showing admin panel...");
+        showAdmin();
+    } else {
+        console.log("Showing public store view...");
+        // Make sure store is visible for public users
+        store.classList.remove("hidden");
+        admin.classList.add("hidden");
+        
+        // Hide admin button for public users if not unlocked
+        if (!adminUnlocked) {
+            adminBtn.style.display = "none";
+        }
+    }
+    
     console.log("=== INIT COMPLETE ===");
 }
 
+// Initialize the application
 init();
+
+// Extra safety: Force store view on page load for public users
+window.addEventListener('DOMContentLoaded', function() {
+    // If user is not admin, ensure store is visible
+    if (!isAdmin) {
+        store.classList.remove('hidden');
+        admin.classList.add('hidden');
+    }
+});
 </script>
 </body>
 </html>
-
