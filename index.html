@@ -26,7 +26,6 @@ nav button:hover { background: #ddd; }
 .btn-red { background: linear-gradient(135deg, #e74c3c, #ff6b5c); color: #fff; }
 .btn-gray { background: linear-gradient(135deg, #95a5a6, #b4c0c1); color: #fff; }
 .btn-green { background: linear-gradient(135deg, #27ae60, #2ecc71); color: #fff; }
-.btn-purple { background: linear-gradient(135deg, #9b59b6, #8e44ad); color: #fff; }
 .hidden { display: none !important; }
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
 .modal.active { display: flex !important; }
@@ -75,19 +74,6 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
     opacity: 0;
     visibility: hidden;
 }
-/* Debug panel */
-.debug-panel {
-    position: fixed;
-    bottom: 10px;
-    right: 10px;
-    background: rgba(0,0,0,0.8);
-    color: white;
-    padding: 10px;
-    border-radius: 5px;
-    font-size: 12px;
-    z-index: 9999;
-    max-width: 300px;
-}
 </style>
 </head>
 <body>
@@ -102,7 +88,6 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
 <button onclick="openCart()">Cart (<span id="cartCount">0</span>)</button>
 <button id="adminBtn" onclick="openAdmin()" style="display: none;">Admin</button>
 <button onclick="forceRefresh()" style="background: #ff6b35; color: white;">🔄 Refresh</button>
-<button onclick="toggleDebug()" style="background: #9b59b6; color: white;">🐛 Debug</button>
 </nav>
 </div>
 </header>
@@ -235,12 +220,6 @@ Click to upload image or drag & drop
 </div>
 </div>
 
-<!-- DEBUG PANEL -->
-<div id="debugPanel" class="debug-panel hidden">
-<h4 style="margin: 0 0 5px 0;">Debug Info</h4>
-<div id="debugInfo"></div>
-</div>
-
 <script>
 // ====================
 // GLOBAL VARIABLES
@@ -259,8 +238,6 @@ const saveProductBtn = document.getElementById("saveProductBtn");
 const cancelEditBtn = document.getElementById("cancelEditBtn");
 const passwordMessage = document.getElementById("passwordMessage");
 const adminBtn = document.getElementById("adminBtn");
-const debugPanel = document.getElementById("debugPanel");
-const debugInfo = document.getElementById("debugInfo");
 
 const PAYWAY_LINK = "https://link.payway.com.kh/08407860s";
 const PAGE_NAME = "Goatkids";
@@ -318,11 +295,6 @@ function loadData() {
         adminUnlocked = localStorage.getItem("adminUnlocked") === "true";
         
         console.log("Data loaded. Products:", products.length);
-        console.log("Cart:", cart.length, "items");
-        console.log("Orders:", orders.length);
-        console.log("Admin:", isAdmin, "Unlocked:", adminUnlocked);
-        
-        updateDebugInfo();
         
     } catch (error) {
         console.error("Error loading data:", error);
@@ -362,7 +334,6 @@ if (!localStorage.getItem("adminPassword")) {
 
 // Show public store view
 function showStore() {
-    console.log("showStore() called");
     loadData();
     
     // Hide admin, show store
@@ -371,18 +342,12 @@ function showStore() {
     
     // Re-render products
     render();
-    
-    console.log("Store view activated");
-    updateDebugInfo();
 }
 
 // Show admin panel
 function showAdmin() {
-    console.log("showAdmin() called");
-    
     // Only show admin if properly authenticated AND unlocked
     if (!isAdmin || !adminUnlocked) {
-        console.log("Admin not authenticated or unlocked, showing login");
         openAdmin();
         return;
     }
@@ -394,23 +359,16 @@ function showAdmin() {
     // Load admin data
     renderOrders();
     renderEditProducts();
-    
-    console.log("Admin panel activated");
-    updateDebugInfo();
 }
 
 // Open admin (with login check)
 function openAdmin() {
-    console.log("openAdmin() called");
-    
     if (!adminUnlocked) {
-        console.log("Admin not unlocked, prompting for unlock");
         unlockAdmin();
         return;
     }
     
     if (!isAdmin) {
-        console.log("Admin not logged in, showing login modal");
         showModal('loginModal');
         return;
     }
@@ -427,11 +385,8 @@ function unlockAdmin() {
         localStorage.setItem("adminUnlocked", "true");
         adminBtn.style.display = "inline-block";
         alert("✓ Admin access unlocked! Admin button is now visible.");
-        console.log("Admin unlocked successfully");
-        updateDebugInfo();
     } else if (password) {
         alert("✗ Incorrect password!");
-        console.log("Incorrect unlock password entered");
     }
 }
 
@@ -559,11 +514,8 @@ function login() {
         localStorage.setItem("admin", "true");
         closeModal('loginModal');
         showAdmin();
-        console.log("Admin logged in successfully");
-        updateDebugInfo();
     } else {
         alert("Invalid username or password");
-        console.log("Login failed");
     }
 }
 
@@ -572,8 +524,6 @@ function logout() {
     localStorage.removeItem("admin");
     showStore();
     resetForm();
-    console.log("Admin logged out");
-    updateDebugInfo();
 }
 
 function changePassword() {
@@ -779,12 +729,10 @@ function cancelEdit() {
 // ====================
 
 function render() {
-    console.log("render() called - Rendering products...", products);
     productGrid.innerHTML = "";
     
     // Validate products array
     if (!Array.isArray(products)) {
-        console.error("Products is not an array, resetting...");
         products = [];
         localStorage.setItem("products", JSON.stringify(products));
     }
@@ -800,11 +748,8 @@ function render() {
                 <p style="color: #999; margin-bottom: 20px;">Add some products in the admin panel to get started!</p>
                 <button class="btn btn-blue" onclick="openAdmin()">Go to Admin Panel</button>
             </div>`;
-        console.log("No valid products to render");
         return;
     }
-    
-    console.log(`Rendering ${validProducts.length} valid products`);
     
     validProducts.forEach(product => {
         const sizeOptions = product.sizes && product.sizes.length > 0 
@@ -843,7 +788,6 @@ function render() {
     });
     
     updateCartCount();
-    console.log("Products rendered successfully");
 }
 
 function getDefaultImage() {
@@ -1071,60 +1015,18 @@ function sendOrder() {
 }
 
 // ====================
-// DEBUG & UTILITY FUNCTIONS
+// UTILITY FUNCTIONS
 // ====================
 
 function forceRefresh() {
-    console.log("=== FORCE REFRESH ===");
     loadData();
     render();
     updateCartCount();
     
-    const message = `✅ Refreshed!
+    alert(`✅ Refreshed!
 • Products: ${products.length}
 • Cart items: ${cart.length}
-• Orders: ${orders.length}
-• Admin: ${isAdmin ? 'Yes' : 'No'}
-• Admin Unlocked: ${adminUnlocked ? 'Yes' : 'No'}`;
-    
-    alert(message);
-    console.log(message);
-}
-
-function updateDebugInfo() {
-    debugInfo.innerHTML = `
-        Products: ${products.length}<br>
-        Cart: ${cart.length} items<br>
-        Orders: ${orders.length}<br>
-        Admin: ${isAdmin ? '✅' : '❌'}<br>
-        Unlocked: ${adminUnlocked ? '✅' : '❌'}<br>
-        Store: ${store.classList.contains('hidden') ? '❌' : '✅'}<br>
-        Admin Panel: ${admin.classList.contains('hidden') ? '❌' : '✅'}
-    `;
-}
-
-function toggleDebug() {
-    debugPanel.classList.toggle('hidden');
-}
-
-function debugState() {
-    console.group("=== DEBUG STATE ===");
-    console.log("Products:", products);
-    console.log("Cart:", cart);
-    console.log("Orders:", orders);
-    console.log("isAdmin:", isAdmin);
-    console.log("adminUnlocked:", adminUnlocked);
-    console.log("Store visible:", !store.classList.contains("hidden"));
-    console.log("Admin visible:", !admin.classList.contains("hidden"));
-    console.groupEnd();
-    
-    alert(`Debug Info:
-Products: ${products.length}
-Cart: ${cart.length} items
-Admin: ${isAdmin ? 'Yes' : 'No'}
-Unlocked: ${adminUnlocked ? 'Yes' : 'No'}
-Store Hidden: ${store.classList.contains("hidden")}
-Admin Hidden: ${admin.classList.contains("hidden")}`);
+• Orders: ${orders.length}`);
 }
 
 // ====================
@@ -1132,8 +1034,6 @@ Admin Hidden: ${admin.classList.contains("hidden")}`);
 // ====================
 
 function init() {
-    console.log("=== PAGE LOAD INIT ===");
-    
     // Initialize PayWay link
     document.getElementById("payText").textContent = "PayWay";
     document.getElementById("payText").href = PAYWAY_LINK;
@@ -1141,35 +1041,22 @@ function init() {
     // Load all data
     loadData();
     
-    console.log(`Loaded: ${products.length} products`);
-    console.log(`User is admin: ${isAdmin}`);
-    console.log(`Admin unlocked: ${adminUnlocked}`);
-    
     // Render products (always do this first)
     render();
     
     // Show/hide admin button based on unlock status
     if (adminUnlocked) {
         adminBtn.style.display = "inline-block";
-        console.log("Admin button shown (unlocked)");
     } else {
         adminBtn.style.display = "none";
-        console.log("Admin button hidden (locked)");
     }
     
     // Determine which view to show
     if (isAdmin && adminUnlocked) {
-        console.log("Admin is logged in and unlocked, showing admin panel...");
         showAdmin();
     } else {
-        console.log("Showing public store view...");
         showStore();
     }
-    
-    // Update debug panel
-    updateDebugInfo();
-    
-    console.log("=== INIT COMPLETE ===");
 }
 
 // Initialize on DOM ready
