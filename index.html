@@ -61,6 +61,24 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
     z-index: 10000; 
     cursor: pointer; 
 }
+/* View toggle buttons */
+.view-toggle {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.view-toggle button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    background: #eee;
+    cursor: pointer;
+    font-weight: 500;
+}
+.view-toggle button.active {
+    background: #4a90e2;
+    color: white;
+}
 </style>
 </head>
 <body>
@@ -80,6 +98,12 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
 </header>
 
 <div class="container">
+
+<!-- View Toggle (only shows when admin is logged in) -->
+<div id="viewToggle" class="view-toggle hidden">
+<button id="storeViewBtn" onclick="showStoreView()" class="active">🏪 Store</button>
+<button id="adminViewBtn" onclick="showAdminView()">⚙️ Admin Panel</button>
+</div>
 
 <!-- STORE -->
 <section id="store">
@@ -219,6 +243,9 @@ const saveProductBtn = document.getElementById("saveProductBtn");
 const cancelEditBtn = document.getElementById("cancelEditBtn");
 const passwordMessage = document.getElementById("passwordMessage");
 const adminBtn = document.getElementById("adminBtn");
+const viewToggle = document.getElementById("viewToggle");
+const storeViewBtn = document.getElementById("storeViewBtn");
+const adminViewBtn = document.getElementById("adminViewBtn");
 
 const PAYWAY_LINK = "https://link.payway.com.kh/08407860s";
 const PAGE_NAME = "Goatkids";
@@ -254,6 +281,24 @@ function unlockAdmin() {
     } else if (password) {
         alert("✗ Incorrect password!");
     }
+}
+
+// View toggle functions
+function showStoreView() {
+    store.classList.remove("hidden");
+    admin.classList.add("hidden");
+    storeViewBtn.classList.add("active");
+    adminViewBtn.classList.remove("active");
+    render(); // Refresh the store view
+}
+
+function showAdminView() {
+    store.classList.add("hidden");
+    admin.classList.remove("hidden");
+    storeViewBtn.classList.remove("active");
+    adminViewBtn.classList.add("active");
+    renderOrders();
+    renderEditProducts();
 }
 
 // Image Handling
@@ -342,7 +387,7 @@ async function resizeImage(base64, maxWidth = 800, maxHeight = 800) {
             // Convert to JPEG with good quality
             resolve(canvas.toDataURL("image/jpeg", 0.85));
         };
-        img.src = base64;
+    img.src = base64;
     });
 }
 
@@ -408,8 +453,12 @@ function openAdmin() {
         loginModal.style.display = "flex";
         return;
     }
+    
     store.classList.add("hidden");
     admin.classList.remove("hidden");
+    viewToggle.classList.remove("hidden");
+    storeViewBtn.classList.remove("active");
+    adminViewBtn.classList.add("active");
     renderOrders();
     renderEditProducts();
     resetForm();
@@ -435,8 +484,9 @@ function logout() {
     localStorage.removeItem("admin");
     admin.classList.add("hidden");
     store.classList.remove("hidden");
+    viewToggle.classList.add("hidden");
     resetForm();
-    render(); // FIX: Call render() when returning to store view
+    render(); // Call render() when returning to store view
 }
 
 // Password Change Function
@@ -552,9 +602,11 @@ async function saveProduct() {
     
     localStorage.setItem("products", JSON.stringify(products));
     resetForm();
-    render(); // FIX: Call render() to update store view
+    render(); // Update store view
     renderEditProducts();
-    alert(currentEditId !== null ? "Product updated successfully!" : "Product added successfully!");
+    
+    // Show success message and suggest to view store
+    alert(currentEditId !== null ? "Product updated successfully!" : "Product added successfully!\n\nClick 'Store' button at the top to view your products.");
 }
 
 // DELETE PRODUCT FUNCTION
@@ -578,7 +630,7 @@ function deleteProduct(id) {
         // Remove from cart
         cart = cart.filter(item => item.id !== id);
         localStorage.setItem("cart", JSON.stringify(cart));
-        updateCartCount(); // FIX: Update cart count
+        updateCartCount(); // Update cart count
     }
     
     // Remove product from products array
@@ -587,7 +639,7 @@ function deleteProduct(id) {
     
     if (products.length < initialLength) {
         localStorage.setItem("products", JSON.stringify(products));
-        render(); // FIX: Call render() to update store view
+        render(); // Update store view
         renderEditProducts();
         alert("Product deleted successfully!");
         
@@ -734,7 +786,7 @@ function addToCart(id) {
     product.stock--;
     localStorage.setItem("products", JSON.stringify(products));
     localStorage.setItem("cart", JSON.stringify(cart));
-    render(); // FIX: Call render() to update product stock display
+    render(); // Update product stock display
 }
 
 function updateCartCount() {
@@ -811,7 +863,7 @@ function removeFromCart(index) {
     cart.splice(index, 1);
     localStorage.setItem("products", JSON.stringify(products));
     localStorage.setItem("cart", JSON.stringify(cart));
-    render(); // FIX: Call render() to update store view
+    render(); // Update store view
     renderCart();
 }
 
@@ -864,10 +916,10 @@ function sendOrder() {
     localStorage.setItem("orders", JSON.stringify(orders));
     cart = [];
     localStorage.removeItem("cart");
-    updateCartCount(); // FIX: Update cart count
+    updateCartCount(); // Update cart count
     window.open(`https://m.me/${PAGE_NAME}?text=${message}`, '_blank');
     closeCart();
-    render(); // FIX: Call render() to update store view
+    render(); // Update store view
     renderOrders();
 }
 
@@ -931,10 +983,14 @@ function init() {
     }
     
     if (isAdmin) {
-        store.classList.add("hidden");
-        admin.classList.remove("hidden");
+        viewToggle.classList.remove("hidden");
+        storeViewBtn.classList.add("active");
+        adminViewBtn.classList.remove("active");
         renderOrders();
         renderEditProducts();
+    } else {
+        store.classList.remove("hidden");
+        admin.classList.add("hidden");
     }
 }
 
