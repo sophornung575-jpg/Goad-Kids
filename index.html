@@ -61,24 +61,6 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
     z-index: 10000; 
     cursor: pointer; 
 }
-/* View toggle buttons */
-.view-toggle {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-}
-.view-toggle button {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 6px;
-    background: #eee;
-    cursor: pointer;
-    font-weight: 500;
-}
-.view-toggle button.active {
-    background: #4a90e2;
-    color: white;
-}
 </style>
 </head>
 <body>
@@ -93,17 +75,12 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
 <button onclick="openCart()">Cart (<span id="cartCount">0</span>)</button>
 <!-- Admin button is hidden by default -->
 <button id="adminBtn" onclick="openAdmin()" style="display: none;">Admin</button>
+<button onclick="forceRefresh()" style="background: #ff6b35; color: white;">🔄 Refresh</button>
 </nav>
 </div>
 </header>
 
 <div class="container">
-
-<!-- View Toggle (only shows when admin is logged in) -->
-<div id="viewToggle" class="view-toggle hidden">
-<button id="storeViewBtn" onclick="showStoreView()" class="active">🏪 Store</button>
-<button id="adminViewBtn" onclick="showAdminView()">⚙️ Admin Panel</button>
-</div>
 
 <!-- STORE -->
 <section id="store">
@@ -172,7 +149,8 @@ Click to upload image or drag & drop
 <h3>Edit Products</h3>
 <div id="editProducts"></div>
 
-<button class="btn btn-red" onclick="logout()" style="margin-top: 20px;">Logout</button>
+<button class="btn btn-blue" onclick="showStore()" style="margin-right: 10px;">View Store</button>
+<button class="btn btn-red" onclick="logout()">Logout</button>
 </section>
 
 </div>
@@ -243,20 +221,22 @@ const saveProductBtn = document.getElementById("saveProductBtn");
 const cancelEditBtn = document.getElementById("cancelEditBtn");
 const passwordMessage = document.getElementById("passwordMessage");
 const adminBtn = document.getElementById("adminBtn");
-const viewToggle = document.getElementById("viewToggle");
-const storeViewBtn = document.getElementById("storeViewBtn");
-const adminViewBtn = document.getElementById("adminViewBtn");
 
 const PAYWAY_LINK = "https://link.payway.com.kh/08407860s";
 const PAGE_NAME = "Goatkids";
 const SECRET_UNLOCK_PASSWORD = "admin123"; // Change this to your preferred password
 
-// Load data from localStorage
-let products = JSON.parse(localStorage.getItem("products")) || [];
-let cart = JSON.parse(localStorage.getItem("cart")) || [];
-let orders = JSON.parse(localStorage.getItem("orders")) || [];
-let isAdmin = localStorage.getItem("admin") === "true";
-let adminUnlocked = localStorage.getItem("adminUnlocked") === "true";
+// Load data from localStorage - FIXED: Always load fresh data
+function loadData() {
+    products = JSON.parse(localStorage.getItem("products")) || [];
+    cart = JSON.parse(localStorage.getItem("cart")) || [];
+    orders = JSON.parse(localStorage.getItem("orders")) || [];
+    isAdmin = localStorage.getItem("admin") === "true";
+    adminUnlocked = localStorage.getItem("adminUnlocked") === "true";
+    console.log("Data loaded. Products:", products.length);
+}
+
+// Initialize variables
 let currentEditId = null;
 let currentImageData = null;
 
@@ -266,8 +246,16 @@ if (!localStorage.getItem("adminPassword")) {
 }
 
 // Initialize
+loadData();
 document.getElementById("payText").textContent = "PayWay";
 document.getElementById("payText").href = PAYWAY_LINK;
+
+// Helper function to force refresh
+function forceRefresh() {
+    loadData();
+    render();
+    alert(`Refreshed! Found ${products.length} products`);
+}
 
 // Secret Admin Unlock Function
 function unlockAdmin() {
@@ -283,20 +271,17 @@ function unlockAdmin() {
     }
 }
 
-// View toggle functions
-function showStoreView() {
-    store.classList.remove("hidden");
+// View switching functions
+function showStore() {
+    loadData(); // Reload fresh data
     admin.classList.add("hidden");
-    storeViewBtn.classList.add("active");
-    adminViewBtn.classList.remove("active");
-    render(); // Refresh the store view
+    store.classList.remove("hidden");
+    render();
 }
 
-function showAdminView() {
+function showAdmin() {
     store.classList.add("hidden");
     admin.classList.remove("hidden");
-    storeViewBtn.classList.remove("active");
-    adminViewBtn.classList.add("active");
     renderOrders();
     renderEditProducts();
 }
@@ -387,60 +372,9 @@ async function resizeImage(base64, maxWidth = 800, maxHeight = 800) {
             // Convert to JPEG with good quality
             resolve(canvas.toDataURL("image/jpeg", 0.85));
         };
-    img.src = base64;
+        img.src = base64;
     });
 }
-
-// Drag and drop functionality for images
-document.addEventListener('DOMContentLoaded', function() {
-    const uploadContainer = document.querySelector('.image-upload-container');
-    
-    if (uploadContainer) {
-        // Prevent default drag behaviors
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            uploadContainer.addEventListener(eventName, preventDefaults, false);
-            document.body.addEventListener(eventName, preventDefaults, false);
-        });
-        
-        // Highlight drop area when item is dragged over it
-        ['dragenter', 'dragover'].forEach(eventName => {
-            uploadContainer.addEventListener(eventName, highlight, false);
-        });
-        
-        ['dragleave', 'drop'].forEach(eventName => {
-            uploadContainer.addEventListener(eventName, unhighlight, false);
-        });
-        
-        // Handle dropped files
-        uploadContainer.addEventListener('drop', handleDrop, false);
-    }
-    
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-    
-    function highlight() {
-        uploadContainer.style.borderColor = '#4a90e2';
-        uploadContainer.style.background = '#e8f4ff';
-    }
-    
-    function unhighlight() {
-        uploadContainer.style.borderColor = '#ddd';
-        uploadContainer.style.background = '#fafafa';
-    }
-    
-    function handleDrop(e) {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        
-        if (files.length > 0) {
-            imageInput.files = files;
-            const event = new Event('change', { bubbles: true });
-            imageInput.dispatchEvent(event);
-        }
-    }
-});
 
 // Admin Functions
 function openAdmin() {
@@ -453,15 +387,7 @@ function openAdmin() {
         loginModal.style.display = "flex";
         return;
     }
-    
-    store.classList.add("hidden");
-    admin.classList.remove("hidden");
-    viewToggle.classList.remove("hidden");
-    storeViewBtn.classList.remove("active");
-    adminViewBtn.classList.add("active");
-    renderOrders();
-    renderEditProducts();
-    resetForm();
+    showAdmin();
 }
 
 function login() {
@@ -484,9 +410,9 @@ function logout() {
     localStorage.removeItem("admin");
     admin.classList.add("hidden");
     store.classList.remove("hidden");
-    viewToggle.classList.add("hidden");
     resetForm();
-    render(); // Call render() when returning to store view
+    loadData();
+    render();
 }
 
 // Password Change Function
@@ -601,12 +527,10 @@ async function saveProduct() {
     }
     
     localStorage.setItem("products", JSON.stringify(products));
+    loadData(); // Reload fresh data
     resetForm();
-    render(); // Update store view
     renderEditProducts();
-    
-    // Show success message and suggest to view store
-    alert(currentEditId !== null ? "Product updated successfully!" : "Product added successfully!\n\nClick 'Store' button at the top to view your products.");
+    alert(currentEditId !== null ? "Product updated successfully!" : "Product added successfully!\n\nClick 'View Store' button to see your products.");
 }
 
 // DELETE PRODUCT FUNCTION
@@ -630,7 +554,7 @@ function deleteProduct(id) {
         // Remove from cart
         cart = cart.filter(item => item.id !== id);
         localStorage.setItem("cart", JSON.stringify(cart));
-        updateCartCount(); // Update cart count
+        updateCartCount();
     }
     
     // Remove product from products array
@@ -639,7 +563,7 @@ function deleteProduct(id) {
     
     if (products.length < initialLength) {
         localStorage.setItem("products", JSON.stringify(products));
-        render(); // Update store view
+        loadData(); // Reload fresh data
         renderEditProducts();
         alert("Product deleted successfully!");
         
@@ -693,11 +617,12 @@ function cancelEdit() {
     resetForm();
 }
 
-// Enhanced Render Products with better image display
+// Enhanced Render Products with better image display - FIXED
 function render() {
+    console.log("Rendering products...", products);
     productGrid.innerHTML = "";
     
-    if (products.length === 0) {
+    if (!products || products.length === 0) {
         productGrid.innerHTML = `
             <div style="text-align: center; grid-column: 1/-1; padding: 60px 20px; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,.05);">
                 <div style="font-size: 60px; margin-bottom: 20px;">🛍️</div>
@@ -709,6 +634,8 @@ function render() {
     }
     
     products.forEach(product => {
+        if (!product) return;
+        
         const sizeOptions = product.sizes && product.sizes.length > 0 
             ? product.sizes.map(size => `<option value="${size}">${size}</option>`).join("")
             : '<option value="">One Size</option>';
@@ -728,8 +655,8 @@ function render() {
             <div class="card-body">
                 <h4 style="margin: 0 0 8px 0; font-size: 16px; line-height: 1.4;">${product.name}</h4>
                 ${sizeTags}
-                <div class="price">$${product.price.toFixed(2)}</div>
-                <div style="color: #666; margin: 8px 0;">Stock: <b>${product.stock}</b></div>
+                <div class="price">$${product.price ? product.price.toFixed(2) : '0.00'}</div>
+                <div style="color: #666; margin: 8px 0;">Stock: <b>${product.stock || 0}</b></div>
                 <select class="size-select" id="sizeSelect-${product.id}">
                     <option value="">Select Size</option>
                     ${sizeOptions}
@@ -786,7 +713,8 @@ function addToCart(id) {
     product.stock--;
     localStorage.setItem("products", JSON.stringify(products));
     localStorage.setItem("cart", JSON.stringify(cart));
-    render(); // Update product stock display
+    loadData(); // Reload fresh data
+    render();
 }
 
 function updateCartCount() {
@@ -863,7 +791,8 @@ function removeFromCart(index) {
     cart.splice(index, 1);
     localStorage.setItem("products", JSON.stringify(products));
     localStorage.setItem("cart", JSON.stringify(cart));
-    render(); // Update store view
+    loadData(); // Reload fresh data
+    render();
     renderCart();
 }
 
@@ -916,10 +845,11 @@ function sendOrder() {
     localStorage.setItem("orders", JSON.stringify(orders));
     cart = [];
     localStorage.removeItem("cart");
-    updateCartCount(); // Update cart count
+    loadData(); // Reload fresh data
+    updateCartCount();
     window.open(`https://m.me/${PAGE_NAME}?text=${message}`, '_blank');
     closeCart();
-    render(); // Update store view
+    render();
     renderOrders();
 }
 
@@ -974,6 +904,7 @@ function renderEditProducts() {
 
 // Initialization
 function init() {
+    loadData(); // Load fresh data on init
     render();
     updateCartCount();
     
@@ -983,19 +914,13 @@ function init() {
     }
     
     if (isAdmin) {
-        viewToggle.classList.remove("hidden");
-        storeViewBtn.classList.add("active");
-        adminViewBtn.classList.remove("active");
-        renderOrders();
-        renderEditProducts();
+        showAdmin();
     } else {
-        store.classList.remove("hidden");
-        admin.classList.add("hidden");
+        showStore();
     }
 }
 
 init();
 </script>
-
 </body>
 </html>
