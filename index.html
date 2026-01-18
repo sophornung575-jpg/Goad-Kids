@@ -35,7 +35,6 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
 .preview { width: 100%; height: 180px; object-fit: contain; border-radius: 8px; margin-bottom: 12px; border: 1px solid #eee; background: #f8f9fa; }
 .order { background: #fff; padding: 15px; margin-bottom: 12px; border-radius: 8px; border-left: 4px solid #4a90e2; }
 .alert-stock { color: #e74c3c; font-weight: bold; margin-top: 8px; padding: 5px; background: #fee; border-radius: 4px; text-align: center; font-size: 13px; }
-.edit-btn { background: #4a90e2; color: #fff; width: 100%; margin-top: 8px; }
 .form-group { margin-bottom: 16px; }
 .form-group label { display: block; margin-bottom: 6px; font-weight: 500; color: #333; font-size: 14px; }
 .alert { padding: 12px; border-radius: 6px; margin-bottom: 12px; font-size: 14px; }
@@ -100,29 +99,19 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: #4a90e2
     .card img { height: 140px; }
     input, textarea, select { 
         padding: 10px;
-        font-size: 16px; /* Prevent iOS zoom */
+        font-size: 16px;
     }
-}
-
-/* Fix for very small screens */
-@media (max-width: 360px) {
-    .grid { grid-template-columns: 1fr; }
-    nav button span { display: none; }
-    nav button:after { content: "🛒"; }
-    #cartCount { display: inline; }
 }
 
 /* Prevent text size adjustment on iOS */
 html { -webkit-text-size-adjust: 100%; }
 /* Fix tap highlight color */
 * { -webkit-tap-highlight-color: transparent; }
-/* Improve scrolling on iOS */
-body { -webkit-overflow-scrolling: touch; }
 </style>
 </head>
 <body>
 
-<!-- Secret admin unlock area (invisible in top-right corner) -->
+<!-- Secret admin unlock area -->
 <div class="secret-admin-area" onclick="unlockAdmin()" title="Click to unlock admin"></div>
 
 <header>
@@ -140,9 +129,7 @@ body { -webkit-overflow-scrolling: touch; }
 
 <!-- STORE -->
 <section id="store">
-<div class="grid" id="productGrid">
-<!-- Products will be loaded here -->
-</div>
+<div class="grid" id="productGrid"></div>
 </section>
 
 <!-- ADMIN -->
@@ -170,7 +157,7 @@ body { -webkit-overflow-scrolling: touch; }
 <div class="image-upload-label" onclick="document.getElementById('image').click()">
 <div class="image-upload-icon">📷</div>
 Click to upload image
-<br><small>Max 5MB</small>
+<br><small>Max 2MB</small>
 </div>
 <input type="file" id="image" accept="image/*" style="display: none;">
 <div id="imageError" class="alert alert-error hidden"></div>
@@ -270,6 +257,55 @@ Click to upload image
 
 <script>
 // ====================
+// COOKIE-BASED STORAGE (CROSS-BROWSER COMPATIBLE)
+// ====================
+
+// Cookie helper functions
+function setCookie(name, value, days = 30) {
+    try {
+        const d = new Date();
+        d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+        const expires = "expires=" + d.toUTCString();
+        
+        // For large data, split into chunks if needed
+        const valueStr = JSON.stringify(value);
+        
+        // Check if value is too large for a cookie
+        if (valueStr.length > 2000) {
+            console.warn(`Cookie ${name} is large: ${valueStr.length} chars`);
+        }
+        
+        document.cookie = name + "=" + encodeURIComponent(valueStr) + ";" + expires + ";path=/;SameSite=Lax";
+        return true;
+    } catch (error) {
+        console.error("Error setting cookie:", error);
+        return false;
+    }
+}
+
+function getCookie(name) {
+    try {
+        const nameEQ = name + "=";
+        const ca = document.cookie.split(';');
+        for(let i = 0; i < ca.length; i++) {
+            let c = ca[i];
+            while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+            if (c.indexOf(nameEQ) === 0) {
+                const cookieValue = decodeURIComponent(c.substring(nameEQ.length, c.length));
+                return JSON.parse(cookieValue);
+            }
+        }
+    } catch (error) {
+        console.error("Error reading cookie:", error);
+    }
+    return null;
+}
+
+function deleteCookie(name) {
+    document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:01 GMT; path=/';
+}
+
+// ====================
 // GLOBAL VARIABLES
 // ====================
 const productGrid = document.getElementById("productGrid");
@@ -301,101 +337,55 @@ let currentEditId = null;
 let currentImageData = null;
 
 // ====================
-// MOBILE DETECTION & SETUP
+// DATA STORAGE FUNCTIONS
 // ====================
-function isMobile() {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-}
 
-function setupMobileFeatures() {
-    if (isMobile()) {
-        console.log("Mobile device detected");
-        
-        // Improve touch scrolling
-        document.body.style.overflow = 'auto';
-        document.body.style.webkitOverflowScrolling = 'touch';
-        
-        // Add touch event listeners for better UX
-        document.querySelectorAll('button').forEach(btn => {
-            btn.addEventListener('touchstart', function() {
-                this.style.opacity = '0.7';
-            });
-            btn.addEventListener('touchend', function() {
-                this.style.opacity = '1';
-            });
-        });
-    }
-}
-
-// ====================
-// LOCALSTORAGE FUNCTIONS (MOBILE SAFE)
-// ====================
 function loadData() {
-    try {
-        // Check if localStorage is available
-        if (typeof localStorage === 'undefined') {
-            console.error("localStorage not available");
-            alert("Local storage not supported. Data will not be saved.");
-            return;
-        }
-        
-        // Load products
-        const productsData = localStorage.getItem("products");
-        if (productsData) {
-            products = JSON.parse(productsData);
-            if (!Array.isArray(products)) {
-                products = [];
-            }
-        } else {
-            products = [];
-        }
-        
-        // Load cart
-        const cartData = localStorage.getItem("cart");
-        if (cartData) {
-            cart = JSON.parse(cartData);
-            if (!Array.isArray(cart)) cart = [];
-        } else {
-            cart = [];
-        }
-        
-        // Load orders
-        const ordersData = localStorage.getItem("orders");
-        if (ordersData) {
-            orders = JSON.parse(ordersData);
-            if (!Array.isArray(orders)) orders = [];
-        } else {
-            orders = [];
-        }
-        
-        // Load admin states
-        isAdmin = localStorage.getItem("admin") === "true";
-        adminUnlocked = localStorage.getItem("adminUnlocked") === "true";
-        
-        console.log("Data loaded:", products.length, "products");
-        
-    } catch (error) {
-        console.error("Error loading data:", error);
-        // Initialize empty data
-        products = products || [];
-        cart = cart || [];
-        orders = orders || [];
-    }
+    console.log("Loading data from cookies...");
+    
+    // Load products
+    const productsData = getCookie("goad_products");
+    products = Array.isArray(productsData) ? productsData : [];
+    
+    // Load cart
+    const cartData = getCookie("goad_cart");
+    cart = Array.isArray(cartData) ? cartData : [];
+    
+    // Load orders
+    const ordersData = getCookie("goad_orders");
+    orders = Array.isArray(ordersData) ? ordersData : [];
+    
+    // Load admin states
+    isAdmin = getCookie("goad_admin") === true;
+    adminUnlocked = getCookie("goad_unlocked") === true;
+    
+    console.log("Loaded:", products.length, "products,", cart.length, "cart items,", orders.length, "orders");
+    console.log("Admin:", isAdmin, "Unlocked:", adminUnlocked);
 }
 
 function saveData() {
-    try {
-        localStorage.setItem("products", JSON.stringify(products));
-        localStorage.setItem("cart", JSON.stringify(cart));
-        localStorage.setItem("orders", JSON.stringify(orders));
-    } catch (error) {
-        console.error("Error saving data:", error);
+    console.log("Saving data to cookies...");
+    
+    // Save all data to cookies
+    setCookie("goad_products", products, 30);
+    setCookie("goad_cart", cart, 7);
+    setCookie("goad_orders", orders, 30);
+    
+    // Save admin states with shorter expiry
+    if (isAdmin) {
+        setCookie("goad_admin", true, 1); // 1 day for admin session
     }
+    if (adminUnlocked) {
+        setCookie("goad_unlocked", true, 7); // 7 days for unlock
+    }
+    
+    console.log("Data saved to cookies");
 }
 
-// Initialize admin credentials if not set
-if (!localStorage.getItem("adminPassword")) {
-    localStorage.setItem("adminPassword", "admin123");
+// Initialize admin password cookie
+if (!getCookie("goad_password")) {
+    setCookie("goad_password", "admin123", 365);
+    console.log("Initial admin password set");
 }
 
 // ====================
@@ -405,31 +395,24 @@ if (!localStorage.getItem("adminPassword")) {
 function showStore() {
     loadData();
     
-    // Hide admin, show store
     admin.classList.add("hidden");
     store.classList.remove("hidden");
     
-    // Re-render products
     render();
-    
     console.log("Store view shown");
 }
 
 function showAdmin() {
-    // Only show admin if properly authenticated AND unlocked
     if (!isAdmin || !adminUnlocked) {
         openAdmin();
         return;
     }
     
-    // Hide store, show admin
     store.classList.add("hidden");
     admin.classList.remove("hidden");
     
-    // Load admin data
     renderOrders();
     renderEditProducts();
-    
     console.log("Admin panel shown");
 }
 
@@ -453,9 +436,10 @@ function unlockAdmin() {
     
     if (password === SECRET_UNLOCK_PASSWORD) {
         adminUnlocked = true;
-        localStorage.setItem("adminUnlocked", "true");
+        setCookie("goad_unlocked", true, 7);
         adminBtn.style.display = "inline-block";
         alert("✓ Admin access unlocked!");
+        console.log("Admin unlocked");
     } else if (password) {
         alert("✗ Incorrect password!");
     }
@@ -512,20 +496,16 @@ imageInput.onchange = async (e) => {
         return;
     }
     
-    if (file.size > 5 * 1024 * 1024) {
-        showImageError("Image too large! Maximum size is 5MB");
+    if (file.size > 2 * 1024 * 1024) {
+        showImageError("Image too large! Maximum size is 2MB");
         return;
     }
     
     const reader = new FileReader();
     reader.onload = async () => {
-        const img = new Image();
-        img.onload = async () => {
-            preview.src = reader.result;
-            preview.classList.remove("hidden");
-            currentImageData = await resizeImage(reader.result, 600, 600);
-        };
-        img.src = reader.result;
+        preview.src = reader.result;
+        preview.classList.remove("hidden");
+        currentImageData = await resizeImage(reader.result, 400, 400); // Smaller for cookies
     };
     reader.readAsDataURL(file);
 };
@@ -538,7 +518,7 @@ function showImageError(message) {
     currentImageData = null;
 }
 
-async function resizeImage(base64, maxWidth = 600, maxHeight = 600) {
+async function resizeImage(base64, maxWidth = 400, maxHeight = 400) {
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
@@ -562,7 +542,8 @@ async function resizeImage(base64, maxWidth = 600, maxHeight = 600) {
             const ctx = canvas.getContext("2d");
             ctx.drawImage(img, 0, 0, width, height);
             
-            resolve(canvas.toDataURL("image/jpeg", 0.8));
+            // Lower quality to reduce size for cookies
+            resolve(canvas.toDataURL("image/jpeg", 0.7));
         };
         img.src = base64;
     });
@@ -575,13 +556,14 @@ async function resizeImage(base64, maxWidth = 600, maxHeight = 600) {
 function login() {
     const user = document.getElementById("user").value;
     const pass = document.getElementById("pass").value;
-    const storedPassword = localStorage.getItem("adminPassword");
+    const storedPassword = getCookie("goad_password");
     
     if (user === "admin" && pass === storedPassword) {
         isAdmin = true;
-        localStorage.setItem("admin", "true");
+        setCookie("goad_admin", true, 1);
         closeModal('loginModal');
         showAdmin();
+        console.log("Admin logged in");
     } else {
         alert("Invalid username or password");
     }
@@ -589,16 +571,17 @@ function login() {
 
 function logout() {
     isAdmin = false;
-    localStorage.removeItem("admin");
+    deleteCookie("goad_admin");
     showStore();
     resetForm();
+    console.log("Admin logged out");
 }
 
 function changePassword() {
     const oldPass = document.getElementById("oldPass").value;
     const newPass = document.getElementById("newPass").value;
     const confirmPass = document.getElementById("confirmPass").value;
-    const storedPassword = localStorage.getItem("adminPassword");
+    const storedPassword = getCookie("goad_password");
     
     passwordMessage.classList.add("hidden");
     
@@ -622,13 +605,14 @@ function changePassword() {
         return;
     }
     
-    localStorage.setItem("adminPassword", newPass);
+    setCookie("goad_password", newPass, 365);
     
     document.getElementById("oldPass").value = "";
     document.getElementById("newPass").value = "";
     document.getElementById("confirmPass").value = "";
     
     showPasswordMessage("Password changed successfully!", "success");
+    console.log("Password changed");
 }
 
 function showPasswordMessage(message, type) {
@@ -718,10 +702,7 @@ function deleteProduct(id) {
         return;
     }
     
-    // Remove from cart if present
     cart = cart.filter(item => item.id !== id);
-    
-    // Remove from products
     products = products.filter(p => p.id !== id);
     
     saveData();
@@ -777,11 +758,11 @@ function cancelEdit() {
 }
 
 // ====================
-// RENDER FUNCTIONS (MOBILE OPTIMIZED)
+// RENDER FUNCTIONS
 // ====================
 
 function render() {
-    console.log("Rendering products for mobile:", isMobile());
+    console.log("Rendering products...");
     
     if (!productGrid) {
         console.error("productGrid element not found!");
@@ -790,7 +771,6 @@ function render() {
     
     productGrid.innerHTML = "";
     
-    // Validate products array
     if (!Array.isArray(products)) {
         products = [];
     }
@@ -845,10 +825,11 @@ function render() {
     });
     
     updateCartCount();
+    console.log(`Rendered ${validProducts.length} products`);
 }
 
 function getDefaultImage() {
-    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjYwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiM5OTkiPk5vIEltYWdlPC90ZXh0Pjwvc3ZnPg==';
+    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiPk5vIEltYWdlPC90ZXh0Pjwvc3ZnPg==';
 }
 
 function renderCart() {
@@ -1078,7 +1059,7 @@ function sendOrder() {
     
     saveData();
     cart = [];
-    localStorage.removeItem("cart");
+    deleteCookie("goad_cart");
     loadData();
     updateCartCount();
     
@@ -1106,14 +1087,11 @@ function forceRefresh() {
 }
 
 // ====================
-// INITIALIZATION (MOBILE SAFE)
+// INITIALIZATION
 // ====================
 
 function init() {
-    console.log("Initializing store on mobile:", isMobile());
-    
-    // Setup mobile features
-    setupMobileFeatures();
+    console.log("Initializing Goad Kids Store...");
     
     // Initialize PayWay link
     const payText = document.getElementById("payText");
@@ -1143,6 +1121,8 @@ function init() {
     }
     
     console.log("Store initialized successfully");
+    console.log("Cookies enabled:", navigator.cookieEnabled);
+    console.log("Current cookies:", document.cookie);
 }
 
 // Initialize when everything is ready
@@ -1170,12 +1150,14 @@ document.addEventListener('visibilitychange', function() {
     }
 });
 
-// Handle orientation change on mobile
-window.addEventListener('orientationchange', function() {
-    setTimeout(function() {
-        render();
-    }, 300);
-});
+// Test cookie functionality
+function testCookies() {
+    console.log("Testing cookie functionality...");
+    const testData = { test: "cookie test", timestamp: Date.now() };
+    setCookie("test_cookie", testData, 1);
+    const retrieved = getCookie("test_cookie");
+    console.log("Cookie test - Set:", testData, "Got:", retrieved);
+}
 </script>
 </body>
 </html>
