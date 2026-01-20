@@ -1,26 +1,54 @@
-// sw.js - Service Worker for GOAT KIDS Store
-const CACHE_NAME = 'goat-kids-v1.0';
+// sw.js - Fixed Service Worker for GOAT KIDS
+const CACHE_NAME = 'goat-kids-v1.1';
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/favicon.ico'
+  './',                    // Current directory
+  './index.html',          // Your main HTML file
+  // Add other assets ONLY if they exist
 ];
 
 // Install event - cache assets
 self.addEventListener('install', event => {
+  console.log('📦 Service Worker: Installing...');
+  
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('📦 Caching app shell');
-        return cache.addAll(ASSETS_TO_CACHE);
+        console.log('📁 Attempting to cache:', ASSETS_TO_CACHE);
+        
+        // Use Promise.all to cache individually with error handling
+        return Promise.all(
+          ASSETS_TO_CACHE.map(url => {
+            return fetch(url)
+              .then(response => {
+                if (!response.ok) {
+                  throw new Error(`Failed to fetch ${url}: ${response.status}`);
+                }
+                return cache.put(url, response);
+              })
+              .catch(error => {
+                console.warn(`⚠️ Could not cache ${url}:`, error.message);
+                // Continue even if one file fails
+                return Promise.resolve();
+              });
+          })
+        );
       })
-      .then(() => self.skipWaiting())
+      .then(() => {
+        console.log('✅ All assets cached successfully');
+        return self.skipWaiting();
+      })
+      .catch(error => {
+        console.error('❌ Cache installation failed:', error);
+        // Don't fail the installation if caching fails
+        return self.skipWaiting();
+      })
   );
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
+  console.log('🔄 Service Worker: Activating...');
+  
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
@@ -31,52 +59,107 @@ self.addEventListener('activate', event => {
           }
         })
       );
-    }).then(() => self.clients.claim())
+    }).then(() => {
+      console.log('✅ Service Worker activated');
+      return self.clients.claim();
+    })
   );
 });
 
 // Fetch event - serve from cache or network
 self.addEventListener('fetch', event => {
-  // Skip non-GET requests and Chrome extensions
-  if (event.request.method !== 'GET' || 
-      event.request.url.startsWith('chrome-extension://')) {
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') {
     return;
   }
-
+  
+  // Skip Chrome extensions and external URLs
+  if (event.request.url.startsWith('chrome-extension://') ||
+      !event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+  
   event.respondWith(
     caches.match(event.request)
       .then(cachedResponse => {
         // Return cached response if found
         if (cachedResponse) {
+          console.log('📂 Serving from cache:', event.request.url);
           return cachedResponse;
         }
-
-        // Otherwise fetch from network
-        return fetch(event.request)
-          .then(networkResponse => {
-            // Don't cache if not a valid response
-            if (!networkResponse || 
-                networkResponse.status !== 200 || 
-                networkResponse.type !== 'basic') {
-              return networkResponse;
+        
+        console.log('🌐 Fetching from network:', event.request.url);
+        
+        // Clone the request
+        const fetchRequest = event.request.clone();
+        
+        return fetch(fetchRequest)
+          .then(response => {
+            // Check if valid response
+            if (!response || response.status !== 200 || response.type !== 'basic') {
+              return response;
             }
-
-            // Clone and cache the response
-            const responseToCache = networkResponse.clone();
+            
+            // Clone the response
+            const responseToCache = response.clone();
+            
+            // Cache the response
             caches.open(CACHE_NAME)
               .then(cache => {
                 cache.put(event.request, responseToCache);
+                console.log('💾 Cached new resource:', event.request.url);
               });
-
-            return networkResponse;
+            
+            return response;
           })
-          .catch(() => {
-            // If network fails and no cache, you could return a fallback
-            return new Response('Offline - Please check your connection', {
-              status: 503,
-              headers: { 'Content-Type': 'text/plain' }
+          .catch(error => {
+            console.error('❌ Network fetch failed:', error.message);
+            
+            // You could return a custom offline page here
+            if (event.request.url.includes('.html')) {
+              return caches.match('./index.html');
+            }
+            
+            // Return a simple offline message for other requests
+            return new Response(`
+              <!DOCTYPE html>
+              <html>
+                <head>
+                  <title>Offline - GOAT KIDS</title>
+                  <style>
+                    body { 
+                      font-family: Arial, sans-serif; 
+                      text-align: center; 
+                      padding: 50px; 
+                      background: #f5f7ff;
+                      color: #2d3436;
+                    }
+                    h1 { color: #4a6ee0; }
+                  </style>
+                </head>
+                <body>
+                  <h1>🐐 GOAT KIDS</h1>
+                  <h2>You're Offline</h2>
+                  <p>Please check your internet connection and try again.</p>
+                  <button onclick="window.location.reload()">Retry</button>
+                </body>
+              </html>
+            `, {
+              headers: { 'Content-Type': 'text/html' }
             });
           });
       })
   );
+});
+
+// Message handling
+self.addEventListener('message', event => {
+  if (event.data === 'skipWaiting') {
+    self.skipWaiting();
+  }
+});
+
+// Error handling
+self.addEventListener('error', error => {
+  console.error('Service Worker Error:', error);
 });
