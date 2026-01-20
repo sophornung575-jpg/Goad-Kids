@@ -2783,7 +2783,7 @@
             }, 5000);
         }
 
-        // ===================================================
+ // ===================================================
 // CROSS-BROWSER COMPATIBILITY ENHANCEMENTS
 // ====================================================
 
@@ -2808,61 +2808,221 @@ function ensureLocalStorage() {
     }
 }
 
-// Safari specific fixes
+// ===================================================
+// BROWSER DETECTION & FIXES
+// ===================================================
+
+// Safari detection - this regex is CORRECT
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+// Apply Safari-specific fixes
 if (isSafari) {
-    // Fix for Safari flexbox issues
-    document.documentElement.style.setProperty('--safari-fix', '1');
+    console.log('🔍 Safari browser detected - applying fixes');
+    
+    // Add Safari class to body for CSS targeting
+    document.body.classList.add('browser-safari');
+    
+    // Fix 1: Mobile Safari 100vh issue
+    function fixSafariViewportHeight() {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
+    
+    fixSafariViewportHeight();
+    window.addEventListener('resize', fixSafariViewportHeight);
+    window.addEventListener('orientationchange', fixSafariViewportHeight);
+    
+    // Fix 2: Input/textarea styling in Safari
+    const safariStyleFix = document.createElement('style');
+    safariStyleFix.textContent = `
+        /* Safari input fixes */
+        .browser-safari input[type="text"],
+        .browser-safari input[type="number"],
+        .browser-safari input[type="tel"],
+        .browser-safari input[type="email"],
+        .browser-safari textarea,
+        .browser-safari select {
+            -webkit-appearance: none;
+            appearance: none;
+            border-radius: var(--radius-sm);
+            padding: 12px 15px !important;
+        }
+        
+        /* Fix Safari button rendering */
+        .browser-safari button {
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        
+        /* Fix for Safari's date/time inputs */
+        .browser-safari input[type="date"],
+        .browser-safari input[type="time"] {
+            min-height: 44px; /* Better touch target */
+        }
+        
+        /* Fix Safari flexbox gap for older versions */
+        @supports not (gap: 1rem) {
+            .browser-safari .product-grid {
+                margin: -12.5px;
+            }
+            .browser-safari .product-card {
+                margin: 12.5px;
+            }
+        }
+        
+        /* Fix for Safari's 100vh issue on mobile */
+        .browser-safari .full-height {
+            height: calc(var(--vh, 1vh) * 100);
+        }
+    `;
+    document.head.appendChild(safariStyleFix);
+    
+    // Fix 3: Safari smooth scrolling behavior
+    if (CSS.supports('scroll-behavior', 'smooth')) {
+        document.documentElement.style.setProperty('--safari-scroll', 'smooth');
+    }
+    
+    // Fix 4: Safari localStorage quirks (sometimes needs a delay)
+    setTimeout(() => {
+        if (typeof localStorage !== 'undefined') {
+            try {
+                localStorage.setItem('safari_test', 'ok');
+                localStorage.removeItem('safari_test');
+            } catch (e) {
+                console.warn('Safari localStorage issue detected');
+            }
+        }
+    }, 100);
+}
+
+// Additional browser detection
+const isChrome = /chrome|chromium|crios/i.test(navigator.userAgent);
+const isFirefox = /firefox|fxios/i.test(navigator.userAgent);
+const isEdge = /edg/i.test(navigator.userAgent);
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isAndroid = /android/i.test(navigator.userAgent);
+
+// iOS-specific fixes
+if (isIOS) {
+    document.body.classList.add('platform-ios');
+    
+    // Fix for iOS zoom on input focus
+    const iOSStyleFix = document.createElement('style');
+    iOSStyleFix.textContent = `
+        @media screen and (max-width: 768px) {
+            .platform-ios input,
+            .platform-ios textarea,
+            .platform-ios select {
+                font-size: 16px !important; /* Prevents iOS zoom */
+            }
+        }
+        
+        /* Fix iOS button active states */
+        .platform-ios button:active {
+            opacity: 0.7;
+        }
+    `;
+    document.head.appendChild(iOSStyleFix);
+}
+
+// Android-specific fixes
+if (isAndroid && !isChrome) {
+    document.body.classList.add('platform-android');
+    
+    // Fix for Android WebView rendering issues
+    const androidStyleFix = document.createElement('style');
+    androidStyleFix.textContent = `
+        .platform-android .modal-content {
+            -webkit-transform: translateZ(0);
+            transform: translateZ(0);
+        }
+    `;
+    document.head.appendChild(androidStyleFix);
 }
 
 // Facebook in-app browser detection
-const isFacebook = /FBAN|FBAV/i.test(navigator.userAgent);
-if (isFacebook) {
-    // Add specific styles for Facebook browser
-    document.body.classList.add('facebook-browser');
-}
-
-// Make sure links work in all browsers
-document.addEventListener('click', function(e) {
-    if (e.target.matches('a[href^="http"]')) {
-        e.preventDefault();
-        window.open(e.target.href, '_blank');
-    }
-});
-    // Safari specific fixes
-const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-if (isSafari) {
-    // Fix for Safari flexbox issues
-    document.documentElement.style.setProperty('--safari-fix', '1');
-    console.log('Safari browser detected - applying fixes');
+const isFacebookApp = /FBAN|FBAV/i.test(navigator.userAgent);
+if (isFacebookApp) {
+    document.body.classList.add('browser-facebook');
+    console.log('📱 Facebook in-app browser detected');
     
-    // Additional Safari-specific fixes
-    // Fix for Safari 100vh issue
-    document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
-    window.addEventListener('resize', () => {
-        document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
-    });
-    
-    // Fix for Safari input styling
-    const style = document.createElement('style');
-    style.textContent = `
-        /* Safari input fixes */
-        input[type="text"], 
-        input[type="number"], 
-        input[type="tel"], 
-        textarea, 
-        select {
-            -webkit-appearance: none;
-            border-radius: var(--radius-sm);
+    // Fix for Facebook browser issues
+    const fbStyleFix = document.createElement('style');
+    fbStyleFix.textContent = `
+        .browser-facebook {
+            /* Facebook browser specific fixes */
         }
         
-        /* Fix for Safari button rendering */
-        button {
-            -webkit-appearance: none;
+        /* Fix Facebook browser's aggressive caching */
+        .browser-facebook .product-image {
+            image-rendering: -webkit-optimize-contrast;
         }
     `;
-    document.head.appendChild(style);
+    document.head.appendChild(fbStyleFix);
 }
+
+// Feature detection fallbacks
+function detectBrowserFeatures() {
+    const features = {
+        hasLocalStorage: typeof localStorage !== 'undefined',
+        hasSessionStorage: typeof sessionStorage !== 'undefined',
+        hasTouch: 'ontouchstart' in window || navigator.maxTouchPoints > 0,
+        hasGeolocation: 'geolocation' in navigator,
+        hasServiceWorker: 'serviceWorker' in navigator,
+        supportsFlexGap: CSS.supports('gap', '1px'),
+        supportsGrid: CSS.supports('display', 'grid'),
+        supportsSticky: CSS.supports('position', 'sticky'),
+        supportsObjectFit: CSS.supports('object-fit', 'cover')
+    };
+    
+    // Apply polyfills or fallbacks based on feature detection
+    if (!features.supportsFlexGap) {
+        console.log('⚠️ Flexbox gap not supported, applying fallback');
+        // You could add a fallback CSS class here
+    }
+    
+    if (!features.supportsObjectFit) {
+        console.log('⚠️ object-fit not supported, applying fallback');
+        document.querySelectorAll('img[style*="object-fit"]').forEach(img => {
+            img.style.backgroundImage = `url(${img.src})`;
+            img.style.backgroundSize = 'cover';
+            img.style.backgroundPosition = 'center';
+            img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>';
+        });
+    }
+    
+    return features;
+}
+
+// Initialize browser features detection
+document.addEventListener('DOMContentLoaded', function() {
+    const browserFeatures = detectBrowserFeatures();
+    
+    // Store features for debugging
+    window.browserFeatures = browserFeatures;
+    
+    // Show warning for critical missing features
+    if (!browserFeatures.hasLocalStorage) {
+        console.error('❌ localStorage not available - cart and admin features will not persist');
+        showMessage('Your browser settings may limit some features. Please enable cookies and site data.', 'warning');
+    }
+});
+
+// Global helper to check browser
+window.getBrowserInfo = function() {
+    return {
+        isSafari,
+        isChrome,
+        isFirefox,
+        isEdge,
+        isIOS,
+        isAndroid,
+        isFacebookApp,
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        language: navigator.language
+    };
+};
         // Facebook in-app browser detection
         const isFacebook = /FBAN|FBAV/i.test(navigator.userAgent);
         if (isFacebook) {
@@ -2880,6 +3040,7 @@ if (isSafari) {
     </script>
 </body>
 </html>
+
 
 
 
