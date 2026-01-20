@@ -108,35 +108,41 @@
             });
         }
 
-        // ============================================
-        // SERVICE WORKER REGISTRATION (FIXED VERSION)
-        // ============================================
-        function registerServiceWorker() {
-            // Check if Service Worker is supported
-            if (!('serviceWorker' in navigator)) {
-                console.log('Service Worker not supported');
-                return;
-            }
-            
-            // Only register on secure origins (HTTPS or localhost)
-            if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-                console.log('Service Worker requires HTTPS');
-                return;
-            }
-            
-            // Register with error handling
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('sw.js')
-                    .then(function(registration) {
-                        console.log('Service Worker registered with scope:', registration.scope);
-                    })
-                    .catch(function(error) {
-                        console.log('Service Worker registration failed:', error);
-                        // Don't show error to user - it's optional
-                    });
-            });
+       // ============================================
+// SERVICE WORKER REGISTRATION (FIXED FOR GITHUB PAGES)
+// ============================================
+function registerServiceWorker() {
+    // Check if Service Worker is supported
+    if (!('serviceWorker' in navigator)) {
+        console.log('Service Worker not supported');
+        return;
+    }
+    
+    // Check if we're on GitHub Pages
+    const isGitHubPages = window.location.hostname.includes('github.io');
+    
+    // Determine the correct path for Service Worker
+    let swPath = '/sw.js';
+    if (isGitHubPages) {
+        // For GitHub Pages project sites
+        const repoName = window.location.pathname.split('/')[1];
+        if (repoName && repoName !== '') {
+            swPath = '/' + repoName + '/sw.js';
         }
-
+    }
+    
+    // Register Service Worker
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register(swPath)
+            .then(function(registration) {
+                console.log('✅ Service Worker registered successfully:', registration.scope);
+            })
+            .catch(function(error) {
+                console.log('⚠️ Service Worker registration failed:', error);
+                // Silently fail - Service Worker is optional
+            });
+    });
+}
         // ============================================
         // TAB NAVIGATION
         // ============================================
@@ -793,4 +799,5 @@
     </script>
 </body>
 </html>
+
 
