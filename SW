@@ -1,0 +1,79 @@
+// sw.js - Service Worker for GOAT KIDS Store
+const CACHE_NAME = 'goat-kids-v1';
+const urlsToCache = [
+  './',
+  './index.html'
+];
+
+// Install Service Worker
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => {
+        console.log('[ServiceWorker] Caching app shell');
+        return cache.addAll(urlsToCache);
+      })
+      .catch(error => {
+        console.error('[ServiceWorker] Cache addAll error:', error);
+      })
+  );
+});
+
+// Activate Service Worker
+self.addEventListener('activate', event => {
+  console.log('[ServiceWorker] Activated');
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('[ServiceWorker] Removing old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+});
+
+// Fetch event - Serve from cache, fall back to network
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => {
+        // Return cached version
+        if (response) {
+          return response;
+        }
+        
+        // Clone the request
+        const fetchRequest = event.request.clone();
+        
+        // Try network
+        return fetch(fetchRequest)
+          .then(response => {
+            // Check if valid response
+            if (!response || response.status !== 200 || response.type !== 'basic') {
+              return response;
+            }
+            
+            // Clone the response
+            const responseToCache = response.clone();
+            
+            // Cache the new response
+            caches.open(CACHE_NAME)
+              .then(cache => {
+                cache.put(event.request, responseToCache);
+              });
+            
+            return response;
+          })
+          .catch(() => {
+            // If offline and request is for HTML, return cached index.html
+            if (event.request.mode === 'navigate') {
+              return caches.match('./index.html');
+            }
+          });
+      })
+  );
+});
