@@ -1335,48 +1335,10 @@
     <!-- Main Content -->
     <main class="container">
         <!-- Store Tab -->
-<div id="mobileAdminForm" style="display: none; background: white; padding: 20px; border-radius: var(--radius); margin-top: 30px; box-shadow: var(--shadow);">
-    <h3 style="color: var(--primary); margin-bottom: 15px;">
-        <i class="fas fa-lock"></i> Admin Access
-    </h3>
-    
-    <div class="form-group">
-        <input type="password" id="mobileAdminPassword" class="form-control" placeholder="Enter admin password" style="width: 100%;">
-    </div>
-    
-    <div class="btn-group" style="display: flex; gap: 10px;">
-        <button onclick="mobileAdminLogin()" class="btn btn-primary" style="flex: 1;">
-            <i class="fas fa-sign-in-alt"></i> Login
-        </button>
-        <button onclick="document.getElementById('mobileAdminForm').style.display='none'" class="btn btn-outline">
-            Cancel
-        </button>
-    </div>
-</div>
-
-<!-- Add admin access button -->
-<div style="text-align: center; margin: 20px 0;">
-    <button onclick="document.getElementById('mobileAdminForm').style.display='block'" 
-            style="background: var(--accent); color: white; padding: 10px 20px; border: none; border-radius: 50px; font-size: 0.9rem;">
-        <i class="fas fa-user-shield"></i> Admin Access
-    </button>
-</div>
-
-<script>
-function mobileAdminLogin() {
-    const password = document.getElementById('mobileAdminPassword').value;
-    if (password === 'admin123') {
-        isAdmin = true;
-        localStorage.setItem('goatKidsAdmin', 'true');
-        checkAdminStatus();
-        showTab('admin');
-        document.getElementById('mobileAdminForm').style.display = 'none';
-        showMessage('Admin login successful!', 'success');
-    } else {
-        showMessage('Incorrect password!', 'error');
-    }
-}
-</script>
+        <div id="storeTab" class="tab-content active">
+            <div class="store-header">
+                <h1>Children's Clothing Store</h1>
+                <p>High-quality, comfortable clothing for kids of all ages</p>
             </div>
             
             <!-- Search & Filter -->
@@ -1413,6 +1375,43 @@ function mobileAdminLogin() {
             <div class="product-grid" id="productGrid">
                 <!-- Products loaded by JavaScript -->
             </div>
+            
+            <!-- ============== MOBILE ADMIN ACCESS FORM ============== -->
+            <div id="mobileAdminForm" style="display: none; background: white; padding: 25px; border-radius: var(--radius); margin-top: 40px; box-shadow: var(--shadow);">
+                <h3 style="color: var(--primary); margin-bottom: 20px; text-align: center;">
+                    <i class="fas fa-user-shield"></i> Admin Access
+                </h3>
+                
+                <div class="form-group">
+                    <input type="password" id="mobileAdminPassword" class="form-control" placeholder="Enter admin password" style="width: 100%; padding: 15px; font-size: 16px;">
+                </div>
+                
+                <div class="btn-group" style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button onclick="mobileAdminLogin()" class="btn btn-primary" style="flex: 1; padding: 15px; font-size: 16px;">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                    <button onclick="document.getElementById('mobileAdminForm').style.display='none'" class="btn btn-outline" style="padding: 15px;">
+                        Cancel
+                    </button>
+                </div>
+                
+                <p style="color: var(--gray); font-size: 0.9rem; margin-top: 15px; text-align: center;">
+                    <i class="fas fa-info-circle"></i> Default password: admin123
+                </p>
+            </div>
+            
+            <!-- Admin Access Button (Always visible on mobile) -->
+            <div style="text-align: center; margin: 40px 0 20px;">
+                <button onclick="toggleAdminForm()" 
+                        style="background: var(--accent); color: white; padding: 15px 30px; border: none; border-radius: 50px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: var(--transition);">
+                    <i class="fas fa-user-shield"></i> Admin Panel Access
+                </button>
+                
+                <p style="color: var(--gray); font-size: 0.9rem; margin-top: 10px;">
+                    For store management and product updates
+                </p>
+            </div>
+            <!-- ============== END MOBILE ADMIN ACCESS ============== -->
         </div>
         
         <!-- Cart Tab -->
@@ -1812,6 +1811,12 @@ function mobileAdminLogin() {
                     }
                 }, 1000);
                 
+                // Auto-show admin form on mobile
+                if (window.innerWidth <= 768) {
+                    // Show admin button more prominently on mobile
+                    document.querySelector('button[onclick="toggleAdminForm()"]').style.display = 'block';
+                }
+                
             } catch (error) {
                 console.error('Initialization error:', error);
                 showMessage('Initialization error. Please refresh the page.', 'error');
@@ -1864,6 +1869,16 @@ function mobileAdminLogin() {
                     pasteLinkInput.addEventListener('keypress', function(e) {
                         if (e.key === 'Enter') {
                             applyShareLink();
+                        }
+                    });
+                }
+                
+                // Mobile admin password input
+                const mobileAdminPassword = document.getElementById('mobileAdminPassword');
+                if (mobileAdminPassword) {
+                    mobileAdminPassword.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            mobileAdminLogin();
                         }
                     });
                 }
@@ -1930,9 +1945,6 @@ function mobileAdminLogin() {
         function checkAdminStatus() {
             try {
                 const adminElements = document.querySelectorAll('#adminNavLink, #adminNavLinkMobile');
-                #adminNavLinkMobile {
-                display: flex !important;
-        }
                 adminElements.forEach(el => {
                     if (el) el.style.display = isAdmin ? 'flex' : 'none';
                 });
@@ -1970,6 +1982,47 @@ function mobileAdminLogin() {
                 showMessage('Admin logged out.', 'info');
             } catch (error) {
                 console.error('Admin logout error:', error);
+            }
+        }
+
+        // ============================================
+        // MOBILE ADMIN FUNCTIONS
+        // ============================================
+        function toggleAdminForm() {
+            const form = document.getElementById('mobileAdminForm');
+            if (form.style.display === 'none' || form.style.display === '') {
+                form.style.display = 'block';
+                // Scroll to form
+                form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Focus on password field
+                document.getElementById('mobileAdminPassword').focus();
+            } else {
+                form.style.display = 'none';
+            }
+        }
+
+        function mobileAdminLogin() {
+            try {
+                const passwordInput = document.getElementById('mobileAdminPassword');
+                if (!passwordInput) return;
+                
+                const password = passwordInput.value;
+                if (password === 'admin123') {
+                    isAdmin = true;
+                    localStorage.setItem('goatKidsAdmin', 'true');
+                    checkAdminStatus();
+                    showTab('admin');
+                    passwordInput.value = '';
+                    document.getElementById('mobileAdminForm').style.display = 'none';
+                    showMessage('Admin login successful!', 'success');
+                } else {
+                    showMessage('Incorrect password!', 'error');
+                    passwordInput.focus();
+                    passwordInput.select();
+                }
+            } catch (error) {
+                console.error('Mobile admin login error:', error);
+                showMessage('Login error', 'error');
             }
         }
 
@@ -3322,6 +3375,3 @@ function mobileAdminLogin() {
     </script>
 </body>
 </html>
-
-
-
