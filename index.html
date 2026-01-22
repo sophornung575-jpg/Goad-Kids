@@ -1571,39 +1571,45 @@
                     </button>
                 </div>
                 
+                <!-- ============== SYNC SECTION ============== -->
+                <div class="section-title">Sync Products Across Browsers</div>
+                
+                <div class="form-group">
+                    <label class="form-label" style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--dark);">
+                        Share Link (Copy from Browser 1):
+                    </label>
+                    <textarea id="shareLink" class="form-control" rows="4" readonly placeholder="Share link will appear here..." style="font-family: monospace; resize: vertical; width: 100%; padding: 12px; border: 2px solid var(--gray-light); border-radius: var(--radius-sm);"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--dark);">
+                        Paste Link Here (In Browser 2):
+                    </label>
+                    <input type="text" id="pasteLink" class="form-control" placeholder="Paste share link here..." style="width: 100%; padding: 12px; border: 2px solid var(--gray-light); border-radius: var(--radius-sm);">
+                </div>
+                
+                <div class="btn-group">
+                    <button class="btn-admin btn-blue" onclick="generateShareLink()">
+                        <i class="fas fa-link"></i> Generate Share Link
+                    </button>
+                    <button class="btn-admin btn-green" onclick="applyShareLink()">
+                        <i class="fas fa-check-circle"></i> Apply Share Link
+                    </button>
+                    <button class="btn-admin btn-warning" onclick="copyShareLink()">
+                        <i class="fas fa-copy"></i> Copy Link
+                    </button>
+                </div>
+                
+                <p style="color: var(--gray); font-size: 0.9rem; margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: var(--radius-sm);">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>How to sync:</strong><br>
+                    1. In first browser: Click "Generate Share Link" → Copy<br>
+                    2. In other browser: Paste link → Click "Apply Share Link"
+                </p>
+                <!-- ============== END SYNC SECTION ============== -->
+                
                 <!-- Inventory -->
                 <div class="section-title">Current Inventory (<span id="productCount">0</span> products)</div>
-                <!-- Data Sync Section -->
-<div class="section-title">Sync Products Across Browsers</div>
-
-<div class="form-group">
-    <label class="form-label">Share Link (Copy from Browser 1):</label>
-    <textarea id="shareLink" class="form-control" rows="4" readonly placeholder="Share link will appear here..." style="font-family: monospace; resize: vertical;"></textarea>
-</div>
-
-<div class="form-group">
-    <label class="form-label">Paste Link Here (In Browser 2):</label>
-    <input type="text" id="pasteLink" class="form-control" placeholder="Paste share link here...">
-</div>
-
-<div class="btn-group">
-    <button class="btn-admin btn-blue" onclick="generateShareLink()">
-        <i class="fas fa-link"></i> Generate Share Link
-    </button>
-    <button class="btn-admin btn-green" onclick="applyShareLink()">
-        <i class="fas fa-check-circle"></i> Apply Share Link
-    </button>
-    <button class="btn-admin btn-warning" onclick="copyShareLink()">
-        <i class="fas fa-copy"></i> Copy Link
-    </button>
-</div>
-
-<p style="color: var(--gray); font-size: 0.9rem; margin-top: 15px;">
-    <i class="fas fa-info-circle"></i> 
-    <strong>How to sync:</strong><br>
-    1. In first browser: Click "Generate Share Link" → Copy<br>
-    2. In other browser: Paste link → Click "Apply Share Link"
-</p>
                 
                 <div class="btn-group">
                     <button class="btn-admin btn-blue" onclick="exportInventory()">
@@ -1741,12 +1747,11 @@
         };
 
         // ============================================
-        // INITIALIZATION - FIXED FOR ALL BROWSERS
+        // INITIALIZATION
         // ============================================
         document.addEventListener('DOMContentLoaded', function() {
             console.log('GOAT KIDS Store Initializing...');
             
-            // Initialize with fallbacks for all browsers
             try {
                 // Load data
                 loadProducts();
@@ -1761,8 +1766,13 @@
                 // Show store tab by default
                 showTab('store');
                 
-                // Browser compatibility check
-                checkBrowserCompatibility();
+                // Welcome message
+                setTimeout(() => {
+                    if (!localStorage.getItem('goatKidsWelcomeShown')) {
+                        showMessage('Welcome to GOAT KIDS Store!', 'info');
+                        localStorage.setItem('goatKidsWelcomeShown', 'true');
+                    }
+                }, 1000);
                 
             } catch (error) {
                 console.error('Initialization error:', error);
@@ -1810,28 +1820,18 @@
                 // Payment method selection
                 selectPayment('payway');
                 
+                // Auto-apply share link when Enter is pressed
+                const pasteLinkInput = document.getElementById('pasteLink');
+                if (pasteLinkInput) {
+                    pasteLinkInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            applyShareLink();
+                        }
+                    });
+                }
+                
             } catch (error) {
                 console.error('Event listener setup error:', error);
-            }
-        }
-
-        function checkBrowserCompatibility() {
-            // Check for localStorage support
-            if (typeof localStorage === 'undefined') {
-                showMessage('Your browser does not support local storage. Cart and admin features will not persist.', 'warning');
-            }
-            
-            // Check for modern JavaScript features
-            const features = {
-                arrowFunctions: typeof (() => {}) === 'function',
-                templateLiterals: typeof `${'test'}` === 'string',
-                letConst: true, // Most modern browsers support let/const
-                fetch: typeof fetch === 'function',
-                promise: typeof Promise !== 'undefined'
-            };
-            
-            if (!features.arrowFunctions || !features.templateLiterals) {
-                console.warn('Browser may not fully support ES6 features');
             }
         }
 
@@ -1846,7 +1846,7 @@
         }
 
         // ============================================
-        // TAB NAVIGATION - FIXED
+        // TAB NAVIGATION
         // ============================================
         function showTab(tabName) {
             try {
@@ -1887,7 +1887,7 @@
         }
 
         // ============================================
-        // ADMIN FUNCTIONS - FIXED
+        // ADMIN FUNCTIONS
         // ============================================
         function checkAdminStatus() {
             try {
@@ -1933,7 +1933,7 @@
         }
 
         // ============================================
-        // PRODUCT MANAGEMENT - FIXED
+        // PRODUCT MANAGEMENT
         // ============================================
         function loadProducts() {
             try {
@@ -2121,7 +2121,7 @@
         }
 
         // ============================================
-        // CART FUNCTIONS - FIXED
+        // CART FUNCTIONS
         // ============================================
         function loadCart() {
             try {
@@ -2307,7 +2307,7 @@
         }
 
         // ============================================
-        // PAYMENT FUNCTIONS - FIXED
+        // PAYMENT FUNCTIONS
         // ============================================
         function selectPayment(method) {
             try {
@@ -2374,7 +2374,7 @@
         }
 
         // ============================================
-        // ORDER PROCESSING - FIXED
+        // ORDER PROCESSING
         // ============================================
         function validateCheckoutForm() {
             try {
@@ -2541,7 +2541,7 @@
         }
 
         // ============================================
-        // ADMIN INVENTORY FUNCTIONS - FIXED
+        // ADMIN INVENTORY FUNCTIONS
         // ============================================
         function refreshInventory() {
             try {
@@ -2784,7 +2784,7 @@
         }
 
         // ============================================
-        // PHOTO MANAGEMENT - FIXED
+        // PHOTO MANAGEMENT
         // ============================================
         function handlePhotoUpload(event) {
             try {
@@ -2963,7 +2963,164 @@
         }
 
         // ============================================
-        // UTILITY FUNCTIONS - FIXED
+        // SHARE LINK FUNCTIONS (SIMPLE COPY-PASTE)
+        // ============================================
+
+        function generateShareLink() {
+            try {
+                // Prepare data for sharing
+                const shareData = {
+                    products: products,
+                    timestamp: new Date().toISOString(),
+                    version: '1.0'
+                };
+                
+                // Convert to JSON string
+                const jsonString = JSON.stringify(shareData);
+                
+                // Compress to make URL shorter (using Base64)
+                const compressedData = btoa(encodeURIComponent(jsonString));
+                
+                // Create shareable link
+                const shareLink = `GOATKIDS-SYNC:${compressedData}`;
+                
+                // Display in textarea
+                const shareLinkElement = document.getElementById('shareLink');
+                if (shareLinkElement) {
+                    shareLinkElement.value = shareLink;
+                }
+                
+                // Also copy to clipboard automatically
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(shareLink);
+                    showMessage('Share link generated and copied to clipboard!', 'success');
+                } else {
+                    showMessage('Share link generated! Copy it from the box.', 'success');
+                }
+                
+                return shareLink;
+                
+            } catch (error) {
+                console.error('Error generating share link:', error);
+                showMessage('Error generating share link', 'error');
+                return null;
+            }
+        }
+
+        function applyShareLink() {
+            try {
+                const pasteLinkElement = document.getElementById('pasteLink');
+                if (!pasteLinkElement || !pasteLinkElement.value.trim()) {
+                    showMessage('Please paste a share link first', 'error');
+                    return;
+                }
+                
+                const shareLink = pasteLinkElement.value.trim();
+                
+                // Extract the data part
+                let dataPart = shareLink;
+                
+                // Handle different formats
+                if (shareLink.includes('GOATKIDS-SYNC:')) {
+                    dataPart = shareLink.split('GOATKIDS-SYNC:')[1];
+                }
+                
+                // Decode the data
+                const jsonString = decodeURIComponent(atob(dataPart));
+                const importedData = JSON.parse(jsonString);
+                
+                // Validate the data
+                if (!importedData.products || !Array.isArray(importedData.products)) {
+                    showMessage('Invalid share link format', 'error');
+                    return;
+                }
+                
+                // Ask for confirmation
+                if (!confirm(`Apply ${importedData.products.length} products from share link? This will replace your current products.`)) {
+                    return;
+                }
+                
+                // Replace all products
+                products = importedData.products;
+                
+                // Save to localStorage
+                saveProducts();
+                
+                // Update UI
+                renderProducts();
+                refreshInventory();
+                
+                // Clear the input field
+                pasteLinkElement.value = '';
+                
+                // Show success message
+                showMessage(`Successfully imported ${products.length} products!`, 'success');
+                
+            } catch (error) {
+                console.error('Error applying share link:', error);
+                showMessage('Invalid share link. Please check and try again.', 'error');
+            }
+        }
+
+        function copyShareLink() {
+            try {
+                const shareLinkElement = document.getElementById('shareLink');
+                if (!shareLinkElement || !shareLinkElement.value.trim()) {
+                    showMessage('Generate a share link first', 'error');
+                    return;
+                }
+                
+                const shareLink = shareLinkElement.value;
+                
+                // Try modern clipboard API first
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(shareLink)
+                        .then(() => {
+                            showMessage('Share link copied to clipboard!', 'success');
+                        })
+                        .catch(err => {
+                            // Fallback to old method
+                            copyUsingOldMethod(shareLink);
+                        });
+                } else {
+                    // Use old method
+                    copyUsingOldMethod(shareLink);
+                }
+                
+            } catch (error) {
+                console.error('Error copying share link:', error);
+                showMessage('Error copying link', 'error');
+            }
+        }
+
+        function copyUsingOldMethod(text) {
+            try {
+                // Create temporary textarea
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                
+                // Copy
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                if (successful) {
+                    showMessage('Share link copied to clipboard!', 'success');
+                } else {
+                    showMessage('Failed to copy. Please select and copy manually.', 'warning');
+                }
+            } catch (error) {
+                showMessage('Failed to copy. Please select and copy manually.', 'warning');
+            }
+        }
+
+        // ============================================
+        // UTILITY FUNCTIONS
         // ============================================
         function showMessage(text, type = 'info') {
             try {
@@ -3024,6 +3181,24 @@
                 if (modal) modal.style.display = 'none';
             } catch (error) {
                 console.error('Error closing order modal:', error);
+            }
+        }
+
+        function confirmPhotoSelection() {
+            try {
+                const selectedImageUrl = document.getElementById('selectedImageUrl');
+                if (selectedImageUrl && selectedImageUrl.value.trim()) {
+                    selectedPhotoForProduct = selectedImageUrl.value.trim();
+                }
+                
+                if (selectedPhotoForProduct) {
+                    const productImageUrl = document.getElementById('productImageUrl');
+                    if (productImageUrl) productImageUrl.value = selectedPhotoForProduct;
+                }
+                
+                closePhotoSelector();
+            } catch (error) {
+                console.error('Error confirming photo selection:', error);
             }
         }
 
@@ -3104,235 +3279,5 @@
         // Initialize the app
         console.log('GOAT KIDS Store Ready!');
     </script>
-// ============================================
-// SHARE LINK FUNCTIONS (Simple Copy-Paste)
-// ============================================
-
-function generateShareLink() {
-    try {
-        // Prepare data for sharing
-        const shareData = {
-            products: products,
-            timestamp: new Date().toISOString(),
-            version: '1.0'
-        };
-        
-        // Convert to JSON string
-        const jsonString = JSON.stringify(shareData);
-        
-        // Compress to make URL shorter (using Base64)
-        const compressedData = btoa(encodeURIComponent(jsonString));
-        
-        // Create shareable link
-        // Using a simple hash method instead of URL parameters
-        const shareLink = `GOATKIDS-SYNC:${compressedData}`;
-        
-        // Display in textarea
-        const shareLinkElement = document.getElementById('shareLink');
-        if (shareLinkElement) {
-            shareLinkElement.value = shareLink;
-        }
-        
-        // Also copy to clipboard automatically
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(shareLink);
-            showMessage('Share link generated and copied to clipboard!', 'success');
-        } else {
-            showMessage('Share link generated! Copy it from the box.', 'success');
-        }
-        
-        return shareLink;
-        
-    } catch (error) {
-        console.error('Error generating share link:', error);
-        showMessage('Error generating share link', 'error');
-        return null;
-    }
-}
-
-function applyShareLink() {
-    try {
-        const pasteLinkElement = document.getElementById('pasteLink');
-        if (!pasteLinkElement || !pasteLinkElement.value.trim()) {
-            showMessage('Please paste a share link first', 'error');
-            return;
-        }
-        
-        const shareLink = pasteLinkElement.value.trim();
-        
-        // Extract the data part
-        let dataPart = shareLink;
-        
-        // Handle different formats
-        if (shareLink.includes('GOATKIDS-SYNC:')) {
-            dataPart = shareLink.split('GOATKIDS-SYNC:')[1];
-        }
-        
-        // Decode the data
-        const jsonString = decodeURIComponent(atob(dataPart));
-        const importedData = JSON.parse(jsonString);
-        
-        // Validate the data
-        if (!importedData.products || !Array.isArray(importedData.products)) {
-            showMessage('Invalid share link format', 'error');
-            return;
-        }
-        
-        // Ask for confirmation
-        if (!confirm(`Apply ${importedData.products.length} products from share link? This will replace your current products.`)) {
-            return;
-        }
-        
-        // Replace all products
-        products = importedData.products;
-        
-        // Save to localStorage
-        saveProducts();
-        
-        // Update UI
-        renderProducts();
-        refreshInventory();
-        
-        // Clear the input field
-        pasteLinkElement.value = '';
-        
-        // Show success message
-        showMessage(`Successfully imported ${products.length} products!`, 'success');
-        
-        // Show import details
-        setTimeout(() => {
-            showMessage(`Products imported: ${products.map(p => p.name).join(', ')}`, 'info');
-        }, 1000);
-        
-    } catch (error) {
-        console.error('Error applying share link:', error);
-        showMessage('Invalid share link. Please check and try again.', 'error');
-    }
-}
-
-function copyShareLink() {
-    try {
-        const shareLinkElement = document.getElementById('shareLink');
-        if (!shareLinkElement || !shareLinkElement.value.trim()) {
-            showMessage('Generate a share link first', 'error');
-            return;
-        }
-        
-        const shareLink = shareLinkElement.value;
-        
-        // Try modern clipboard API first
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(shareLink)
-                .then(() => {
-                    showMessage('Share link copied to clipboard!', 'success');
-                })
-                .catch(err => {
-                    // Fallback to old method
-                    copyUsingOldMethod(shareLink);
-                });
-        } else {
-            // Use old method
-            copyUsingOldMethod(shareLink);
-        }
-        
-    } catch (error) {
-        console.error('Error copying share link:', error);
-        showMessage('Error copying link', 'error');
-    }
-}
-
-function copyUsingOldMethod(text) {
-    try {
-        // Create temporary textarea
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        textArea.style.top = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        
-        // Copy
-        const successful = document.execCommand('copy');
-        document.body.removeChild(textArea);
-        
-        if (successful) {
-            showMessage('Share link copied to clipboard!', 'success');
-        } else {
-            showMessage('Failed to copy. Please select and copy manually.', 'warning');
-        }
-    } catch (error) {
-        showMessage('Failed to copy. Please select and copy manually.', 'warning');
-    }
-}
-
-// Auto-detect share links in input field (optional)
-function setupShareLinkAutoDetect() {
-    const pasteLinkElement = document.getElementById('pasteLink');
-    if (pasteLinkElement) {
-        // Auto-apply when Enter is pressed
-        pasteLinkElement.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                applyShareLink();
-            }
-        });
-        
-        // Auto-detect GOATKIDS-SYNC links
-        pasteLinkElement.addEventListener('input', function() {
-            const value = this.value.trim();
-            if (value.includes('GOATKIDS-SYNC:')) {
-                this.style.borderColor = 'var(--success)';
-                this.style.boxShadow = '0 0 0 2px rgba(0, 184, 148, 0.2)';
-            } else {
-                this.style.borderColor = '';
-                this.style.boxShadow = '';
-            }
-        });
-    }
-}
-
-// Initialize when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    setupShareLinkAutoDetect();
-});
-
-    // Auto-import from URL parameter
-function checkURLForShareData() {
-    try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const shareData = urlParams.get('share');
-        
-        if (shareData && shareData.includes('GOATKIDS-SYNC:')) {
-            // Ask user if they want to import
-            if (confirm('Found share data in URL. Import products now?')) {
-                // Extract and apply
-                const dataPart = shareData.split('GOATKIDS-SYNC:')[1];
-                const jsonString = decodeURIComponent(atob(dataPart));
-                const importedData = JSON.parse(jsonString);
-                
-                if (importedData.products && Array.isArray(importedData.products)) {
-                    products = importedData.products;
-                    saveProducts();
-                    renderProducts();
-                    refreshInventory();
-                    showMessage(`Imported ${products.length} products from URL!`, 'success');
-                    
-                    // Remove the share parameter from URL (without reloading)
-                    const newUrl = window.location.pathname;
-                    window.history.replaceState({}, document.title, newUrl);
-                }
-            }
-        }
-    } catch (error) {
-        console.error('Error processing URL share data:', error);
-    }
-}
-
-// Call this in your existing DOMContentLoaded function
-// Add this line where you initialize everything:
-// checkURLForShareData();
-
 </body>
 </html>
-
