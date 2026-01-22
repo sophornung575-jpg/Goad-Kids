@@ -108,6 +108,7 @@
             border-radius: 20px;
             margin-left: 8px;
             font-weight: 500;
+            display: none;
         }
 
         /* Navigation */
@@ -182,17 +183,13 @@
             opacity: 0;
             transition: var(--transition);
             z-index: 999;
+            display: flex;
+            flex-direction: column;
         }
 
         .mobile-nav.active {
             transform: translateY(0);
             opacity: 1;
-        }
-
-        .mobile-nav .nav-link {
-            padding: 12px;
-            margin-bottom: 10px;
-            justify-content: center;
         }
 
         /* Main Content */
@@ -226,16 +223,6 @@
             margin-bottom: 30px;
             position: relative;
             overflow: hidden;
-        }
-
-        .store-header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
         }
 
         .store-header h1 {
@@ -344,8 +331,7 @@
             width: 100%;
             height: 250px;
             overflow: hidden;
-            background: linear-gradient(45deg, #f5f7ff 25%, #e3e9ff 25%, #e3e9ff 50%, #f5f7ff 50%, #f5f7ff 75%, #e3e9ff 75%);
-            background-size: 20px 20px;
+            background: #f5f7ff;
         }
 
         .product-image {
@@ -1124,11 +1110,6 @@
                 padding: 12px 15px;
             }
             
-            .stats-container {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 15px;
-            }
-            
             .product-grid {
                 grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
                 gap: 15px;
@@ -1172,10 +1153,6 @@
         }
 
         @media (max-width: 480px) {
-            .stats-container {
-                grid-template-columns: 1fr;
-            }
-            
             .product-grid {
                 grid-template-columns: 1fr;
             }
@@ -1346,7 +1323,7 @@
             <a href="#" class="nav-link" onclick="showTab('cart'); return false;">
                 <i class="fas fa-shopping-cart"></i>
                 <span>Cart</span>
-                <span class="cart-count">0</span>
+                <span class="cart-count" id="cartCountMobile">0</span>
             </a>
             <a href="#" class="nav-link" id="adminNavLinkMobile" onclick="showTab('admin'); return false;">
                 <i class="fas fa-cog"></i>
@@ -1667,8 +1644,6 @@
                 </div>
             </div>
         </div>
-        
-        </div>
     </footer>
 
     <!-- Order Confirmation Modal -->
@@ -1735,1258 +1710,1368 @@
         };
 
         // ============================================
-        // INITIALIZATION
+        // INITIALIZATION - FIXED FOR ALL BROWSERS
         // ============================================
         document.addEventListener('DOMContentLoaded', function() {
-            // Load data
-            loadProducts();
-            loadCart();
+            console.log('GOAT KIDS Store Initializing...');
             
-            // Setup event listeners
-            setupEventListeners();
-            
-            // Check admin status
-            checkAdminStatus();
-            
-            // Show store tab
-            showTab('store');
-            
-            // Welcome message
-            setTimeout(() => {
-                if (!localStorage.getItem('goatKidsWelcomeShown')) {
-                    showMessage('Welcome to GOAT KIDS Store!', 'info');
-                    localStorage.setItem('goatKidsWelcomeShown', 'true');
-                }
-            }, 1000);
+            // Initialize with fallbacks for all browsers
+            try {
+                // Load data
+                loadProducts();
+                loadCart();
+                
+                // Setup event listeners
+                setupEventListeners();
+                
+                // Check admin status
+                checkAdminStatus();
+                
+                // Show store tab by default
+                showTab('store');
+                
+                // Browser compatibility check
+                checkBrowserCompatibility();
+                
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showMessage('Initialization error. Please refresh the page.', 'error');
+            }
         });
 
         function setupEventListeners() {
-            // Mobile menu toggle
-            document.getElementById('mobileMenuBtn').addEventListener('click', function() {
-                document.getElementById('mobileNav').classList.toggle('active');
-            });
-            
-            // Close mobile menu when clicking outside
-            document.addEventListener('click', function(event) {
-                const mobileNav = document.getElementById('mobileNav');
-                const menuBtn = document.getElementById('mobileMenuBtn');
-                if (mobileNav.classList.contains('active') && 
-                    !mobileNav.contains(event.target) && 
-                    !menuBtn.contains(event.target)) {
-                    mobileNav.classList.remove('active');
+            try {
+                // Mobile menu toggle
+                const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+                if (mobileMenuBtn) {
+                    mobileMenuBtn.addEventListener('click', function() {
+                        const mobileNav = document.getElementById('mobileNav');
+                        mobileNav.classList.toggle('active');
+                    });
                 }
-            });
-            
-            // Keyboard shortcuts
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape') {
-                    closeAllModals();
+                
+                // Close mobile menu when clicking outside
+                document.addEventListener('click', function(event) {
+                    const mobileNav = document.getElementById('mobileNav');
+                    const menuBtn = document.getElementById('mobileMenuBtn');
+                    if (mobileNav && mobileNav.classList.contains('active') && 
+                        !mobileNav.contains(event.target) && 
+                        menuBtn && !menuBtn.contains(event.target)) {
+                        mobileNav.classList.remove('active');
+                    }
+                });
+                
+                // Keyboard shortcuts
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') {
+                        closeAllModals();
+                    }
+                });
+                
+                // Form submissions
+                const productNameInput = document.getElementById('productName');
+                if (productNameInput) {
+                    productNameInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') addSingleProduct();
+                    });
                 }
-            });
+                
+                // Payment method selection
+                selectPayment('payway');
+                
+            } catch (error) {
+                console.error('Event listener setup error:', error);
+            }
+        }
+
+        function checkBrowserCompatibility() {
+            // Check for localStorage support
+            if (typeof localStorage === 'undefined') {
+                showMessage('Your browser does not support local storage. Cart and admin features will not persist.', 'warning');
+            }
             
-            // Form submissions
-            document.getElementById('productName')?.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') addSingleProduct();
-            });
+            // Check for modern JavaScript features
+            const features = {
+                arrowFunctions: typeof (() => {}) === 'function',
+                templateLiterals: typeof `${'test'}` === 'string',
+                letConst: true, // Most modern browsers support let/const
+                fetch: typeof fetch === 'function',
+                promise: typeof Promise !== 'undefined'
+            };
             
-            // Payment method selection
-            selectPayment('payway');
+            if (!features.arrowFunctions || !features.templateLiterals) {
+                console.warn('Browser may not fully support ES6 features');
+            }
         }
 
         function closeAllModals() {
-            document.querySelectorAll('.modal').forEach(modal => {
-                modal.style.display = 'none';
-            });
-        }
-
-        // ============================================
-        // TAB NAVIGATION
-        // ============================================
-        function showTab(tabName) {
-            // Close mobile menu
-            document.getElementById('mobileNav').classList.remove('active');
-            
-            // Hide all tabs
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
-            // Update nav links
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.classList.remove('active');
-            });
-            
-            // Show selected tab
-            if (tabName === 'store') {
-                document.getElementById('storeTab').classList.add('active');
-                document.querySelectorAll('.nav-link')[0].classList.add('active');
-                refreshStoreStats();
-            } else if (tabName === 'cart') {
-                document.getElementById('cartTab').classList.add('active');
-                document.querySelectorAll('.nav-link')[1].classList.add('active');
-                renderCart();
-            } else if (tabName === 'admin') {
-                if (!isAdmin) {
-                    adminLogin();
-                    return;
-                }
-                document.getElementById('adminTab').classList.add('active');
-                document.querySelectorAll('.nav-link')[2].classList.add('active');
-                refreshInventory();
+            try {
+                document.querySelectorAll('.modal').forEach(modal => {
+                    modal.style.display = 'none';
+                });
+            } catch (error) {
+                console.error('Error closing modals:', error);
             }
         }
 
         // ============================================
-        // ADMIN FUNCTIONS
+        // TAB NAVIGATION - FIXED
+        // ============================================
+        function showTab(tabName) {
+            try {
+                // Close mobile menu
+                const mobileNav = document.getElementById('mobileNav');
+                if (mobileNav) mobileNav.classList.remove('active');
+                
+                // Hide all tabs
+                document.querySelectorAll('.tab-content').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                
+                // Update nav links
+                document.querySelectorAll('.nav-link').forEach(link => {
+                    link.classList.remove('active');
+                });
+                
+                // Show selected tab
+                if (tabName === 'store') {
+                    document.getElementById('storeTab').classList.add('active');
+                    document.querySelectorAll('.nav-link')[0].classList.add('active');
+                } else if (tabName === 'cart') {
+                    document.getElementById('cartTab').classList.add('active');
+                    document.querySelectorAll('.nav-link')[1].classList.add('active');
+                    renderCart();
+                } else if (tabName === 'admin') {
+                    if (!isAdmin) {
+                        adminLogin();
+                        return;
+                    }
+                    document.getElementById('adminTab').classList.add('active');
+                    document.querySelectorAll('.nav-link')[2].classList.add('active');
+                    refreshInventory();
+                }
+            } catch (error) {
+                console.error('Error showing tab:', error);
+            }
+        }
+
+        // ============================================
+        // ADMIN FUNCTIONS - FIXED
         // ============================================
         function checkAdminStatus() {
-            const adminElements = document.querySelectorAll('#adminNavLink, #adminNavLinkMobile');
-            adminElements.forEach(el => {
-                el.style.display = isAdmin ? 'flex' : 'none';
-            });
-            document.getElementById('adminBadge').style.display = isAdmin ? 'inline-block' : 'none';
+            try {
+                const adminElements = document.querySelectorAll('#adminNavLink, #adminNavLinkMobile');
+                adminElements.forEach(el => {
+                    if (el) el.style.display = isAdmin ? 'flex' : 'none';
+                });
+                
+                const adminBadge = document.getElementById('adminBadge');
+                if (adminBadge) adminBadge.style.display = isAdmin ? 'inline-block' : 'none';
+            } catch (error) {
+                console.error('Error checking admin status:', error);
+            }
         }
 
         function adminLogin() {
-            const password = prompt('Enter admin password:');
-            if (password === 'admin123') {
-                isAdmin = true;
-                localStorage.setItem('goatKidsAdmin', 'true');
-                checkAdminStatus();
-                showTab('admin');
-                showMessage('Admin login successful!', 'success');
-            } else if (password) {
-                alert('Incorrect password!');
+            try {
+                const password = prompt('Enter admin password:');
+                if (password === 'admin123') {
+                    isAdmin = true;
+                    localStorage.setItem('goatKidsAdmin', 'true');
+                    checkAdminStatus();
+                    showTab('admin');
+                    showMessage('Admin login successful!', 'success');
+                } else if (password) {
+                    alert('Incorrect password!');
+                }
+            } catch (error) {
+                console.error('Admin login error:', error);
             }
         }
 
         function adminLogout() {
-            isAdmin = false;
-            localStorage.removeItem('goatKidsAdmin');
-            checkAdminStatus();
-            showTab('store');
-            showMessage('Admin logged out.', 'info');
+            try {
+                isAdmin = false;
+                localStorage.removeItem('goatKidsAdmin');
+                checkAdminStatus();
+                showTab('store');
+                showMessage('Admin logged out.', 'info');
+            } catch (error) {
+                console.error('Admin logout error:', error);
+            }
         }
 
         // ============================================
-        // PRODUCT MANAGEMENT
+        // PRODUCT MANAGEMENT - FIXED
         // ============================================
         function loadProducts() {
-            const saved = localStorage.getItem('goatKidsProducts');
-            products = saved ? JSON.parse(saved) : [];
-            if (products.length === 0) {
+            try {
+                const saved = localStorage.getItem('goatKidsProducts');
+                products = saved ? JSON.parse(saved) : [];
+                if (products.length === 0) {
+                    loadSampleProducts();
+                } else {
+                    renderProducts();
+                }
+            } catch (error) {
+                console.error('Error loading products:', error);
+                products = [];
                 loadSampleProducts();
-            } else {
-                renderProducts();
-                refreshStoreStats();
             }
         }
 
         function loadSampleProducts() {
-            products = [
-                { id: 1, name: "Blue Dinosaur T-Shirt", price: 14.99, stock: 15, category: "tshirts", image: "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=400&h=400&fit=crop" },
-                { id: 2, name: "Denim Overall Pants", price: 29.99, stock: 8, category: "pants", image: "https://images.unsplash.com/photo-1590372948123-1cb519acab7c?w=400&h=400&fit=crop" },
-                { id: 3, name: "Cotton Hoodie", price: 24.99, stock: 12, category: "hoodies", image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400&h=400&fit=crop" },
-                { id: 4, name: "Rainbow Sneakers", price: 34.99, stock: 3, category: "shoes", image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop" },
-                { id: 5, name: "Animal Print Cap", price: 12.99, stock: 20, category: "accessories", image: "https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=400&h=400&fit=crop" },
-                { id: 6, name: "Soft Cotton Pajamas", price: 22.99, stock: 6, category: "pajamas", image: "https://images.unsplash.com/photo-1592243739234-1c8b8de87a3c?w=400&h=400&fit=crop" }
-            ];
-            saveProducts();
-            renderProducts();
-            refreshStoreStats();
-            showMessage('Sample products loaded!', 'success');
+            try {
+                products = [
+                    { id: 1, name: "Blue Dinosaur T-Shirt", price: 14.99, stock: 15, category: "tshirts", image: "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=400&h=400&fit=crop" },
+                    { id: 2, name: "Denim Overall Pants", price: 29.99, stock: 8, category: "pants", image: "https://images.unsplash.com/photo-1590372948123-1cb519acab7c?w=400&h=400&fit=crop" },
+                    { id: 3, name: "Cotton Hoodie", price: 24.99, stock: 12, category: "hoodies", image: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400&h=400&fit=crop" },
+                    { id: 4, name: "Rainbow Sneakers", price: 34.99, stock: 3, category: "shoes", image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop" },
+                    { id: 5, name: "Animal Print Cap", price: 12.99, stock: 20, category: "accessories", image: "https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=400&h=400&fit=crop" },
+                    { id: 6, name: "Soft Cotton Pajamas", price: 22.99, stock: 6, category: "pajamas", image: "https://images.unsplash.com/photo-1592243739234-1c8b8de87a3c?w=400&h=400&fit=crop" }
+                ];
+                saveProducts();
+                renderProducts();
+                showMessage('Sample products loaded!', 'success');
+            } catch (error) {
+                console.error('Error loading sample products:', error);
+            }
         }
 
         function saveProducts() {
-            localStorage.setItem('goatKidsProducts', JSON.stringify(products));
+            try {
+                localStorage.setItem('goatKidsProducts', JSON.stringify(products));
+            } catch (error) {
+                console.error('Error saving products:', error);
+                showMessage('Error saving products to storage', 'error');
+            }
         }
 
         function renderProducts() {
-            const container = document.getElementById('productGrid');
-            if (!container) return;
-            
-            // Filter products
-            let filtered = products.filter(p => {
-                // Search filter
-                if (currentFilter.search && !p.name.toLowerCase().includes(currentFilter.search.toLowerCase())) {
-                    return false;
-                }
-                // Category filter
-                if (currentFilter.category !== 'all' && p.category !== currentFilter.category) {
-                    return false;
-                }
-                // Stock filter
-                if (currentFilter.stock !== 'all') {
-                    if (currentFilter.stock === 'in-stock' && p.stock <= 10) return false;
-                    if (currentFilter.stock === 'low-stock' && (p.stock > 10 || p.stock === 0)) return false;
-                    if (currentFilter.stock === 'out-of-stock' && p.stock > 0) return false;
-                }
-                // Price filter
-                if (currentFilter.price !== 'all') {
-                    const [min, max] = currentFilter.price === '30+' ? [30, Infinity] : currentFilter.price.split('-').map(Number);
-                    if (p.price < min || (max && p.price > max)) return false;
-                }
-                return true;
-            });
-            
-            if (filtered.length === 0) {
-                container.innerHTML = `
-                    <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px;">
-                        <i class="fas fa-search" style="font-size: 3rem; color: var(--gray-light); margin-bottom: 20px;"></i>
-                        <h3>No products found</h3>
-                        <p>Try adjusting your search or filters</p>
-                        <button class="btn btn-outline mt-20" onclick="resetFilters()">
-                            <i class="fas fa-redo"></i> Reset Filters
-                        </button>
-                    </div>
-                `;
-                return;
-            }
-            
-            container.innerHTML = filtered.map(product => `
-                <div class="product-card">
-                    ${product.stock === 0 ? '<div class="product-badge badge-out">Out of Stock</div>' : 
-                      product.stock <= 5 ? '<div class="product-badge badge-low">Low Stock</div>' : ''}
-                    
-                    <div class="product-image-container">
-                        <img src="${product.image}" alt="${product.name}" class="product-image"
-                             onerror="this.onerror=null; this.src='https://via.placeholder.com/400x400/f5f7ff/4a6ee0?text=GOAT+KIDS';">
-                    </div>
-                    
-                    <div class="product-info">
-                        <div class="product-title">${product.name}</div>
-                        <div class="product-category">${product.category}</div>
-                        <div class="product-price">$${product.price.toFixed(2)}</div>
-                        
-                        <div class="product-stock ${product.stock > 10 ? 'in-stock' : product.stock > 0 ? 'low-stock' : 'out-of-stock'}">
-                            ${product.stock > 10 ? 'In Stock' : product.stock > 0 ? `Low Stock (${product.stock})` : 'Out of Stock'}
-                        </div>
-                        
-                        <div class="product-actions">
-                            <button class="btn btn-primary" onclick="addToCart(${product.id})" 
-                                    ${product.stock === 0 ? 'disabled' : ''}>
-                                <i class="fas fa-cart-plus"></i> Add to Cart
+            try {
+                const container = document.getElementById('productGrid');
+                if (!container) return;
+                
+                // Filter products
+                let filtered = products.filter(p => {
+                    // Search filter
+                    if (currentFilter.search && !p.name.toLowerCase().includes(currentFilter.search.toLowerCase())) {
+                        return false;
+                    }
+                    // Category filter
+                    if (currentFilter.category !== 'all' && p.category !== currentFilter.category) {
+                        return false;
+                    }
+                    // Stock filter
+                    if (currentFilter.stock !== 'all') {
+                        if (currentFilter.stock === 'in-stock' && p.stock <= 10) return false;
+                        if (currentFilter.stock === 'low-stock' && (p.stock > 10 || p.stock === 0)) return false;
+                        if (currentFilter.stock === 'out-of-stock' && p.stock > 0) return false;
+                    }
+                    // Price filter
+                    if (currentFilter.price !== 'all') {
+                        const priceRanges = currentFilter.price.split('-');
+                        const min = parseFloat(priceRanges[0]);
+                        const max = priceRanges[1] ? parseFloat(priceRanges[1]) : Infinity;
+                        if (p.price < min || p.price > max) return false;
+                    }
+                    return true;
+                });
+                
+                if (filtered.length === 0) {
+                    container.innerHTML = `
+                        <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px;">
+                            <i class="fas fa-search" style="font-size: 3rem; color: var(--gray-light); margin-bottom: 20px;"></i>
+                            <h3>No products found</h3>
+                            <p>Try adjusting your search or filters</p>
+                            <button class="btn btn-outline mt-20" onclick="resetFilters()">
+                                <i class="fas fa-redo"></i> Reset Filters
                             </button>
-                            ${isAdmin ? `
-                            <button class="btn btn-outline" onclick="editProduct(${product.id})">
-                                <i class="fas fa-edit"></i>
-                            </button>` : ''}
                         </div>
-                    </div>
-                </div>
-            `).join('');
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = filtered.map(product => {
+                    let badge = '';
+                    if (product.stock === 0) {
+                        badge = '<div class="product-badge badge-out">Out of Stock</div>';
+                    } else if (product.stock <= 5) {
+                        badge = '<div class="product-badge badge-low">Low Stock</div>';
+                    }
+                    
+                    let stockClass = 'in-stock';
+                    let stockText = 'In Stock';
+                    if (product.stock > 10) {
+                        stockClass = 'in-stock';
+                        stockText = 'In Stock';
+                    } else if (product.stock > 0) {
+                        stockClass = 'low-stock';
+                        stockText = `Low Stock (${product.stock})`;
+                    } else {
+                        stockClass = 'out-of-stock';
+                        stockText = 'Out of Stock';
+                    }
+                    
+                    const editButton = isAdmin ? `
+                        <button class="btn btn-outline" onclick="editProduct(${product.id})">
+                            <i class="fas fa-edit"></i>
+                        </button>` : '';
+                    
+                    return `
+                        <div class="product-card">
+                            ${badge}
+                            <div class="product-image-container">
+                                <img src="${product.image}" alt="${product.name}" class="product-image"
+                                     onerror="this.onerror=null; this.src='https://via.placeholder.com/400x400/f5f7ff/4a6ee0?text=GOAT+KIDS';">
+                            </div>
+                            <div class="product-info">
+                                <div class="product-title">${product.name}</div>
+                                <div class="product-category">${product.category}</div>
+                                <div class="product-price">$${product.price.toFixed(2)}</div>
+                                <div class="product-stock ${stockClass}">${stockText}</div>
+                                <div class="product-actions">
+                                    <button class="btn btn-primary" onclick="addToCart(${product.id})" 
+                                            ${product.stock === 0 ? 'disabled' : ''}>
+                                        <i class="fas fa-cart-plus"></i> Add to Cart
+                                    </button>
+                                    ${editButton}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                console.error('Error rendering products:', error);
+                const container = document.getElementById('productGrid');
+                if (container) {
+                    container.innerHTML = '<div style="padding: 40px; text-align: center;">Error loading products</div>';
+                }
+            }
         }
 
         function searchProducts() {
-            currentFilter.search = document.getElementById('searchInput').value;
-            renderProducts();
+            try {
+                const searchInput = document.getElementById('searchInput');
+                currentFilter.search = searchInput ? searchInput.value : '';
+                renderProducts();
+            } catch (error) {
+                console.error('Error in search:', error);
+            }
         }
 
         function filterProducts() {
-            currentFilter.category = document.getElementById('categoryFilter').value;
-            currentFilter.stock = document.getElementById('stockFilter').value;
-            currentFilter.price = document.getElementById('priceFilter').value;
-            renderProducts();
+            try {
+                const categoryFilter = document.getElementById('categoryFilter');
+                const stockFilter = document.getElementById('stockFilter');
+                const priceFilter = document.getElementById('priceFilter');
+                
+                currentFilter.category = categoryFilter ? categoryFilter.value : 'all';
+                currentFilter.stock = stockFilter ? stockFilter.value : 'all';
+                currentFilter.price = priceFilter ? priceFilter.value : 'all';
+                renderProducts();
+            } catch (error) {
+                console.error('Error filtering products:', error);
+            }
         }
 
         function resetFilters() {
-            document.getElementById('searchInput').value = '';
-            document.getElementById('categoryFilter').value = 'all';
-            document.getElementById('stockFilter').value = 'all';
-            document.getElementById('priceFilter').value = 'all';
-            currentFilter = { category: 'all', stock: 'all', price: 'all', search: '' };
-            renderProducts();
-        }
-
-        function refreshStoreStats() {
-            const totalProducts = products.length;
-            const lowStockCount = products.filter(p => p.stock > 0 && p.stock <= 10).length;
-            const avgPrice = totalProducts > 0 ? 
-                (products.reduce((sum, p) => sum + p.price, 0) / totalProducts).toFixed(2) : '0.00';
-            const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
-            
-            document.getElementById('totalProducts').textContent = totalProducts;
-            document.getElementById('lowStockCount').textContent = lowStockCount;
-            document.getElementById('avgPrice').textContent = `$${avgPrice}`;
-            document.getElementById('totalStock').textContent = totalStock;
+            try {
+                document.getElementById('searchInput').value = '';
+                document.getElementById('categoryFilter').value = 'all';
+                document.getElementById('stockFilter').value = 'all';
+                document.getElementById('priceFilter').value = 'all';
+                currentFilter = { category: 'all', stock: 'all', price: 'all', search: '' };
+                renderProducts();
+            } catch (error) {
+                console.error('Error resetting filters:', error);
+            }
         }
 
         // ============================================
-        // CART FUNCTIONS
+        // CART FUNCTIONS - FIXED
         // ============================================
         function loadCart() {
-            const saved = localStorage.getItem('goatKidsCart');
-            cart = saved ? JSON.parse(saved) : [];
-            updateCartCount();
+            try {
+                const saved = localStorage.getItem('goatKidsCart');
+                cart = saved ? JSON.parse(saved) : [];
+                updateCartCount();
+            } catch (error) {
+                console.error('Error loading cart:', error);
+                cart = [];
+                updateCartCount();
+            }
         }
 
         function saveCart() {
-            localStorage.setItem('goatKidsCart', JSON.stringify(cart));
-            updateCartCount();
+            try {
+                localStorage.setItem('goatKidsCart', JSON.stringify(cart));
+                updateCartCount();
+            } catch (error) {
+                console.error('Error saving cart:', error);
+                updateCartCount();
+            }
         }
 
         function updateCartCount() {
-            const total = cart.reduce((sum, item) => sum + item.quantity, 0);
-            document.querySelectorAll('.cart-count').forEach(el => {
-                el.textContent = total;
-            });
+            try {
+                const total = cart.reduce((sum, item) => sum + item.quantity, 0);
+                document.querySelectorAll('.cart-count').forEach(el => {
+                    if (el) el.textContent = total;
+                });
+            } catch (error) {
+                console.error('Error updating cart count:', error);
+            }
         }
 
         function addToCart(productId) {
-            const product = products.find(p => p.id === productId);
-            if (!product) return;
-            
-            if (product.stock === 0) {
-                showMessage('This product is out of stock!', 'error');
-                return;
-            }
-            
-            const existing = cart.find(item => item.productId === productId);
-            
-            if (existing) {
-                if (existing.quantity >= product.stock) {
-                    showMessage(`Only ${product.stock} items available!`, 'error');
+            try {
+                const product = products.find(p => p.id === productId);
+                if (!product) return;
+                
+                if (product.stock === 0) {
+                    showMessage('This product is out of stock!', 'error');
                     return;
                 }
-                existing.quantity++;
-            } else {
-                cart.push({
-                    productId,
-                    quantity: 1,
-                    name: product.name,
-                    price: product.price,
-                    image: product.image
-                });
+                
+                const existing = cart.find(item => item.productId === productId);
+                
+                if (existing) {
+                    if (existing.quantity >= product.stock) {
+                        showMessage(`Only ${product.stock} items available!`, 'error');
+                        return;
+                    }
+                    existing.quantity++;
+                } else {
+                    cart.push({
+                        productId,
+                        quantity: 1,
+                        name: product.name,
+                        price: product.price,
+                        image: product.image
+                    });
+                }
+                
+                saveCart();
+                showMessage(`${product.name} added to cart!`, 'success');
+                
+                // Animate cart icon
+                const cartCount = document.getElementById('cartCountNav');
+                if (cartCount) {
+                    cartCount.style.transform = 'scale(1.3)';
+                    setTimeout(() => cartCount.style.transform = 'scale(1)', 300);
+                }
+            } catch (error) {
+                console.error('Error adding to cart:', error);
+                showMessage('Error adding product to cart', 'error');
             }
-            
-            saveCart();
-            showMessage(`${product.name} added to cart!`, 'success');
-            
-            // Animate cart icon
-            const cartCount = document.getElementById('cartCountNav');
-            cartCount.style.transform = 'scale(1.3)';
-            setTimeout(() => cartCount.style.transform = 'scale(1)', 300);
         }
 
         function removeFromCart(productId) {
-            cart = cart.filter(item => item.productId !== productId);
-            saveCart();
-            renderCart();
-            showMessage('Item removed from cart.', 'info');
+            try {
+                cart = cart.filter(item => item.productId !== productId);
+                saveCart();
+                renderCart();
+                showMessage('Item removed from cart.', 'info');
+            } catch (error) {
+                console.error('Error removing from cart:', error);
+                showMessage('Error removing item from cart', 'error');
+            }
         }
 
         function updateQuantity(productId, change) {
-            const item = cart.find(item => item.productId === productId);
-            if (!item) return;
-            
-            const product = products.find(p => p.id === productId);
-            if (!product) {
-                removeFromCart(productId);
-                return;
+            try {
+                const item = cart.find(item => item.productId === productId);
+                if (!item) return;
+                
+                const product = products.find(p => p.id === productId);
+                if (!product) {
+                    removeFromCart(productId);
+                    return;
+                }
+                
+                const newQty = item.quantity + change;
+                
+                if (newQty < 1) {
+                    removeFromCart(productId);
+                    return;
+                }
+                
+                if (newQty > product.stock) {
+                    showMessage(`Only ${product.stock} available!`, 'error');
+                    return;
+                }
+                
+                item.quantity = newQty;
+                saveCart();
+                renderCart();
+            } catch (error) {
+                console.error('Error updating quantity:', error);
+                showMessage('Error updating quantity', 'error');
             }
-            
-            const newQty = item.quantity + change;
-            
-            if (newQty < 1) {
-                removeFromCart(productId);
-                return;
-            }
-            
-            if (newQty > product.stock) {
-                showMessage(`Only ${product.stock} available!`, 'error');
-                return;
-            }
-            
-            item.quantity = newQty;
-            saveCart();
-            renderCart();
         }
 
         function renderCart() {
-            const container = document.getElementById('cartItemsList');
-            const empty = document.getElementById('emptyCart');
-            const summary = document.getElementById('cartSummary');
-            
-            if (cart.length === 0) {
-                container.classList.add('d-none');
-                summary.classList.add('d-none');
-                empty.classList.remove('d-none');
-                return;
-            }
-            
-            empty.classList.add('d-none');
-            container.classList.remove('d-none');
-            summary.classList.remove('d-none');
-            
-            container.innerHTML = cart.map(item => `
-                <div class="cart-item">
-                    <img src="${item.image}" alt="${item.name}" class="cart-item-image"
-                         onerror="this.onerror=null; this.src='https://via.placeholder.com/100x100/f5f7ff/4a6ee0?text=GOAT';">
-                    
-                    <div class="cart-item-details">
-                        <div class="cart-item-name">${item.name}</div>
-                        <div class="cart-item-price">$${item.price.toFixed(2)} each</div>
-                        <div class="cart-item-quantity">
-                            <button class="quantity-btn" onclick="updateQuantity(${item.productId}, -1)">
-                                <i class="fas fa-minus"></i>
-                            </button>
-                            <span>${item.quantity}</span>
-                            <button class="quantity-btn" onclick="updateQuantity(${item.productId}, 1)">
-                                <i class="fas fa-plus"></i>
+            try {
+                const container = document.getElementById('cartItemsList');
+                const empty = document.getElementById('emptyCart');
+                const summary = document.getElementById('cartSummary');
+                
+                if (!container || !empty || !summary) return;
+                
+                if (cart.length === 0) {
+                    container.classList.add('d-none');
+                    summary.classList.add('d-none');
+                    empty.classList.remove('d-none');
+                    return;
+                }
+                
+                empty.classList.add('d-none');
+                container.classList.remove('d-none');
+                summary.classList.remove('d-none');
+                
+                container.innerHTML = cart.map(item => {
+                    const itemTotal = (item.price * item.quantity).toFixed(2);
+                    return `
+                        <div class="cart-item">
+                            <img src="${item.image}" alt="${item.name}" class="cart-item-image"
+                                 onerror="this.onerror=null; this.src='https://via.placeholder.com/100x100/f5f7ff/4a6ee0?text=GOAT';">
+                            <div class="cart-item-details">
+                                <div class="cart-item-name">${item.name}</div>
+                                <div class="cart-item-price">$${item.price.toFixed(2)} each</div>
+                                <div class="cart-item-quantity">
+                                    <button class="quantity-btn" onclick="updateQuantity(${item.productId}, -1)">
+                                        <i class="fas fa-minus"></i>
+                                    </button>
+                                    <span>${item.quantity}</span>
+                                    <button class="quantity-btn" onclick="updateQuantity(${item.productId}, 1)">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="cart-item-total">$${itemTotal}</div>
+                            <button class="remove-item" onclick="removeFromCart(${item.productId})" aria-label="Remove item">
+                                <i class="fas fa-trash"></i>
                             </button>
                         </div>
-                    </div>
-                    
-                    <div class="cart-item-total">$${(item.price * item.quantity).toFixed(2)}</div>
-                    
-                    <button class="remove-item" onclick="removeFromCart(${item.productId})" aria-label="Remove item">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            `).join('');
-            
-            // Update totals
-            const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            const shipping = 5.00;
-            const total = subtotal + shipping;
-            
-            document.getElementById('cartSubtotal').textContent = `$${subtotal.toFixed(2)}`;
-            document.getElementById('cartShipping').textContent = `$${shipping.toFixed(2)}`;
-            document.getElementById('cartTotal').textContent = `$${total.toFixed(2)}`;
-            
-            // Update PayWay link
-            updatePaywayLink(total);
+                    `;
+                }).join('');
+                
+                // Update totals
+                const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                const shipping = 5.00;
+                const total = subtotal + shipping;
+                
+                document.getElementById('cartSubtotal').textContent = `$${subtotal.toFixed(2)}`;
+                document.getElementById('cartShipping').textContent = `$${shipping.toFixed(2)}`;
+                document.getElementById('cartTotal').textContent = `$${total.toFixed(2)}`;
+                
+                // Update PayWay link
+                updatePaywayLink(total);
+            } catch (error) {
+                console.error('Error rendering cart:', error);
+                showMessage('Error loading cart', 'error');
+            }
         }
 
         // ============================================
-        // PAYMENT FUNCTIONS
+        // PAYMENT FUNCTIONS - FIXED
         // ============================================
         function selectPayment(method) {
-            selectedPaymentMethod = method;
-            
-            // Update UI
-            document.getElementById('paywayOption').classList.toggle('selected', method === 'payway');
-            document.getElementById('codOption').classList.toggle('selected', method === 'cod');
-            
-            // Show/hide PayWay button
-            const paywayBtn = document.getElementById('paywayLink');
-            const messengerBtn = document.getElementById('messengerBtn');
-            
-            if (method === 'payway') {
-                paywayBtn.classList.remove('d-none');
-                messengerBtn.textContent = 'Send Order via Messenger';
-            } else {
-                paywayBtn.classList.add('d-none');
-                messengerBtn.textContent = 'Confirm Order & Send via Messenger';
+            try {
+                selectedPaymentMethod = method;
+                
+                // Update UI
+                const paywayOption = document.getElementById('paywayOption');
+                const codOption = document.getElementById('codOption');
+                const paywayBtn = document.getElementById('paywayLink');
+                const messengerBtn = document.getElementById('messengerBtn');
+                
+                if (paywayOption) paywayOption.classList.toggle('selected', method === 'payway');
+                if (codOption) codOption.classList.toggle('selected', method === 'cod');
+                
+                if (method === 'payway') {
+                    if (paywayBtn) paywayBtn.classList.remove('d-none');
+                    if (messengerBtn) messengerBtn.textContent = 'Send Order via Messenger';
+                } else {
+                    if (paywayBtn) paywayBtn.classList.add('d-none');
+                    if (messengerBtn) messengerBtn.textContent = 'Confirm Order & Send via Messenger';
+                }
+            } catch (error) {
+                console.error('Error selecting payment:', error);
             }
         }
 
         function updatePaywayLink(total) {
-            const paywayBtn = document.getElementById('paywayLink');
-            const encodedOrder = encodeURIComponent(generateOrderSummary());
-            paywayBtn.href = `https://link.payway.com.kh/08407860s?amount=${total}&description=${encodedOrder}`;
+            try {
+                const paywayBtn = document.getElementById('paywayLink');
+                if (paywayBtn) {
+                    const encodedOrder = encodeURIComponent(generateOrderSummary());
+                    paywayBtn.href = `https://link.payway.com.kh/08407860s?amount=${total}&description=${encodedOrder}`;
+                }
+            } catch (error) {
+                console.error('Error updating PayWay link:', error);
+            }
         }
 
         function proceedToPayway(event) {
-            event.preventDefault();
-            
-            // Validate form first
-            if (!validateCheckoutForm()) return;
-            
-            const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) + 5;
-            const orderSummary = generateOrderSummary();
-            const encodedSummary = encodeURIComponent(orderSummary);
-            
-            // Open PayWay in new tab
-            window.open(`https://link.payway.com.kh/08407860s?amount=${total}&description=${encodedSummary}`, '_blank');
-            
-            // Show confirmation
-            showMessage('Redirecting to PayWay for secure payment...', 'info');
-            
-            // After payment, send order to Messenger
-            setTimeout(() => {
-                sendOrderToMessenger();
-            }, 2000);
+            try {
+                event.preventDefault();
+                
+                // Validate form first
+                if (!validateCheckoutForm()) return;
+                
+                const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) + 5;
+                const orderSummary = generateOrderSummary();
+                const encodedSummary = encodeURIComponent(orderSummary);
+                
+                // Open PayWay in new tab
+                window.open(`https://link.payway.com.kh/08407860s?amount=${total}&description=${encodedSummary}`, '_blank');
+                
+                // Show confirmation
+                showMessage('Redirecting to PayWay for secure payment...', 'info');
+                
+                // After payment, send order to Messenger
+                setTimeout(() => {
+                    sendOrderToMessenger();
+                }, 2000);
+            } catch (error) {
+                console.error('Error proceeding to PayWay:', error);
+                showMessage('Error processing payment', 'error');
+            }
         }
 
         // ============================================
-        // ORDER PROCESSING
+        // ORDER PROCESSING - FIXED
         // ============================================
         function validateCheckoutForm() {
-            let isValid = true;
-            
-            // Clear previous errors
-            document.querySelectorAll('.error-message').forEach(el => el.textContent = '');
-            document.querySelectorAll('.form-control.error').forEach(el => el.classList.remove('error'));
-            
-            // Validate name
-            const name = document.getElementById('customerName').value.trim();
-            if (!name) {
-                document.getElementById('nameError').textContent = 'Name is required';
-                document.getElementById('customerName').classList.add('error');
-                isValid = false;
+            try {
+                let isValid = true;
+                
+                // Clear previous errors
+                document.querySelectorAll('.error-message').forEach(el => {
+                    if (el) el.textContent = '';
+                });
+                document.querySelectorAll('.form-control.error').forEach(el => {
+                    if (el) el.classList.remove('error');
+                });
+                
+                // Validate name
+                const nameInput = document.getElementById('customerName');
+                const name = nameInput ? nameInput.value.trim() : '';
+                if (!name) {
+                    const nameError = document.getElementById('nameError');
+                    if (nameError) nameError.textContent = 'Name is required';
+                    if (nameInput) nameInput.classList.add('error');
+                    isValid = false;
+                }
+                
+                // Validate phone (Cambodian format: 10-15 digits)
+                const phoneInput = document.getElementById('customerPhone');
+                const phone = phoneInput ? phoneInput.value.trim() : '';
+                const phoneRegex = /^[0-9+]{9,15}$/;
+                if (!phone) {
+                    const phoneError = document.getElementById('phoneError');
+                    if (phoneError) phoneError.textContent = 'Phone number is required';
+                    if (phoneInput) phoneInput.classList.add('error');
+                    isValid = false;
+                } else if (!phoneRegex.test(phone.replace(/\s+/g, ''))) {
+                    const phoneError = document.getElementById('phoneError');
+                    if (phoneError) phoneError.textContent = 'Please enter a valid phone number';
+                    if (phoneInput) phoneInput.classList.add('error');
+                    isValid = false;
+                }
+                
+                // Validate address
+                const addressInput = document.getElementById('customerAddress');
+                const address = addressInput ? addressInput.value.trim() : '';
+                if (!address) {
+                    const addressError = document.getElementById('addressError');
+                    if (addressError) addressError.textContent = 'Address is required';
+                    if (addressInput) addressInput.classList.add('error');
+                    isValid = false;
+                }
+                
+                if (!isValid) {
+                    showMessage('Please fix the errors in the form.', 'error');
+                }
+                
+                return isValid;
+            } catch (error) {
+                console.error('Error validating form:', error);
+                return false;
             }
-            
-            // Validate phone (Cambodian format: 10-15 digits)
-            const phone = document.getElementById('customerPhone').value.trim();
-            const phoneRegex = /^[0-9+]{9,15}$/;
-            if (!phone) {
-                document.getElementById('phoneError').textContent = 'Phone number is required';
-                document.getElementById('customerPhone').classList.add('error');
-                isValid = false;
-            } else if (!phoneRegex.test(phone.replace(/\s+/g, ''))) {
-                document.getElementById('phoneError').textContent = 'Please enter a valid phone number';
-                document.getElementById('customerPhone').classList.add('error');
-                isValid = false;
-            }
-            
-            // Validate address
-            const address = document.getElementById('customerAddress').value.trim();
-            if (!address) {
-                document.getElementById('addressError').textContent = 'Address is required';
-                document.getElementById('customerAddress').classList.add('error');
-                isValid = false;
-            }
-            
-            if (!isValid) {
-                showMessage('Please fix the errors in the form.', 'error');
-            }
-            
-            return isValid;
-        }
-
-        function showOrderConfirmation() {
-            if (!validateCheckoutForm()) return;
-            
-            const summary = generateOrderSummary();
-            document.getElementById('orderSummaryContent').innerHTML = `
-                <div class="order-summary">
-                    <h4>Order Summary</h4>
-                    <div class="order-items">
-                        ${cart.map(item => `
-                            <div class="order-item">
-                                <span>${item.name} x${item.quantity}</span>
-                                <span>$${(item.price * item.quantity).toFixed(2)}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <div class="order-total">
-                        <span>Total:</span>
-                        <span>$${(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) + 2).toFixed(2)}</span>
-                    </div>
-                </div>
-                <p><strong>Payment Method:</strong> ${selectedPaymentMethod === 'payway' ? 'PayWay' : 'Cash on Delivery'}</p>
-            `;
-            
-            document.getElementById('orderModal').style.display = 'flex';
         }
 
         function generateOrderSummary() {
-            const name = document.getElementById('customerName').value.trim();
-            const phone = document.getElementById('customerPhone').value.trim();
-            const address = document.getElementById('customerAddress').value.trim();
-            const notes = document.getElementById('customerNotes').value.trim();
-            
-            let summary = `🛍️ *NEW ORDER - GOAT KIDS* 🛍️\n\n`;
-            summary += `👤 *Customer:* ${name}\n`;
-            summary += `📞 *Phone:* ${phone}\n`;
-            summary += `🏠 *Address:* ${address}\n`;
-            if (notes) summary += `📝 *Notes:* ${notes}\n`;
-            summary += `💳 *Payment:* ${selectedPaymentMethod === 'payway' ? 'PayWay' : 'Cash on Delivery'}\n`;
-            summary += `\n🛒 *Order Items:*\n`;
-            
-            let total = 5.00;
-            cart.forEach(item => {
-                const itemTotal = item.price * item.quantity;
-                total += itemTotal;
-                summary += `• ${item.name} x${item.quantity}: $${itemTotal.toFixed(2)}\n`;
-            });
-            
-            summary += `\n🚚 *Shipping:* $5.00\n`;
-            summary += `💰 *Total:* $${total.toFixed(2)}\n`;
-            summary += `\n🆔 *Order ID:* GOAT-${Date.now().toString().slice(-8)}`;
-            
-            return summary;
-        }
-
-        function confirmOrder() {
-            sendOrderToMessenger();
-            closeOrderModal();
-        }
-
-        function closeOrderModal() {
-            document.getElementById('orderModal').style.display = 'none';
+            try {
+                const nameInput = document.getElementById('customerName');
+                const phoneInput = document.getElementById('customerPhone');
+                const addressInput = document.getElementById('customerAddress');
+                const notesInput = document.getElementById('customerNotes');
+                
+                const name = nameInput ? nameInput.value.trim() : '';
+                const phone = phoneInput ? phoneInput.value.trim() : '';
+                const address = addressInput ? addressInput.value.trim() : '';
+                const notes = notesInput ? notesInput.value.trim() : '';
+                
+                let summary = `🛍️ *NEW ORDER - GOAT KIDS* 🛍️\n\n`;
+                summary += `👤 *Customer:* ${name}\n`;
+                summary += `📞 *Phone:* ${phone}\n`;
+                summary += `🏠 *Address:* ${address}\n`;
+                if (notes) summary += `📝 *Notes:* ${notes}\n`;
+                summary += `💳 *Payment:* ${selectedPaymentMethod === 'payway' ? 'PayWay' : 'Cash on Delivery'}\n`;
+                summary += `\n🛒 *Order Items:*\n`;
+                
+                let total = 5.00;
+                cart.forEach(item => {
+                    const itemTotal = item.price * item.quantity;
+                    total += itemTotal;
+                    summary += `• ${item.name} x${item.quantity}: $${itemTotal.toFixed(2)}\n`;
+                });
+                
+                summary += `\n🚚 *Shipping:* $5.00\n`;
+                summary += `💰 *Total:* $${total.toFixed(2)}\n`;
+                summary += `\n🆔 *Order ID:* GOAT-${Date.now().toString().slice(-8)}`;
+                
+                return summary;
+            } catch (error) {
+                console.error('Error generating order summary:', error);
+                return 'Order details could not be generated.';
+            }
         }
 
         function sendOrderToMessenger() {
-            if (!validateCheckoutForm()) return;
-            
-            const orderSummary = generateOrderSummary();
-            
-            // Encode for Messenger
-            const encodedMessage = encodeURIComponent(orderSummary);
-            const messengerUrl = `https://m.me/Goatkids?text=${encodedMessage}`;
-            
-            // Open Messenger in new tab
-            window.open(messengerUrl, '_blank');
-            
-            // Save order to history
-            saveOrderToHistory();
-            
-            // Clear cart
-            cart = [];
-            saveCart();
-            renderCart();
-            
-            // Reset form
-            document.getElementById('customerName').value = '';
-            document.getElementById('customerPhone').value = '';
-            document.getElementById('customerAddress').value = '';
-            document.getElementById('customerNotes').value = '';
-            
-            showMessage('Order sent to Messenger!', 'success');
+            try {
+                if (!validateCheckoutForm()) return;
+                
+                const orderSummary = generateOrderSummary();
+                
+                // Encode for Messenger
+                const encodedMessage = encodeURIComponent(orderSummary);
+                const messengerUrl = `https://m.me/Goatkids?text=${encodedMessage}`;
+                
+                // Open Messenger in new tab
+                window.open(messengerUrl, '_blank');
+                
+                // Save order to history
+                saveOrderToHistory();
+                
+                // Clear cart
+                cart = [];
+                saveCart();
+                renderCart();
+                
+                // Reset form
+                const nameInput = document.getElementById('customerName');
+                const phoneInput = document.getElementById('customerPhone');
+                const addressInput = document.getElementById('customerAddress');
+                const notesInput = document.getElementById('customerNotes');
+                
+                if (nameInput) nameInput.value = '';
+                if (phoneInput) phoneInput.value = '';
+                if (addressInput) addressInput.value = '';
+                if (notesInput) notesInput.value = '';
+                
+                showMessage('Order sent to Messenger!', 'success');
+            } catch (error) {
+                console.error('Error sending order to Messenger:', error);
+                showMessage('Error sending order to Messenger', 'error');
+            }
         }
 
         function saveOrderToHistory() {
-            const orders = JSON.parse(localStorage.getItem('goatKidsOrders') || '[]');
-            const order = {
-                id: Date.now(),
-                date: new Date().toISOString(),
-                customer: {
-                    name: document.getElementById('customerName').value.trim(),
-                    phone: document.getElementById('customerPhone').value.trim(),
-                    address: document.getElementById('customerAddress').value.trim(),
-                    notes: document.getElementById('customerNotes').value.trim()
-                },
-                items: [...cart],
-                payment: selectedPaymentMethod,
-                total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) + 5
-            };
-            orders.unshift(order);
-            localStorage.setItem('goatKidsOrders', JSON.stringify(orders.slice(0, 50))); // Keep last 50 orders
+            try {
+                const orders = JSON.parse(localStorage.getItem('goatKidsOrders') || '[]');
+                const nameInput = document.getElementById('customerName');
+                const phoneInput = document.getElementById('customerPhone');
+                const addressInput = document.getElementById('customerAddress');
+                const notesInput = document.getElementById('customerNotes');
+                
+                const order = {
+                    id: Date.now(),
+                    date: new Date().toISOString(),
+                    customer: {
+                        name: nameInput ? nameInput.value.trim() : '',
+                        phone: phoneInput ? phoneInput.value.trim() : '',
+                        address: addressInput ? addressInput.value.trim() : '',
+                        notes: notesInput ? notesInput.value.trim() : ''
+                    },
+                    items: [...cart],
+                    payment: selectedPaymentMethod,
+                    total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) + 5
+                };
+                orders.unshift(order);
+                localStorage.setItem('goatKidsOrders', JSON.stringify(orders.slice(0, 50))); // Keep last 50 orders
+            } catch (error) {
+                console.error('Error saving order history:', error);
+            }
         }
 
         // ============================================
-        // ADMIN INVENTORY FUNCTIONS
+        // ADMIN INVENTORY FUNCTIONS - FIXED
         // ============================================
         function refreshInventory() {
-            if (!isAdmin) return;
-            
-            document.getElementById('productCount').textContent = products.length;
-            
-            const tbody = document.getElementById('inventoryTableBody');
-            tbody.innerHTML = products.map(product => `
-                <tr>
-                    <td style="padding: 12px;">
-                        <img src="${product.image}" alt="${product.name}" 
-                             style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px;"
-                             onerror="this.onerror=null; this.src='https://via.placeholder.com/50x50/f5f7ff/4a6ee0?text=GOAT';">
-                    </td>
-                    <td style="padding: 12px;">${product.name}</td>
-                    <td style="padding: 12px;">
-                        <span style="background: var(--gray-light); padding: 4px 10px; border-radius: 20px; font-size: 0.85rem;">
-                            ${product.category}
-                        </span>
-                    </td>
-                    <td style="padding: 12px; font-weight: 600;">$${product.price.toFixed(2)}</td>
-                    <td style="padding: 12px;">
-                        <span class="product-stock ${product.stock > 10 ? 'in-stock' : product.stock > 0 ? 'low-stock' : 'out-of-stock'}"
-                              style="padding: 4px 10px; border-radius: 20px; font-size: 0.85rem;">
-                            ${product.stock}
-                        </span>
-                    </td>
-                    <td style="padding: 12px;">
-                        <button class="btn btn-outline btn-small" onclick="editProduct(${product.id})">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-danger btn-small" onclick="deleteProduct(${product.id})">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
+            try {
+                if (!isAdmin) return;
+                
+                const productCount = document.getElementById('productCount');
+                if (productCount) productCount.textContent = products.length;
+                
+                const tbody = document.getElementById('inventoryTableBody');
+                if (!tbody) return;
+                
+                tbody.innerHTML = products.map(product => {
+                    let stockClass = 'in-stock';
+                    if (product.stock > 10) {
+                        stockClass = 'in-stock';
+                    } else if (product.stock > 0) {
+                        stockClass = 'low-stock';
+                    } else {
+                        stockClass = 'out-of-stock';
+                    }
+                    
+                    return `
+                        <tr>
+                            <td style="padding: 12px;">
+                                <img src="${product.image}" alt="${product.name}" 
+                                     style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px;"
+                                     onerror="this.onerror=null; this.src='https://via.placeholder.com/50x50/f5f7ff/4a6ee0?text=GOAT';">
+                            </td>
+                            <td style="padding: 12px;">${product.name}</td>
+                            <td style="padding: 12px;">
+                                <span style="background: var(--gray-light); padding: 4px 10px; border-radius: 20px; font-size: 0.85rem;">
+                                    ${product.category}
+                                </span>
+                            </td>
+                            <td style="padding: 12px; font-weight: 600;">$${product.price.toFixed(2)}</td>
+                            <td style="padding: 12px;">
+                                <span class="product-stock ${stockClass}"
+                                      style="padding: 4px 10px; border-radius: 20px; font-size: 0.85rem;">
+                                    ${product.stock}
+                                </span>
+                            </td>
+                            <td style="padding: 12px;">
+                                <button class="btn btn-outline btn-small" onclick="editProduct(${product.id})">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-danger btn-small" onclick="deleteProduct(${product.id})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error refreshing inventory:', error);
+            }
         }
 
         function editProduct(productId) {
-            if (!isAdmin) {
-                adminLogin();
-                return;
-            }
-            
-            selectedProductForEditing = products.find(p => p.id === productId);
-            if (!selectedProductForEditing) return;
-            
-            const editModal = document.createElement('div');
-            editModal.className = 'modal';
-            editModal.style.display = 'flex';
-            editModal.innerHTML = `
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3 class="modal-title">Edit Product</h3>
-                        <button class="modal-close" onclick="this.parentElement.parentElement.parentElement.remove()">&times;</button>
-                    </div>
-                    <div style="padding: 20px;">
-                        <div class="form-group">
-                            <label class="form-label">Product Name</label>
-                            <input type="text" id="editName" class="form-control" value="${selectedProductForEditing.name}">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Category</label>
-                            <input type="text" id="editCategory" class="form-control" value="${selectedProductForEditing.category}">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Price ($)</label>
-                            <input type="number" id="editPrice" class="form-control" step="0.01" min="0" value="${selectedProductForEditing.price}">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Stock</label>
-                            <input type="number" id="editStock" class="form-control" min="0" value="${selectedProductForEditing.stock}">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Image URL</label>
-                            <input type="text" id="editImage" class="form-control" value="${selectedProductForEditing.image}">
-                        </div>
-                        <div class="btn-group">
-                            <button class="btn-admin btn-green" onclick="saveEditedProduct()">
-                                <i class="fas fa-save"></i> Save Changes
-                            </button>
-                            <button class="btn-admin btn-danger" onclick="this.parentElement.parentElement.parentElement.parentElement.remove()">
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(editModal);
-        }
-
-        function saveEditedProduct() {
-            if (!selectedProductForEditing) return;
-            
-            selectedProductForEditing.name = document.getElementById('editName').value.trim();
-            selectedProductForEditing.category = document.getElementById('editCategory').value.trim().toLowerCase();
-            selectedProductForEditing.price = parseFloat(document.getElementById('editPrice').value);
-            selectedProductForEditing.stock = parseInt(document.getElementById('editStock').value);
-            selectedProductForEditing.image = document.getElementById('editImage').value.trim();
-            
-            saveProducts();
-            renderProducts();
-            refreshInventory();
-            refreshStoreStats();
-            
-            // Close modal
-            document.querySelector('.modal:last-child')?.remove();
-            showMessage('Product updated successfully!', 'success');
-        }
-
-        function deleteProduct(productId) {
-            if (!confirm('Delete this product?')) return;
-            
-            products = products.filter(p => p.id !== productId);
-            saveProducts();
-            renderProducts();
-            refreshInventory();
-            refreshStoreStats();
-            
-            showMessage('Product deleted!', 'success');
-        }
-
-        function addSingleProduct() {
-            const name = document.getElementById('productName').value.trim();
-            const price = parseFloat(document.getElementById('productPrice').value);
-            const stock = parseInt(document.getElementById('productStock').value);
-            const category = document.getElementById('productCategory').value.trim().toLowerCase();
-            const imageUrl = document.getElementById('productImageUrl').value.trim() || 
-                            uploadedPhotos[0]?.url || 
-                            'https://via.placeholder.com/400x400/f5f7ff/4a6ee0?text=GOAT+KIDS';
-            
-            if (!name || isNaN(price) || isNaN(stock) || !category) {
-                showMessage('Please fill all fields correctly!', 'error');
-                return;
-            }
-            
-            const newProduct = {
-                id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
-                name,
-                price,
-                stock,
-                category,
-                image: imageUrl
-            };
-            
-            products.push(newProduct);
-            saveProducts();
-            renderProducts();
-            refreshInventory();
-            refreshStoreStats();
-            
-            // Clear form
-            document.getElementById('productName').value = '';
-            document.getElementById('productPrice').value = '';
-            document.getElementById('productStock').value = '';
-            document.getElementById('productCategory').value = '';
-            document.getElementById('productImageUrl').value = '';
-            
-            showMessage('Product added successfully!', 'success');
-        }
-
-        function exportInventory() {
-            const headers = ['Name', 'Category', 'Price', 'Stock', 'Image URL'];
-            const csv = [
-                headers.join(','),
-                ...products.map(p => [
-                    `"${p.name.replace(/"/g, '""')}"`,
-                    p.category,
-                    p.price.toFixed(2),
-                    p.stock,
-                    p.image
-                ].join(','))
-            ].join('\n');
-            
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            link.href = url;
-            link.download = `goatkids_inventory_${new Date().toISOString().split('T')[0]}.csv`;
-            link.click();
-            URL.revokeObjectURL(url);
-            
-            showMessage('Inventory exported as CSV!', 'success');
-        }
-
-        // ============================================
-        // PHOTO MANAGEMENT
-        // ============================================
-        function handlePhotoUpload(event) {
-            const files = event.target.files;
-            if (!files.length) return;
-            
-            Array.from(files).forEach(file => {
-                if (file.size > 2 * 1024 * 1024) {
-                    showMessage(`${file.name} is too large (max 2MB)`, 'error');
+            try {
+                if (!isAdmin) {
+                    adminLogin();
                     return;
                 }
                 
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    uploadedPhotos.push({
-                        name: file.name,
-                        url: e.target.result,
-                        size: (file.size / 1024 / 1024).toFixed(2) + 'MB'
-                    });
-                    updatePhotoPreview();
+                selectedProductForEditing = products.find(p => p.id === productId);
+                if (!selectedProductForEditing) return;
+                
+                const editModal = document.createElement('div');
+                editModal.className = 'modal';
+                editModal.style.display = 'flex';
+                editModal.innerHTML = `
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3 class="modal-title">Edit Product</h3>
+                            <button class="modal-close" onclick="this.parentElement.parentElement.parentElement.remove()">&times;</button>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="form-group">
+                                <label class="form-label">Product Name</label>
+                                <input type="text" id="editName" class="form-control" value="${selectedProductForEditing.name.replace(/"/g, '&quot;')}">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Category</label>
+                                <input type="text" id="editCategory" class="form-control" value="${selectedProductForEditing.category.replace(/"/g, '&quot;')}">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Price ($)</label>
+                                <input type="number" id="editPrice" class="form-control" step="0.01" min="0" value="${selectedProductForEditing.price}">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Stock</label>
+                                <input type="number" id="editStock" class="form-control" min="0" value="${selectedProductForEditing.stock}">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Image URL</label>
+                                <input type="text" id="editImage" class="form-control" value="${selectedProductForEditing.image.replace(/"/g, '&quot;')}">
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn-admin btn-green" onclick="saveEditedProduct()">
+                                    <i class="fas fa-save"></i> Save Changes
+                                </button>
+                                <button class="btn-admin btn-danger" onclick="this.parentElement.parentElement.parentElement.parentElement.remove()">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(editModal);
+            } catch (error) {
+                console.error('Error editing product:', error);
+                showMessage('Error editing product', 'error');
+            }
+        }
+
+        function saveEditedProduct() {
+            try {
+                if (!selectedProductForEditing) return;
+                
+                const editName = document.getElementById('editName');
+                const editCategory = document.getElementById('editCategory');
+                const editPrice = document.getElementById('editPrice');
+                const editStock = document.getElementById('editStock');
+                const editImage = document.getElementById('editImage');
+                
+                if (editName) selectedProductForEditing.name = editName.value.trim();
+                if (editCategory) selectedProductForEditing.category = editCategory.value.trim().toLowerCase();
+                if (editPrice) selectedProductForEditing.price = parseFloat(editPrice.value) || 0;
+                if (editStock) selectedProductForEditing.stock = parseInt(editStock.value) || 0;
+                if (editImage) selectedProductForEditing.image = editImage.value.trim();
+                
+                saveProducts();
+                renderProducts();
+                refreshInventory();
+                
+                // Close modal
+                const modal = document.querySelector('.modal:last-child');
+                if (modal) modal.remove();
+                
+                showMessage('Product updated successfully!', 'success');
+            } catch (error) {
+                console.error('Error saving edited product:', error);
+                showMessage('Error saving product changes', 'error');
+            }
+        }
+
+        function deleteProduct(productId) {
+            try {
+                if (!confirm('Delete this product?')) return;
+                
+                products = products.filter(p => p.id !== productId);
+                saveProducts();
+                renderProducts();
+                refreshInventory();
+                
+                showMessage('Product deleted!', 'success');
+            } catch (error) {
+                console.error('Error deleting product:', error);
+                showMessage('Error deleting product', 'error');
+            }
+        }
+
+        function addSingleProduct() {
+            try {
+                const nameInput = document.getElementById('productName');
+                const priceInput = document.getElementById('productPrice');
+                const stockInput = document.getElementById('productStock');
+                const categoryInput = document.getElementById('productCategory');
+                const imageUrlInput = document.getElementById('productImageUrl');
+                
+                const name = nameInput ? nameInput.value.trim() : '';
+                const price = priceInput ? parseFloat(priceInput.value) : 0;
+                const stock = stockInput ? parseInt(stockInput.value) : 0;
+                const category = categoryInput ? categoryInput.value.trim().toLowerCase() : '';
+                const imageUrl = imageUrlInput ? imageUrlInput.value.trim() : 
+                                (uploadedPhotos[0] && uploadedPhotos[0].url) || 
+                                'https://via.placeholder.com/400x400/f5f7ff/4a6ee0?text=GOAT+KIDS';
+                
+                if (!name || isNaN(price) || price <= 0 || isNaN(stock) || stock < 0 || !category) {
+                    showMessage('Please fill all fields correctly!', 'error');
+                    return;
+                }
+                
+                const newProduct = {
+                    id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
+                    name,
+                    price,
+                    stock,
+                    category,
+                    image: imageUrl
                 };
-                reader.readAsDataURL(file);
-            });
-            
-            document.getElementById('photoPreview').classList.remove('d-none');
-            showMessage(`${files.length} photos uploaded!`, 'success');
+                
+                products.push(newProduct);
+                saveProducts();
+                renderProducts();
+                refreshInventory();
+                
+                // Clear form
+                if (nameInput) nameInput.value = '';
+                if (priceInput) priceInput.value = '';
+                if (stockInput) stockInput.value = '';
+                if (categoryInput) categoryInput.value = '';
+                if (imageUrlInput) imageUrlInput.value = '';
+                
+                showMessage('Product added successfully!', 'success');
+            } catch (error) {
+                console.error('Error adding product:', error);
+                showMessage('Error adding product', 'error');
+            }
+        }
+
+        function exportInventory() {
+            try {
+                const headers = ['Name', 'Category', 'Price', 'Stock', 'Image URL'];
+                const csv = [
+                    headers.join(','),
+                    ...products.map(p => [
+                        `"${p.name.replace(/"/g, '""')}"`,
+                        p.category,
+                        p.price.toFixed(2),
+                        p.stock,
+                        p.image
+                    ].join(','))
+                ].join('\n');
+                
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.href = url;
+                link.download = `goatkids_inventory_${new Date().toISOString().split('T')[0]}.csv`;
+                link.click();
+                URL.revokeObjectURL(url);
+                
+                showMessage('Inventory exported as CSV!', 'success');
+            } catch (error) {
+                console.error('Error exporting inventory:', error);
+                showMessage('Error exporting inventory', 'error');
+            }
+        }
+
+        // ============================================
+        // PHOTO MANAGEMENT - FIXED
+        // ============================================
+        function handlePhotoUpload(event) {
+            try {
+                const files = event.target.files;
+                if (!files || !files.length) return;
+                
+                Array.from(files).forEach(file => {
+                    if (file.size > 2 * 1024 * 1024) {
+                        showMessage(`${file.name} is too large (max 2MB)`, 'error');
+                        return;
+                    }
+                    
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        uploadedPhotos.push({
+                            name: file.name,
+                            url: e.target.result,
+                            size: (file.size / 1024 / 1024).toFixed(2) + 'MB'
+                        });
+                        updatePhotoPreview();
+                    };
+                    reader.readAsDataURL(file);
+                });
+                
+                const photoPreview = document.getElementById('photoPreview');
+                if (photoPreview) photoPreview.classList.remove('d-none');
+                
+                showMessage(`${files.length} photos uploaded!`, 'success');
+            } catch (error) {
+                console.error('Error uploading photos:', error);
+                showMessage('Error uploading photos', 'error');
+            }
         }
 
         function updatePhotoPreview() {
-            const container = document.getElementById('photoPreviewGrid');
-            container.innerHTML = uploadedPhotos.map((photo, index) => `
-                <div class="photo-preview-item">
-                    <img src="${photo.url}" alt="${photo.name}">
-                    <div style="padding: 8px; background: rgba(0,0,0,0.7); color: white; font-size: 0.8rem;">
-                        ${photo.name} (${photo.size})
+            try {
+                const container = document.getElementById('photoPreviewGrid');
+                if (!container) return;
+                
+                container.innerHTML = uploadedPhotos.map((photo, index) => `
+                    <div class="photo-preview-item">
+                        <img src="${photo.url}" alt="${photo.name}">
+                        <div style="padding: 8px; background: rgba(0,0,0,0.7); color: white; font-size: 0.8rem;">
+                            ${photo.name} (${photo.size})
+                        </div>
+                        <button class="remove-photo" onclick="removePhoto(${index})" aria-label="Remove photo">
+                            <i class="fas fa-times"></i>
+                        </button>
                     </div>
-                    <button class="remove-photo" onclick="removePhoto(${index})" aria-label="Remove photo">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-            `).join('');
+                `).join('');
+            } catch (error) {
+                console.error('Error updating photo preview:', error);
+            }
         }
 
         function removePhoto(index) {
-            uploadedPhotos.splice(index, 1);
-            updatePhotoPreview();
-            if (uploadedPhotos.length === 0) {
-                document.getElementById('photoPreview').classList.add('d-none');
+            try {
+                uploadedPhotos.splice(index, 1);
+                updatePhotoPreview();
+                if (uploadedPhotos.length === 0) {
+                    const photoPreview = document.getElementById('photoPreview');
+                    if (photoPreview) photoPreview.classList.add('d-none');
+                }
+            } catch (error) {
+                console.error('Error removing photo:', error);
             }
         }
 
         function clearPhotoUploads() {
-            if (!confirm('Clear all uploaded photos?')) return;
-            uploadedPhotos = [];
-            document.getElementById('photoPreview').classList.add('d-none');
-            document.getElementById('photoFiles').value = '';
-            showMessage('Photos cleared!', 'info');
+            try {
+                if (!confirm('Clear all uploaded photos?')) return;
+                uploadedPhotos = [];
+                const photoPreview = document.getElementById('photoPreview');
+                if (photoPreview) photoPreview.classList.add('d-none');
+                const photoFiles = document.getElementById('photoFiles');
+                if (photoFiles) photoFiles.value = '';
+                showMessage('Photos cleared!', 'info');
+            } catch (error) {
+                console.error('Error clearing photo uploads:', error);
+            }
         }
 
         function showPhotoSelector() {
-            const modal = document.createElement('div');
-            modal.className = 'modal';
-            modal.style.display = 'flex';
-            modal.innerHTML = `
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3 class="modal-title">Select Photo</h3>
-                        <button class="modal-close" onclick="this.parentElement.parentElement.parentElement.remove()">&times;</button>
+            try {
+                const modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.style.display = 'flex';
+                modal.innerHTML = `
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3 class="modal-title">Select Photo</h3>
+                            <button class="modal-close" onclick="this.parentElement.parentElement.parentElement.remove()">&times;</button>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="photo-preview-grid" id="selectorGrid">
+                                ${uploadedPhotos.map((photo, index) => `
+                                    <div class="photo-preview-item" onclick="selectPhoto('${photo.url.replace(/'/g, "\\'")}', this)">
+                                        <img src="${photo.url}" alt="${photo.name}">
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="form-group mt-20">
+                                <input type="text" id="manualImageUrl" class="form-control" placeholder="Or enter image URL">
+                            </div>
+                            <div class="btn-group mt-20">
+                                <button class="btn-admin btn-green" onclick="useSelectedPhoto()">
+                                    <i class="fas fa-check"></i> Use Selected
+                                </button>
+                                <button class="btn-admin btn-danger" onclick="this.parentElement.parentElement.parentElement.parentElement.remove()">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div style="padding: 20px;">
-                        <div class="photo-preview-grid" id="selectorGrid">
-                            ${uploadedPhotos.map((photo, index) => `
-                                <div class="photo-preview-item" onclick="selectPhoto('${photo.url}', this)">
-                                    <img src="${photo.url}" alt="${photo.name}">
-                                </div>
-                            `).join('')}
-                        </div>
-                        <div class="form-group mt-20">
-                            <input type="text" id="manualImageUrl" class="form-control" placeholder="Or enter image URL">
-                        </div>
-                        <div class="btn-group mt-20">
-                            <button class="btn-admin btn-green" onclick="useSelectedPhoto()">
-                                <i class="fas fa-check"></i> Use Selected
-                            </button>
-                            <button class="btn-admin btn-danger" onclick="this.parentElement.parentElement.parentElement.parentElement.remove()">
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(modal);
+                `;
+                
+                document.body.appendChild(modal);
+            } catch (error) {
+                console.error('Error showing photo selector:', error);
+                showMessage('Error showing photo selector', 'error');
+            }
         }
 
         function selectPhoto(url, element) {
-            document.querySelectorAll('#selectorGrid .photo-preview-item').forEach(el => {
-                el.style.border = '2px solid transparent';
-            });
-            element.style.border = '2px solid var(--primary)';
-            selectedPhotoForProduct = url;
+            try {
+                document.querySelectorAll('#selectorGrid .photo-preview-item').forEach(el => {
+                    if (el) el.style.border = '2px solid transparent';
+                });
+                if (element) element.style.border = '2px solid var(--primary)';
+                selectedPhotoForProduct = url;
+            } catch (error) {
+                console.error('Error selecting photo:', error);
+            }
         }
 
         function useSelectedPhoto() {
-            const manualUrl = document.getElementById('manualImageUrl').value.trim();
-            if (manualUrl) {
-                selectedPhotoForProduct = manualUrl;
+            try {
+                const manualUrlInput = document.getElementById('manualImageUrl');
+                if (manualUrlInput && manualUrlInput.value.trim()) {
+                    selectedPhotoForProduct = manualUrlInput.value.trim();
+                }
+                
+                if (selectedPhotoForProduct) {
+                    const productImageUrl = document.getElementById('productImageUrl');
+                    if (productImageUrl) productImageUrl.value = selectedPhotoForProduct;
+                }
+                
+                const modal = document.querySelector('.modal:last-child');
+                if (modal) modal.remove();
+            } catch (error) {
+                console.error('Error using selected photo:', error);
             }
-            
-            if (selectedPhotoForProduct) {
-                document.getElementById('productImageUrl').value = selectedPhotoForProduct;
-            }
-            
-            document.querySelector('.modal:last-child')?.remove();
         }
 
         function autoAssignPhotos() {
-            if (uploadedPhotos.length === 0) {
-                showMessage('No photos to assign!', 'warning');
-                return;
-            }
-            
-            products.forEach((product, index) => {
-                if (index < uploadedPhotos.length) {
-                    product.image = uploadedPhotos[index].url;
+            try {
+                if (uploadedPhotos.length === 0) {
+                    showMessage('No photos to assign!', 'warning');
+                    return;
                 }
-            });
-            
-            saveProducts();
-            renderProducts();
-            refreshInventory();
-            showMessage('Photos assigned to products!', 'success');
+                
+                products.forEach((product, index) => {
+                    if (index < uploadedPhotos.length) {
+                        product.image = uploadedPhotos[index].url;
+                    }
+                });
+                
+                saveProducts();
+                renderProducts();
+                refreshInventory();
+                showMessage('Photos assigned to products!', 'success');
+            } catch (error) {
+                console.error('Error auto-assigning photos:', error);
+                showMessage('Error assigning photos', 'error');
+            }
         }
 
         // ============================================
-        // UTILITY FUNCTIONS
+        // UTILITY FUNCTIONS - FIXED
         // ============================================
         function showMessage(text, type = 'info') {
-            const area = document.getElementById('messageArea');
-            if (!area) return;
-            
-            const message = document.createElement('div');
-            message.className = `message message-${type}`;
-            message.innerHTML = `
-                <div>
-                    <span>${text}</span>
-                    <button onclick="this.parentElement.parentElement.remove()" style="background:none; border:none; color:inherit; cursor:pointer; padding:5px;">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-            `;
-            
-            area.insertBefore(message, area.firstChild);
-            
-            // Remove after 5 seconds
-            setTimeout(() => {
-                if (message.parentElement) {
-                    message.style.opacity = '0';
-                    message.style.transform = 'translateX(-20px)';
-                    setTimeout(() => message.remove(), 300);
-                }
-            }, 5000);
-        }
-
- // ===================================================
-// CROSS-BROWSER COMPATIBILITY ENHANCEMENTS
-// ====================================================
-
-// Service Worker for PWA features (optional)
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-        navigator.serviceWorker.register('sw.js').catch(err => {
-            console.log('ServiceWorker registration failed: ', err);
-        });
-    });
-}
-
-// Ensure localStorage works across browsers
-function ensureLocalStorage() {
-    try {
-        localStorage.setItem('test', 'test');
-        localStorage.removeItem('test');
-        return true;
-    } catch (e) {
-        console.warn('LocalStorage not available, using in-memory storage');
-        return false;
-    }
-}
-
-// ===================================================
-// BROWSER DETECTION & FIXES
-// ===================================================
-
-// Safari detection - this regex is CORRECT
-const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-
-// Apply Safari-specific fixes
-if (isSafari) {
-    console.log('🔍 Safari browser detected - applying fixes');
-    
-    // Add Safari class to body for CSS targeting
-    document.body.classList.add('browser-safari');
-    
-    // Fix 1: Mobile Safari 100vh issue
-    function fixSafariViewportHeight() {
-        const vh = window.innerHeight * 0.01;
-        document.documentElement.style.setProperty('--vh', `${vh}px`);
-    }
-    
-    fixSafariViewportHeight();
-    window.addEventListener('resize', fixSafariViewportHeight);
-    window.addEventListener('orientationchange', fixSafariViewportHeight);
-    
-    // Fix 2: Input/textarea styling in Safari
-    const safariStyleFix = document.createElement('style');
-    safariStyleFix.textContent = `
-        /* Safari input fixes */
-        .browser-safari input[type="text"],
-        .browser-safari input[type="number"],
-        .browser-safari input[type="tel"],
-        .browser-safari input[type="email"],
-        .browser-safari textarea,
-        .browser-safari select {
-            -webkit-appearance: none;
-            appearance: none;
-            border-radius: var(--radius-sm);
-            padding: 12px 15px !important;
-        }
-        
-        /* Fix Safari button rendering */
-        .browser-safari button {
-            -webkit-appearance: none;
-            appearance: none;
-        }
-        
-        /* Fix for Safari's date/time inputs */
-        .browser-safari input[type="date"],
-        .browser-safari input[type="time"] {
-            min-height: 44px; /* Better touch target */
-        }
-        
-        /* Fix Safari flexbox gap for older versions */
-        @supports not (gap: 1rem) {
-            .browser-safari .product-grid {
-                margin: -12.5px;
-            }
-            .browser-safari .product-card {
-                margin: 12.5px;
-            }
-        }
-        
-        /* Fix for Safari's 100vh issue on mobile */
-        .browser-safari .full-height {
-            height: calc(var(--vh, 1vh) * 100);
-        }
-    `;
-    document.head.appendChild(safariStyleFix);
-    
-    // Fix 3: Safari smooth scrolling behavior
-    if (CSS.supports('scroll-behavior', 'smooth')) {
-        document.documentElement.style.setProperty('--safari-scroll', 'smooth');
-    }
-    
-    // Fix 4: Safari localStorage quirks (sometimes needs a delay)
-    setTimeout(() => {
-        if (typeof localStorage !== 'undefined') {
             try {
-                localStorage.setItem('safari_test', 'ok');
-                localStorage.removeItem('safari_test');
-            } catch (e) {
-                console.warn('Safari localStorage issue detected');
+                const area = document.getElementById('messageArea');
+                if (!area) return;
+                
+                const message = document.createElement('div');
+                message.className = `message message-${type}`;
+                message.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <span>${text}</span>
+                        <button onclick="this.parentElement.parentElement.remove()" style="background:none; border:none; color:inherit; cursor:pointer; padding:5px;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                
+                area.insertBefore(message, area.firstChild);
+                
+                // Remove after 5 seconds
+                setTimeout(() => {
+                    if (message.parentElement) {
+                        message.style.opacity = '0';
+                        message.style.transform = 'translateX(-20px)';
+                        setTimeout(() => message.remove(), 300);
+                    }
+                }, 5000);
+            } catch (error) {
+                console.error('Error showing message:', error);
+                // Fallback to alert for critical messages
+                if (type === 'error') {
+                    alert(text);
+                }
             }
         }
-    }, 100);
-}
 
-// Additional browser detection
-const isChrome = /chrome|chromium|crios/i.test(navigator.userAgent);
-const isFirefox = /firefox|fxios/i.test(navigator.userAgent);
-const isEdge = /edg/i.test(navigator.userAgent);
-const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-const isAndroid = /android/i.test(navigator.userAgent);
-
-// iOS-specific fixes
-if (isIOS) {
-    document.body.classList.add('platform-ios');
-    
-    // Fix for iOS zoom on input focus
-    const iOSStyleFix = document.createElement('style');
-    iOSStyleFix.textContent = `
-        @media screen and (max-width: 768px) {
-            .platform-ios input,
-            .platform-ios textarea,
-            .platform-ios select {
-                font-size: 16px !important; /* Prevents iOS zoom */
+        function closePhotoSelector() {
+            try {
+                const modal = document.getElementById('photoSelectorModal');
+                if (modal) modal.style.display = 'none';
+            } catch (error) {
+                console.error('Error closing photo selector:', error);
             }
+        }
+
+        function confirmOrder() {
+            try {
+                sendOrderToMessenger();
+                closeOrderModal();
+            } catch (error) {
+                console.error('Error confirming order:', error);
+            }
+        }
+
+        function closeOrderModal() {
+            try {
+                const modal = document.getElementById('orderModal');
+                if (modal) modal.style.display = 'none';
+            } catch (error) {
+                console.error('Error closing order modal:', error);
+            }
+        }
+
+        // ============================================
+        // BROWSER COMPATIBILITY POLYFILLS
+        // ============================================
+        
+        // Polyfill for Object.values if needed
+        if (!Object.values) {
+            Object.values = function(obj) {
+                return Object.keys(obj).map(key => obj[key]);
+            };
         }
         
-        /* Fix iOS button active states */
-        .platform-ios button:active {
-            opacity: 0.7;
-        }
-    `;
-    document.head.appendChild(iOSStyleFix);
-}
-
-// Android-specific fixes
-if (isAndroid && !isChrome) {
-    document.body.classList.add('platform-android');
-    
-    // Fix for Android WebView rendering issues
-    const androidStyleFix = document.createElement('style');
-    androidStyleFix.textContent = `
-        .platform-android .modal-content {
-            -webkit-transform: translateZ(0);
-            transform: translateZ(0);
-        }
-    `;
-    document.head.appendChild(androidStyleFix);
-}
-
-// Facebook in-app browser detection
-const isFacebookApp = /FBAN|FBAV/i.test(navigator.userAgent);
-if (isFacebookApp) {
-    document.body.classList.add('browser-facebook');
-    console.log('📱 Facebook in-app browser detected');
-    
-    // Fix for Facebook browser issues
-    const fbStyleFix = document.createElement('style');
-    fbStyleFix.textContent = `
-        .browser-facebook {
-            /* Facebook browser specific fixes */
+        // Polyfill for Array.from if needed
+        if (!Array.from) {
+            Array.from = (function () {
+                var toStr = Object.prototype.toString;
+                var isCallable = function (fn) {
+                    return typeof fn === 'function' || toStr.call(fn) === '[object Function]';
+                };
+                var toInteger = function (value) {
+                    var number = Number(value);
+                    if (isNaN(number)) { return 0; }
+                    if (number === 0 || !isFinite(number)) { return number; }
+                    return (number > 0 ? 1 : -1) * Math.floor(Math.abs(number));
+                };
+                var maxSafeInteger = Math.pow(2, 53) - 1;
+                var toLength = function (value) {
+                    var len = toInteger(value);
+                    return Math.min(Math.max(len, 0), maxSafeInteger);
+                };
+                return function from(arrayLike/*, mapFn, thisArg */) {
+                    var C = this;
+                    var items = Object(arrayLike);
+                    if (arrayLike == null) {
+                        throw new TypeError('Array.from requires an array-like object - not null or undefined');
+                    }
+                    var mapFn = arguments.length > 1 ? arguments[1] : void undefined;
+                    var T;
+                    if (typeof mapFn !== 'undefined') {
+                        if (!isCallable(mapFn)) {
+                            throw new TypeError('Array.from: when provided, the second argument must be a function');
+                        }
+                        if (arguments.length > 2) {
+                            T = arguments[2];
+                        }
+                    }
+                    var len = toLength(items.length);
+                    var A = isCallable(C) ? Object(new C(len)) : new Array(len);
+                    var k = 0;
+                    var kValue;
+                    while (k < len) {
+                        kValue = items[k];
+                        if (mapFn) {
+                            A[k] = typeof T === 'undefined' ? mapFn(kValue, k) : mapFn.call(T, kValue, k);
+                        } else {
+                            A[k] = kValue;
+                        }
+                        k += 1;
+                    }
+                    A.length = len;
+                    return A;
+                };
+            }());
         }
         
-        /* Fix Facebook browser's aggressive caching */
-        .browser-facebook .product-image {
-            image-rendering: -webkit-optimize-contrast;
-        }
-    `;
-    document.head.appendChild(fbStyleFix);
-}
-
-// Feature detection fallbacks
-function detectBrowserFeatures() {
-    const features = {
-        hasLocalStorage: typeof localStorage !== 'undefined',
-        hasSessionStorage: typeof sessionStorage !== 'undefined',
-        hasTouch: 'ontouchstart' in window || navigator.maxTouchPoints > 0,
-        hasGeolocation: 'geolocation' in navigator,
-        hasServiceWorker: 'serviceWorker' in navigator,
-        supportsFlexGap: CSS.supports('gap', '1px'),
-        supportsGrid: CSS.supports('display', 'grid'),
-        supportsSticky: CSS.supports('position', 'sticky'),
-        supportsObjectFit: CSS.supports('object-fit', 'cover')
-    };
-    
-    // Apply polyfills or fallbacks based on feature detection
-    if (!features.supportsFlexGap) {
-        console.log('⚠️ Flexbox gap not supported, applying fallback');
-        // You could add a fallback CSS class here
-    }
-    
-    if (!features.supportsObjectFit) {
-        console.log('⚠️ object-fit not supported, applying fallback');
-        document.querySelectorAll('img[style*="object-fit"]').forEach(img => {
-            img.style.backgroundImage = `url(${img.src})`;
-            img.style.backgroundSize = 'cover';
-            img.style.backgroundPosition = 'center';
-            img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>';
-        });
-    }
-    
-    return features;
-}
-
-// Initialize browser features detection
-document.addEventListener('DOMContentLoaded', function() {
-    const browserFeatures = detectBrowserFeatures();
-    
-    // Store features for debugging
-    window.browserFeatures = browserFeatures;
-    
-    // Show warning for critical missing features
-    if (!browserFeatures.hasLocalStorage) {
-        console.error('❌ localStorage not available - cart and admin features will not persist');
-        showMessage('Your browser settings may limit some features. Please enable cookies and site data.', 'warning');
-    }
-});
-
-// Global helper to check browser
-window.getBrowserInfo = function() {
-    return {
-        isSafari,
-        isChrome,
-        isFirefox,
-        isEdge,
-        isIOS,
-        isAndroid,
-        isFacebookApp,
-        userAgent: navigator.userAgent,
-        platform: navigator.platform,
-        language: navigator.language
-    };
-};
-        // Facebook in-app browser detection
-        const isFacebook = /FBAN|FBAV/i.test(navigator.userAgent);
-        if (isFacebook) {
-            // Add specific styles for Facebook browser
-            document.body.classList.add('facebook-browser');
+        // Ensure console.log exists in older browsers
+        if (typeof console === 'undefined') {
+            console = {
+                log: function() {},
+                error: function() {},
+                warn: function() {},
+                info: function() {}
+            };
         }
 
-        // Make sure links work in all browsers
-        document.addEventListener('click', function(e) {
-            if (e.target.matches('a[href^="http"]')) {
-                e.preventDefault();
-                window.open(e.target.href, '_blank');
-            }
-        });
+        // Initialize the app
+        console.log('GOAT KIDS Store Ready!');
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
