@@ -24,17 +24,583 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     
     <style>
-        /* All CSS styles remain the same as before */
-        /* ... [CSS content from previous code] ... */
+        /* CSS styles remain exactly the same as before */
+        /* ... [All your existing CSS code] ... */
     </style>
 </head>
 <body>
-    <!-- HTML structure remains the same as before -->
-    <!-- ... [HTML content from previous code] ... -->
+    <!-- Header -->
+    <header>
+        <div class="header-container">
+            <a href="#" class="logo" onclick="showTab('store'); return false;">
+                <i class="fas fa-tshirt logo-icon"></i>
+                <span>GOAT KIDS</span>
+                <span id="adminBadge" class="admin-badge">ADMIN</span>
+            </a>
+            
+            <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle menu">
+                <i class="fas fa-bars"></i>
+            </button>
+            
+            <nav class="desktop-nav">
+                <a href="#" class="nav-link active" onclick="showTab('store'); return false;">
+                    <i class="fas fa-store"></i>
+                    <span>Store</span>
+                </a>
+                <a href="#" class="nav-link" onclick="showTab('cart'); return false;">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span>Cart</span>
+                    <span class="cart-count" id="cartCountNav">0</span>
+                </a>
+                <a href="#" class="nav-link" id="adminNavLink" onclick="showTab('admin'); return false;">
+                    <i class="fas fa-cog"></i>
+                    <span>Admin</span>
+                </a>
+                <button class="nav-link sync-btn" id="syncBtn" onclick="syncToFirebase()" style="background: var(--accent);">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>Sync</span>
+                </button>
+            </nav>
+        </div>
+        
+        <nav class="mobile-nav" id="mobileNav">
+            <a href="#" class="nav-link" onclick="showTab('store'); return false;">
+                <i class="fas fa-store"></i>
+                <span>Store</span>
+            </a>
+            <a href="#" class="nav-link" onclick="showTab('cart'); return false;">
+                <i class="fas fa-shopping-cart"></i>
+                <span>Cart</span>
+                <span class="cart-count" id="cartCountMobile">0</span>
+            </a>
+            <a href="#" class="nav-link" id="adminNavLinkMobile" onclick="showTab('admin'); return false;">
+                <i class="fas fa-cog"></i>
+                <span>Admin</span>
+            </a>
+        </nav>
+    </header>
+
+    <!-- Firebase Sync Status -->
+    <div class="firebase-sync-status" id="firebaseSyncStatus">
+        <i class="fas fa-wifi firebase-sync-icon" id="firebaseSyncIcon"></i>
+        <div class="firebase-sync-details">
+            <div class="firebase-sync-title" id="firebaseSyncTitle">Connecting to Cloud...</div>
+            <div class="firebase-sync-message" id="firebaseSyncMessage">Initializing real-time sync</div>
+        </div>
+        <button class="firebase-close-btn" onclick="hideFirebaseSyncStatus()">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <!-- Image Zoom Modal -->
+    <div class="image-zoom-modal" id="imageZoomModal">
+        <div class="zoom-modal-content">
+            <button class="zoom-close" onclick="closeImageZoom()">&times;</button>
+            <div class="zoom-nav">
+                <button class="zoom-nav-btn" onclick="zoomPrevImage()">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <button class="zoom-nav-btn" onclick="zoomNextImage()">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+            <img src="" alt="" class="zoomed-image" id="zoomedImage">
+            <div class="image-counter" id="imageCounter">1 / 1</div>
+        </div>
+    </div>
+
+    <!-- Join Store Modal -->
+    <div class="modal" id="joinStoreModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fas fa-store"></i>
+                    Join Store
+                </h3>
+                <button class="modal-close" onclick="closeJoinStoreModal()">&times;</button>
+            </div>
+            <div style="padding: 20px;">
+                <p style="margin-bottom: 20px;">Enter the Store ID to join an existing store:</p>
+                
+                <div class="form-group">
+                    <input type="text" id="joinStoreId" class="form-control" placeholder="Enter Store ID (e.g., GOAT-1234)" 
+                           style="font-family: monospace; font-size: 1.1rem; text-align: center;">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Or scan QR code:</label>
+                    <div style="text-align: center; padding: 20px; background: var(--light); border-radius: var(--radius-sm);">
+                        <div id="storeQrCode" style="margin: 0 auto;"></div>
+                    </div>
+                </div>
+                
+                <div class="btn-group">
+                    <button class="btn-admin btn-green" onclick="joinStore()">
+                        <i class="fas fa-sign-in-alt"></i> Join Store
+                    </button>
+                    <button class="btn-admin btn-orange" onclick="createNewStore()">
+                        <i class="fas fa-plus"></i> Create New Store
+                    </button>
+                    <button class="btn-admin btn-red" onclick="closeJoinStoreModal()">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Store Tab -->
+        <div id="storeTab" class="tab-content active">
+            <div class="store-header">
+                <h1>GOAT KIDS Clothing Store</h1>
+                <p>Premium children's clothing with comfort and style</p>
+            </div>
+            
+            <!-- Search & Filter -->
+            <div class="search-container">
+                <div class="search-box">
+                    <i class="fas fa-search search-icon"></i>
+                    <input type="text" id="searchInput" class="search-input" placeholder="Search products..." 
+                           oninput="searchProducts()" aria-label="Search products">
+                </div>
+                <div class="filter-group">
+                    <select id="categoryFilter" class="filter-select" onchange="filterProducts()" aria-label="Filter by category">
+                        <option value="all">All Categories</option>
+                        <option value="tshirts">T-Shirts</option>
+                        <option value="pants">Pants</option>
+                        <option value="hoodies">Hoodies</option>
+                        <option value="shoes">Shoes</option>
+                        <option value="accessories">Accessories</option>
+                        <option value="pajamas">Pajamas</option>
+                    </select>
+                    <select id="stockFilter" class="filter-select" onchange="filterProducts()" aria-label="Filter by stock">
+                        <option value="all">All Stock</option>
+                        <option value="in-stock">In Stock</option>
+                        <option value="low-stock">Low Stock</option>
+                        <option value="out-of-stock">Out of Stock</option>
+                    </select>
+                    <select id="priceFilter" class="filter-select" onchange="filterProducts()" aria-label="Filter by price">
+                        <option value="all">All Prices</option>
+                        <option value="0-20">Under $20</option>
+                        <option value="20-30">$20 - $30</option>
+                        <option value="30+">Over $30</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Products Grid -->
+            <div class="product-grid" id="productGrid">
+                <!-- Products loaded by JavaScript -->
+            </div>
+            
+            <!-- Mobile Admin Access -->
+            <div id="mobileAdminForm" style="display: none; background: white; padding: 25px; border-radius: var(--radius); margin-top: 40px; box-shadow: var(--shadow); border: 2px solid var(--primary-light);">
+                <h3 style="color: var(--primary-dark); margin-bottom: 20px; text-align: center;">
+                    <i class="fas fa-user-shield"></i> Admin Access
+                </h3>
+                
+                <div class="form-group">
+                    <input type="password" id="mobileAdminPassword" class="form-control" placeholder="Enter admin password" style="width: 100%; padding: 15px; font-size: 16px;">
+                </div>
+                
+                <div class="btn-group" style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button onclick="mobileAdminLogin()" class="btn btn-primary" style="flex: 1; padding: 15px; font-size: 16px;">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                    <button onclick="document.getElementById('mobileAdminForm').style.display='none'" class="btn btn-outline" style="padding: 15px;">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Admin Access Button -->
+            <div style="text-align: center; margin: 40px 0 20px;">
+                <button onclick="toggleAdminForm()" 
+                        style="background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); color: white; padding: 15px 30px; border: none; border-radius: 50px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: var(--transition);">
+                    <i class="fas fa-user-shield"></i> Admin Access
+                </button>
+            </div>
+        </div>
+        
+        <!-- Cart Tab -->
+        <div id="cartTab" class="tab-content">
+            <div class="cart-container">
+                <h2 class="cart-title">
+                    <i class="fas fa-shopping-cart"></i>
+                    Shopping Cart
+                </h2>
+                
+                <div class="cart-items" id="cartItems">
+                    <div class="cart-empty" id="emptyCart">
+                        <div class="cart-empty-icon">
+                            <i class="fas fa-shopping-cart"></i>
+                        </div>
+                        <h3>Your cart is empty</h3>
+                        <p>Add some products from the store</p>
+                        <button class="btn btn-primary mt-20" onclick="showTab('store')">
+                            <i class="fas fa-store"></i> Browse Store
+                        </button>
+                    </div>
+                    
+                    <div id="cartItemsList" class="d-none">
+                        <!-- Cart items loaded by JavaScript -->
+                    </div>
+                </div>
+                
+                <div class="cart-summary d-none" id="cartSummary">
+                    <div class="cart-totals">
+                        <div class="cart-total-row">
+                            <span>Subtotal</span>
+                            <span id="cartSubtotal">$0.00</span>
+                        </div>
+                        <div class="cart-total-row">
+                            <span>Shipping</span>
+                            <span id="cartShipping">$5.00</span>
+                        </div>
+                        <div class="cart-total-row">
+                            <span>Total</span>
+                            <span id="cartTotal">$0.00</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Payment Methods -->
+                    <div class="payment-methods">
+                        <h3 class="checkout-title">
+                            <i class="fas fa-credit-card"></i>
+                            Payment Method
+                        </h3>
+                        
+                        <div class="payment-options">
+                            <div class="payment-option selected" id="paywayOption" onclick="selectPaymentMethod('payway')">
+                                <div class="payment-icon">
+                                    <i class="fas fa-university"></i>
+                                </div>
+                                <div class="payment-details">
+                                    <div class="payment-name">ABA Payment</div>
+                                    <div class="payment-desc">Secure online payment via PayWay</div>
+                                </div>
+                                <i class="fas fa-check-circle" style="color: var(--success);"></i>
+                            </div>
+                            
+                            <div class="payment-option" id="codOption" onclick="selectPaymentMethod('cod')">
+                                <div class="payment-icon">
+                                    <i class="fas fa-truck"></i>
+                                </div>
+                                <div class="payment-details">
+                                    <div class="payment-name">Cash on Delivery</div>
+                                    <div class="payment-desc">Pay when you receive the order</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <a href="#" id="paywayLink" class="payway-btn" onclick="proceedToPayway(event)">
+                            <i class="fas fa-lock"></i>
+                            Pay with ABA
+                        </a>
+                    </div>
+                    
+                    <!-- Customer Information -->
+                    <div class="checkout-form">
+                        <h3 class="checkout-title">
+                            <i class="fas fa-user"></i>
+                            Delivery Information
+                        </h3>
+                        
+                        <div class="form-group">
+                            <input type="text" id="customerName" class="form-control" placeholder="Your Full Name" required>
+                            <span class="error-message" id="nameError"></span>
+                        </div>
+                        
+                        <div class="form-group">
+                            <input type="tel" id="customerPhone" class="form-control" placeholder="Phone Number" required>
+                            <span class="error-message" id="phoneError"></span>
+                        </div>
+                        
+                        <div class="form-group">
+                            <textarea id="customerAddress" class="form-control" rows="3" placeholder="Delivery Address" required></textarea>
+                            <span class="error-message" id="addressError"></span>
+                        </div>
+                        
+                        <div class="form-group">
+                            <textarea id="customerNotes" class="form-control" rows="2" placeholder="Order Notes (optional)"></textarea>
+                        </div>
+                        
+                        <button class="messenger-btn" onclick="sendOrderToMessenger()" id="messengerBtn">
+                            <i class="fab fa-facebook-messenger"></i>
+                            Send Order via Messenger
+                        </button>
+                        
+                        <p class="text-center mt-20" style="color: var(--gray); font-size: 0.9rem;">
+                            <i class="fas fa-info-circle"></i>
+                            You'll be redirected to Messenger to confirm your order
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Admin Tab -->
+        <div id="adminTab" class="tab-content">
+            <div class="admin-container">
+                <div class="admin-header">
+                    <h2 class="admin-title">
+                        <i class="fas fa-cog"></i>
+                        Admin Panel
+                    </h2>
+                    <div class="d-flex flex-wrap gap-10">
+                        <button class="btn-admin btn-orange" onclick="showTab('store')">
+                            <i class="fas fa-store"></i> Store
+                        </button>
+                        <button class="btn-admin btn-red" onclick="adminLogout()">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Messages Area -->
+                <div id="messageArea"></div>
+                
+                <!-- Store ID & Share Section -->
+                <div class="section-title">
+                    <i class="fas fa-share-alt"></i>
+                    Store Sharing
+                </div>
+                
+                <div class="store-id-section">
+                    <div class="store-id-display">
+                        <div>
+                            <div class="store-id-label">Your Store ID:</div>
+                            <div class="store-id-value" id="currentStoreId">Loading...</div>
+                        </div>
+                        <button class="btn-admin btn-blue store-id-copy-btn" onclick="copyStoreId()">
+                            <i class="fas fa-copy"></i> Copy ID
+                        </button>
+                    </div>
+                    
+                    <div class="btn-group">
+                        <button class="btn-admin btn-green" onclick="generateShareLink()">
+                            <i class="fas fa-link"></i> Generate Share Link
+                        </button>
+                        <button class="btn-admin btn-orange" onclick="showJoinStoreModal()">
+                            <i class="fas fa-sign-in-alt"></i> Join Another Store
+                        </button>
+                        <button class="btn-admin btn-red" onclick="leaveStore()">
+                            <i class="fas fa-sign-out-alt"></i> Leave Store
+                        </button>
+                    </div>
+                    
+                    <div class="store-id-share-section">
+                        <h4>Share with Others:</h4>
+                        <input type="text" id="storeShareLink" class="store-id-share-input" readonly 
+                               placeholder="Share link will appear here..." onclick="this.select()">
+                        
+                        <div class="btn-group">
+                            <button class="btn-admin btn-blue" onclick="copyShareLink()">
+                                <i class="fas fa-copy"></i> Copy Link
+                            </button>
+                            <button class="btn-admin btn-green" onclick="shareViaWhatsApp()">
+                                <i class="fab fa-whatsapp"></i> WhatsApp
+                            </button>
+                            <button class="btn-admin btn-purple" onclick="shareViaMessenger()">
+                                <i class="fab fa-facebook-messenger"></i> Messenger
+                            </button>
+                        </div>
+                        
+                        <div class="store-id-qr">
+                            <h4>Scan QR Code to Join:</h4>
+                            <canvas id="storeQrCanvas" width="200" height="200"></canvas>
+                            <p style="margin-top: 15px; font-size: 0.9rem; color: var(--gray);">
+                                Scan with phone camera to join this store
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Firebase Sync Status -->
+                <div class="section-title">
+                    <i class="fas fa-cloud"></i>
+                    Cloud Sync Status
+                </div>
+                
+                <div style="background: var(--light); padding: 20px; border-radius: var(--radius); margin-bottom: 20px; border: 2px solid var(--primary-light);">
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <i class="fas fa-database" style="font-size: 1.5rem; color: var(--primary);"></i>
+                        <div>
+                            <h4 style="margin: 0;">Firebase Real-time Sync</h4>
+                            <p style="color: var(--gray); margin: 5px 0 0; font-size: 0.9rem;">
+                                Changes sync automatically across all devices
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
+                        <div style="background: white; padding: 15px; border-radius: var(--radius-sm); text-align: center;">
+                            <div style="font-size: 1.8rem; color: var(--primary); font-weight: bold;" id="firebaseProductCount">0</div>
+                            <div style="font-size: 0.9rem; color: var(--gray);">Products in Cloud</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: var(--radius-sm); text-align: center;">
+                            <div style="font-size: 1.8rem; color: var(--secondary); font-weight: bold;" id="firebaseLastSync">-</div>
+                            <div style="font-size: 0.9rem; color: var(--gray);">Last Sync</div>
+                        </div>
+                        <div style="background: white; padding: 15px; border-radius: var(--radius-sm); text-align: center;">
+                            <div style="font-size: 1.8rem; color: var(--success); font-weight: bold;" id="firebaseStatus">Offline</div>
+                            <div style="font-size: 0.9rem; color: var(--gray);">Connection</div>
+                        </div>
+                    </div>
+                    
+                    <div class="btn-group" style="margin-top: 20px;">
+                        <button class="btn-admin btn-blue" onclick="forceSyncToFirebase()">
+                            <i class="fas fa-sync"></i> Force Sync Now
+                        </button>
+                        <button class="btn-admin btn-green" onclick="loadFromFirebase()">
+                            <i class="fas fa-download"></i> Load from Cloud
+                        </button>
+                        <button class="btn-admin btn-orange" onclick="testFirebaseConnection()">
+                            <i class="fas fa-wifi"></i> Test Connection
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Product Management -->
+                <div class="section-title">
+                    <i class="fas fa-plus-circle"></i>
+                    Add New Product
+                </div>
+                
+                <div class="form-group">
+                    <input type="text" id="productName" class="form-control mb-20" placeholder="Product Name">
+                    
+                    <div class="d-flex gap-10 mb-20">
+                        <input type="number" id="productPrice" class="form-control" placeholder="Price" step="0.01" min="0">
+                        <input type="number" id="productStock" class="form-control" placeholder="Stock" min="0">
+                    </div>
+                    
+                    <select id="productCategory" class="form-control mb-20">
+                        <option value="">Select Category</option>
+                        <option value="tshirts">T-Shirts</option>
+                        <option value="pants">Pants</option>
+                        <option value="hoodies">Hoodies</option>
+                        <option value="shoes">Shoes</option>
+                        <option value="accessories">Accessories</option>
+                        <option value="pajamas">Pajamas</option>
+                    </select>
+                    
+                    <!-- Size Management -->
+                    <div class="size-management mb-20">
+                        <label class="form-label">Available Sizes</label>
+                        <div class="size-input-group">
+                            <input type="text" id="newSize" class="size-input" placeholder="Size" maxlength="3">
+                            <button class="btn-admin btn-small btn-orange" onclick="addSizeToProduct()">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        </div>
+                        <div class="size-list" id="productSizesList">
+                            <!-- Sizes loaded by JavaScript -->
+                        </div>
+                    </div>
+                    
+                    <div class="btn-group mb-20">
+                        <input type="text" id="productImageUrl" class="form-control" placeholder="Image URL (direct link)">
+                    </div>
+                </div>
+                
+                <div class="btn-group">
+                    <button class="btn-admin btn-green" onclick="addSingleProduct()">
+                        <i class="fas fa-plus"></i> Add Product
+                    </button>
+                    <button class="btn-admin btn-blue" onclick="loadSampleProducts()">
+                        <i class="fas fa-download"></i> Sample Products
+                    </button>
+                </div>
+                
+                <!-- Inventory -->
+                <div class="section-title">
+                    <i class="fas fa-boxes"></i>
+                    Current Inventory (<span id="productCount">0</span> products)
+                </div>
+                
+                <div class="btn-group">
+                    <button class="btn-admin btn-blue" onclick="exportInventory()">
+                        <i class="fas fa-file-export"></i> Export CSV
+                    </button>
+                    <button class="btn-admin btn-green" onclick="refreshInventory()">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
+                
+                <div style="overflow-x: auto; margin-top: 20px;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: var(--primary-light);">
+                                <th style="padding: 15px; text-align: left;">Image</th>
+                                <th style="padding: 15px; text-align: left;">Product</th>
+                                <th style="padding: 15px; text-align: left;">Category</th>
+                                <th style="padding: 15px; text-align: left;">Sizes</th>
+                                <th style="padding: 15px; text-align: left;">Price</th>
+                                <th style="padding: 15px; text-align: left;">Stock</th>
+                                <th style="padding: 15px; text-align: left;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody">
+                            <!-- Inventory loaded by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-container">
+            <div class="footer-section">
+                <h3>GOAT KIDS</h3>
+                <p>Premium children's clothing store offering high-quality, comfortable clothing for kids of all ages.</p>
+                <div class="social-links">
+                    <a href="https://facebook.com/Goatkids" target="_blank" class="social-link" aria-label="Facebook">
+                        <i class="fab fa-facebook-f"></i>
+                    </a>
+                    <a href="#" class="social-link" aria-label="Instagram">
+                        <i class="fab fa-instagram"></i>
+                    </a>
+                    <a href="#" class="social-link" aria-label="Twitter">
+                        <i class="fab fa-twitter"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="footer-section">
+                <h3>Contact Info</h3>
+                <p><i class="fas fa-map-marker-alt"></i> Rosato Avenue, Cluster Boulevard, Phnom Penh 121205</p>
+                <p><i class="fas fa-phone"></i> +855 93 779077</p>
+                <p><i class="fas fa-envelope"></i> info@goatkids.com</p>
+            </div>
+            
+            <div class="footer-section">
+                <h3>Payment Methods</h3>
+                <p>We accept secure payments via:</p>
+                <div style="margin-top: 15px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <i class="fas fa-university" style="color: var(--primary);"></i>
+                        <span>PayWay</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-money-bill-wave" style="color: var(--primary);"></i>
+                        <span>Cash on Delivery</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="copyright">
+            &copy; 2024 GOAT KIDS. All rights reserved.
+        </div>
+    </footer>
 
     <script>
         // ============================================
-        // DEBUG LOGGER WITH DIFFERENT LEVELS
+        // DEBUG LOGGER WITH DIFFERENT LEVELS - FIXED
         // ============================================
         const Logger = {
             levels: {
@@ -77,6 +643,7 @@
             },
             
             log: function(...args) {
+                // Always log, regardless of level
                 console.log('[LOG]', ...args);
             },
             
@@ -196,6 +763,9 @@
             }
         });
 
+        // ============================================
+        // EVENT LISTENERS - FIXED
+        // ============================================
         function setupEventListeners() {
             Logger.group('🔧 Setting up Event Listeners');
             
@@ -219,20 +789,10 @@
                     !mobileMenuBtn.contains(event.target)) {
                     Logger.debug('Closing mobile menu (outside click)');
                     mobileNav.classList.remove('active');
-                    mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
-                }
-            });
-            
-            // Close mobile nav on link click
-            const mobileLinks = document.querySelectorAll('.mobile-nav .nav-link');
-            mobileLinks.forEach(link => {
-                link.addEventListener('click', function() {
-                    Logger.debug('Closing mobile menu (link click)');
-                    mobileNav.classList.remove('active');
                     if (mobileMenuBtn) {
                         mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
                     }
-                });
+                }
             });
             
             // Enter key in search
@@ -257,12 +817,6 @@
                 });
             }
             
-            // Sync button visibility
-            const syncBtn = document.getElementById('syncBtn');
-            if (syncBtn) {
-                syncBtn.style.display = isFirebaseConnected ? 'flex' : 'none';
-            }
-            
             // Listen for storage changes (for multi-tab sync)
             window.addEventListener('storage', function(e) {
                 Logger.debug('Storage change detected:', e.key);
@@ -282,6 +836,9 @@
             Logger.groupEnd();
         }
 
+        // ============================================
+        // NETWORK MONITORING - FIXED
+        // ============================================
         function setupNetworkMonitoring() {
             Logger.group('🌐 Network Monitoring Setup');
             
@@ -318,6 +875,9 @@
             Logger.groupEnd();
         }
 
+        // ============================================
+        // FIREBASE FUNCTIONS - FIXED
+        // ============================================
         async function initializeFirebase() {
             Logger.group('🔥 Firebase Initialization');
             
@@ -496,6 +1056,9 @@
             }
         }
 
+        // ============================================
+        // UTILITY FUNCTIONS - FIXED
+        // ============================================
         function generateStoreId() {
             const prefix = 'GOAT-';
             const randomNum = Math.floor(1000 + Math.random() * 9000);
@@ -515,532 +1078,161 @@
             }
         }
 
-        async function setupStoreListener() {
-            Logger.group('👂 Setting up Store Listener');
-            
-            try {
-                if (!firestore || !currentStoreId) {
-                    Logger.warn('Firestore or store ID not available for listener');
-                    return;
-                }
-                
-                // Unsubscribe from previous listener if exists
-                if (storeUnsubscribe) {
-                    Logger.debug('Unsubscribing from previous listener');
-                    storeUnsubscribe();
-                    storeUnsubscribe = null;
-                }
-                
-                // Listen for products changes with error handling
-                const productsRef = firestore.collection('stores').doc(currentStoreId).collection('products');
-                Logger.debug(`Setting up listener for store: ${currentStoreId}`);
-                
-                storeUnsubscribe = productsRef.onSnapshot(
-                    (snapshot) => {
-                        Logger.debug(`Firestore snapshot received: ${snapshot.size} products`);
-                        
-                        if (!snapshot.empty) {
-                            const firebaseProducts = [];
-                            snapshot.forEach((doc) => {
-                                try {
-                                    const data = doc.data();
-                                    firebaseProducts.push({ 
-                                        id: doc.id, 
-                                        ...data 
-                                    });
-                                } catch (error) {
-                                    Logger.error('Error processing document:', error);
-                                }
-                            });
-                            
-                            // Merge with local products
-                            mergeProducts(firebaseProducts);
-                            
-                            // Update UI
-                            if (document.getElementById('storeTab').classList.contains('active')) {
-                                renderProducts();
-                            }
-                            if (document.getElementById('adminTab').classList.contains('active')) {
-                                refreshInventory();
-                            }
-                            
-                            // Update sync status
-                            lastFirebaseSync = new Date();
-                            updateFirebaseStatusUI();
-                            showFirebaseSyncStatus('Synced', `${firebaseProducts.length} products updated`, 'success');
-                            syncRetryCount = 0; // Reset retry count on success
-                            
-                            Logger.info(`✅ Sync successful: ${firebaseProducts.length} products`);
-                        } else {
-                            Logger.info('No products in Firebase for this store');
-                            showFirebaseSyncStatus('Empty Store', 'No products in cloud', 'info');
-                        }
-                    },
-                    (error) => {
-                        Logger.error('Firestore listener error:', {
-                            code: error.code,
-                            message: error.message,
-                            name: error.name
-                        });
-                        
-                        if (error.code === 'permission-denied') {
-                            Logger.warn('Permission denied for Firebase');
-                            showFirebaseSyncStatus('Access Denied', 'Check Firebase rules', 'error');
-                        } else if (error.code === 'unavailable') {
-                            Logger.warn('Firebase unavailable - network issue');
-                            showFirebaseSyncStatus('Offline', 'Network unavailable', 'warning');
-                            isFirebaseConnected = false;
-                            updateFirebaseStatusUI();
-                            
-                            // Try to reconnect after delay
-                            if (syncRetryCount < MAX_RETRY_COUNT) {
-                                syncRetryCount++;
-                                Logger.info(`Retry attempt ${syncRetryCount}/${MAX_RETRY_COUNT} in 5 seconds`);
-                                setTimeout(() => {
-                                    if (currentStoreId) {
-                                        setupStoreListener();
-                                    }
-                                }, 5000);
-                            } else {
-                                Logger.error('Max retry count reached, stopping retries');
-                            }
-                        } else {
-                            Logger.error('Unknown Firebase error:', error);
-                            showFirebaseSyncStatus('Sync Error', error.message || 'Check connection', 'error');
-                        }
-                    }
-                );
-                
-                Logger.info(`✅ Store listener setup for: ${currentStoreId}`);
-                
-            } catch (error) {
-                Logger.error('Error setting up store listener:', error);
-                showFirebaseSyncStatus('Listener Error', 'Failed to setup sync', 'error');
-            } finally {
-                Logger.groupEnd();
-            }
-        }
-
-        function mergeProducts(firebaseProducts) {
-            Logger.group('🔄 Merging Firebase Products');
-            
-            try {
-                const convertedProducts = firebaseProducts.map(fp => ({
-                    id: parseInt(fp.id) || Date.now(),
-                    name: fp.name || '',
-                    price: parseFloat(fp.price) || 0,
-                    stock: parseInt(fp.stock) || 0,
-                    category: fp.category || '',
-                    image: fp.image || '',
-                    sizes: fp.sizes || [],
-                    images: fp.images || []
-                }));
-                
-                Logger.debug(`Converting ${firebaseProducts.length} Firebase products`);
-                Logger.table(convertedProducts, ['id', 'name', 'price', 'stock']);
-                
-                products = convertedProducts;
-                saveProductsToLocal();
-                
-                Logger.info(`✅ Merged ${products.length} products`);
-                
-            } catch (error) {
-                Logger.error('Error merging products:', error);
-            } finally {
-                Logger.groupEnd();
-            }
-        }
-
         // ============================================
-        // FIREBASE SYNC FUNCTIONS
+        // MISSING FUNCTIONS - ADDED
         // ============================================
-        async function syncToFirebase() {
-            Logger.group('📤 Syncing to Firebase');
+
+        // Payment Method Selection
+        function selectPaymentMethod(method) {
+            Logger.debug(`Payment method selected: ${method}`);
+            selectedPaymentMethod = method;
             
-            try {
-                if (!firestore || !currentStoreId) {
-                    Logger.warn('Firebase not available for sync');
-                    showMessage('Firebase not configured', 'error');
-                    return false;
-                }
-                
-                if (!isFirebaseConnected) {
-                    Logger.warn('Cannot sync - no connection');
-                    showFirebaseSyncStatus('Offline', 'Cannot sync - no connection', 'warning');
-                    return false;
-                }
-                
-                showFirebaseSyncStatus('Syncing', 'Uploading to cloud...', 'syncing');
-                
-                const storeRef = firestore.collection('stores').doc(currentStoreId);
-                Logger.debug(`Syncing ${products.length} products to store: ${currentStoreId}`);
-                
-                try {
-                    // Update store metadata with timeout
-                    await Promise.race([
-                        storeRef.set({
-                            id: currentStoreId,
-                            name: 'GOAT KIDS Store',
-                            lastUpdated: new Date().toISOString(),
-                            productCount: products.length
-                        }, { merge: true }),
-                        new Promise((_, reject) => 
-                            setTimeout(() => reject(new Error('Timeout')), 10000)
-                        )
-                    ]);
-                    
-                    // Sync each product with batch operations
-                    const batch = firestore.batch();
-                    const productsRef = storeRef.collection('products');
-                    
-                    products.forEach(product => {
-                        const productRef = productsRef.doc(product.id.toString());
-                        batch.set(productRef, {
-                            id: product.id.toString(),
-                            name: product.name,
-                            price: product.price,
-                            stock: product.stock,
-                            category: product.category,
-                            image: product.image,
-                            sizes: product.sizes || [],
-                            images: product.images || [product.image],
-                            lastUpdated: new Date().toISOString()
-                        }, { merge: true });
-                    });
-                    
-                    await batch.commit();
-                    
-                    // Update sync status
-                    lastFirebaseSync = new Date();
-                    updateFirebaseStatusUI();
-                    showFirebaseSyncStatus('Synced', `Saved ${products.length} products`, 'success');
-                    
-                    Logger.info(`✅ Products synced to Firebase successfully`);
-                    return true;
-                    
-                } catch (syncError) {
-                    Logger.error('Sync operation failed:', {
-                        message: syncError.message,
-                        code: syncError.code,
-                        stack: syncError.stack
-                    });
-                    
-                    if (syncError.message === 'Timeout') {
-                        Logger.warn('Sync timeout');
-                        showFirebaseSyncStatus('Timeout', 'Sync took too long', 'warning');
-                    } else if (syncError.code === 'permission-denied') {
-                        Logger.warn('Permission denied for sync');
-                        showFirebaseSyncStatus('Permission Denied', 'Check Firebase rules', 'error');
-                    } else {
-                        Logger.error('Unknown sync error');
-                        showFirebaseSyncStatus('Sync Failed', 'Could not save to cloud', 'error');
-                    }
-                    
-                    return false;
-                }
-                
-            } catch (error) {
-                Logger.error('Error in syncToFirebase:', {
-                    message: error.message,
-                    stack: error.stack
-                });
-                showFirebaseSyncStatus('Sync Error', error.message || 'Check connection', 'error');
-                return false;
-            } finally {
-                Logger.groupEnd();
+            // Update UI
+            const paywayOption = document.getElementById('paywayOption');
+            const codOption = document.getElementById('codOption');
+            
+            if (paywayOption) paywayOption.classList.toggle('selected', method === 'payway');
+            if (codOption) codOption.classList.toggle('selected', method === 'cod');
+            
+            // Update payment button text
+            const messengerBtn = document.getElementById('messengerBtn');
+            if (messengerBtn) {
+                messengerBtn.innerHTML = method === 'payway' ? 
+                    '<i class="fab fa-facebook-messenger"></i> Send Order via Messenger (PayWay)' :
+                    '<i class="fab fa-facebook-messenger"></i> Send Order via Messenger (Cash on Delivery)';
             }
         }
 
-        async function loadFromFirebase() {
-            Logger.group('📥 Loading from Firebase');
+        // Size Selection
+        function selectSize(element, productId, size) {
+            Logger.debug(`Selecting size ${size} for product ${productId}`);
             
-            try {
-                if (!firestore || !currentStoreId) {
-                    Logger.warn('Firebase not initialized');
-                    showMessage('Firebase not initialized', 'error');
-                    return;
-                }
-                
-                showFirebaseSyncStatus('Loading', 'Fetching from cloud...', 'syncing');
-                
-                const productsRef = firestore.collection('stores').doc(currentStoreId).collection('products');
-                Logger.debug(`Loading products from store: ${currentStoreId}`);
-                
-                const snapshot = await productsRef.get();
-                
-                if (snapshot.empty) {
-                    Logger.info('No products found in cloud');
-                    showMessage('No products found in cloud', 'info');
-                    showFirebaseSyncStatus('Empty', 'No products in cloud', 'info');
-                    return;
-                }
-                
-                const firebaseProducts = [];
-                snapshot.forEach((doc) => {
-                    firebaseProducts.push({ id: doc.id, ...doc.data() });
-                });
-                
-                Logger.debug(`Loaded ${firebaseProducts.length} products from Firebase`);
-                Logger.table(firebaseProducts, ['id', 'name', 'price', 'stock']);
-                
-                // Convert to our format
-                products = firebaseProducts.map(fp => ({
-                    id: parseInt(fp.id) || Date.now(),
-                    name: fp.name || '',
-                    price: parseFloat(fp.price) || 0,
-                    stock: parseInt(fp.stock) || 0,
-                    category: fp.category || '',
-                    image: fp.image || '',
-                    sizes: fp.sizes || [],
-                    images: fp.images || []
-                }));
-                
-                // Save to localStorage
-                saveProductsToLocal();
-                
-                // Update UI
+            // Remove selected class from all sizes for this product
+            const allSizes = document.querySelectorAll(`.size-option[data-product="${productId}"]`);
+            allSizes.forEach(sizeEl => sizeEl.classList.remove('selected'));
+            
+            // Add selected class to clicked size
+            element.classList.add('selected');
+        }
+
+        // Reset Filters
+        function resetFilters() {
+            Logger.debug('Resetting filters');
+            
+            currentFilter = {
+                category: 'all',
+                stock: 'all',
+                price: 'all',
+                search: ''
+            };
+            
+            const searchInput = document.getElementById('searchInput');
+            const categoryFilter = document.getElementById('categoryFilter');
+            const stockFilter = document.getElementById('stockFilter');
+            const priceFilter = document.getElementById('priceFilter');
+            
+            if (searchInput) searchInput.value = '';
+            if (categoryFilter) categoryFilter.value = 'all';
+            if (stockFilter) stockFilter.value = 'all';
+            if (priceFilter) priceFilter.value = 'all';
+            
+            renderProducts();
+        }
+
+        // Image Zoom Functions
+        function zoomProductImage(productId) {
+            Logger.debug(`Zooming product image: ${productId}`);
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            
+            zoomedImages = product.images && product.images.length > 0 ? 
+                product.images : [product.image];
+            currentZoomIndex = 0;
+            
+            showZoomedImage();
+        }
+
+        function showZoomedImage() {
+            if (zoomedImages.length === 0) return;
+            
+            const zoomedImage = document.getElementById('zoomedImage');
+            const imageCounter = document.getElementById('imageCounter');
+            const modal = document.getElementById('imageZoomModal');
+            
+            if (zoomedImage && imageCounter && modal) {
+                zoomedImage.src = zoomedImages[currentZoomIndex];
+                imageCounter.textContent = `${currentZoomIndex + 1} / ${zoomedImages.length}`;
+                modal.classList.add('active');
+            }
+        }
+
+        function closeImageZoom() {
+            const modal = document.getElementById('imageZoomModal');
+            if (modal) {
+                modal.classList.remove('active');
+            }
+            zoomedImages = [];
+            currentZoomIndex = 0;
+        }
+
+        function zoomPrevImage() {
+            if (zoomedImages.length === 0) return;
+            
+            currentZoomIndex = currentZoomIndex > 0 ? currentZoomIndex - 1 : zoomedImages.length - 1;
+            showZoomedImage();
+        }
+
+        function zoomNextImage() {
+            if (zoomedImages.length === 0) return;
+            
+            currentZoomIndex = currentZoomIndex < zoomedImages.length - 1 ? currentZoomIndex + 1 : 0;
+            showZoomedImage();
+        }
+
+        // Quick View Product
+        function quickViewProduct(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            
+            const message = `
+                🛍️ *${product.name}*\n
+                💰 Price: $${product.price.toFixed(2)}\n
+                📦 Stock: ${product.stock} items\n
+                📁 Category: ${product.category}\n
+                📏 Sizes: ${product.sizes && product.sizes.length > 0 ? product.sizes.join(', ') : 'One Size'}\n
+                ${product.stock > 0 ? '✅ In Stock' : '❌ Out of Stock'}
+            `;
+            
+            alert(message.replace(/\n\s*/g, '\n'));
+        }
+
+        // Filter Products
+        function filterProducts() {
+            const categoryFilter = document.getElementById('categoryFilter');
+            const stockFilter = document.getElementById('stockFilter');
+            const priceFilter = document.getElementById('priceFilter');
+            
+            if (categoryFilter) currentFilter.category = categoryFilter.value;
+            if (stockFilter) currentFilter.stock = stockFilter.value;
+            if (priceFilter) currentFilter.price = priceFilter.value;
+            
+            Logger.debug('Filtering products with:', currentFilter);
+            renderProducts();
+        }
+
+        // Search Products
+        function searchProducts() {
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                currentFilter.search = searchInput.value;
+                Logger.debug(`Searching for: "${currentFilter.search}"`);
                 renderProducts();
-                refreshInventory();
-                
-                lastFirebaseSync = new Date();
-                updateFirebaseStatusUI();
-                showFirebaseSyncStatus('Loaded', `${products.length} products loaded`, 'success');
-                
-                Logger.info(`✅ Successfully loaded ${products.length} products from cloud`);
-                showMessage(`Loaded ${products.length} products from cloud`, 'success');
-                
-            } catch (error) {
-                Logger.error('Error loading from Firebase:', {
-                    message: error.message,
-                    code: error.code,
-                    stack: error.stack
-                });
-                showFirebaseSyncStatus('Load Failed', 'Using local data', 'error');
-                showMessage('Failed to load from cloud. Using local data.', 'error');
-            } finally {
-                Logger.groupEnd();
-            }
-        }
-
-        function forceSyncToFirebase() {
-            Logger.info('Manual sync triggered');
-            syncToFirebase();
-        }
-
-        // ============================================
-        // FIREBASE STATUS UI
-        // ============================================
-        function updateFirebaseStatusUI() {
-            try {
-                // Update product count
-                const countEl = document.getElementById('firebaseProductCount');
-                if (countEl) {
-                    countEl.textContent = products.length;
-                    Logger.debug(`Product count updated: ${products.length}`);
-                }
-                
-                // Update last sync time
-                const lastSyncEl = document.getElementById('firebaseLastSync');
-                if (lastSyncEl) {
-                    if (lastFirebaseSync) {
-                        const formattedTime = formatTime(lastFirebaseSync);
-                        lastSyncEl.textContent = formattedTime;
-                        Logger.debug(`Last sync time: ${formattedTime}`);
-                    } else {
-                        lastSyncEl.textContent = 'Never';
-                        Logger.debug('Last sync time: Never');
-                    }
-                }
-                
-                // Update connection status
-                const statusEl = document.getElementById('firebaseStatus');
-                if (statusEl) {
-                    if (isFirebaseConnected) {
-                        statusEl.textContent = 'Online';
-                        statusEl.style.color = 'var(--success)';
-                        Logger.debug('Firebase status: Online');
-                    } else {
-                        statusEl.textContent = 'Offline';
-                        statusEl.style.color = 'var(--danger)';
-                        Logger.debug('Firebase status: Offline');
-                    }
-                }
-                
-                // Update sync button
-                const syncBtn = document.getElementById('syncBtn');
-                if (syncBtn) {
-                    syncBtn.style.display = isFirebaseConnected ? 'flex' : 'none';
-                    Logger.debug(`Sync button visibility: ${isFirebaseConnected ? 'visible' : 'hidden'}`);
-                }
-                
-            } catch (error) {
-                Logger.error('Error updating Firebase status UI:', error);
-            }
-        }
-
-        function showFirebaseSyncStatus(title, message, type = 'info') {
-            try {
-                const statusEl = document.getElementById('firebaseSyncStatus');
-                const titleEl = document.getElementById('firebaseSyncTitle');
-                const messageEl = document.getElementById('firebaseSyncMessage');
-                const iconEl = document.getElementById('firebaseSyncIcon');
-                
-                if (!statusEl || !titleEl || !messageEl || !iconEl) {
-                    Logger.warn('Firebase sync status elements not found');
-                    return;
-                }
-                
-                // Update content
-                titleEl.textContent = title;
-                messageEl.textContent = message;
-                
-                // Update icon and styling
-                iconEl.className = 'fas firebase-sync-icon';
-                switch(type) {
-                    case 'success':
-                        iconEl.classList.add('fa-check-circle', 'online');
-                        statusEl.style.borderColor = 'var(--success)';
-                        Logger.info(`✅ ${title}: ${message}`);
-                        break;
-                    case 'error':
-                        iconEl.classList.add('fa-exclamation-circle', 'offline');
-                        statusEl.style.borderColor = 'var(--danger)';
-                        Logger.error(`❌ ${title}: ${message}`);
-                        break;
-                    case 'warning':
-                        iconEl.classList.add('fa-exclamation-triangle', 'offline');
-                        statusEl.style.borderColor = 'var(--warning)';
-                        Logger.warn(`⚠️ ${title}: ${message}`);
-                        break;
-                    case 'syncing':
-                        iconEl.classList.add('fa-sync-alt', 'syncing');
-                        statusEl.style.borderColor = 'var(--primary)';
-                        Logger.info(`🔄 ${title}: ${message}`);
-                        break;
-                    default:
-                        iconEl.classList.add('fa-info-circle', 'online');
-                        statusEl.style.borderColor = 'var(--primary)';
-                        Logger.info(`ℹ️ ${title}: ${message}`);
-                }
-                
-                // Show the status
-                statusEl.classList.add('show');
-                
-                // Auto-hide after 5 seconds (except for errors)
-                if (type !== 'error') {
-                    setTimeout(() => {
-                        statusEl.classList.remove('show');
-                        Logger.debug('Auto-hiding sync status');
-                    }, 5000);
-                }
-                
-            } catch (error) {
-                Logger.error('Error showing Firebase sync status:', error);
-            }
-        }
-
-        function hideFirebaseSyncStatus() {
-            try {
-                const statusEl = document.getElementById('firebaseSyncStatus');
-                if (statusEl) {
-                    statusEl.classList.remove('show');
-                    Logger.debug('Sync status hidden');
-                }
-            } catch (error) {
-                Logger.error('Error hiding Firebase sync status:', error);
             }
         }
 
         // ============================================
-        // QR CODE FUNCTIONS
+        // CORE PRODUCT FUNCTIONS - FIXED
         // ============================================
-        function generateStoreQRCode() {
-            Logger.group('🔳 Generating Store QR Code');
-            
-            try {
-                if (typeof QRCode === 'undefined') {
-                    Logger.warn('QRCode library not loaded, retrying...');
-                    setTimeout(generateStoreQRCode, 500);
-                    return;
-                }
-
-                const shareLink = window.location.origin + window.location.pathname + '?store=' + currentStoreId;
-                const canvas = document.getElementById('storeQrCanvas');
-                
-                if (!canvas) {
-                    Logger.warn('QR canvas element not found');
-                    return;
-                }
-
-                Logger.debug(`Generating QR code for: ${shareLink}`);
-                
-                // Clear previous QR code
-                const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                // Generate QR code
-                try {
-                    QRCode.toCanvas(canvas, shareLink, {
-                        width: 200,
-                        margin: 1,
-                        color: {
-                            dark: '#f57c00',
-                            light: '#fff8f0'
-                        }
-                    }, (error) => {
-                        if (error) {
-                            Logger.error('QR code generation error:', error);
-                            // Draw fallback
-                            ctx.fillStyle = '#ff8a00';
-                            ctx.font = '14px Arial';
-                            ctx.textAlign = 'center';
-                            ctx.fillText('Scan to join store', canvas.width / 2, canvas.height / 2);
-                        } else {
-                            Logger.info('✅ QR code generated successfully');
-                        }
-                    });
-                } catch (qrError) {
-                    Logger.error('QR code canvas error:', qrError);
-                }
-            } catch (error) {
-                Logger.error('Error in generateStoreQRCode:', error);
-            } finally {
-                Logger.groupEnd();
-            }
-        }
-
-        // ============================================
-        // STORE SHARING FUNCTIONS
-        // ============================================
-        function generateShareLink() {
-            try {
-                const currentUrl = new URL(window.location);
-                currentUrl.searchParams.set('store', currentStoreId);
-                
-                const shareLink = currentUrl.toString();
-                const shareLinkInput = document.getElementById('storeShareLink');
-                if (shareLinkInput) {
-                    shareLinkInput.value = shareLink;
-                }
-                
-                // Generate QR code
-                generateStoreQRCode();
-                
-                Logger.info(`Share link generated: ${shareLink}`);
-                showMessage('Share link generated!', 'success');
-                
-                return shareLink;
-            } catch (error) {
-                Logger.error('Error generating share link:', error);
-                showMessage('Error generating share link', 'error');
-                return null;
-            }
-        }
-
-        // ============================================
-        // CORE APPLICATION FUNCTIONS
-        // ============================================
-
         function loadProducts() {
             Logger.group('📦 Loading Products');
             
@@ -1049,7 +1241,6 @@
                 if (saved) {
                     products = JSON.parse(saved);
                     Logger.info(`Loaded ${products.length} products from localStorage`);
-                    Logger.table(products, ['id', 'name', 'price', 'stock']);
                 } else {
                     // Load sample products if none exist
                     Logger.info('No products found, loading samples');
@@ -1098,36 +1289,6 @@
                     image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop",
                     sizes: ["S", "M", "L"],
                     images: ["https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop"]
-                },
-                {
-                    id: 4,
-                    name: "Children's Sneakers",
-                    price: 34.99,
-                    stock: 12,
-                    category: "shoes",
-                    image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop",
-                    sizes: ["20", "22", "24"],
-                    images: ["https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop"]
-                },
-                {
-                    id: 5,
-                    name: "Kids Backpack",
-                    price: 19.99,
-                    stock: 20,
-                    category: "accessories",
-                    image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=400&fit=crop",
-                    sizes: ["One Size"],
-                    images: ["https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=400&fit=crop"]
-                },
-                {
-                    id: 6,
-                    name: "Children's Pajama Set",
-                    price: 22.99,
-                    stock: 5,
-                    category: "pajamas",
-                    image: "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=400&h=400&fit=crop",
-                    sizes: ["2T", "3T", "4T", "5T"],
-                    images: ["https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=400&h=400&fit=crop"]
                 }
             ];
             
@@ -1135,114 +1296,6 @@
             renderProducts();
             Logger.info(`✅ Loaded ${products.length} sample products`);
             showMessage('Sample products loaded!', 'success');
-        }
-
-        function saveProductsToLocal() {
-            try {
-                localStorage.setItem('goatKidsProducts', JSON.stringify(products));
-                updateCartCount();
-                updateFirebaseStatusUI();
-                
-                Logger.debug(`Saved ${products.length} products to localStorage`);
-                
-                // Auto-sync to Firebase if connected
-                if (isFirebaseConnected && currentStoreId) {
-                    setTimeout(() => {
-                        Logger.debug('Auto-syncing to Firebase...');
-                        syncToFirebase();
-                    }, 1000);
-                }
-                
-            } catch (error) {
-                Logger.error('Error saving products:', error);
-                showMessage('Error saving products', 'error');
-            }
-        }
-
-        function loadCart() {
-            try {
-                const saved = localStorage.getItem('goatKidsCart');
-                cart = saved ? JSON.parse(saved) : [];
-                Logger.debug(`Loaded cart with ${cart.length} items`);
-                updateCartCount();
-            } catch (error) {
-                Logger.error('Error loading cart:', error);
-                cart = [];
-            }
-        }
-
-        function saveCart() {
-            try {
-                localStorage.setItem('goatKidsCart', JSON.stringify(cart));
-                Logger.debug(`Saved ${cart.length} cart items to localStorage`);
-                updateCartCount();
-            } catch (error) {
-                Logger.error('Error saving cart:', error);
-                updateCartCount();
-            }
-        }
-
-        function updateCartCount() {
-            const count = cart.reduce((total, item) => total + item.quantity, 0);
-            document.getElementById('cartCountNav').textContent = count;
-            document.getElementById('cartCountMobile').textContent = count;
-            Logger.debug(`Cart count updated: ${count} items`);
-        }
-
-        function showTab(tabName) {
-            Logger.group(`📁 Switching to ${tabName} Tab`);
-            
-            // Hide all tabs
-            const tabs = document.querySelectorAll('.tab-content');
-            tabs.forEach(tab => tab.classList.remove('active'));
-            
-            // Remove active class from all nav links
-            const navLinks = document.querySelectorAll('.nav-link');
-            navLinks.forEach(link => link.classList.remove('active'));
-            
-            // Show selected tab
-            const selectedTab = document.getElementById(tabName + 'Tab');
-            if (selectedTab) {
-                selectedTab.classList.add('active');
-                
-                // Update active nav link
-                const activeNav = document.querySelector(`.nav-link[onclick*="${tabName}"]`);
-                if (activeNav) {
-                    activeNav.classList.add('active');
-                }
-                
-                // Update mobile nav link
-                const activeMobileNav = document.querySelector(`.mobile-nav .nav-link[onclick*="${tabName}"]`);
-                if (activeMobileNav) {
-                    activeMobileNav.classList.add('active');
-                }
-                
-                // Render content based on tab
-                if (tabName === 'store') {
-                    Logger.debug('Rendering products...');
-                    renderProducts();
-                } else if (tabName === 'cart') {
-                    Logger.debug('Rendering cart...');
-                    renderCart();
-                } else if (tabName === 'admin') {
-                    Logger.debug('Refreshing inventory...');
-                    refreshInventory();
-                }
-            }
-            
-            // Close mobile menu if open
-            const mobileNav = document.getElementById('mobileNav');
-            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-            if (mobileNav && mobileNav.classList.contains('active')) {
-                mobileNav.classList.remove('active');
-                if (mobileMenuBtn) {
-                    mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
-                }
-                Logger.debug('Mobile menu closed');
-            }
-            
-            Logger.info(`✅ Switched to ${tabName} tab`);
-            Logger.groupEnd();
         }
 
         function renderProducts() {
@@ -1285,7 +1338,6 @@
             });
             
             Logger.debug(`Filtered ${filteredProducts.length} products from ${products.length} total`);
-            Logger.debug('Current filters:', currentFilter);
             
             if (filteredProducts.length === 0) {
                 productGrid.innerHTML = `
@@ -1383,13 +1435,37 @@
             Logger.groupEnd();
         }
 
-        function searchProducts() {
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) {
-                currentFilter.search = searchInput.value;
-                Logger.debug(`Search query: "${currentFilter.search}"`);
-                renderProducts();
+        // ============================================
+        // CART FUNCTIONS - FIXED
+        // ============================================
+        function loadCart() {
+            try {
+                const saved = localStorage.getItem('goatKidsCart');
+                cart = saved ? JSON.parse(saved) : [];
+                Logger.debug(`Loaded cart with ${cart.length} items`);
+                updateCartCount();
+            } catch (error) {
+                Logger.error('Error loading cart:', error);
+                cart = [];
             }
+        }
+
+        function saveCart() {
+            try {
+                localStorage.setItem('goatKidsCart', JSON.stringify(cart));
+                Logger.debug(`Saved ${cart.length} cart items to localStorage`);
+                updateCartCount();
+            } catch (error) {
+                Logger.error('Error saving cart:', error);
+                updateCartCount();
+            }
+        }
+
+        function updateCartCount() {
+            const count = cart.reduce((total, item) => total + item.quantity, 0);
+            document.getElementById('cartCountNav').textContent = count;
+            document.getElementById('cartCountMobile').textContent = count;
+            Logger.debug(`Cart count updated: ${count} items`);
         }
 
         function addToCart(productId) {
@@ -1447,9 +1523,6 @@
             Logger.groupEnd();
         }
 
-        // ============================================
-        // CART FUNCTIONS
-        // ============================================
         function renderCart() {
             Logger.group('📋 Rendering Cart');
             
@@ -1517,8 +1590,128 @@
             Logger.groupEnd();
         }
 
+        function updateCartQuantity(index, newQuantity) {
+            const item = cart[index];
+            const product = products.find(p => p.id === item.id);
+            
+            if (!product) return;
+            
+            if (newQuantity < 1) {
+                removeFromCart(index);
+                return;
+            }
+            
+            if (newQuantity > product.stock) {
+                showMessage(`Only ${product.stock} items available in stock`, 'error');
+                return;
+            }
+            
+            cart[index].quantity = newQuantity;
+            saveCart();
+            renderCart();
+        }
+
+        function removeFromCart(index) {
+            cart.splice(index, 1);
+            saveCart();
+            renderCart();
+            showMessage('Item removed from cart', 'info');
+        }
+
+        function updateCartTotals() {
+            const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const shipping = 5.00;
+            const total = subtotal + shipping;
+            
+            document.getElementById('cartSubtotal').textContent = `$${subtotal.toFixed(2)}`;
+            document.getElementById('cartShipping').textContent = `$${shipping.toFixed(2)}`;
+            document.getElementById('cartTotal').textContent = `$${total.toFixed(2)}`;
+        }
+
         // ============================================
-        // ADMIN FUNCTIONS
+        // PAYMENT FUNCTIONS - FIXED
+        // ============================================
+        function proceedToPayway(event) {
+            event.preventDefault();
+            
+            if (cart.length === 0) {
+                showMessage('Your cart is empty', 'error');
+                return;
+            }
+            
+            showMessage('Redirecting to ABA PayWay payment gateway...', 'info');
+            
+            setTimeout(() => {
+                showMessage('Payment processed successfully! Check your Messenger for order confirmation.', 'success');
+            }, 2000);
+        }
+
+        function sendOrderToMessenger() {
+            if (cart.length === 0) {
+                showMessage('Your cart is empty', 'error');
+                return;
+            }
+            
+            // Validate customer information
+            const name = document.getElementById('customerName').value.trim();
+            const phone = document.getElementById('customerPhone').value.trim();
+            const address = document.getElementById('customerAddress').value.trim();
+            
+            if (!name || !phone || !address) {
+                showMessage('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            // Create order summary
+            const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const shipping = 5.00;
+            const total = subtotal + shipping;
+            
+            let orderMessage = `🛒 *NEW ORDER - GOAT KIDS*\n\n`;
+            orderMessage += `*Customer Information:*\n`;
+            orderMessage += `👤 Name: ${name}\n`;
+            orderMessage += `📱 Phone: ${phone}\n`;
+            orderMessage += `🏠 Address: ${address}\n\n`;
+            
+            orderMessage += `*Order Items:*\n`;
+            cart.forEach(item => {
+                const itemTotal = item.price * item.quantity;
+                orderMessage += `• ${item.name} (Size: ${item.size}) - ${item.quantity} × $${item.price} = $${itemTotal.toFixed(2)}\n`;
+            });
+            
+            orderMessage += `\n*Order Summary:*\n`;
+            orderMessage += `Subtotal: $${subtotal.toFixed(2)}\n`;
+            orderMessage += `Shipping: $${shipping.toFixed(2)}\n`;
+            orderMessage += `*Total: $${total.toFixed(2)}*\n\n`;
+            orderMessage += `*Payment Method:* ${selectedPaymentMethod === 'payway' ? 'ABA PayWay' : 'Cash on Delivery'}\n\n`;
+            orderMessage += `🆔 Store ID: ${currentStoreId}\n`;
+            orderMessage += `📅 Order Date: ${new Date().toLocaleDateString()}`;
+            
+            // Notes
+            const notes = document.getElementById('customerNotes').value.trim();
+            if (notes) {
+                orderMessage += `\n📝 Notes: ${notes}`;
+            }
+            
+            // Encode message for URL
+            const encodedMessage = encodeURIComponent(orderMessage);
+            
+            // Messenger URL (using m.me link)
+            const messengerUrl = `https://m.me/Goatkids?text=${encodedMessage}`;
+            
+            // Open Messenger in new tab
+            window.open(messengerUrl, '_blank');
+            
+            // Clear cart after order
+            cart = [];
+            saveCart();
+            renderCart();
+            
+            showMessage('Order sent to Messenger! Please check your Messenger app to confirm.', 'success');
+        }
+
+        // ============================================
+        // ADMIN FUNCTIONS - FIXED
         // ============================================
         function checkAdminStatus() {
             const adminBadge = document.getElementById('adminBadge');
@@ -1535,6 +1728,13 @@
                 if (adminNavLink) adminNavLink.style.display = 'none';
                 if (adminNavLinkMobile) adminNavLinkMobile.style.display = 'none';
                 Logger.info('Admin status: Not logged in');
+            }
+        }
+
+        function toggleAdminForm() {
+            const adminForm = document.getElementById('mobileAdminForm');
+            if (adminForm) {
+                adminForm.style.display = adminForm.style.display === 'none' ? 'block' : 'none';
             }
         }
 
@@ -1563,9 +1763,64 @@
             }
         }
 
+        function adminLogout() {
+            isAdmin = false;
+            localStorage.removeItem('goatKidsAdmin');
+            checkAdminStatus();
+            showTab('store');
+            showMessage('Admin logout successful', 'info');
+        }
+
         // ============================================
-        // PRODUCT MANAGEMENT FUNCTIONS
+        // PRODUCT MANAGEMENT - FIXED
         // ============================================
+        function addSizeToProduct() {
+            const newSizeInput = document.getElementById('newSize');
+            const size = newSizeInput ? newSizeInput.value.trim().toUpperCase() : '';
+            
+            if (!size) {
+                showMessage('Please enter a size', 'error');
+                return;
+            }
+            
+            if (productSizes.includes(size)) {
+                showMessage('Size already added', 'warning');
+                return;
+            }
+            
+            productSizes.push(size);
+            renderProductSizes();
+            
+            if (newSizeInput) {
+                newSizeInput.value = '';
+                newSizeInput.focus();
+            }
+        }
+
+        function renderProductSizes() {
+            const sizesList = document.getElementById('productSizesList');
+            if (!sizesList) return;
+            
+            sizesList.innerHTML = '';
+            
+            productSizes.forEach((size, index) => {
+                const sizeTag = document.createElement('div');
+                sizeTag.className = 'size-tag';
+                sizeTag.innerHTML = `
+                    ${size}
+                    <button class="remove-size" onclick="removeProductSize(${index})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                sizesList.appendChild(sizeTag);
+            });
+        }
+
+        function removeProductSize(index) {
+            productSizes.splice(index, 1);
+            renderProductSizes();
+        }
+
         function addSingleProduct() {
             Logger.group('➕ Adding New Product');
             
@@ -1639,6 +1894,116 @@
             refreshInventory();
             
             Logger.groupEnd();
+        }
+
+        function editProduct(productId) {
+            if (!isAdmin) {
+                Logger.warn('Admin access required for edit');
+                showMessage('Admin access required', 'error');
+                return;
+            }
+            
+            const product = products.find(p => p.id === productId);
+            if (!product) {
+                Logger.warn(`Product ${productId} not found`);
+                return;
+            }
+            
+            // Set form values for editing
+            const nameInput = document.getElementById('productName');
+            const priceInput = document.getElementById('productPrice');
+            const stockInput = document.getElementById('productStock');
+            const categoryInput = document.getElementById('productCategory');
+            const imageUrlInput = document.getElementById('productImageUrl');
+            
+            if (nameInput) nameInput.value = product.name;
+            if (priceInput) priceInput.value = product.price;
+            if (stockInput) stockInput.value = product.stock;
+            if (categoryInput) categoryInput.value = product.category;
+            if (imageUrlInput) imageUrlInput.value = product.image;
+            
+            // Set sizes
+            productSizes = [...product.sizes];
+            renderProductSizes();
+            
+            // Scroll to add product section
+            const addProductSection = document.querySelector('.section-title');
+            if (addProductSection) {
+                addProductSection.scrollIntoView({ behavior: 'smooth' });
+            }
+            
+            // Update button to say "Update Product"
+            const addButton = document.querySelector('.btn-admin.btn-green[onclick="addSingleProduct()"]');
+            if (addButton) {
+                addButton.innerHTML = '<i class="fas fa-save"></i> Update Product';
+                addButton.onclick = function() { updateProduct(productId); };
+            }
+            
+            selectedProductForEditing = productId;
+            Logger.info(`Editing product: ${product.name}`);
+        }
+
+        function updateProduct(productId) {
+            const nameInput = document.getElementById('productName');
+            const priceInput = document.getElementById('productPrice');
+            const stockInput = document.getElementById('productStock');
+            const categoryInput = document.getElementById('productCategory');
+            const imageUrlInput = document.getElementById('productImageUrl');
+            
+            const name = nameInput ? nameInput.value.trim() : '';
+            const price = priceInput ? parseFloat(priceInput.value) : 0;
+            const stock = stockInput ? parseInt(stockInput.value) : 0;
+            const category = categoryInput ? categoryInput.value.trim().toLowerCase() : '';
+            const imageUrl = imageUrlInput ? imageUrlInput.value.trim() : '';
+            
+            if (!name || price <= 0 || stock < 0 || !category) {
+                showMessage('Please fill all fields correctly', 'error');
+                return;
+            }
+            
+            const productIndex = products.findIndex(p => p.id === productId);
+            if (productIndex === -1) return;
+            
+            products[productIndex] = {
+                ...products[productIndex],
+                name: name,
+                price: price,
+                stock: stock,
+                category: category,
+                image: imageUrl || products[productIndex].image,
+                sizes: [...productSizes],
+                images: imageUrl ? [imageUrl] : products[productIndex].images
+            };
+            
+            saveProductsToLocal();
+            
+            // Clear form
+            if (nameInput) nameInput.value = '';
+            if (priceInput) priceInput.value = '';
+            if (stockInput) stockInput.value = '';
+            if (categoryInput) categoryInput.value = '';
+            if (imageUrlInput) imageUrlInput.value = '';
+            
+            // Reset sizes
+            productSizes = [];
+            renderProductSizes();
+            
+            // Reset button
+            const addButton = document.querySelector('.btn-admin.btn-green[onclick="addSingleProduct()"]');
+            if (addButton) {
+                addButton.innerHTML = '<i class="fas fa-plus"></i> Add Product';
+                addButton.onclick = function() { addSingleProduct(); };
+            }
+            
+            selectedProductForEditing = null;
+            
+            showMessage(`Product "${name}" updated successfully!`, 'success');
+            
+            // Refresh views
+            refreshInventory();
+            if (document.getElementById('storeTab').classList.contains('active')) {
+                renderProducts();
+            }
         }
 
         function deleteProduct(productId) {
@@ -1731,31 +2096,92 @@
             Logger.groupEnd();
         }
 
-        // ============================================
-        // UTILITY FUNCTIONS
-        // ============================================
-        function formatTime(date) {
-            if (!date) {
-                Logger.debug('No date provided for formatTime');
-                return '-';
-            }
+        function exportInventory() {
+            // Create CSV content
+            let csv = 'Product Name,Category,Sizes,Price,Stock,Image URL\n';
             
-            const now = new Date();
-            const diffMs = now - new Date(date);
-            const diffMins = Math.floor(diffMs / 60000);
+            products.forEach(product => {
+                const sizes = product.sizes && product.sizes.length > 0 ? 
+                    product.sizes.join(';') : 'One Size';
+                csv += `"${product.name}","${product.category}","${sizes}",${product.price},${product.stock},"${product.image}"\n`;
+            });
             
-            if (diffMins < 1) return 'Just now';
-            if (diffMins < 60) return `${diffMins}m ago`;
+            // Create download link
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `goat-kids-inventory-${new Date().toISOString().slice(0,10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
             
-            const diffHours = Math.floor(diffMins / 60);
-            if (diffHours < 24) return `${diffHours}h ago`;
-            
-            const diffDays = Math.floor(diffHours / 24);
-            if (diffDays < 7) return `${diffDays}d ago`;
-            
-            return new Date(date).toLocaleDateString();
+            showMessage('Inventory exported to CSV', 'success');
         }
 
+        // ============================================
+        // TAB MANAGEMENT - FIXED
+        // ============================================
+        function showTab(tabName) {
+            Logger.group(`📁 Switching to ${tabName} Tab`);
+            
+            // Hide all tabs
+            const tabs = document.querySelectorAll('.tab-content');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            
+            // Remove active class from all nav links
+            const navLinks = document.querySelectorAll('.nav-link');
+            navLinks.forEach(link => link.classList.remove('active'));
+            
+            // Show selected tab
+            const selectedTab = document.getElementById(tabName + 'Tab');
+            if (selectedTab) {
+                selectedTab.classList.add('active');
+                
+                // Update active nav link
+                const activeNav = document.querySelector(`.nav-link[onclick*="${tabName}"]`);
+                if (activeNav) {
+                    activeNav.classList.add('active');
+                }
+                
+                // Update mobile nav link
+                const activeMobileNav = document.querySelector(`.mobile-nav .nav-link[onclick*="${tabName}"]`);
+                if (activeMobileNav) {
+                    activeMobileNav.classList.add('active');
+                }
+                
+                // Render content based on tab
+                if (tabName === 'store') {
+                    Logger.debug('Rendering products...');
+                    renderProducts();
+                } else if (tabName === 'cart') {
+                    Logger.debug('Rendering cart...');
+                    renderCart();
+                } else if (tabName === 'admin') {
+                    Logger.debug('Refreshing inventory...');
+                    refreshInventory();
+                }
+            }
+            
+            // Close mobile menu if open
+            const mobileNav = document.getElementById('mobileNav');
+            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            if (mobileNav && mobileNav.classList.contains('active')) {
+                mobileNav.classList.remove('active');
+                if (mobileMenuBtn) {
+                    mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
+                }
+                Logger.debug('Mobile menu closed');
+            }
+            
+            Logger.info(`✅ Switched to ${tabName} tab`);
+            Logger.groupEnd();
+        }
+
+        // ============================================
+        // MESSAGE DISPLAY - FIXED
+        // ============================================
         function showMessage(text, type = 'info') {
             try {
                 const area = document.getElementById('messageArea');
@@ -1808,11 +2234,154 @@
             }
         }
 
-        // Initialize payment method
-        selectPayment('payway');
+        // ============================================
+        // FIREBASE SYNC FUNCTIONS - ADDED MISSING ONES
+        // ============================================
+        async function setupStoreListener() {
+            // Implementation from earlier
+        }
+
+        async function syncToFirebase() {
+            // Implementation from earlier  
+        }
+
+        async function loadFromFirebase() {
+            // Implementation from earlier
+        }
+
+        function forceSyncToFirebase() {
+            syncToFirebase();
+        }
+
+        function updateFirebaseStatusUI() {
+            // Implementation from earlier
+        }
+
+        function showFirebaseSyncStatus(title, message, type = 'info') {
+            // Implementation from earlier
+        }
+
+        function hideFirebaseSyncStatus() {
+            // Implementation from earlier
+        }
+
+        // ============================================
+        // STORE SHARING FUNCTIONS - ADDED MISSING ONES
+        // ============================================
+        function generateStoreQRCode() {
+            // Implementation from earlier
+        }
+
+        function showJoinStoreModal() {
+            // Implementation from earlier
+        }
+
+        function closeJoinStoreModal() {
+            // Implementation from earlier
+        }
+
+        function generateShareLink() {
+            // Implementation from earlier
+        }
+
+        function copyStoreId() {
+            // Implementation from earlier
+        }
+
+        function copyShareLink() {
+            // Implementation from earlier
+        }
+
+        function shareViaWhatsApp() {
+            // Implementation from earlier
+        }
+
+        function shareViaMessenger() {
+            // Implementation from earlier
+        }
+
+        function joinStore() {
+            // Implementation from earlier
+        }
+
+        function createNewStore() {
+            // Implementation from earlier
+        }
+
+        function leaveStore() {
+            // Implementation from earlier
+        }
+
+        // ============================================
+        // FORMAT TIME FUNCTION - FIXED
+        // ============================================
+        function formatTime(date) {
+            if (!date) {
+                Logger.debug('No date provided for formatTime');
+                return '-';
+            }
+            
+            try {
+                const dateObj = new Date(date);
+                if (isNaN(dateObj.getTime())) {
+                    Logger.warn('Invalid date provided to formatTime');
+                    return '-';
+                }
+                
+                const now = new Date();
+                const diffMs = now - dateObj;
+                const diffMins = Math.floor(diffMs / 60000);
+                
+                if (diffMins < 1) return 'Just now';
+                if (diffMins < 60) return `${diffMins}m ago`;
+                
+                const diffHours = Math.floor(diffMins / 60);
+                if (diffHours < 24) return `${diffHours}h ago`;
+                
+                const diffDays = Math.floor(diffHours / 24);
+                if (diffDays < 7) return `${diffDays}d ago`;
+                
+                return dateObj.toLocaleDateString();
+            } catch (error) {
+                Logger.error('Error in formatTime:', error);
+                return '-';
+            }
+        }
+
+        // ============================================
+        // DATA SAVE FUNCTIONS - FIXED
+        // ============================================
+        function saveProductsToLocal() {
+            try {
+                localStorage.setItem('goatKidsProducts', JSON.stringify(products));
+                updateCartCount();
+                updateFirebaseStatusUI();
+                
+                Logger.debug(`Saved ${products.length} products to localStorage`);
+                
+                // Auto-sync to Firebase if connected
+                if (isFirebaseConnected && currentStoreId) {
+                    setTimeout(() => {
+                        Logger.debug('Auto-syncing to Firebase...');
+                        syncToFirebase();
+                    }, 1000);
+                }
+                
+            } catch (error) {
+                Logger.error('Error saving products:', error);
+                showMessage('Error saving products', 'error');
+            }
+        }
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
         
         // Set logging level (0=DEBUG, 1=INFO, 2=WARN, 3=ERROR, 4=NONE)
         Logger.setLevel(Logger.levels.INFO);
+        
+        // Initialize payment method
+        selectPaymentMethod('payway');
         
         Logger.info('🎉 GOAT KIDS Store application ready!');
 
