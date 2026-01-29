@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
-    <meta name="theme-color" content="#ffa726">
+    <meta name="theme-color" content="#667eea">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
     <title>GOAT KIDS - Children's Clothing Store</title>
     
@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Roboto:wght@300;400;500&display=swap">
     
-    <!-- Firebase 9 (Modular) -->
+    <!-- Firebase 9 SDK -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js'
         import { 
@@ -32,7 +32,7 @@
             serverTimestamp 
         } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js'
 
-        // Firebase configuration
+        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU",
             authDomain: "goat-kids-store.firebaseapp.com",
@@ -44,31 +44,37 @@
         };
 
         // Initialize Firebase
-        window.firebaseApp = initializeApp(firebaseConfig);
-        window.firestore = getFirestore(window.firebaseApp);
-        
-        // Enable persistence with error handling
         try {
-            await enableIndexedDbPersistence(window.firestore, { 
-                forceOwnership: false 
-            });
-            console.log('[Firebase] Persistence enabled');
-        } catch (err) {
-            if (err.code === 'failed-precondition') {
-                console.warn('[Firebase] Multiple tabs open, persistence only in one tab');
-            } else if (err.code === 'unimplemented') {
-                console.warn('[Firebase] Browser doesn\'t support persistence');
+            window.firebaseApp = initializeApp(firebaseConfig);
+            window.firestore = getFirestore(window.firebaseApp);
+            
+            // Enable persistence with error handling
+            try {
+                await enableIndexedDbPersistence(window.firestore, { 
+                    synchronizeTabs: false,
+                    experimentalForceOwningTab: false 
+                });
+                console.log('[Firebase] Persistence enabled');
+            } catch (persistenceError) {
+                if (persistenceError.code === 'failed-precondition') {
+                    console.warn('[Firebase] Multiple tabs open, persistence only enabled in first tab');
+                } else if (persistenceError.code === 'unimplemented') {
+                    console.warn('[Firebase] Browser doesn\'t support persistence');
+                }
             }
+            
+            // Export Firestore functions to window
+            window.firestoreFunctions = {
+                doc, getDoc, setDoc, updateDoc, deleteDoc,
+                collection, query, where, getDocs, onSnapshot,
+                writeBatch, serverTimestamp
+            };
+            
+            console.log('[Firebase] ✅ Initialized successfully');
+        } catch (error) {
+            console.error('[Firebase] Initialization failed:', error);
+            window.firebaseInitialized = false;
         }
-
-        // Export Firestore functions to window
-        window.firestoreFunctions = {
-            doc, getDoc, setDoc, updateDoc, deleteDoc,
-            collection, query, where, getDocs, onSnapshot,
-            writeBatch, serverTimestamp
-        };
-
-        console.log('[Firebase] ✅ Initialized successfully');
     </script>
     
     <style>
@@ -122,23 +128,9 @@
 
         body {
             font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--light) 0%, #ffffff 100%);
             min-height: 100vh;
             color: var(--dark);
-        }
-
-        /* ========== TYPOGRAPHY ========== */
-        h1, h2, h3, h4 {
-            font-weight: 600;
-            line-height: 1.2;
-        }
-
-        h1 { font-size: 2.5rem; }
-        h2 { font-size: 2rem; }
-        h3 { font-size: 1.5rem; }
-        h4 { font-size: 1.25rem; }
-
-        p {
             line-height: 1.6;
         }
 
@@ -154,7 +146,9 @@
         .flex-wrap { flex-wrap: wrap; }
         .gap-10 { gap: 0.625rem; }
         .gap-20 { gap: 1.25rem; }
+        .mt-10 { margin-top: 0.625rem; }
         .mt-20 { margin-top: 1.25rem; }
+        .mb-10 { margin-bottom: 0.625rem; }
         .mb-20 { margin-bottom: 1.25rem; }
         .text-center { text-align: center; }
 
@@ -173,6 +167,7 @@
             cursor: pointer;
             transition: var(--transition);
             text-decoration: none;
+            outline: none;
         }
 
         .btn-primary {
@@ -221,61 +216,6 @@
         .btn-admin.btn-red { background: var(--danger); color: white; }
         .btn-admin.btn-small { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
 
-        /* ========== FORMS ========== */
-        .form-group {
-            margin-bottom: var(--space-lg);
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: var(--space-xs);
-            font-weight: 500;
-            color: var(--gray-dark);
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 0.75rem;
-            border: 2px solid var(--gray-light);
-            border-radius: var(--radius);
-            font-family: 'Poppins', sans-serif;
-            font-size: 1rem;
-            transition: var(--transition);
-        }
-
-        .form-control:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .search-box {
-            position: relative;
-            flex: 1;
-        }
-
-        .search-input {
-            width: 100%;
-            padding: 0.75rem 1rem 0.75rem 3rem;
-            border: 2px solid var(--gray-light);
-            border-radius: var(--radius);
-            font-size: 1rem;
-            transition: var(--transition);
-        }
-
-        .search-input:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-
-        .search-icon {
-            position: absolute;
-            left: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--gray);
-        }
-
         /* ========== HEADER ========== */
         header {
             background: white;
@@ -302,6 +242,7 @@
             font-weight: 700;
             color: var(--primary);
             text-decoration: none;
+            cursor: pointer;
         }
 
         .logo-icon {
@@ -399,6 +340,7 @@
             z-index: 9999;
             transform: translateY(-100%);
             transition: transform 0.3s ease;
+            box-shadow: var(--shadow-lg);
         }
 
         .firebase-sync-status.show {
@@ -428,6 +370,12 @@
             color: white;
             font-size: 1.25rem;
             cursor: pointer;
+            padding: 0.5rem;
+            border-radius: var(--radius-sm);
+        }
+
+        .firebase-close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
         }
 
         /* ========== MODALS ========== */
@@ -459,6 +407,7 @@
             width: 90%;
             max-height: 90vh;
             overflow-y: auto;
+            box-shadow: var(--shadow-xl);
         }
 
         .modal-header {
@@ -481,6 +430,12 @@
             font-size: 1.5rem;
             cursor: pointer;
             color: var(--gray);
+            padding: 0.5rem;
+            border-radius: var(--radius-sm);
+        }
+
+        .modal-close:hover {
+            background: var(--light);
         }
 
         .btn-group {
@@ -506,30 +461,63 @@
 
         .store-header {
             text-align: center;
-            color: white;
             padding: var(--space-2xl) var(--space-lg);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+            margin-bottom: var(--space-xl);
         }
 
         .store-header h1 {
             margin-bottom: var(--space-sm);
+            font-size: 2.5rem;
         }
 
         .store-header p {
             opacity: 0.9;
+            font-size: 1.125rem;
         }
 
         .search-container {
             background: white;
             padding: var(--space-xl);
             border-radius: var(--radius-lg);
-            margin: -3rem var(--space-lg) var(--space-xl);
-            box-shadow: var(--shadow-xl);
+            margin-bottom: var(--space-xl);
+            box-shadow: var(--shadow-md);
+        }
+
+        .search-box {
+            position: relative;
+            margin-bottom: var(--space-lg);
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.75rem 1rem 0.75rem 3rem;
+            border: 2px solid var(--gray-light);
+            border-radius: var(--radius);
+            font-size: 1rem;
+            transition: var(--transition);
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--gray);
         }
 
         .filter-group {
             display: flex;
             gap: var(--space-md);
-            margin-top: var(--space-lg);
             flex-wrap: wrap;
         }
 
@@ -542,13 +530,20 @@
             font-family: 'Poppins', sans-serif;
             background: white;
             cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .filter-select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
         .product-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: var(--space-xl);
-            padding: var(--space-lg);
+            padding: var(--space-lg) 0;
         }
 
         .product-card {
@@ -557,6 +552,7 @@
             overflow: hidden;
             box-shadow: var(--shadow-md);
             transition: var(--transition);
+            border: 1px solid var(--gray-light);
         }
 
         .product-card:hover {
@@ -578,7 +574,7 @@
         }
 
         .product-card:hover .product-image {
-            transform: scale(1.1);
+            transform: scale(1.05);
         }
 
         .product-badge {
@@ -590,6 +586,7 @@
             font-size: 0.75rem;
             font-weight: 600;
             color: white;
+            z-index: 1;
         }
 
         .badge-new { background: var(--success); }
@@ -601,7 +598,7 @@
             bottom: 1rem;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.95);
             border: none;
             padding: 0.5rem 1rem;
             border-radius: var(--radius);
@@ -609,6 +606,8 @@
             cursor: pointer;
             opacity: 0;
             transition: var(--transition);
+            font-family: 'Poppins', sans-serif;
+            font-weight: 500;
         }
 
         .product-card:hover .quick-view-btn {
@@ -622,6 +621,7 @@
         .product-title {
             font-size: 1.25rem;
             margin-bottom: var(--space-xs);
+            color: var(--dark);
         }
 
         .product-category {
@@ -706,9 +706,9 @@
         .cart-container {
             background: white;
             border-radius: var(--radius-lg);
-            margin: var(--space-xl);
+            margin: var(--space-xl) 0;
             overflow: hidden;
-            box-shadow: var(--shadow-xl);
+            box-shadow: var(--shadow-md);
         }
 
         .cart-title {
@@ -718,6 +718,7 @@
             display: flex;
             align-items: center;
             gap: var(--space-sm);
+            font-size: 1.5rem;
         }
 
         .cart-items {
@@ -769,6 +770,7 @@
         .cart-item-name {
             font-weight: 600;
             margin-bottom: var(--space-xs);
+            font-size: 1.125rem;
         }
 
         .cart-item-size {
@@ -799,6 +801,7 @@
             justify-content: center;
             cursor: pointer;
             transition: var(--transition);
+            font-family: 'Poppins', sans-serif;
         }
 
         .quantity-btn:hover {
@@ -820,6 +823,7 @@
             cursor: pointer;
             padding: var(--space-xs);
             border-radius: var(--radius-sm);
+            transition: var(--transition);
         }
 
         .remove-item:hover {
@@ -861,10 +865,12 @@
             display: flex;
             gap: var(--space-md);
             margin-bottom: var(--space-lg);
+            flex-wrap: wrap;
         }
 
         .payment-option {
             flex: 1;
+            min-width: 250px;
             padding: var(--space-lg);
             border: 2px solid var(--gray-light);
             border-radius: var(--radius);
@@ -916,6 +922,10 @@
             border-radius: var(--radius);
             font-weight: 600;
             transition: var(--transition);
+            border: none;
+            cursor: pointer;
+            font-family: 'Poppins', sans-serif;
+            font-size: 1rem;
         }
 
         .payway-btn:hover {
@@ -927,6 +937,15 @@
             background: white;
             border-radius: var(--radius);
             padding: var(--space-lg);
+        }
+
+        .checkout-title {
+            font-size: 1.25rem;
+            margin-bottom: var(--space-lg);
+            color: var(--dark);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
         }
 
         .error-message {
@@ -952,6 +971,7 @@
             cursor: pointer;
             transition: var(--transition);
             margin-top: var(--space-lg);
+            font-family: 'Poppins', sans-serif;
         }
 
         .messenger-btn:hover {
@@ -963,9 +983,9 @@
         .admin-container {
             background: white;
             border-radius: var(--radius-lg);
-            margin: var(--space-xl);
+            margin: var(--space-xl) 0;
             overflow: hidden;
-            box-shadow: var(--shadow-xl);
+            box-shadow: var(--shadow-md);
         }
 
         .admin-header {
@@ -975,12 +995,15 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: var(--space-md);
         }
 
         .admin-title {
             display: flex;
             align-items: center;
             gap: var(--space-sm);
+            font-size: 1.5rem;
         }
 
         .section-title {
@@ -989,6 +1012,8 @@
             display: flex;
             align-items: center;
             gap: var(--space-sm);
+            font-size: 1.25rem;
+            color: var(--dark);
         }
 
         .store-id-section {
@@ -1003,6 +1028,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: var(--space-md);
         }
 
         .store-id-label {
@@ -1032,6 +1059,7 @@
             border-radius: var(--radius);
             font-family: monospace;
             margin-bottom: var(--space-lg);
+            background: white;
         }
 
         .store-id-qr {
@@ -1057,6 +1085,7 @@
             padding: 0.75rem;
             border: 2px solid var(--gray-light);
             border-radius: var(--radius);
+            font-family: 'Poppins', sans-serif;
         }
 
         .size-list {
@@ -1067,19 +1096,26 @@
 
         .size-tag {
             background: var(--primary-light);
-            color: var(--primary);
+            color: var(--primary-dark);
             padding: 0.5rem 1rem;
             border-radius: var(--radius);
             display: flex;
             align-items: center;
             gap: var(--space-sm);
+            font-size: 0.875rem;
         }
 
         .remove-size {
             background: none;
             border: none;
-            color: var(--primary);
+            color: var(--primary-dark);
             cursor: pointer;
+            padding: 0.25rem;
+            border-radius: var(--radius-sm);
+        }
+
+        .remove-size:hover {
+            background: rgba(255, 255, 255, 0.3);
         }
 
         /* ========== FOOTER ========== */
@@ -1101,6 +1137,7 @@
         .footer-section h3 {
             margin-bottom: var(--space-lg);
             color: white;
+            font-size: 1.25rem;
         }
 
         .footer-section p {
@@ -1137,6 +1174,7 @@
             padding: var(--space-lg);
             border-top: 1px solid rgba(255, 255, 255, 0.1);
             opacity: 0.8;
+            font-size: 0.875rem;
         }
 
         /* ========== RESPONSIVE DESIGN ========== */
@@ -1153,24 +1191,32 @@
                 flex-wrap: wrap;
             }
             
-            .search-container {
-                margin: -2rem var(--space-md) var(--space-lg);
-                padding: var(--space-lg);
+            .store-header h1 {
+                font-size: 2rem;
+            }
+            
+            .store-header p {
+                font-size: 1rem;
             }
             
             .filter-group {
                 flex-direction: column;
             }
             
+            .filter-select {
+                min-width: 100%;
+            }
+            
             .product-grid {
                 grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
                 gap: var(--space-lg);
-                padding: var(--space-md);
+                padding: var(--space-md) 0;
             }
             
             .cart-item {
                 grid-template-columns: 1fr;
                 text-align: center;
+                gap: var(--space-md);
             }
             
             .cart-item-image {
@@ -1179,6 +1225,15 @@
             
             .payment-options {
                 flex-direction: column;
+            }
+            
+            .payment-option {
+                min-width: 100%;
+            }
+            
+            .admin-header {
+                flex-direction: column;
+                text-align: center;
             }
             
             .footer-container {
@@ -1193,7 +1248,7 @@
 
         @media (max-width: 480px) {
             .store-header h1 {
-                font-size: 2rem;
+                font-size: 1.75rem;
             }
             
             .product-grid {
@@ -1204,8 +1259,14 @@
                 flex-direction: column;
             }
             
-            .btn {
+            .btn, .btn-admin {
                 width: 100%;
+                justify-content: center;
+            }
+            
+            .store-id-display {
+                flex-direction: column;
+                text-align: center;
             }
         }
     </style>
@@ -1214,11 +1275,11 @@
     <!-- Header -->
     <header>
         <div class="header-container">
-            <a href="#" class="logo" onclick="showTab('store'); return false;">
+            <div class="logo" onclick="showTab('store')">
                 <i class="fas fa-tshirt logo-icon"></i>
                 <span>GOAT KIDS</span>
-                <span id="adminBadge" class="admin-badge">ADMIN</span>
-            </a>
+                <span id="adminBadge" class="admin-badge d-none">ADMIN</span>
+            </div>
             
             <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle menu">
                 <i class="fas fa-bars"></i>
@@ -1234,11 +1295,11 @@
                     <span>Cart</span>
                     <span class="cart-count" id="cartCountNav">0</span>
                 </a>
-                <a href="#" class="nav-link" id="adminNavLink" onclick="showTab('admin'); return false;">
+                <a href="#" class="nav-link d-none" id="adminNavLink" onclick="showTab('admin'); return false;">
                     <i class="fas fa-cog"></i>
                     <span>Admin</span>
                 </a>
-                <button class="nav-link sync-btn" id="syncBtn" onclick="syncToFirebase()">
+                <button class="nav-link sync-btn d-none" id="syncBtn" onclick="syncToFirebase()">
                     <i class="fas fa-sync-alt"></i>
                     <span>Sync</span>
                 </button>
@@ -1255,7 +1316,7 @@
                 <span>Cart</span>
                 <span class="cart-count" id="cartCountMobile">0</span>
             </a>
-            <a href="#" class="nav-link" id="adminNavLinkMobile" onclick="showTab('admin'); return false;">
+            <a href="#" class="nav-link d-none" id="adminNavLinkMobile" onclick="showTab('admin'); return false;">
                 <i class="fas fa-cog"></i>
                 <span>Admin</span>
             </a>
@@ -1292,13 +1353,6 @@
                            style="font-family: monospace; font-size: 1.1rem; text-align: center;">
                 </div>
                 
-                <div class="form-group">
-                    <label class="form-label">Or scan QR code:</label>
-                    <div style="text-align: center; padding: 20px; background: var(--light); border-radius: var(--radius-sm);">
-                        <canvas id="storeQrCode" style="margin: 0 auto;"></canvas>
-                    </div>
-                </div>
-                
                 <div class="btn-group">
                     <button class="btn-admin btn-green" onclick="joinStore()">
                         <i class="fas fa-sign-in-alt"></i> Join Store
@@ -1307,6 +1361,34 @@
                         <i class="fas fa-plus"></i> Create New Store
                     </button>
                     <button class="btn-admin btn-red" onclick="closeJoinStoreModal()">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Login Modal -->
+    <div class="modal" id="adminLoginModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fas fa-user-shield"></i>
+                    Admin Login
+                </h3>
+                <button class="modal-close" onclick="closeAdminLoginModal()">&times;</button>
+            </div>
+            <div style="padding: 20px;">
+                <div class="form-group">
+                    <input type="password" id="adminPassword" class="form-control" placeholder="Enter admin password" 
+                           onkeypress="if(event.key === 'Enter') adminLogin()">
+                </div>
+                
+                <div class="btn-group">
+                    <button onclick="adminLogin()" class="btn-admin btn-green" style="flex: 1;">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                    <button onclick="closeAdminLoginModal()" class="btn-admin btn-red">
                         Cancel
                     </button>
                 </div>
@@ -1362,31 +1444,10 @@
             
             <!-- Admin Access Button -->
             <div style="text-align: center; margin: 40px 0 20px;">
-                <button onclick="toggleAdminLogin()" 
+                <button onclick="openAdminLoginModal()" 
                         style="background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); color: white; padding: 15px 30px; border: none; border-radius: 50px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: var(--transition);">
                     <i class="fas fa-user-shield"></i> Admin Access
                 </button>
-            </div>
-
-            <!-- Admin Login Form -->
-            <div id="adminLoginForm" style="display: none; background: white; padding: 25px; border-radius: var(--radius); margin: 20px 0; box-shadow: var(--shadow);">
-                <h3 style="color: var(--primary-dark); margin-bottom: 20px; text-align: center;">
-                    <i class="fas fa-user-shield"></i> Admin Login
-                </h3>
-                
-                <div class="form-group">
-                    <input type="password" id="adminPassword" class="form-control" placeholder="Enter admin password" 
-                           onkeypress="if(event.key === 'Enter') adminLogin()">
-                </div>
-                
-                <div class="btn-group" style="margin-top: 20px;">
-                    <button onclick="adminLogin()" class="btn btn-primary" style="flex: 1;">
-                        <i class="fas fa-sign-in-alt"></i> Login
-                    </button>
-                    <button onclick="toggleAdminLogin()" class="btn btn-outline">
-                        Cancel
-                    </button>
-                </div>
             </div>
         </div>
         
@@ -1461,10 +1522,10 @@
                             </div>
                         </div>
                         
-                        <a href="#" id="paywayLink" class="payway-btn" onclick="proceedToPayway(event)">
+                        <button class="payway-btn" onclick="proceedToPayway()">
                             <i class="fas fa-lock"></i>
                             Pay with ABA
-                        </a>
+                        </button>
                     </div>
                     
                     <!-- Customer Information -->
@@ -1493,7 +1554,7 @@
                             <textarea id="customerNotes" class="form-control" rows="2" placeholder="Order Notes (optional)"></textarea>
                         </div>
                         
-                        <button class="messenger-btn" onclick="sendOrderToMessenger()" id="messengerBtn">
+                        <button class="messenger-btn" onclick="sendOrderToMessenger()">
                             <i class="fab fa-facebook-messenger"></i>
                             Send Order via Messenger
                         </button>
@@ -1546,7 +1607,7 @@
                         <button class="btn-admin btn-green" onclick="generateShareLink()">
                             <i class="fas fa-link"></i> Generate Share Link
                         </button>
-                        <button class="btn-admin btn-orange" onclick="showJoinStoreModal()">
+                        <button class="btn-admin btn-orange" onclick="openJoinStoreModal()">
                             <i class="fas fa-sign-in-alt"></i> Join Another Store
                         </button>
                         <button class="btn-admin btn-red" onclick="leaveStore()">
@@ -1775,7 +1836,6 @@
             cart: [],
             isAdmin: false,
             currentStoreId: null,
-            storeData: null,
             selectedPaymentMethod: 'payway',
             productSizes: [],
             currentFilter: {
@@ -1787,247 +1847,421 @@
             firebase: {
                 isConnected: false,
                 lastSync: null,
-                unsubscribe: null,
-                retryCount: 0,
-                maxRetries: 3
+                unsubscribe: null
             }
         };
 
         // ============================================
-        // FIREBASE FUNCTIONS
+        // LOGGING SYSTEM
         // ============================================
-        async function initializeFirebase() {
-            try {
-                // Wait for Firebase to load
-                await new Promise(resolve => setTimeout(resolve, 1000));
+        class AppLogger {
+            constructor() {
+                this.logLevel = 2; // 0=error, 1=warn, 2=info, 3=debug
+                this.suppressedMessages = [
+                    'enableMultiTabIndexedDbPersistence',
+                    'favicon.ico 404',
+                    'CVER=22',
+                    'X-HTTP'
+                ];
+            }
+            
+            setLevel(level) {
+                this.logLevel = level;
+            }
+            
+            shouldLog(message, level) {
+                if (level > this.logLevel) return false;
                 
-                if (!window.firestore) {
-                    throw new Error('Firebase not loaded');
+                if (message && typeof message === 'string') {
+                    for (const suppressed of this.suppressedMessages) {
+                        if (message.includes(suppressed)) {
+                            return false;
+                        }
+                    }
                 }
                 
-                // Test connection
-                await testFirebaseConnection();
-                
-                // Get or create store ID
-                await initializeStore();
-                
-                // Setup real-time listener
-                await setupFirebaseListener();
-                
-                showFirebaseSyncStatus('Connected', 'Real-time sync active', 'success');
                 return true;
-                
-            } catch (error) {
-                console.error('Firebase initialization failed:', error);
-                showFirebaseSyncStatus('Offline Mode', 'Using local storage', 'warning');
-                return false;
+            }
+            
+            log(...args) {
+                if (this.shouldLog(args[0], 3)) {
+                    console.log('[LOG]', ...args);
+                }
+            }
+            
+            info(...args) {
+                if (this.shouldLog(args[0], 2)) {
+                    console.info('[INFO]', ...args);
+                }
+            }
+            
+            warn(...args) {
+                if (this.shouldLog(args[0], 1)) {
+                    console.warn('[WARN]', ...args);
+                }
+            }
+            
+            error(...args) {
+                if (this.shouldLog(args[0], 0)) {
+                    console.error('[ERROR]', ...args);
+                }
             }
         }
 
-        async function testFirebaseConnection() {
-            try {
-                const { getDoc, doc } = window.firestoreFunctions;
-                const testRef = doc(window.firestore, '_test', 'connection');
-                await getDoc(testRef);
-                
-                AppState.firebase.isConnected = true;
-                document.getElementById('syncBtn').style.display = 'flex';
-                return true;
-            } catch (error) {
-                AppState.firebase.isConnected = false;
-                document.getElementById('syncBtn').style.display = 'none';
-                return false;
-            }
-        }
+        const logger = new AppLogger();
 
-        async function initializeStore() {
-            try {
-                // Get store ID from localStorage or URL
-                let storeId = localStorage.getItem('goatStoreId');
-                
-                if (!storeId) {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    storeId = urlParams.get('store');
+        // ============================================
+        // FIREBASE MANAGER
+        // ============================================
+        class FirebaseManager {
+            constructor() {
+                this.db = null;
+                this.storeId = null;
+                this.unsubscribe = null;
+                this.isConnected = false;
+            }
+            
+            async initialize() {
+                try {
+                    logger.info('Initializing Firebase...');
                     
+                    // Wait for Firebase to load
+                    await this.waitForFirebase();
+                    
+                    if (!window.firestore || !window.firestoreFunctions) {
+                        throw new Error('Firebase not loaded properly');
+                    }
+                    
+                    this.db = window.firestore;
+                    logger.info('Firestore initialized');
+                    
+                    // Test connection
+                    await this.testConnection();
+                    
+                    // Initialize store
+                    await this.initializeStore();
+                    
+                    this.isConnected = true;
+                    logger.info('✅ Firebase ready');
+                    
+                    return { success: true };
+                    
+                } catch (error) {
+                    logger.error('Firebase initialization failed:', error);
+                    this.isConnected = false;
+                    return { success: false, error: error.message };
+                }
+            }
+            
+            async waitForFirebase() {
+                return new Promise((resolve) => {
+                    const check = () => {
+                        if (window.firestore && window.firestoreFunctions) {
+                            resolve();
+                        } else {
+                            setTimeout(check, 100);
+                        }
+                    };
+                    check();
+                });
+            }
+            
+            async testConnection() {
+                try {
+                    const { doc, getDoc } = window.firestoreFunctions;
+                    const testRef = doc(this.db, '_test', 'connection');
+                    await getDoc(testRef);
+                    
+                    logger.info('✅ Firebase connection test passed');
+                    return { connected: true };
+                    
+                } catch (error) {
+                    if (error.code === 'permission-denied') {
+                        logger.warn('Firebase permissions issue - check security rules');
+                    }
+                    logger.warn('Firebase connection test failed - using offline mode');
+                    return { connected: false, error: error.message };
+                }
+            }
+            
+            async initializeStore(storeId = null) {
+                try {
+                    // Get store ID from localStorage or URL
                     if (!storeId) {
-                        storeId = generateStoreId();
+                        storeId = localStorage.getItem('goatStoreId');
+                        
+                        if (!storeId) {
+                            const urlParams = new URLSearchParams(window.location.search);
+                            storeId = urlParams.get('store');
+                            
+                            if (!storeId) {
+                                storeId = this.generateStoreId();
+                            }
+                            
+                            localStorage.setItem('goatStoreId', storeId);
+                        }
                     }
                     
-                    localStorage.setItem('goatStoreId', storeId);
+                    this.storeId = storeId;
+                    AppState.currentStoreId = storeId;
+                    
+                    // Update UI
+                    document.getElementById('currentStoreId').textContent = storeId;
+                    
+                    // Update URL
+                    this.updateUrlWithStoreId(storeId);
+                    
+                    // Setup listener
+                    await this.setupStoreListener();
+                    
+                    logger.info(`✅ Store initialized: ${storeId}`);
+                    return { success: true, storeId };
+                    
+                } catch (error) {
+                    logger.error('Store initialization failed:', error);
+                    return { success: false, error: error.message };
                 }
-                
-                AppState.currentStoreId = storeId;
-                document.getElementById('currentStoreId').textContent = storeId;
-                
-                // Update URL
-                updateUrlWithStoreId();
-                
-                // Generate QR code
-                generateStoreQRCode();
-                
-                return storeId;
-            } catch (error) {
-                console.error('Store initialization failed:', error);
-                return null;
             }
-        }
-
-        async function setupFirebaseListener() {
-            try {
-                const { collection, query, where, onSnapshot } = window.firestoreFunctions;
-                
-                if (!AppState.currentStoreId) return;
-                
-                // Cleanup previous listener
-                if (AppState.firebase.unsubscribe) {
-                    AppState.firebase.unsubscribe();
+            
+            generateStoreId() {
+                const prefix = 'GOAT';
+                const randomNum = Math.floor(1000 + Math.random() * 9000);
+                return `${prefix}-${randomNum}`;
+            }
+            
+            updateUrlWithStoreId(storeId) {
+                try {
+                    const url = new URL(window.location);
+                    url.searchParams.set('store', storeId);
+                    window.history.replaceState({}, '', url);
+                } catch (error) {
+                    logger.debug('Could not update URL:', error);
                 }
-                
-                const productsRef = collection(
-                    window.firestore,
-                    'stores',
-                    AppState.currentStoreId,
-                    'products'
-                );
-                
-                const productsQuery = query(productsRef, where('active', '==', true));
-                
-                AppState.firebase.unsubscribe = onSnapshot(
-                    productsQuery,
-                    (snapshot) => {
-                        const products = [];
-                        snapshot.forEach(doc => {
-                            products.push({
-                                id: doc.id,
-                                ...doc.data()
-                            });
-                        });
-                        
-                        AppState.products = products;
-                        localStorage.setItem('goatProducts', JSON.stringify(products));
-                        
-                        AppState.firebase.lastSync = new Date();
-                        updateFirebaseStatusUI();
-                        
-                        renderProducts();
-                        refreshInventory();
-                        
-                        console.log(`[Firebase] Synced ${products.length} products`);
-                    },
-                    (error) => {
-                        console.error('Firebase listener error:', error);
-                        AppState.firebase.isConnected = false;
-                        updateFirebaseStatusUI();
+            }
+            
+            async setupStoreListener() {
+                try {
+                    // Cleanup previous listener
+                    if (this.unsubscribe) {
+                        this.unsubscribe();
                     }
-                );
-                
-                return true;
-            } catch (error) {
-                console.error('Setup listener failed:', error);
-                return false;
-            }
-        }
-
-        async function syncToFirebase() {
-            try {
-                if (!AppState.firebase.isConnected || !AppState.currentStoreId) {
-                    showMessage('Not connected to Firebase', 'error');
-                    return false;
-                }
-                
-                const { doc, setDoc, writeBatch } = window.firestoreFunctions;
-                const batch = writeBatch(window.firestore);
-                
-                // Get current products from localStorage
-                const products = JSON.parse(localStorage.getItem('goatProducts') || '[]');
-                
-                // Update each product in Firestore
-                products.forEach(product => {
-                    const productRef = doc(
-                        window.firestore,
+                    
+                    const { collection, query, where, onSnapshot } = window.firestoreFunctions;
+                    
+                    const productsRef = collection(
+                        this.db,
                         'stores',
-                        AppState.currentStoreId,
-                        'products',
-                        product.id.toString()
+                        this.storeId,
+                        'products'
                     );
                     
-                    batch.set(productRef, {
-                        ...product,
-                        storeId: AppState.currentStoreId,
-                        active: true,
-                        updatedAt: new Date().toISOString()
-                    }, { merge: true });
-                });
-                
-                await batch.commit();
-                
-                AppState.firebase.lastSync = new Date();
-                updateFirebaseStatusUI();
-                
-                showMessage(`Synced ${products.length} products to cloud`, 'success');
-                return true;
-                
-            } catch (error) {
-                console.error('Sync failed:', error);
-                showMessage('Sync failed: ' + error.message, 'error');
-                return false;
+                    const productsQuery = query(productsRef, where('active', '==', true));
+                    
+                    this.unsubscribe = onSnapshot(
+                        productsQuery,
+                        (snapshot) => {
+                            const products = [];
+                            snapshot.forEach(doc => {
+                                products.push({
+                                    id: doc.id,
+                                    ...doc.data()
+                                });
+                            });
+                            
+                            AppState.products = products;
+                            localStorage.setItem('goatProducts', JSON.stringify(products));
+                            
+                            AppState.firebase.lastSync = new Date();
+                            updateFirebaseStatusUI();
+                            
+                            renderProducts();
+                            refreshInventory();
+                            
+                            logger.info(`Firestore sync: ${products.length} products`);
+                        },
+                        (error) => {
+                            logger.error('Firestore listener error:', error);
+                            this.isConnected = false;
+                            updateFirebaseStatusUI();
+                        }
+                    );
+                    
+                    logger.info('✅ Real-time listener setup complete');
+                    
+                } catch (error) {
+                    logger.error('Listener setup failed:', error);
+                }
+            }
+            
+            async syncToFirebase(products) {
+                try {
+                    if (!this.isConnected || !this.storeId) {
+                        throw new Error('Not connected to Firebase');
+                    }
+                    
+                    const { doc, setDoc, writeBatch } = window.firestoreFunctions;
+                    const batch = writeBatch(this.db);
+                    
+                    products.forEach(product => {
+                        const productRef = doc(
+                            this.db,
+                            'stores',
+                            this.storeId,
+                            'products',
+                            product.id.toString()
+                        );
+                        
+                        batch.set(productRef, {
+                            ...product,
+                            storeId: this.storeId,
+                            active: true,
+                            updatedAt: new Date().toISOString()
+                        }, { merge: true });
+                    });
+                    
+                    await batch.commit();
+                    
+                    AppState.firebase.lastSync = new Date();
+                    updateFirebaseStatusUI();
+                    
+                    logger.info(`✅ Synced ${products.length} products to Firestore`);
+                    return { success: true, count: products.length };
+                    
+                } catch (error) {
+                    logger.error('Sync failed:', error);
+                    return { success: false, error: error.message };
+                }
+            }
+            
+            async loadFromFirebase() {
+                try {
+                    if (!this.isConnected || !this.storeId) {
+                        throw new Error('Not connected to Firebase');
+                    }
+                    
+                    const { collection, query, where, getDocs } = window.firestoreFunctions;
+                    
+                    const productsRef = collection(
+                        this.db,
+                        'stores',
+                        this.storeId,
+                        'products'
+                    );
+                    
+                    const productsQuery = query(productsRef, where('active', '==', true));
+                    const snapshot = await getDocs(productsQuery);
+                    
+                    const products = [];
+                    snapshot.forEach(doc => {
+                        products.push({
+                            id: doc.id,
+                            ...doc.data()
+                        });
+                    });
+                    
+                    AppState.products = products;
+                    localStorage.setItem('goatProducts', JSON.stringify(products));
+                    
+                    logger.info(`✅ Loaded ${products.length} products from Firestore`);
+                    return { success: true, products };
+                    
+                } catch (error) {
+                    logger.error('Load failed:', error);
+                    return { success: false, error: error.message, products: [] };
+                }
+            }
+            
+            cleanup() {
+                if (this.unsubscribe) {
+                    this.unsubscribe();
+                    this.unsubscribe = null;
+                }
+                logger.info('Firebase listeners cleaned up');
             }
         }
 
-        async function loadFromFirebase() {
-            try {
-                if (!AppState.firebase.isConnected || !AppState.currentStoreId) {
-                    showMessage('Not connected to Firebase', 'error');
-                    return false;
-                }
+        const firebaseManager = new FirebaseManager();
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        async function initializeApp() {
+            logger.info('🚀 GOAT KIDS Store Initializing...');
+            
+            // Setup mobile menu
+            setupMobileMenu();
+            
+            // Check admin status
+            checkAdminStatus();
+            
+            // Load local data
+            loadProductsFromLocal();
+            loadCartFromLocal();
+            
+            // Initialize Firebase
+            const firebaseResult = await firebaseManager.initialize();
+            
+            if (firebaseResult.success) {
+                showFirebaseSyncStatus('Connected', 'Real-time sync active', 'success');
                 
-                const { collection, query, where, getDocs } = window.firestoreFunctions;
+                // Show sync button
+                document.getElementById('syncBtn').classList.remove('d-none');
                 
-                const productsRef = collection(
-                    window.firestore,
-                    'stores',
-                    AppState.currentStoreId,
-                    'products'
-                );
+                // Initial sync
+                setTimeout(() => {
+                    if (firebaseManager.isConnected) {
+                        loadFromFirebase();
+                    }
+                }, 1000);
                 
-                const productsQuery = query(productsRef, where('active', '==', true));
-                const snapshot = await getDocs(productsQuery);
-                
-                const products = [];
-                snapshot.forEach(doc => {
-                    products.push({
-                        id: doc.id,
-                        ...doc.data()
-                    });
+            } else {
+                showFirebaseSyncStatus('Offline Mode', 'Using local storage', 'warning');
+            }
+            
+            // Setup payment method
+            selectPaymentMethod('payway');
+            
+            // Show store tab
+            showTab('store');
+            
+            logger.info('✅ Application initialized');
+        }
+
+        function setupMobileMenu() {
+            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            const mobileNav = document.getElementById('mobileNav');
+            
+            if (mobileMenuBtn && mobileNav) {
+                mobileMenuBtn.addEventListener('click', function() {
+                    mobileNav.classList.toggle('active');
+                    this.innerHTML = mobileNav.classList.contains('active') ? 
+                        '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
                 });
                 
-                AppState.products = products;
-                localStorage.setItem('goatProducts', JSON.stringify(products));
-                
-                renderProducts();
-                refreshInventory();
-                
-                showMessage(`Loaded ${products.length} products from cloud`, 'success');
-                return true;
-                
-            } catch (error) {
-                console.error('Load from Firebase failed:', error);
-                showMessage('Load failed: ' + error.message, 'error');
-                return false;
+                // Close menu when clicking outside
+                document.addEventListener('click', function(event) {
+                    if (mobileNav.classList.contains('active') && 
+                        !mobileNav.contains(event.target) && 
+                        !mobileMenuBtn.contains(event.target)) {
+                        mobileNav.classList.remove('active');
+                        mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
+                    }
+                });
             }
         }
 
         // ============================================
         // PRODUCT MANAGEMENT
         // ============================================
-        function loadProducts() {
+        function loadProductsFromLocal() {
             try {
                 const saved = localStorage.getItem('goatProducts');
                 AppState.products = saved ? JSON.parse(saved) : [];
                 renderProducts();
                 refreshInventory();
+                updateFirebaseStatusUI();
             } catch (error) {
-                console.error('Load products error:', error);
+                logger.error('Load products error:', error);
                 AppState.products = [];
             }
         }
@@ -2236,15 +2470,15 @@
         }
 
         // ============================================
-        // CART FUNCTIONS
+        // CART MANAGEMENT
         // ============================================
-        function loadCart() {
+        function loadCartFromLocal() {
             try {
                 const saved = localStorage.getItem('goatCart');
                 AppState.cart = saved ? JSON.parse(saved) : [];
                 updateCartCount();
             } catch (error) {
-                console.error('Load cart error:', error);
+                logger.error('Load cart error:', error);
                 AppState.cart = [];
             }
         }
@@ -2254,7 +2488,7 @@
                 localStorage.setItem('goatCart', JSON.stringify(AppState.cart));
                 updateCartCount();
             } catch (error) {
-                console.error('Save cart error:', error);
+                logger.error('Save cart error:', error);
             }
         }
 
@@ -2401,32 +2635,31 @@
             const adminNavLink = document.getElementById('adminNavLink');
             const adminNavLinkMobile = document.getElementById('adminNavLinkMobile');
             
-            if (adminBadge) adminBadge.style.display = AppState.isAdmin ? 'inline-block' : 'none';
-            if (adminNavLink) adminNavLink.style.display = AppState.isAdmin ? 'flex' : 'none';
-            if (adminNavLinkMobile) adminNavLinkMobile.style.display = AppState.isAdmin ? 'flex' : 'none';
+            if (adminBadge) adminBadge.classList.toggle('d-none', !AppState.isAdmin);
+            if (adminNavLink) adminNavLink.classList.toggle('d-none', !AppState.isAdmin);
+            if (adminNavLinkMobile) adminNavLinkMobile.classList.toggle('d-none', !AppState.isAdmin);
         }
 
-        function toggleAdminLogin() {
-            const form = document.getElementById('adminLoginForm');
-            if (form) {
-                form.style.display = form.style.display === 'none' ? 'block' : 'none';
-            }
+        function openAdminLoginModal() {
+            document.getElementById('adminLoginModal').classList.add('active');
+        }
+
+        function closeAdminLoginModal() {
+            document.getElementById('adminLoginModal').classList.remove('active');
+            document.getElementById('adminPassword').value = '';
         }
 
         function adminLogin() {
             const passwordInput = document.getElementById('adminPassword');
             const password = passwordInput ? passwordInput.value : '';
             
-            // Default admin password (change in production)
             if (password === 'goatkids2024') {
                 AppState.isAdmin = true;
                 localStorage.setItem('goatAdmin', 'true');
                 checkAdminStatus();
                 showTab('admin');
+                closeAdminLoginModal();
                 showMessage('Admin login successful!', 'success');
-                
-                if (passwordInput) passwordInput.value = '';
-                toggleAdminLogin();
             } else {
                 showMessage('Invalid admin password', 'error');
             }
@@ -2565,10 +2798,10 @@
             renderProductSizes();
             
             // Scroll to form
-            const formSection = document.querySelector('.section-title');
-            if (formSection) {
-                formSection.scrollIntoView({ behavior: 'smooth' });
-            }
+            document.getElementById('adminTab').scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
         }
 
         function deleteProduct(productId) {
@@ -2647,16 +2880,17 @@
                 updateFirebaseStatusUI();
                 
                 // Auto-sync to Firebase if connected
-                if (AppState.firebase.isConnected && AppState.currentStoreId) {
+                if (firebaseManager.isConnected && firebaseManager.storeId) {
                     setTimeout(() => syncToFirebase(), 1000);
                 }
             } catch (error) {
-                console.error('Save products error:', error);
+                logger.error('Save products error:', error);
+                showMessage('Error saving products', 'error');
             }
         }
 
         // ============================================
-        // UTILITY FUNCTIONS
+        // TAB MANAGEMENT
         // ============================================
         function showTab(tabName) {
             // Hide all tabs
@@ -2697,120 +2931,8 @@
             }
         }
 
-        function showMessage(text, type = 'info') {
-            // Create temporary message element
-            const message = document.createElement('div');
-            message.className = `message message-${type}`;
-            message.innerHTML = `
-                <div style="position: fixed; top: 20px; right: 20px; background: ${
-                    type === 'success' ? 'var(--success)' : 
-                    type === 'error' ? 'var(--danger)' : 
-                    type === 'warning' ? 'var(--warning)' : 'var(--info)'
-                }; color: white; padding: 1rem 1.5rem; border-radius: var(--radius); box-shadow: var(--shadow-lg); z-index: 10000; display: flex; align-items: center; gap: 0.5rem;">
-                    <i class="fas fa-${
-                        type === 'success' ? 'check-circle' : 
-                        type === 'error' ? 'exclamation-circle' : 
-                        type === 'warning' ? 'exclamation-triangle' : 'info-circle'
-                    }"></i>
-                    <span>${text}</span>
-                </div>
-            `;
-            
-            document.body.appendChild(message);
-            
-            // Remove after 3 seconds
-            setTimeout(() => {
-                message.style.opacity = '0';
-                message.style.transform = 'translateY(-20px)';
-                setTimeout(() => message.remove(), 300);
-            }, 3000);
-        }
-
-        function generateStoreId() {
-            const prefix = 'GOAT';
-            const randomNum = Math.floor(1000 + Math.random() * 9000);
-            return `${prefix}-${randomNum}`;
-        }
-
-        function updateUrlWithStoreId() {
-            try {
-                const url = new URL(window.location);
-                url.searchParams.set('store', AppState.currentStoreId);
-                window.history.replaceState({}, '', url);
-            } catch (error) {
-                console.error('Update URL error:', error);
-            }
-        }
-
-        function updateFirebaseStatusUI() {
-            const productCount = document.getElementById('firebaseProductCount');
-            const lastSync = document.getElementById('firebaseLastSync');
-            const status = document.getElementById('firebaseStatus');
-            
-            if (productCount) productCount.textContent = AppState.products.length;
-            if (lastSync) lastSync.textContent = AppState.firebase.lastSync ? 
-                formatTime(AppState.firebase.lastSync) : '-';
-            if (status) {
-                status.textContent = AppState.firebase.isConnected ? 'Online' : 'Offline';
-                status.style.color = AppState.firebase.isConnected ? 'var(--success)' : 'var(--danger)';
-            }
-        }
-
-        function formatTime(date) {
-            if (!date) return '-';
-            
-            const now = new Date();
-            const diffMs = now - new Date(date);
-            const diffMins = Math.floor(diffMs / 60000);
-            
-            if (diffMins < 1) return 'Just now';
-            if (diffMins < 60) return `${diffMins}m ago`;
-            
-            const diffHours = Math.floor(diffMins / 60);
-            if (diffHours < 24) return `${diffHours}h ago`;
-            
-            return new Date(date).toLocaleDateString();
-        }
-
         // ============================================
-        // INITIALIZATION
-        // ============================================
-        document.addEventListener('DOMContentLoaded', async function() {
-            console.log('GOAT KIDS Store Initializing...');
-            
-            // Setup mobile menu
-            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-            const mobileNav = document.getElementById('mobileNav');
-            
-            if (mobileMenuBtn && mobileNav) {
-                mobileMenuBtn.addEventListener('click', function() {
-                    mobileNav.classList.toggle('active');
-                    this.innerHTML = mobileNav.classList.contains('active') ? 
-                        '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
-                });
-            }
-            
-            // Check admin status
-            checkAdminStatus();
-            
-            // Load data
-            loadProducts();
-            loadCart();
-            
-            // Initialize Firebase
-            await initializeFirebase();
-            
-            // Show store tab by default
-            showTab('store');
-            
-            // Setup payment method
-            selectPaymentMethod('payway');
-            
-            console.log('✅ GOAT KIDS Store initialized successfully');
-        });
-
-        // ============================================
-        // EVENT LISTENERS
+        // UTILITY FUNCTIONS
         // ============================================
         function selectSize(element, productId, size) {
             // Remove selected class from all sizes for this product
@@ -2844,7 +2966,43 @@
                 ${product.stock > 0 ? '✅ In Stock' : '❌ Out of Stock'}
             `;
             
-            alert(message);
+            alert(message.replace(/\n\s*/g, '\n'));
+        }
+
+        function showMessage(text, type = 'info') {
+            // Create message element
+            const message = document.createElement('div');
+            message.className = `message message-${type}`;
+            message.innerHTML = `
+                <div style="position: fixed; top: 20px; right: 20px; background: ${
+                    type === 'success' ? 'var(--success)' : 
+                    type === 'error' ? 'var(--danger)' : 
+                    type === 'warning' ? 'var(--warning)' : 'var(--info)'
+                }; color: white; padding: 1rem 1.5rem; border-radius: var(--radius); box-shadow: var(--shadow-lg); z-index: 10000; display: flex; align-items: center; gap: 0.5rem; min-width: 300px; max-width: 400px;">
+                    <i class="fas fa-${
+                        type === 'success' ? 'check-circle' : 
+                        type === 'error' ? 'exclamation-circle' : 
+                        type === 'warning' ? 'exclamation-triangle' : 'info-circle'
+                    }"></i>
+                    <span style="flex: 1;">${text}</span>
+                    <button onclick="this.parentElement.parentElement.remove()" style="background:none; border:none; color:white; cursor:pointer; padding:0.25rem;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(message);
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                message.style.opacity = '0';
+                message.style.transform = 'translateY(-20px)';
+                setTimeout(() => {
+                    if (message.parentElement) {
+                        message.remove();
+                    }
+                }, 300);
+            }, 3000);
         }
 
         function showFirebaseSyncStatus(title, message, type = 'info') {
@@ -2853,27 +3011,27 @@
             const messageDiv = document.getElementById('firebaseSyncMessage');
             const icon = document.getElementById('firebaseSyncIcon');
             
-            if (!statusDiv || !titleDiv || !messageDiv || !icon) return;
+            if (!statusDiv) return;
             
-            titleDiv.textContent = title;
-            messageDiv.textContent = message;
+            if (titleDiv) titleDiv.textContent = title;
+            if (messageDiv) messageDiv.textContent = message;
             
-            // Update icon and color based on type
+            // Set icon and color
             if (type === 'success') {
-                icon.className = 'fas fa-wifi firebase-sync-icon';
-                statusDiv.style.background = 'var(--success)';
+                if (icon) icon.className = 'fas fa-wifi firebase-sync-icon';
+                statusDiv.style.background = 'linear-gradient(135deg, var(--success) 0%, #38a169 100%)';
             } else if (type === 'warning') {
-                icon.className = 'fas fa-exclamation-triangle firebase-sync-icon';
-                statusDiv.style.background = 'var(--warning)';
-                statusDiv.style.color = 'var(--dark)';
+                if (icon) icon.className = 'fas fa-exclamation-triangle firebase-sync-icon';
+                statusDiv.style.background = 'linear-gradient(135deg, var(--warning) 0%, #d69e2e 100%)';
             } else if (type === 'error') {
-                icon.className = 'fas fa-exclamation-circle firebase-sync-icon';
-                statusDiv.style.background = 'var(--danger)';
+                if (icon) icon.className = 'fas fa-exclamation-circle firebase-sync-icon';
+                statusDiv.style.background = 'linear-gradient(135deg, var(--danger) 0%, #e53e3e 100%)';
             } else {
-                icon.className = 'fas fa-info-circle firebase-sync-icon';
-                statusDiv.style.background = 'var(--info)';
+                if (icon) icon.className = 'fas fa-info-circle firebase-sync-icon';
+                statusDiv.style.background = 'linear-gradient(135deg, var(--info) 0%, #3182ce 100%)';
             }
             
+            // Show status
             statusDiv.classList.add('show');
             
             // Auto-hide after 5 seconds
@@ -2889,30 +3047,132 @@
             }
         }
 
-        // Placeholder functions for missing features
-        function proceedToPayway(event) {
-            event.preventDefault();
-            showMessage('PayWay payment integration coming soon!', 'info');
+        function updateFirebaseStatusUI() {
+            const productCount = document.getElementById('firebaseProductCount');
+            const lastSync = document.getElementById('firebaseLastSync');
+            const status = document.getElementById('firebaseStatus');
+            
+            if (productCount) productCount.textContent = AppState.products.length;
+            if (lastSync) lastSync.textContent = AppState.firebase.lastSync ? 
+                formatTime(AppState.firebase.lastSync) : '-';
+            if (status) {
+                status.textContent = firebaseManager.isConnected ? 'Online' : 'Offline';
+                status.style.color = firebaseManager.isConnected ? 'var(--success)' : 'var(--danger)';
+            }
         }
 
-        function sendOrderToMessenger() {
-            if (AppState.cart.length === 0) {
-                showMessage('Your cart is empty', 'error');
+        function formatTime(date) {
+            if (!date) return '-';
+            
+            const now = new Date();
+            const diffMs = now - new Date(date);
+            const diffMins = Math.floor(diffMs / 60000);
+            
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            
+            const diffHours = Math.floor(diffMins / 60);
+            if (diffHours < 24) return `${diffHours}h ago`;
+            
+            return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // ============================================
+        // FIREBASE WRAPPER FUNCTIONS
+        // ============================================
+        async function syncToFirebase() {
+            const result = await firebaseManager.syncToFirebase(AppState.products);
+            if (result.success) {
+                showMessage(`Synced ${result.count} products to cloud`, 'success');
+            } else {
+                showMessage('Sync failed: ' + result.error, 'error');
+            }
+        }
+
+        async function loadFromFirebase() {
+            const result = await firebaseManager.loadFromFirebase();
+            if (result.success) {
+                showMessage(`Loaded ${result.products.length} products from cloud`, 'success');
+            } else {
+                showMessage('Load failed: ' + result.error, 'error');
+            }
+        }
+
+        async function testFirebaseConnection() {
+            const result = await firebaseManager.testConnection();
+            if (result.connected) {
+                showMessage('Firebase connection successful', 'success');
+            } else {
+                showMessage('Firebase connection failed', 'error');
+            }
+        }
+
+        function forceSyncToFirebase() {
+            syncToFirebase();
+        }
+
+        // ============================================
+        // STORE MANAGEMENT FUNCTIONS
+        // ============================================
+        function openJoinStoreModal() {
+            document.getElementById('joinStoreModal').classList.add('active');
+        }
+
+        function closeJoinStoreModal() {
+            document.getElementById('joinStoreModal').classList.remove('active');
+            document.getElementById('joinStoreId').value = '';
+        }
+
+        function joinStore() {
+            const storeIdInput = document.getElementById('joinStoreId');
+            const storeId = storeIdInput ? storeIdInput.value.trim() : '';
+            
+            if (!storeId) {
+                showMessage('Please enter a Store ID', 'error');
                 return;
             }
             
-            showMessage('Messenger integration coming soon!', 'info');
+            localStorage.setItem('goatStoreId', storeId);
+            showMessage(`Joined store: ${storeId}. Refreshing...`, 'success');
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        }
+
+        function createNewStore() {
+            localStorage.removeItem('goatStoreId');
+            localStorage.removeItem('goatProducts');
+            showMessage('Creating new store...', 'info');
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        }
+
+        function leaveStore() {
+            if (confirm('Are you sure you want to leave this store? All local data will be cleared.')) {
+                localStorage.removeItem('goatStoreId');
+                localStorage.removeItem('goatProducts');
+                localStorage.removeItem('goatCart');
+                localStorage.removeItem('goatAdmin');
+                showMessage('Left store. Refreshing...', 'info');
+                
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            }
+        }
+
+        function copyStoreId() {
+            navigator.clipboard.writeText(AppState.currentStoreId || '');
+            showMessage('Store ID copied to clipboard!', 'success');
         }
 
         function generateShareLink() {
             const shareLink = `${window.location.origin}${window.location.pathname}?store=${AppState.currentStoreId}`;
             document.getElementById('storeShareLink').value = shareLink;
             showMessage('Share link generated!', 'success');
-        }
-
-        function copyStoreId() {
-            navigator.clipboard.writeText(AppState.currentStoreId);
-            showMessage('Store ID copied to clipboard!', 'success');
         }
 
         function copyShareLink() {
@@ -2937,52 +3197,6 @@
             }
         }
 
-        function showJoinStoreModal() {
-            document.getElementById('joinStoreModal').classList.add('active');
-        }
-
-        function closeJoinStoreModal() {
-            document.getElementById('joinStoreModal').classList.remove('active');
-        }
-
-        function joinStore() {
-            const storeIdInput = document.getElementById('joinStoreId');
-            const storeId = storeIdInput ? storeIdInput.value.trim() : '';
-            
-            if (!storeId) {
-                showMessage('Please enter a Store ID', 'error');
-                return;
-            }
-            
-            localStorage.setItem('goatStoreId', storeId);
-            showMessage(`Joined store: ${storeId}. Refreshing...`, 'success');
-            
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
-        }
-
-        function createNewStore() {
-            localStorage.removeItem('goatStoreId');
-            showMessage('Creating new store...', 'info');
-            
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
-        }
-
-        function leaveStore() {
-            if (confirm('Are you sure you want to leave this store?')) {
-                localStorage.removeItem('goatStoreId');
-                localStorage.removeItem('goatProducts');
-                showMessage('Left store. Refreshing...', 'info');
-                
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
-            }
-        }
-
         function exportInventory() {
             let csv = 'ID,Name,Category,Sizes,Price,Stock,Image\n';
             
@@ -3003,50 +3217,44 @@
             showMessage('Inventory exported to CSV', 'success');
         }
 
-        function forceSyncToFirebase() {
-            syncToFirebase();
+        // ============================================
+        // PAYMENT FUNCTIONS
+        // ============================================
+        function proceedToPayway() {
+            if (AppState.cart.length === 0) {
+                showMessage('Your cart is empty', 'error');
+                return;
+            }
+            
+            showMessage('PayWay payment integration coming soon!', 'info');
         }
 
-        function generateStoreQRCode() {
-            try {
-                const canvas = document.getElementById('storeQrCanvas');
-                if (!canvas || !AppState.currentStoreId) return;
-                
-                const ctx = canvas.getContext('2d');
-                const size = 200;
-                
-                // Clear canvas
-                ctx.clearRect(0, 0, size, size);
-                
-                // Draw background
-                ctx.fillStyle = 'white';
-                ctx.fillRect(0, 0, size, size);
-                
-                // Draw QR code pattern (simple version)
-                const storeId = AppState.currentStoreId;
-                const cellSize = 8;
-                
-                ctx.fillStyle = 'black';
-                
-                // Draw border
-                for (let i = 0; i < 25; i++) {
-                    for (let j = 0; j < 25; j++) {
-                        if (i < 2 || i >= 23 || j < 2 || j >= 23) {
-                            ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
-                        }
-                    }
-                }
-                
-                // Draw store ID text
-                ctx.fillStyle = 'black';
-                ctx.font = '12px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText(storeId, size/2, size - 10);
-                
-            } catch (error) {
-                console.error('QR code generation failed:', error);
+        function sendOrderToMessenger() {
+            if (AppState.cart.length === 0) {
+                showMessage('Your cart is empty', 'error');
+                return;
             }
+            
+            showMessage('Messenger integration coming soon!', 'info');
         }
+
+        // ============================================
+        // START APPLICATION
+        // ============================================
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set log level
+            logger.setLevel(2); // INFO level
+            
+            // Initialize the application
+            setTimeout(() => {
+                initializeApp();
+            }, 100);
+            
+            // Clean up on page unload
+            window.addEventListener('beforeunload', () => {
+                firebaseManager.cleanup();
+            });
+        });
     </script>
 </body>
 </html>
