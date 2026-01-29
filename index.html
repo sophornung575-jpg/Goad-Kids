@@ -1720,6 +1720,10 @@
                     <i class="fas fa-cog"></i>
                     <span>Admin</span>
                 </a>
+                <button class="nav-link sync-btn" id="syncBtn" onclick="syncToFirebase()" style="background: var(--accent);">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>Sync</span>
+                </button>
             </nav>
         </div>
         
@@ -2117,6 +2121,9 @@
                         <button class="btn-admin btn-green" onclick="loadFromFirebase()">
                             <i class="fas fa-download"></i> Load from Cloud
                         </button>
+                        <button class="btn-admin btn-orange" onclick="testFirebaseConnection()">
+                            <i class="fas fa-wifi"></i> Test Connection
+                        </button>
                     </div>
                 </div>
                 
@@ -2255,8 +2262,6 @@
         </div>
     </footer>
 
-    <!-- Photo Selector Modal (Removed since we're using direct image URLs) -->
-
     <script>
         // ============================================
         // FIREBASE CONFIGURATION
@@ -2296,6 +2301,8 @@
         let storeUnsubscribe = null;
         let isFirebaseConnected = false;
         let lastFirebaseSync = null;
+        let syncRetryCount = 0;
+        const MAX_RETRY_COUNT = 3;
 
         // ============================================
         // INITIALIZATION
@@ -2306,6 +2313,9 @@
             try {
                 // Setup event listeners
                 setupEventListeners();
+                
+                // Setup network monitoring
+                setupNetworkMonitoring();
                 
                 // Check admin status
                 checkAdminStatus();
@@ -2323,18 +2333,17 @@
                 // Show store tab by default
                 showTab('store');
                 
-                // Welcome message
-                setTimeout(() => {
-                    if (!localStorage.getItem('goatKidsWelcomeShown')) {
-                        showMessage('Welcome to GOAT KIDS Store! Real-time sync is active.', 'info');
-                        localStorage.setItem('goatKidsWelcomeShown', 'true');
+                // Initial sync
+                setTimeout(async () => {
+                    if (isFirebaseConnected) {
+                        await loadFromFirebase();
                     }
                 }, 1000);
                 
             } catch (error) {
                 console.error('Initialization error:', error);
-                showMessage('Initialization error. Please refresh the page.', 'error');
-                showFirebaseSyncStatus('Connection Error', 'Failed to connect to cloud sync', 'error');
+                showMessage('Initialization complete. Using offline mode.', 'warning');
+                showFirebaseSyncStatus('Offline Mode', 'Local data only', 'warning');
             }
         });
 
@@ -2392,6 +2401,12 @@
                 });
             }
             
+            // Sync button visibility
+            const syncBtn = document.getElementById('syncBtn');
+            if (syncBtn) {
+                syncBtn.style.display = isFirebaseConnected ? 'flex' : 'none';
+            }
+            
             // Listen for storage changes (for multi-tab sync)
             window.addEventListener('storage', function(e) {
                 if (e.key === 'goatKidsProducts') {
@@ -2405,13 +2420,38 @@
             });
         }
 
+        function setupNetworkMonitoring() {
+            window.addEventListener('online', async () => {
+                console.log('Network connection restored');
+                isFirebaseConnected = true;
+                updateFirebaseStatusUI();
+                showFirebaseSyncStatus('Reconnecting', 'Network restored', 'info');
+                
+                // Try to reconnect Firebase
+                try {
+                    await testFirebaseConnection();
+                    if (isFirebaseConnected && currentStoreId) {
+                        await setupStoreListener();
+                        await syncToFirebase();
+                    }
+                } catch (error) {
+                    console.error('Reconnection failed:', error);
+                }
+            });
+            
+            window.addEventListener('offline', () => {
+                console.log('Network connection lost');
+                isFirebaseConnected = false;
+                updateFirebaseStatusUI();
+                showFirebaseSyncStatus('Offline', 'Network unavailable', 'warning');
+            });
+            
+            // Initial check
+            isFirebaseConnected = navigator.onLine;
+        }
+
         async function initializeFirebase() {
             try {
-                // Check if QRCode library is loaded
-                if (typeof QRCode === 'undefined') {
-                    console.log('QRCode library not loaded yet');
-                }
-                
                 // Initialize Firebase
                 if (!firebase.apps.length) {
                     firebaseApp = firebase.initializeApp(firebaseConfig);
@@ -2428,37 +2468,103 @@
                 try {
                     await firestore.enablePersistence({
                         synchronizeTabs: true
+                    }).catch((error) => {
+                        if (error.code === 'failed-precondition') {
+                            console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
+                        } else if (error.code === 'unimplemented') {
+                            console.warn('The current browser does not support persistence.');
+                        } else {
+                            console.warn('Persistence error:', error);
+                        }
                     });
-                    console.log('Firestore persistence enabled');
+                    console.log('Firestore persistence initialized');
                 } catch (persistenceError) {
-                    console.warn('Firestore persistence error:', persistenceError.code, persistenceError.message);
-                    // Continue without persistence
+                    console.warn('Persistence setup failed, continuing without:', persistenceError);
                 }
                 
-                // Set initial connection state
-                isFirebaseConnected = true;
-                updateFirebaseStatusUI();
+                // Test connection
+                await testFirebaseConnection();
                 
                 console.log('Firebase initialized successfully');
                 showFirebaseSyncStatus('Connected', 'Real-time sync active', 'success');
                 
             } catch (error) {
                 console.error('Firebase initialization error:', error);
+                isFirebaseConnected = false;
                 showFirebaseSyncStatus('Offline Mode', 'Using local storage only', 'warning');
                 
-                // Create a mock firestore for offline functionality
-                firestore = {
-                    collection: () => ({ 
-                        doc: () => ({
-                            get: () => Promise.resolve({ exists: false, data: () => null }),
-                            set: () => Promise.resolve(),
-                            update: () => Promise.resolve(),
-                            onSnapshot: () => ({})
-                        }),
-                        where: () => ({ get: () => Promise.resolve({ empty: true, docs: [] }) })
-                    })
-                };
+                // Create mock firestore for offline use
+                createMockFirestore();
             }
+        }
+
+        async function testFirebaseConnection() {
+            try {
+                // Simple test to verify connection
+                await firestore.collection('test').limit(1).get();
+                isFirebaseConnected = true;
+                console.log('Firebase connection test passed');
+                
+                // Update sync button visibility
+                const syncBtn = document.getElementById('syncBtn');
+                if (syncBtn) {
+                    syncBtn.style.display = 'flex';
+                }
+                
+                return true;
+            } catch (error) {
+                console.warn('Firebase connection test failed:', error.message);
+                isFirebaseConnected = false;
+                
+                // Update sync button visibility
+                const syncBtn = document.getElementById('syncBtn');
+                if (syncBtn) {
+                    syncBtn.style.display = 'none';
+                }
+                
+                return false;
+            }
+        }
+
+        function createMockFirestore() {
+            firestore = {
+                collection: (name) => ({
+                    doc: (id) => ({
+                        get: () => Promise.resolve({ 
+                            exists: false, 
+                            data: () => null,
+                            id: id 
+                        }),
+                        set: (data) => {
+                            console.log('Mock set:', name, id, data);
+                            return Promise.resolve();
+                        },
+                        update: (data) => {
+                            console.log('Mock update:', name, id, data);
+                            return Promise.resolve();
+                        },
+                        onSnapshot: () => ({ 
+                            unsubscribe: () => {} 
+                        })
+                    }),
+                    where: () => ({ 
+                        get: () => Promise.resolve({ 
+                            empty: true, 
+                            docs: [],
+                            forEach: (fn) => {}
+                        }) 
+                    }),
+                    get: () => Promise.resolve({
+                        empty: true,
+                        docs: [],
+                        forEach: (fn) => {}
+                    }),
+                    onSnapshot: (onNext, onError) => {
+                        console.log('Mock listener set up for:', name);
+                        return { unsubscribe: () => {} };
+                    }
+                })
+            };
         }
 
         async function initializeStore() {
@@ -2488,16 +2594,13 @@
                 // Update UI
                 document.getElementById('currentStoreId').textContent = currentStoreId;
                 
-                // Generate QR code (with delay to ensure QRCode library is loaded)
+                // Generate QR code
                 setTimeout(() => {
                     generateStoreQRCode();
                 }, 1000);
                 
                 // Setup real-time listener for this store
                 await setupStoreListener();
-                
-                // Load data from Firebase
-                await loadFromFirebase();
                 
                 // Update URL with store ID
                 updateUrlWithStoreId();
@@ -2528,58 +2631,93 @@
         async function setupStoreListener() {
             try {
                 if (!firestore || !currentStoreId) {
-                    console.log('Firestore or store ID not available');
+                    console.log('Firestore or store ID not available for listener');
                     return;
                 }
                 
-                // Unsubscribe from previous listener
+                // Unsubscribe from previous listener if exists
                 if (storeUnsubscribe) {
                     storeUnsubscribe();
+                    storeUnsubscribe = null;
                 }
                 
-                // Listen for products changes
+                // Listen for products changes with error handling
                 const productsRef = firestore.collection('stores').doc(currentStoreId).collection('products');
                 
-                storeUnsubscribe = productsRef.onSnapshot((snapshot) => {
-                    console.log('Firestore snapshot received:', snapshot.size, 'products');
-                    
-                    if (!snapshot.empty) {
-                        const firebaseProducts = [];
-                        snapshot.forEach((doc) => {
-                            firebaseProducts.push({ id: doc.id, ...doc.data() });
-                        });
+                storeUnsubscribe = productsRef.onSnapshot(
+                    (snapshot) => {
+                        console.log('Firestore snapshot received:', snapshot.size, 'products');
                         
-                        // Merge with local products
-                        mergeProducts(firebaseProducts);
-                        
-                        // Update UI
-                        if (document.getElementById('storeTab').classList.contains('active')) {
-                            renderProducts();
+                        if (!snapshot.empty) {
+                            const firebaseProducts = [];
+                            snapshot.forEach((doc) => {
+                                try {
+                                    const data = doc.data();
+                                    firebaseProducts.push({ 
+                                        id: doc.id, 
+                                        ...data 
+                                    });
+                                } catch (error) {
+                                    console.error('Error processing document:', error);
+                                }
+                            });
+                            
+                            // Merge with local products
+                            mergeProducts(firebaseProducts);
+                            
+                            // Update UI
+                            if (document.getElementById('storeTab').classList.contains('active')) {
+                                renderProducts();
+                            }
+                            if (document.getElementById('adminTab').classList.contains('active')) {
+                                refreshInventory();
+                            }
+                            
+                            // Update sync status
+                            lastFirebaseSync = new Date();
+                            updateFirebaseStatusUI();
+                            showFirebaseSyncStatus('Synced', `${firebaseProducts.length} products updated`, 'success');
+                            syncRetryCount = 0; // Reset retry count on success
+                        } else {
+                            console.log('No products in Firebase for this store');
+                            showFirebaseSyncStatus('Empty Store', 'No products in cloud', 'info');
                         }
-                        if (document.getElementById('adminTab').classList.contains('active')) {
-                            refreshInventory();
-                        }
+                    },
+                    (error) => {
+                        console.error('Firestore listener error:', error.code, error.message);
                         
-                        // Update sync status
-                        lastFirebaseSync = new Date();
-                        updateFirebaseStatusUI();
-                        showFirebaseSyncStatus('Updated', 'Products synced from cloud', 'info');
+                        if (error.code === 'permission-denied') {
+                            showFirebaseSyncStatus('Access Denied', 'Check Firebase rules', 'error');
+                        } else if (error.code === 'unavailable') {
+                            showFirebaseSyncStatus('Offline', 'Network unavailable', 'warning');
+                            isFirebaseConnected = false;
+                            updateFirebaseStatusUI();
+                            
+                            // Try to reconnect after delay
+                            if (syncRetryCount < MAX_RETRY_COUNT) {
+                                syncRetryCount++;
+                                setTimeout(() => {
+                                    if (currentStoreId) {
+                                        setupStoreListener();
+                                    }
+                                }, 5000);
+                            }
+                        } else {
+                            showFirebaseSyncStatus('Sync Error', error.message || 'Check connection', 'error');
+                        }
                     }
-                }, (error) => {
-                    console.error('Firestore listener error:', error);
-                    showFirebaseSyncStatus('Sync Error', 'Check connection', 'error');
-                });
+                );
                 
                 console.log('Store listener setup for:', currentStoreId);
                 
             } catch (error) {
                 console.error('Error setting up store listener:', error);
+                showFirebaseSyncStatus('Listener Error', 'Failed to setup sync', 'error');
             }
         }
 
         function mergeProducts(firebaseProducts) {
             try {
-                // Convert firebase products to our format
                 const convertedProducts = firebaseProducts.map(fp => ({
                     id: parseInt(fp.id) || Date.now(),
                     name: fp.name || '',
@@ -2591,10 +2729,7 @@
                     images: fp.images || []
                 }));
                 
-                // For simplicity, replace local products with firebase products
                 products = convertedProducts;
-                
-                // Save to localStorage as backup
                 saveProductsToLocal();
                 
             } catch (error) {
@@ -2610,49 +2745,79 @@
                 if (!firestore || !currentStoreId) {
                     console.log('Firebase not available for sync');
                     showMessage('Firebase not configured', 'error');
-                    return;
+                    return false;
+                }
+                
+                if (!isFirebaseConnected) {
+                    showFirebaseSyncStatus('Offline', 'Cannot sync - no connection', 'warning');
+                    return false;
                 }
                 
                 showFirebaseSyncStatus('Syncing', 'Uploading to cloud...', 'syncing');
                 
                 const storeRef = firestore.collection('stores').doc(currentStoreId);
-                const productsRef = storeRef.collection('products');
                 
-                // Update store metadata
-                await storeRef.set({
-                    id: currentStoreId,
-                    name: 'GOAT KIDS Store',
-                    lastUpdated: new Date().toISOString(),
-                    productCount: products.length
-                }, { merge: true });
-                
-                // Sync each product
-                for (const product of products) {
-                    const productRef = productsRef.doc(product.id.toString());
-                    await productRef.set({
-                        id: product.id.toString(),
-                        name: product.name,
-                        price: product.price,
-                        stock: product.stock,
-                        category: product.category,
-                        image: product.image,
-                        sizes: product.sizes || [],
-                        images: product.images || [product.image],
-                        lastUpdated: new Date().toISOString()
-                    }, { merge: true });
+                try {
+                    // Update store metadata with timeout
+                    await Promise.race([
+                        storeRef.set({
+                            id: currentStoreId,
+                            name: 'GOAT KIDS Store',
+                            lastUpdated: new Date().toISOString(),
+                            productCount: products.length
+                        }, { merge: true }),
+                        new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Timeout')), 10000)
+                        )
+                    ]);
+                    
+                    // Sync each product with batch operations
+                    const batch = firestore.batch();
+                    const productsRef = storeRef.collection('products');
+                    
+                    products.forEach(product => {
+                        const productRef = productsRef.doc(product.id.toString());
+                        batch.set(productRef, {
+                            id: product.id.toString(),
+                            name: product.name,
+                            price: product.price,
+                            stock: product.stock,
+                            category: product.category,
+                            image: product.image,
+                            sizes: product.sizes || [],
+                            images: product.images || [product.image],
+                            lastUpdated: new Date().toISOString()
+                        }, { merge: true });
+                    });
+                    
+                    await batch.commit();
+                    
+                    // Update sync status
+                    lastFirebaseSync = new Date();
+                    updateFirebaseStatusUI();
+                    showFirebaseSyncStatus('Synced', `Saved ${products.length} products`, 'success');
+                    
+                    console.log('Products synced to Firebase successfully');
+                    return true;
+                    
+                } catch (syncError) {
+                    console.error('Sync operation failed:', syncError);
+                    
+                    if (syncError.message === 'Timeout') {
+                        showFirebaseSyncStatus('Timeout', 'Sync took too long', 'warning');
+                    } else if (syncError.code === 'permission-denied') {
+                        showFirebaseSyncStatus('Permission Denied', 'Check Firebase rules', 'error');
+                    } else {
+                        showFirebaseSyncStatus('Sync Failed', 'Could not save to cloud', 'error');
+                    }
+                    
+                    return false;
                 }
                 
-                // Update sync status
-                lastFirebaseSync = new Date();
-                updateFirebaseStatusUI();
-                showFirebaseSyncStatus('Synced', 'Changes saved to cloud', 'success');
-                
-                console.log('Products synced to Firebase');
-                
             } catch (error) {
-                console.error('Error syncing to Firebase:', error);
-                showFirebaseSyncStatus('Sync Failed', 'Check connection', 'error');
-                showMessage('Failed to sync to cloud', 'error');
+                console.error('Error in syncToFirebase:', error);
+                showFirebaseSyncStatus('Sync Error', error.message || 'Check connection', 'error');
+                return false;
             }
         }
 
@@ -2743,6 +2908,12 @@
                     }
                 }
                 
+                // Update sync button
+                const syncBtn = document.getElementById('syncBtn');
+                if (syncBtn) {
+                    syncBtn.style.display = isFirebaseConnected ? 'flex' : 'none';
+                }
+                
             } catch (error) {
                 console.error('Error updating Firebase status UI:', error);
             }
@@ -2812,14 +2983,13 @@
         }
 
         // ============================================
-        // QR CODE FUNCTIONS (FIXED)
+        // QR CODE FUNCTIONS
         // ============================================
-        async function generateStoreQRCode() {
+        function generateStoreQRCode() {
             try {
-                // Wait for QRCode library to load
                 if (typeof QRCode === 'undefined') {
-                    console.log('QRCode library not loaded, retrying in 1 second...');
-                    setTimeout(generateStoreQRCode, 1000);
+                    console.log('QRCode library not loaded, retrying...');
+                    setTimeout(generateStoreQRCode, 500);
                     return;
                 }
 
@@ -2852,8 +3022,6 @@
                             ctx.font = '14px Arial';
                             ctx.textAlign = 'center';
                             ctx.fillText('Scan to join store', canvas.width / 2, canvas.height / 2);
-                        } else {
-                            console.log('QR code generated successfully');
                         }
                     });
                 } catch (qrError) {
@@ -3244,7 +3412,7 @@
                 updateCartCount();
                 updateFirebaseStatusUI();
                 
-                // Auto-sync to Firebase
+                // Auto-sync to Firebase if connected
                 if (isFirebaseConnected && currentStoreId) {
                     setTimeout(() => syncToFirebase(), 1000);
                 }
@@ -3772,7 +3940,7 @@
             const passwordInput = document.getElementById('mobileAdminPassword');
             const password = passwordInput ? passwordInput.value : '';
             
-            // Default admin password (change this in production!)
+            // Default admin password
             const adminPassword = 'admin123';
             
             if (password === adminPassword) {
