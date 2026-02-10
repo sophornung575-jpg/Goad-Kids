@@ -7,6 +7,64 @@
     <meta name="theme-color" content="#667eea">
     <title>GOAT KIDS - Children's Clothing Store</title>
     
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js'
+        import { 
+            getFirestore, 
+            collection, 
+            doc, 
+            setDoc, 
+            getDoc, 
+            updateDoc, 
+            deleteDoc, 
+            onSnapshot,
+            query,
+            where,
+            serverTimestamp,
+            enableIndexedDbPersistence
+        } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js'
+
+        // Firebase Configuration - Replace with your config
+        const firebaseConfig = {
+            apiKey: "AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU",
+            authDomain: "goat-kids-store.firebaseapp.com",
+            projectId: "goat-kids-store",
+            storageBucket: "goat-kids-store.firebasestorage.app",
+            messagingSenderId: "372035223463",
+            appId: "1:372035223463:web:a9948932607e81da2a4082",
+            measurementId: "G-V41CZRMTN5"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Enable offline persistence
+        enableIndexedDbPersistence(db).catch((err) => {
+            console.warn('Persistence failed:', err.code);
+        });
+
+        // Make Firebase available globally
+        window.firebase = {
+            db,
+            collection,
+            doc,
+            setDoc,
+            getDoc,
+            updateDoc,
+            deleteDoc,
+            onSnapshot,
+            query,
+            where,
+            serverTimestamp,
+            storeId: null,
+            unsubscribe: null
+        };
+
+        console.log('Firebase initialized');
+    </script>
+    
     <!-- Styles -->
     <style>
         /* ========== CSS RESET ========== */
@@ -25,6 +83,7 @@
             --success: #48bb78;
             --warning: #ecc94b;
             --danger: #f56565;
+            --info: #4299e1;
             --dark: #2d3748;
             --light: #f7fafc;
             --gray: #a0aec0;
@@ -142,6 +201,54 @@
         .btn-small {
             padding: 0.375rem 0.75rem;
             font-size: 0.875rem;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: var(--dark);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        /* ========== SYNC STATUS ========== */
+        .sync-status {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: var(--dark);
+            color: white;
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 1000;
+            transform: translateY(-100%);
+            transition: transform 0.3s ease;
+        }
+
+        .sync-status.show {
+            transform: translateY(0);
+        }
+
+        .sync-status.online {
+            background: var(--success);
+        }
+
+        .sync-status.offline {
+            background: var(--warning);
+        }
+
+        .sync-status.error {
+            background: var(--danger);
         }
 
         /* ========== HEADER & NAVIGATION ========== */
@@ -1103,6 +1210,17 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+    <!-- Sync Status -->
+    <div class="sync-status" id="syncStatus">
+        <div class="flex items-center gap-2">
+            <i class="fas fa-sync-alt fa-spin" id="syncIcon"></i>
+            <span id="syncText">Connecting to Firebase...</span>
+        </div>
+        <button onclick="hideSyncStatus()" class="btn btn-small btn-outline" style="color: white; border-color: white;">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
     <!-- Header -->
     <header>
         <div class="header-container">
@@ -1130,6 +1248,9 @@
                     <i class="fas fa-cog"></i>
                     <span>Admin</span>
                 </a>
+                <button class="btn btn-small btn-success" onclick="syncToFirebase()" id="syncBtn">
+                    <i class="fas fa-sync-alt"></i> Sync
+                </button>
             </nav>
         </div>
         
@@ -1147,6 +1268,9 @@
                 <i class="fas fa-cog"></i>
                 <span>Admin</span>
             </a>
+            <button class="btn btn-success w-full mt-4" onclick="syncToFirebase()">
+                <i class="fas fa-sync-alt"></i> Sync to Cloud
+            </button>
         </nav>
     </header>
 
@@ -1157,6 +1281,9 @@
             <div class="store-header">
                 <h1>GOAT KIDS Clothing Store</h1>
                 <p>Premium children's clothing with comfort and style</p>
+                <div class="mt-4">
+                    <small>Store ID: <span id="currentStoreIdDisplay">Loading...</span></small>
+                </div>
             </div>
             
             <!-- Search & Filter -->
@@ -1361,6 +1488,9 @@
                         </button>
                         <button class="btn btn-outline" onclick="openJoinStoreModal()">
                             <i class="fas fa-sign-in-alt"></i> Join Store
+                        </button>
+                        <button class="btn btn-success" onclick="syncToFirebase()">
+                            <i class="fas fa-sync-alt"></i> Sync Now
                         </button>
                     </div>
                     
@@ -1585,32 +1715,167 @@
                 stock: 'all',
                 price: 'all',
                 search: ''
-            }
+            },
+            storeId: null,
+            firebaseInitialized: false
         };
 
         // ============================================
         // INITIALIZATION
         // ============================================
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeApp();
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initializeApp();
         });
 
-        function initializeApp() {
+        async function initializeApp() {
+            showSyncStatus('Initializing...', 'info');
+            
             // Setup mobile menu
             setupMobileMenu();
             
             // Check admin status
             checkAdminStatus();
             
-            // Load data
-            loadProducts();
+            // Initialize Firebase
+            await waitForFirebase();
+            
+            // Initialize store
+            await initializeStore();
+            
+            // Load local data first
+            loadLocalProducts();
             loadCart();
+            
+            // Setup Firebase listener for real-time updates
+            await setupFirebaseListener();
             
             // Show store tab
             showTab('store');
             
             // Setup payment method
             selectPaymentMethod('payway');
+            
+            showSyncStatus('Connected to Firebase', 'success');
+        }
+
+        async function waitForFirebase() {
+            return new Promise((resolve) => {
+                const check = () => {
+                    if (window.firebase && window.firebase.db) {
+                        state.firebaseInitialized = true;
+                        resolve();
+                    } else {
+                        setTimeout(check, 100);
+                    }
+                };
+                check();
+            });
+        }
+
+        async function initializeStore() {
+            // Get or create store ID
+            let storeId = localStorage.getItem('goatStoreId');
+            
+            if (!storeId) {
+                // Check URL for store ID
+                const urlParams = new URLSearchParams(window.location.search);
+                storeId = urlParams.get('store');
+                
+                if (!storeId) {
+                    // Generate new store ID
+                    storeId = 'GOAT-' + Math.floor(1000 + Math.random() * 9000);
+                }
+                
+                localStorage.setItem('goatStoreId', storeId);
+            }
+            
+            state.storeId = storeId;
+            
+            // Update UI
+            document.getElementById('currentStoreIdDisplay').textContent = storeId;
+            document.getElementById('currentStoreId').textContent = storeId;
+            
+            // Update URL
+            updateUrlWithStoreId(storeId);
+            
+            return storeId;
+        }
+
+        function updateUrlWithStoreId(storeId) {
+            try {
+                const url = new URL(window.location);
+                url.searchParams.set('store', storeId);
+                window.history.replaceState({}, '', url);
+            } catch (error) {
+                console.warn('Could not update URL:', error);
+            }
+        }
+
+        async function setupFirebaseListener() {
+            if (!state.firebaseInitialized || !state.storeId) {
+                console.warn('Firebase not ready for listener setup');
+                return;
+            }
+            
+            try {
+                const { db, collection, query, where, onSnapshot } = window.firebase;
+                
+                const productsRef = collection(db, 'stores', state.storeId, 'products');
+                const productsQuery = query(productsRef, where('active', '==', true));
+                
+                // Clear previous listener
+                if (window.firebase.unsubscribe) {
+                    window.firebase.unsubscribe();
+                }
+                
+                // Setup real-time listener
+                window.firebase.unsubscribe = onSnapshot(
+                    productsQuery,
+                    (snapshot) => {
+                        const products = [];
+                        snapshot.forEach(doc => {
+                            const data = doc.data();
+                            products.push({
+                                id: doc.id,
+                                name: data.name || '',
+                                price: data.price || 0,
+                                stock: data.stock || 0,
+                                category: data.category || '',
+                                image: data.image || '',
+                                sizes: data.sizes || []
+                            });
+                        });
+                        
+                        // Update state
+                        state.products = products;
+                        
+                        // Save to localStorage as backup
+                        localStorage.setItem('goatProducts', JSON.stringify(products));
+                        
+                        // Update UI
+                        if (document.getElementById('storeTab').classList.contains('active')) {
+                            renderProducts();
+                        }
+                        if (document.getElementById('adminTab').classList.contains('active')) {
+                            refreshInventory();
+                        }
+                        
+                        showSyncStatus('Products updated in real-time', 'success');
+                        
+                        console.log('Firestore update:', products.length, 'products');
+                    },
+                    (error) => {
+                        console.error('Firestore listener error:', error);
+                        showSyncStatus('Connection lost, using local data', 'offline');
+                    }
+                );
+                
+                console.log('Firebase listener setup complete');
+                
+            } catch (error) {
+                console.error('Error setting up Firebase listener:', error);
+                showSyncStatus('Failed to setup real-time updates', 'error');
+            }
         }
 
         function setupMobileMenu() {
@@ -1643,6 +1908,123 @@
                 adminBadge?.classList.remove('hidden');
                 adminNavLink?.classList.remove('hidden');
                 adminNavLinkMobile?.classList.remove('hidden');
+            }
+        }
+
+        // ============================================
+        // SYNC STATUS
+        // ============================================
+        function showSyncStatus(text, type = 'info') {
+            const statusEl = document.getElementById('syncStatus');
+            const textEl = document.getElementById('syncText');
+            const iconEl = document.getElementById('syncIcon');
+            
+            if (!statusEl || !textEl || !iconEl) return;
+            
+            textEl.textContent = text;
+            
+            // Update classes
+            statusEl.className = 'sync-status show';
+            if (type === 'success') statusEl.classList.add('online');
+            if (type === 'offline') statusEl.classList.add('offline');
+            if (type === 'error') statusEl.classList.add('error');
+            
+            // Update icon
+            iconEl.className = 'fas';
+            if (type === 'info') iconEl.classList.add('fa-sync-alt', 'fa-spin');
+            if (type === 'success') iconEl.classList.add('fa-check-circle');
+            if (type === 'offline') iconEl.classList.add('fa-exclamation-triangle');
+            if (type === 'error') iconEl.classList.add('fa-exclamation-circle');
+            
+            // Auto-hide after 3 seconds for success messages
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusEl.classList.remove('show');
+                }, 3000);
+            }
+        }
+
+        function hideSyncStatus() {
+            const statusEl = document.getElementById('syncStatus');
+            if (statusEl) {
+                statusEl.classList.remove('show');
+            }
+        }
+
+        // ============================================
+        // FIREBASE SYNC FUNCTIONS
+        // ============================================
+        async function syncToFirebase() {
+            if (!state.firebaseInitialized || !state.storeId) {
+                showSyncStatus('Firebase not initialized', 'error');
+                return;
+            }
+            
+            showSyncStatus('Syncing to Firebase...', 'info');
+            
+            try {
+                const { db, doc, setDoc, serverTimestamp } = window.firebase;
+                
+                // Sync each product
+                for (const product of state.products) {
+                    const productRef = doc(db, 'stores', state.storeId, 'products', product.id.toString());
+                    await setDoc(productRef, {
+                        ...product,
+                        active: true,
+                        updatedAt: serverTimestamp(),
+                        storeId: state.storeId
+                    }, { merge: true });
+                }
+                
+                showSyncStatus('Products synced to Firebase', 'success');
+                
+            } catch (error) {
+                console.error('Error syncing to Firebase:', error);
+                showSyncStatus('Sync failed: ' + error.message, 'error');
+            }
+        }
+
+        async function syncProductToFirebase(product) {
+            if (!state.firebaseInitialized || !state.storeId) {
+                return;
+            }
+            
+            try {
+                const { db, doc, setDoc, serverTimestamp } = window.firebase;
+                
+                const productRef = doc(db, 'stores', state.storeId, 'products', product.id.toString());
+                await setDoc(productRef, {
+                    ...product,
+                    active: true,
+                    updatedAt: serverTimestamp(),
+                    storeId: state.storeId
+                }, { merge: true });
+                
+                console.log('Product synced to Firebase:', product.name);
+                
+            } catch (error) {
+                console.error('Error syncing product:', error);
+            }
+        }
+
+        async function deleteProductFromFirebase(productId) {
+            if (!state.firebaseInitialized || !state.storeId) {
+                return;
+            }
+            
+            try {
+                const { db, doc, updateDoc } = window.firebase;
+                
+                const productRef = doc(db, 'stores', state.storeId, 'products', productId.toString());
+                await updateDoc(productRef, {
+                    active: false,
+                    updatedAt: window.firebase.serverTimestamp()
+                });
+                
+                console.log('Product marked as inactive in Firebase:', productId);
+                
+            } catch (error) {
+                console.error('Error deleting product from Firebase:', error);
             }
         }
 
@@ -1693,7 +2075,7 @@
         // ============================================
         // PRODUCT MANAGEMENT
         // ============================================
-        function loadProducts() {
+        function loadLocalProducts() {
             const saved = localStorage.getItem('goatProducts');
             state.products = saved ? JSON.parse(saved) : [];
             
@@ -1750,15 +2132,6 @@
                     category: "accessories",
                     image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=400&fit=crop",
                     sizes: ["One Size"]
-                },
-                {
-                    id: 6,
-                    name: "Children's Cap",
-                    price: 14.99,
-                    stock: 0,
-                    category: "accessories",
-                    image: "https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=400&h=400&fit=crop",
-                    sizes: ["S", "M", "L"]
                 }
             ];
             
@@ -2114,7 +2487,6 @@
             if (!validateCheckoutForm()) return;
             
             showMessage('Redirecting to PayWay payment gateway...', 'info');
-            // In a real app, you would redirect to PayWay
         }
 
         function sendOrderToMessenger() {
@@ -2126,13 +2498,9 @@
             // Validate form
             if (!validateCheckoutForm()) return;
             
-            const phone = document.getElementById('customerPhone').value;
-            const message = generateOrderMessage();
-            
             showMessage('Opening Messenger...', 'info');
             
             // In a real app, you would use Facebook Messenger API
-            // For now, just show a success message
             setTimeout(() => {
                 showMessage('Order sent successfully! We\'ll contact you soon.', 'success');
                 // Clear cart after successful order
@@ -2192,34 +2560,6 @@
             }
             
             return isValid;
-        }
-
-        function generateOrderMessage() {
-            const name = document.getElementById('customerName').value;
-            const phone = document.getElementById('customerPhone').value;
-            const address = document.getElementById('customerAddress').value;
-            const notes = document.getElementById('customerNotes').value;
-            
-            let message = `New Order from GOAT KIDS Store\n\n`;
-            message += `Customer: ${name}\n`;
-            message += `Phone: ${phone}\n`;
-            message += `Address: ${address}\n\n`;
-            
-            if (notes) {
-                message += `Notes: ${notes}\n\n`;
-            }
-            
-            message += `Order Items:\n`;
-            state.cart.forEach((item, index) => {
-                message += `${index + 1}. ${item.name} (${item.size}) x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}\n`;
-            });
-            
-            message += `\nSubtotal: $${state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}`;
-            message += `\nShipping: $5.00`;
-            message += `\nTotal: $${(state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) + 5).toFixed(2)}`;
-            message += `\nPayment Method: ${state.selectedPaymentMethod === 'payway' ? 'ABA PayWay' : 'Cash on Delivery'}`;
-            
-            return message;
         }
 
         // ============================================
@@ -2283,25 +2623,31 @@
                 return;
             }
             
-            // In a real app, you would validate the store ID
-            showMessage(`Joined store: ${storeId}`, 'success');
-            closeJoinStoreModal();
+            localStorage.setItem('goatStoreId', storeId);
+            showMessage(`Joined store: ${storeId}. Refreshing...`, 'success');
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
         }
 
         function createNewStore() {
-            const newStoreId = 'GOAT-' + Math.floor(1000 + Math.random() * 9000);
-            showMessage(`New store created: ${newStoreId}`, 'success');
-            closeJoinStoreModal();
+            localStorage.removeItem('goatStoreId');
+            localStorage.removeItem('goatProducts');
+            showMessage('Creating new store...', 'info');
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
         }
 
         function copyStoreId() {
-            const storeId = 'GOAT-1234'; // This would be dynamic in a real app
-            navigator.clipboard.writeText(storeId);
+            navigator.clipboard.writeText(state.storeId || '');
             showMessage('Store ID copied to clipboard', 'success');
         }
 
         function generateShareLink() {
-            const shareLink = `${window.location.origin}${window.location.pathname}?store=GOAT-1234`;
+            const shareLink = `${window.location.origin}${window.location.pathname}?store=${state.storeId}`;
             document.getElementById('storeShareLink').value = shareLink;
             showMessage('Share link generated', 'success');
         }
@@ -2369,7 +2715,7 @@
             renderProductSizes();
         }
 
-        function addSingleProduct() {
+        async function addSingleProduct() {
             const name = document.getElementById('productName').value.trim();
             const price = parseFloat(document.getElementById('productPrice').value);
             const stock = parseInt(document.getElementById('productStock').value);
@@ -2393,6 +2739,9 @@
             
             state.products.push(newProduct);
             saveProducts();
+            
+            // Sync to Firebase
+            await syncProductToFirebase(newProduct);
             
             // Clear form
             document.getElementById('productName').value = '';
@@ -2429,7 +2778,7 @@
             showMessage(`Editing "${product.name}"`, 'info');
         }
 
-        function deleteProduct(productId) {
+        async function deleteProduct(productId) {
             if (!confirm('Are you sure you want to delete this product?')) return;
             
             const productIndex = state.products.findIndex(p => p.id === productId);
@@ -2438,6 +2787,9 @@
             const productName = state.products[productIndex].name;
             state.products.splice(productIndex, 1);
             saveProducts();
+            
+            // Delete from Firebase
+            await deleteProductFromFirebase(productId);
             
             showMessage(`Product "${productName}" deleted`, 'success');
             refreshInventory();
