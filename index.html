@@ -9,7 +9,7 @@
     
     <!-- Firebase SDK -->
     <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js'
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js'
         import { 
             getFirestore, 
             collection, 
@@ -23,9 +23,9 @@
             where,
             serverTimestamp,
             enableIndexedDbPersistence
-        } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js'
+        } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js'
 
-        // Firebase Configuration - Replace with your config
+        // 🔥 Your Firebase Configuration 🔥
         const firebaseConfig = {
             apiKey: "AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU",
             authDomain: "goat-kids-store.firebaseapp.com",
@@ -62,7 +62,7 @@
             unsubscribe: null
         };
 
-        console.log('Firebase initialized');
+        console.log('Firebase initialized successfully');
     </script>
     
     <!-- Styles -->
@@ -585,6 +585,43 @@
 
         .btn-add-to-cart {
             flex: 1;
+        }
+
+        /* ========== IMAGE UPLOAD ========== */
+        .image-upload-container {
+            margin-bottom: var(--space-lg);
+        }
+
+        .image-upload-area {
+            border: 2px dashed var(--gray-light);
+            border-radius: var(--radius);
+            padding: var(--space-xl);
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .image-upload-area:hover {
+            border-color: var(--primary);
+            background: var(--light);
+        }
+
+        .image-upload-icon {
+            font-size: 3rem;
+            color: var(--gray);
+            margin-bottom: var(--space-md);
+        }
+
+        .image-preview {
+            margin-top: var(--space-md);
+        }
+
+        .image-preview img {
+            max-width: 200px;
+            max-height: 200px;
+            object-fit: cover;
+            border-radius: var(--radius);
+            border: 2px solid var(--gray-light);
         }
 
         /* ========== CART PAGE ========== */
@@ -1297,8 +1334,8 @@
                     <select id="categoryFilter" class="filter-select" onchange="filterProducts()" aria-label="Filter by category">
                         <option value="all">All Categories</option>
                         <option value="tshirts">T-Shirts</option>
-                        <option value="Jeans">Jeans</option>
-                        <option value="Dresses">Dresses</option>
+                        <option value="pants">Pants</option>
+                        <option value="hoodies">Hoodies</option>
                         <option value="shoes">Shoes</option>
                         <option value="accessories">Accessories</option>
                     </select>
@@ -1530,11 +1567,28 @@
                         <select id="productCategory" class="form-control">
                             <option value="">Select Category</option>
                             <option value="tshirts">T-Shirts</option>
-                            <option value="Jeans">Jeans</option>
-                            <option value="Dresses">Dresses</option>
+                            <option value="pants">Pants</option>
+                            <option value="hoodies">Hoodies</option>
                             <option value="shoes">Shoes</option>
                             <option value="accessories">Accessories</option>
                         </select>
+                    </div>
+                    
+                    <!-- Image Upload -->
+                    <div class="image-upload-container">
+                        <label class="form-label">Product Image</label>
+                        <div class="image-upload-area" onclick="document.getElementById('productImageFile').click()">
+                            <div class="image-upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <p>Click to upload image</p>
+                            <small>Supported: JPG, PNG, GIF (Max 32MB)</small>
+                        </div>
+                        <input type="file" id="productImageFile" accept="image/*" class="hidden" 
+                               onchange="handleImageUpload(event)">
+                        <div class="image-preview" id="imagePreview"></div>
+                        <input type="text" id="productImageUrl" class="form-control mt-4" 
+                               placeholder="Or paste ImgBB/Image URL">
                     </div>
                     
                     <!-- Size Management -->
@@ -1549,10 +1603,6 @@
                         <div class="size-list" id="productSizesList">
                             <!-- Sizes will be added here -->
                         </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <input type="text" id="productImageUrl" class="form-control" placeholder="Image URL">
                     </div>
                     
                     <div class="flex gap-2">
@@ -1700,7 +1750,7 @@
         </div>
     </div>
 
-       <!-- JavaScript -->
+    <!-- JavaScript -->
     <script>
         // ============================================
         // APPLICATION STATE
@@ -1718,14 +1768,18 @@
             },
             storeId: null,
             firebaseInitialized: false,
-            editingProductId: null  // Track which product is being edited
+            editingProductId: null
         };
 
         // Product form state
         const productFormState = {
             sizes: [],
-            editingProductId: null
+            editingProductId: null,
+            imagePreview: null
         };
+
+        // 🔥 ImgBB API Key - GET YOURS FROM imgbb.com 🔥
+        const IMGBB_API_KEY = 'YOUR_IMGBB_API_KEY_HERE';
 
         // ============================================
         // INITIALIZATION
@@ -1959,6 +2013,341 @@
         }
 
         // ============================================
+        // IMGBB IMAGE UPLOAD
+        // ============================================
+        async function uploadToImgBB(file) {
+            if (!IMGBB_API_KEY || IMGBB_API_KEY === 'YOUR_IMGBB_API_KEY_HERE') {
+                throw new Error('Please set your ImgBB API key in the code');
+            }
+            
+            const formData = new FormData();
+            formData.append('image', file);
+            
+            showSyncStatus('Uploading image to ImgBB...', 'info');
+            
+            try {
+                const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showSyncStatus('Image uploaded successfully', 'success');
+                    return data.data.url; // Returns the image URL
+                } else {
+                    throw new Error(data.error?.message || 'Upload failed');
+                }
+            } catch (error) {
+                console.error('ImgBB upload error:', error);
+                throw error;
+            }
+        }
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // Check file size (ImgBB max is 32MB)
+            if (file.size > 32 * 1024 * 1024) {
+                showMessage('Image is too large. Max 32MB.', 'error');
+                return;
+            }
+            
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const preview = document.getElementById('imagePreview');
+                preview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+                productFormState.imagePreview = e.target.result;
+                
+                // Clear URL input when uploading new image
+                document.getElementById('productImageUrl').value = '';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // ============================================
+        // TAB MANAGEMENT
+        // ============================================
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all nav links
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            // Show selected tab
+            const selectedTab = document.getElementById(tabName + 'Tab');
+            if (selectedTab) {
+                selectedTab.classList.remove('hidden');
+                selectedTab.classList.add('active');
+                
+                // Update active nav link
+                const activeNav = document.querySelector(`.nav-link[onclick*="${tabName}"]`);
+                if (activeNav) activeNav.classList.add('active');
+                
+                // Render content if needed
+                if (tabName === 'store') {
+                    renderProducts();
+                } else if (tabName === 'cart') {
+                    renderCart();
+                } else if (tabName === 'admin') {
+                    refreshInventory();
+                    // Reset form when switching to admin tab
+                    resetProductForm();
+                }
+            }
+            
+            // Close mobile menu
+            const mobileNav = document.getElementById('mobileNav');
+            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            if (mobileNav?.classList.contains('active')) {
+                mobileNav.classList.remove('active');
+                mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
+            }
+        }
+
+        // ============================================
+        // PRODUCT MANAGEMENT
+        // ============================================
+        function loadLocalProducts() {
+            const saved = localStorage.getItem('goatProducts');
+            state.products = saved ? JSON.parse(saved) : [];
+            
+            if (state.products.length === 0) {
+                loadSampleProducts();
+            } else {
+                renderProducts();
+            }
+        }
+
+        function loadSampleProducts() {
+            state.products = [
+                {
+                    id: 1,
+                    name: "Kids Cotton T-Shirt",
+                    price: 12.99,
+                    stock: 25,
+                    category: "tshirts",
+                    // Example ImgBB URL format
+                    image: "https://i.ibb.co/XXXXXXX/image.jpg",
+                    sizes: ["S", "M", "L"]
+                },
+                {
+                    id: 2,
+                    name: "Children's Jeans",
+                    price: 24.99,
+                    stock: 15,
+                    category: "pants",
+                    // Unsplash fallback
+                    image: "https://images.unsplash.com/photo-1542272604-787c3835535d?w=400&h=400&fit=crop",
+                    sizes: ["2T", "3T", "4T"]
+                },
+                {
+                    id: 3,
+                    name: "Kids Hoodie Jacket",
+                    price: 29.99,
+                    stock: 8,
+                    category: "hoodies",
+                    image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop",
+                    sizes: ["S", "M", "L"]
+                }
+            ];
+            
+            saveProducts();
+            renderProducts();
+            showMessage('Sample products loaded!', 'success');
+        }
+
+        function saveProducts() {
+            localStorage.setItem('goatProducts', JSON.stringify(state.products));
+        }
+
+        async function addSingleProduct() {
+            const name = document.getElementById('productName').value.trim();
+            const price = parseFloat(document.getElementById('productPrice').value);
+            const stock = parseInt(document.getElementById('productStock').value);
+            const category = document.getElementById('productCategory').value;
+            const imageFile = document.getElementById('productImageFile').files[0];
+            const imageUrl = document.getElementById('productImageUrl').value.trim();
+            
+            if (!name || isNaN(price) || price <= 0 || isNaN(stock) || stock < 0 || !category) {
+                showMessage('Please fill all fields correctly', 'error');
+                return;
+            }
+            
+            let finalImageUrl = imageUrl;
+            
+            // If image file is uploaded, upload to ImgBB
+            if (imageFile) {
+                try {
+                    finalImageUrl = await uploadToImgBB(imageFile);
+                } catch (error) {
+                    showMessage('Failed to upload image: ' + error.message, 'error');
+                    return;
+                }
+            } else if (!imageUrl) {
+                // Default image if no image provided
+                finalImageUrl = 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400&h=400&fit=crop';
+            }
+            
+            let productId;
+            let productData;
+            
+            if (productFormState.editingProductId) {
+                // Update existing product
+                productId = productFormState.editingProductId;
+                const productIndex = state.products.findIndex(p => p.id === productId);
+                
+                if (productIndex !== -1) {
+                    productData = {
+                        id: productId,
+                        name,
+                        price,
+                        stock,
+                        category,
+                        image: finalImageUrl,
+                        sizes: [...productFormState.sizes]
+                    };
+                    
+                    state.products[productIndex] = productData;
+                    showMessage(`Product "${name}" updated successfully!`, 'success');
+                }
+            } else {
+                // Add new product
+                productId = Date.now();
+                productData = {
+                    id: productId,
+                    name,
+                    price,
+                    stock,
+                    category,
+                    image: finalImageUrl,
+                    sizes: [...productFormState.sizes]
+                };
+                
+                state.products.push(productData);
+                showMessage(`Product "${name}" added successfully!`, 'success');
+            }
+            
+            saveProducts();
+            
+            // Sync to Firebase
+            await syncProductToFirebase(productData);
+            
+            // Reset form
+            resetProductForm();
+            
+            // Update UI
+            refreshInventory();
+            renderProducts();
+        }
+
+        function editProduct(productId) {
+            const product = state.products.find(p => p.id === productId);
+            if (!product) {
+                showMessage('Product not found', 'error');
+                return;
+            }
+            
+            // Store the product ID we're editing
+            productFormState.editingProductId = productId;
+            
+            // Fill form with product data
+            document.getElementById('productName').value = product.name;
+            document.getElementById('productPrice').value = product.price;
+            document.getElementById('productStock').value = product.stock;
+            document.getElementById('productCategory').value = product.category;
+            document.getElementById('productImageUrl').value = product.image;
+            
+            // Clear file input
+            document.getElementById('productImageFile').value = '';
+            
+            // Clear preview
+            const preview = document.getElementById('imagePreview');
+            preview.innerHTML = '';
+            productFormState.imagePreview = null;
+            
+            // Fill sizes
+            productFormState.sizes = [...product.sizes];
+            renderProductSizes();
+            
+            // Change button text to "Update Product"
+            const addButton = document.querySelector('.product-form .btn-primary');
+            if (addButton) {
+                addButton.innerHTML = '<i class="fas fa-save"></i> Update Product';
+                addButton.onclick = function() { addSingleProduct(); };
+            }
+            
+            showMessage(`Editing "${product.name}" - Update the fields and click "Update Product"`, 'info');
+            
+            // Scroll to form
+            document.getElementById('adminTab').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function resetProductForm() {
+            // Clear form
+            document.getElementById('productName').value = '';
+            document.getElementById('productPrice').value = '';
+            document.getElementById('productStock').value = '';
+            document.getElementById('productCategory').value = '';
+            document.getElementById('productImageUrl').value = '';
+            document.getElementById('productImageFile').value = '';
+            
+            // Clear preview
+            const preview = document.getElementById('imagePreview');
+            preview.innerHTML = '';
+            productFormState.imagePreview = null;
+            
+            // Clear sizes
+            productFormState.sizes = [];
+            productFormState.editingProductId = null;
+            renderProductSizes();
+            
+            // Reset button text
+            const addButton = document.querySelector('.product-form .btn-primary');
+            if (addButton) {
+                addButton.innerHTML = '<i class="fas fa-plus"></i> Add Product';
+                addButton.onclick = function() { addSingleProduct(); };
+            }
+        }
+
+        async function deleteProduct(productId) {
+            if (!confirm('Are you sure you want to delete this product? This will remove it from the store and Firebase.')) return;
+            
+            const productIndex = state.products.findIndex(p => p.id === productId);
+            if (productIndex === -1) {
+                showMessage('Product not found', 'error');
+                return;
+            }
+            
+            const productName = state.products[productIndex].name;
+            
+            // Remove from local state
+            state.products.splice(productIndex, 1);
+            saveProducts();
+            
+            // Delete from Firebase
+            await deleteProductFromFirebase(productId);
+            
+            // If we were editing this product, reset the form
+            if (productFormState.editingProductId === productId) {
+                resetProductForm();
+            }
+            
+            showMessage(`Product "${productName}" deleted successfully`, 'success');
+            refreshInventory();
+            renderProducts();
+        }
+
+        // ============================================
         // FIREBASE SYNC FUNCTIONS
         // ============================================
         async function syncToFirebase() {
@@ -2036,121 +2425,50 @@
         }
 
         // ============================================
-        // TAB MANAGEMENT
+        // PRODUCT FORM HELPERS
         // ============================================
-        function showTab(tabName) {
-            // Hide all tabs
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.add('hidden');
-                tab.classList.remove('active');
+        function addSizeToProduct() {
+            const sizeInput = document.getElementById('newSize');
+            const size = sizeInput.value.trim().toUpperCase();
+            
+            if (!size) {
+                showMessage('Please enter a size', 'error');
+                return;
+            }
+            
+            if (productFormState.sizes.includes(size)) {
+                showMessage('Size already added', 'warning');
+                return;
+            }
+            
+            productFormState.sizes.push(size);
+            renderProductSizes();
+            sizeInput.value = '';
+            sizeInput.focus();
+        }
+
+        function renderProductSizes() {
+            const sizesList = document.getElementById('productSizesList');
+            if (!sizesList) return;
+            
+            sizesList.innerHTML = '';
+            
+            productFormState.sizes.forEach((size, index) => {
+                const sizeTag = document.createElement('div');
+                sizeTag.className = 'size-tag';
+                sizeTag.innerHTML = `
+                    ${size}
+                    <button class="remove-size" onclick="removeProductSize(${index})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                sizesList.appendChild(sizeTag);
             });
-            
-            // Remove active class from all nav links
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.classList.remove('active');
-            });
-            
-            // Show selected tab
-            const selectedTab = document.getElementById(tabName + 'Tab');
-            if (selectedTab) {
-                selectedTab.classList.remove('hidden');
-                selectedTab.classList.add('active');
-                
-                // Update active nav link
-                const activeNav = document.querySelector(`.nav-link[onclick*="${tabName}"]`);
-                if (activeNav) activeNav.classList.add('active');
-                
-                // Render content if needed
-                if (tabName === 'store') {
-                    renderProducts();
-                } else if (tabName === 'cart') {
-                    renderCart();
-                } else if (tabName === 'admin') {
-                    refreshInventory();
-                    // Reset form when switching to admin tab
-                    resetProductForm();
-                }
-            }
-            
-            // Close mobile menu
-            const mobileNav = document.getElementById('mobileNav');
-            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-            if (mobileNav?.classList.contains('active')) {
-                mobileNav.classList.remove('active');
-                mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
-            }
         }
 
-        // ============================================
-        // PRODUCT MANAGEMENT
-        // ============================================
-        function loadLocalProducts() {
-            const saved = localStorage.getItem('goatProducts');
-            state.products = saved ? JSON.parse(saved) : [];
-            
-            if (state.products.length === 0) {
-                loadSampleProducts();
-            } else {
-                renderProducts();
-            }
-        }
-
-        function loadSampleProducts() {
-            state.products = [
-                {
-                    id: 1,
-                    name: "Kids Cotton T-Shirt",
-                    price: 12.99,
-                    stock: 25,
-                    category: "tshirts",
-                    image: "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400&h=400&fit=crop",
-                    sizes: ["S", "M", "L"]
-                },
-                {
-                    id: 2,
-                    name: "Children's Jeans",
-                    price: 24.99,
-                    stock: 15,
-                    category: "pants",
-                    image: "https://images.unsplash.com/photo-1542272604-787c3835535d?w=400&h=400&fit=crop",
-                    sizes: ["2T", "3T", "4T"]
-                },
-                {
-                    id: 3,
-                    name: "Kids Hoodie Jacket",
-                    price: 29.99,
-                    stock: 8,
-                    category: "hoodies",
-                    image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop",
-                    sizes: ["S", "M", "L"]
-                },
-                {
-                    id: 4,
-                    name: "Children's Sneakers",
-                    price: 34.99,
-                    stock: 12,
-                    category: "shoes",
-                    image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop",
-                    sizes: ["5", "6", "7", "8"]
-                },
-                {
-                    id: 5,
-                    name: "Kids Backpack",
-                    price: 19.99,
-                    stock: 20,
-                    category: "accessories",
-                    image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=400&fit=crop",
-                    sizes: ["One Size"]
-                }
-            ];
-            
-            saveProducts();
-            renderProducts();
-            showMessage('Sample products loaded!', 'success');
-        }
-
-        function saveProducts() {
-            localStorage.setItem('goatProducts', JSON.stringify(state.products));
+        function removeProductSize(index) {
+            productFormState.sizes.splice(index, 1);
+            renderProductSizes();
         }
 
         function renderProducts() {
@@ -2275,54 +2593,52 @@
             });
         }
 
-        function searchProducts() {
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) {
-                state.currentFilter.search = searchInput.value;
-                renderProducts();
+        function refreshInventory() {
+            const productCount = document.getElementById('productCount');
+            if (productCount) {
+                productCount.textContent = state.products.length;
             }
-        }
-
-        function filterProducts() {
-            const categoryFilter = document.getElementById('categoryFilter');
-            const stockFilter = document.getElementById('stockFilter');
-            const priceFilter = document.getElementById('priceFilter');
             
-            if (categoryFilter) state.currentFilter.category = categoryFilter.value;
-            if (stockFilter) state.currentFilter.stock = stockFilter.value;
-            if (priceFilter) state.currentFilter.price = priceFilter.value;
+            const tableBody = document.getElementById('inventoryTableBody');
+            if (!tableBody) return;
             
-            renderProducts();
-        }
-
-        function resetFilters() {
-            state.currentFilter = {
-                category: 'all',
-                stock: 'all',
-                price: 'all',
-                search: ''
-            };
+            tableBody.innerHTML = '';
             
-            const searchInput = document.getElementById('searchInput');
-            const categoryFilter = document.getElementById('categoryFilter');
-            const stockFilter = document.getElementById('stockFilter');
-            const priceFilter = document.getElementById('priceFilter');
-            
-            if (searchInput) searchInput.value = '';
-            if (categoryFilter) categoryFilter.value = 'all';
-            if (stockFilter) stockFilter.value = 'all';
-            if (priceFilter) priceFilter.value = 'all';
-            
-            renderProducts();
-        }
-
-        function selectSize(element, productId, size) {
-            // Remove selected class from all sizes for this product
-            const allSizes = document.querySelectorAll(`.size-option[data-product="${productId}"]`);
-            allSizes.forEach(sizeEl => sizeEl.classList.remove('selected'));
-            
-            // Add selected class to clicked size
-            element.classList.add('selected');
+            state.products.forEach(product => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>
+                        <img src="${product.image}" alt="${product.name}" 
+                             style="width: 50px; height: 50px; object-fit: cover; border-radius: var(--radius);">
+                    </td>
+                    <td>${product.name}</td>
+                    <td>
+                        <span style="background: var(--primary-light); color: var(--primary-dark); 
+                             padding: 0.25rem 0.75rem; border-radius: var(--radius); font-size: 0.75rem;">
+                            ${product.category}
+                        </span>
+                    </td>
+                    <td>${product.sizes.join(', ') || 'One Size'}</td>
+                    <td>$${product.price.toFixed(2)}</td>
+                    <td>
+                        <span class="product-stock ${product.stock > 10 ? 'in-stock' : product.stock > 0 ? 'low-stock' : 'out-of-stock'}" 
+                              style="font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: var(--radius);">
+                            ${product.stock}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="flex gap-2">
+                            <button class="btn btn-primary btn-small" onclick="editProduct(${product.id})">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                            <button class="btn btn-danger btn-small" onclick="deleteProduct(${product.id})">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
         }
 
         // ============================================
@@ -2474,470 +2790,6 @@
         }
 
         // ============================================
-        // PAYMENT METHODS
-        // ============================================
-        function selectPaymentMethod(method) {
-            state.selectedPaymentMethod = method;
-            
-            const paywayOption = document.getElementById('paywayOption');
-            const codOption = document.getElementById('codOption');
-            
-            if (paywayOption) paywayOption.classList.toggle('selected', method === 'payway');
-            if (codOption) codOption.classList.toggle('selected', method === 'cod');
-        }
-
-        function proceedToPayway() {
-            if (state.cart.length === 0) {
-                showMessage('Your cart is empty', 'error');
-                return;
-            }
-            
-            // Validate form
-            if (!validateCheckoutForm()) return;
-            
-            showMessage('Redirecting to PayWay payment gateway...', 'info');
-        }
-
-        function sendOrderToMessenger() {
-            if (state.cart.length === 0) {
-                showMessage('Your cart is empty', 'error');
-                return;
-            }
-            
-            // Validate form
-            if (!validateCheckoutForm()) return;
-            
-            showMessage('Opening Messenger...', 'info');
-            
-            // In a real app, you would use Facebook Messenger API
-            setTimeout(() => {
-                showMessage('Order sent successfully! We\'ll contact you soon.', 'success');
-                // Clear cart after successful order
-                state.cart = [];
-                saveCart();
-                renderCart();
-                showTab('store');
-            }, 1500);
-        }
-
-        function validateCheckoutForm() {
-            let isValid = true;
-            
-            const name = document.getElementById('customerName');
-            const phone = document.getElementById('customerPhone');
-            const address = document.getElementById('customerAddress');
-            const nameError = document.getElementById('nameError');
-            const phoneError = document.getElementById('phoneError');
-            const addressError = document.getElementById('addressError');
-            
-            // Reset errors
-            [nameError, phoneError, addressError].forEach(el => {
-                if (el) el.classList.add('hidden');
-            });
-            
-            // Validate name
-            if (!name.value.trim()) {
-                if (nameError) {
-                    nameError.classList.remove('hidden');
-                    nameError.textContent = 'Please enter your name';
-                }
-                isValid = false;
-            }
-            
-            // Validate phone
-            if (!phone.value.trim()) {
-                if (phoneError) {
-                    phoneError.classList.remove('hidden');
-                    phoneError.textContent = 'Please enter your phone number';
-                }
-                isValid = false;
-            } else if (!/^[0-9+\-\s]+$/.test(phone.value)) {
-                if (phoneError) {
-                    phoneError.classList.remove('hidden');
-                    phoneError.textContent = 'Please enter a valid phone number';
-                }
-                isValid = false;
-            }
-            
-            // Validate address
-            if (!address.value.trim()) {
-                if (addressError) {
-                    addressError.classList.remove('hidden');
-                    addressError.textContent = 'Please enter your address';
-                }
-                isValid = false;
-            }
-            
-            return isValid;
-        }
-
-        // ============================================
-        // ADMIN FUNCTIONS - FIXED
-        // ============================================
-        function openAdminLoginModal() {
-            document.getElementById('adminLoginModal').classList.remove('hidden');
-            document.getElementById('adminLoginModal').classList.add('active');
-        }
-
-        function closeAdminLoginModal() {
-            document.getElementById('adminLoginModal').classList.remove('active');
-            setTimeout(() => {
-                document.getElementById('adminLoginModal').classList.add('hidden');
-            }, 300);
-            document.getElementById('adminPassword').value = '';
-        }
-
-        function adminLogin() {
-            const password = document.getElementById('adminPassword').value;
-            
-            if (password === 'goatkids2024') {
-                state.isAdmin = true;
-                localStorage.setItem('goatAdmin', 'true');
-                checkAdminStatus();
-                closeAdminLoginModal();
-                showTab('admin');
-                showMessage('Admin login successful!', 'success');
-            } else {
-                showMessage('Invalid admin password', 'error');
-            }
-        }
-
-        function adminLogout() {
-            state.isAdmin = false;
-            localStorage.removeItem('goatAdmin');
-            checkAdminStatus();
-            showTab('store');
-            showMessage('Admin logout successful', 'info');
-        }
-
-        // Store Management
-        function openJoinStoreModal() {
-            document.getElementById('joinStoreModal').classList.remove('hidden');
-            document.getElementById('joinStoreModal').classList.add('active');
-        }
-
-        function closeJoinStoreModal() {
-            document.getElementById('joinStoreModal').classList.remove('active');
-            setTimeout(() => {
-                document.getElementById('joinStoreModal').classList.add('hidden');
-            }, 300);
-            document.getElementById('joinStoreId').value = '';
-        }
-
-        function joinStore() {
-            const storeId = document.getElementById('joinStoreId').value.trim();
-            
-            if (!storeId) {
-                showMessage('Please enter a Store ID', 'error');
-                return;
-            }
-            
-            localStorage.setItem('goatStoreId', storeId);
-            showMessage(`Joined store: ${storeId}. Refreshing...`, 'success');
-            
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
-        }
-
-        function createNewStore() {
-            localStorage.removeItem('goatStoreId');
-            localStorage.removeItem('goatProducts');
-            showMessage('Creating new store...', 'info');
-            
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
-        }
-
-        function copyStoreId() {
-            navigator.clipboard.writeText(state.storeId || '');
-            showMessage('Store ID copied to clipboard', 'success');
-        }
-
-        function generateShareLink() {
-            const shareLink = `${window.location.origin}${window.location.pathname}?store=${state.storeId}`;
-            document.getElementById('storeShareLink').value = shareLink;
-            showMessage('Share link generated', 'success');
-        }
-
-        function copyShareLink() {
-            const shareLink = document.getElementById('storeShareLink').value;
-            if (shareLink) {
-                navigator.clipboard.writeText(shareLink);
-                showMessage('Share link copied to clipboard', 'success');
-            }
-        }
-
-        function shareViaWhatsApp() {
-            const shareLink = document.getElementById('storeShareLink').value;
-            if (shareLink) {
-                const text = `Join my GOAT KIDS store: ${shareLink}`;
-                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-            }
-        }
-
-        // Product Management - FIXED FUNCTIONS
-        function addSizeToProduct() {
-            const sizeInput = document.getElementById('newSize');
-            const size = sizeInput.value.trim().toUpperCase();
-            
-            if (!size) {
-                showMessage('Please enter a size', 'error');
-                return;
-            }
-            
-            if (productFormState.sizes.includes(size)) {
-                showMessage('Size already added', 'warning');
-                return;
-            }
-            
-            productFormState.sizes.push(size);
-            renderProductSizes();
-            sizeInput.value = '';
-            sizeInput.focus();
-        }
-
-        function renderProductSizes() {
-            const sizesList = document.getElementById('productSizesList');
-            if (!sizesList) return;
-            
-            sizesList.innerHTML = '';
-            
-            productFormState.sizes.forEach((size, index) => {
-                const sizeTag = document.createElement('div');
-                sizeTag.className = 'size-tag';
-                sizeTag.innerHTML = `
-                    ${size}
-                    <button class="remove-size" onclick="removeProductSize(${index})">
-                        <i class="fas fa-times"></i>
-                    </button>
-                `;
-                sizesList.appendChild(sizeTag);
-            });
-        }
-
-        function removeProductSize(index) {
-            productFormState.sizes.splice(index, 1);
-            renderProductSizes();
-        }
-
-        async function addSingleProduct() {
-            const name = document.getElementById('productName').value.trim();
-            const price = parseFloat(document.getElementById('productPrice').value);
-            const stock = parseInt(document.getElementById('productStock').value);
-            const category = document.getElementById('productCategory').value;
-            const imageUrl = document.getElementById('productImageUrl').value.trim();
-            
-            if (!name || isNaN(price) || price <= 0 || isNaN(stock) || stock < 0 || !category) {
-                showMessage('Please fill all fields correctly', 'error');
-                return;
-            }
-            
-            let productId;
-            let productData;
-            
-            if (productFormState.editingProductId) {
-                // Update existing product
-                productId = productFormState.editingProductId;
-                const productIndex = state.products.findIndex(p => p.id === productId);
-                
-                if (productIndex !== -1) {
-                    productData = {
-                        id: productId,
-                        name,
-                        price,
-                        stock,
-                        category,
-                        image: imageUrl || state.products[productIndex].image,
-                        sizes: [...productFormState.sizes]
-                    };
-                    
-                    state.products[productIndex] = productData;
-                    showMessage(`Product "${name}" updated successfully!`, 'success');
-                }
-            } else {
-                // Add new product
-                productId = Date.now();
-                productData = {
-                    id: productId,
-                    name,
-                    price,
-                    stock,
-                    category,
-                    image: imageUrl || 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400&h=400&fit=crop',
-                    sizes: [...productFormState.sizes]
-                };
-                
-                state.products.push(productData);
-                showMessage(`Product "${name}" added successfully!`, 'success');
-            }
-            
-            saveProducts();
-            
-            // Sync to Firebase
-            await syncProductToFirebase(productData);
-            
-            // Reset form
-            resetProductForm();
-            
-            // Update UI
-            refreshInventory();
-            renderProducts();
-        }
-
-        function editProduct(productId) {
-            const product = state.products.find(p => p.id === productId);
-            if (!product) {
-                showMessage('Product not found', 'error');
-                return;
-            }
-            
-            // Store the product ID we're editing
-            productFormState.editingProductId = productId;
-            
-            // Fill form with product data
-            document.getElementById('productName').value = product.name;
-            document.getElementById('productPrice').value = product.price;
-            document.getElementById('productStock').value = product.stock;
-            document.getElementById('productCategory').value = product.category;
-            document.getElementById('productImageUrl').value = product.image;
-            
-            // Fill sizes
-            productFormState.sizes = [...product.sizes];
-            renderProductSizes();
-            
-            // Change button text to "Update Product"
-            const addButton = document.querySelector('.product-form .btn-primary');
-            if (addButton) {
-                addButton.innerHTML = '<i class="fas fa-save"></i> Update Product';
-                addButton.onclick = function() { addSingleProduct(); };
-            }
-            
-            showMessage(`Editing "${product.name}" - Update the fields and click "Update Product"`, 'info');
-            
-            // Scroll to form
-            document.getElementById('adminTab').scrollIntoView({ behavior: 'smooth' });
-        }
-
-        function resetProductForm() {
-            // Clear form
-            document.getElementById('productName').value = '';
-            document.getElementById('productPrice').value = '';
-            document.getElementById('productStock').value = '';
-            document.getElementById('productCategory').value = '';
-            document.getElementById('productImageUrl').value = '';
-            
-            // Clear sizes
-            productFormState.sizes = [];
-            productFormState.editingProductId = null;
-            renderProductSizes();
-            
-            // Reset button text
-            const addButton = document.querySelector('.product-form .btn-primary');
-            if (addButton) {
-                addButton.innerHTML = '<i class="fas fa-plus"></i> Add Product';
-                addButton.onclick = function() { addSingleProduct(); };
-            }
-        }
-
-        async function deleteProduct(productId) {
-            if (!confirm('Are you sure you want to delete this product? This will remove it from the store and Firebase.')) return;
-            
-            const productIndex = state.products.findIndex(p => p.id === productId);
-            if (productIndex === -1) {
-                showMessage('Product not found', 'error');
-                return;
-            }
-            
-            const productName = state.products[productIndex].name;
-            
-            // Remove from local state
-            state.products.splice(productIndex, 1);
-            saveProducts();
-            
-            // Delete from Firebase
-            await deleteProductFromFirebase(productId);
-            
-            // If we were editing this product, reset the form
-            if (productFormState.editingProductId === productId) {
-                resetProductForm();
-            }
-            
-            showMessage(`Product "${productName}" deleted successfully`, 'success');
-            refreshInventory();
-            renderProducts();
-        }
-
-        function refreshInventory() {
-            const productCount = document.getElementById('productCount');
-            if (productCount) {
-                productCount.textContent = state.products.length;
-            }
-            
-            const tableBody = document.getElementById('inventoryTableBody');
-            if (!tableBody) return;
-            
-            tableBody.innerHTML = '';
-            
-            state.products.forEach(product => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>
-                        <img src="${product.image}" alt="${product.name}" 
-                             style="width: 50px; height: 50px; object-fit: cover; border-radius: var(--radius);">
-                    </td>
-                    <td>${product.name}</td>
-                    <td>
-                        <span style="background: var(--primary-light); color: var(--primary-dark); 
-                             padding: 0.25rem 0.75rem; border-radius: var(--radius); font-size: 0.75rem;">
-                            ${product.category}
-                        </span>
-                    </td>
-                    <td>${product.sizes.join(', ') || 'One Size'}</td>
-                    <td>$${product.price.toFixed(2)}</td>
-                    <td>
-                        <span class="product-stock ${product.stock > 10 ? 'in-stock' : product.stock > 0 ? 'low-stock' : 'out-of-stock'}" 
-                              style="font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: var(--radius);">
-                            ${product.stock}
-                        </span>
-                    </td>
-                    <td>
-                        <div class="flex gap-2">
-                            <button class="btn btn-primary btn-small" onclick="editProduct(${product.id})">
-                                <i class="fas fa-edit"></i> Edit
-                            </button>
-                            <button class="btn btn-danger btn-small" onclick="deleteProduct(${product.id})">
-                                <i class="fas fa-trash"></i> Delete
-                            </button>
-                        </div>
-                    </td>
-                `;
-                tableBody.appendChild(row);
-            });
-        }
-
-        function exportInventory() {
-            let csv = 'ID,Name,Category,Sizes,Price,Stock,Image\n';
-            
-            state.products.forEach(product => {
-                csv += `${product.id},"${product.name}","${product.category}","${product.sizes.join(',')}",${product.price},${product.stock},"${product.image}"\n`;
-            });
-            
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `goat-inventory-${new Date().toISOString().slice(0,10)}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-            
-            showMessage('Inventory exported to CSV', 'success');
-        }
-
-        // ============================================
         // UTILITY FUNCTIONS
         // ============================================
         function showMessage(text, type = 'info') {
@@ -2973,5 +2825,3 @@
     </script>
 </body>
 </html>
-
-
