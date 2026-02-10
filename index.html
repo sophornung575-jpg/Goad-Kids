@@ -1700,7 +1700,7 @@
         </div>
     </div>
 
-    <!-- JavaScript -->
+       <!-- JavaScript -->
     <script>
         // ============================================
         // APPLICATION STATE
@@ -1717,7 +1717,14 @@
                 search: ''
             },
             storeId: null,
-            firebaseInitialized: false
+            firebaseInitialized: false,
+            editingProductId: null  // Track which product is being edited
+        };
+
+        // Product form state
+        const productFormState = {
+            sizes: [],
+            editingProductId: null
         };
 
         // ============================================
@@ -2060,6 +2067,8 @@
                     renderCart();
                 } else if (tabName === 'admin') {
                     refreshInventory();
+                    // Reset form when switching to admin tab
+                    resetProductForm();
                 }
             }
             
@@ -2102,7 +2111,7 @@
                     name: "Children's Jeans",
                     price: 24.99,
                     stock: 15,
-                    category: "Jeans",
+                    category: "pants",
                     image: "https://images.unsplash.com/photo-1542272604-787c3835535d?w=400&h=400&fit=crop",
                     sizes: ["2T", "3T", "4T"]
                 },
@@ -2111,7 +2120,7 @@
                     name: "Kids Hoodie Jacket",
                     price: 29.99,
                     stock: 8,
-                    category: "Dresses",
+                    category: "hoodies",
                     image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop",
                     sizes: ["S", "M", "L"]
                 },
@@ -2563,7 +2572,7 @@
         }
 
         // ============================================
-        // ADMIN FUNCTIONS
+        // ADMIN FUNCTIONS - FIXED
         // ============================================
         function openAdminLoginModal() {
             document.getElementById('adminLoginModal').classList.remove('hidden');
@@ -2668,9 +2677,7 @@
             }
         }
 
-        // Product Management
-        const productSizes = [];
-
+        // Product Management - FIXED FUNCTIONS
         function addSizeToProduct() {
             const sizeInput = document.getElementById('newSize');
             const size = sizeInput.value.trim().toUpperCase();
@@ -2680,12 +2687,12 @@
                 return;
             }
             
-            if (productSizes.includes(size)) {
+            if (productFormState.sizes.includes(size)) {
                 showMessage('Size already added', 'warning');
                 return;
             }
             
-            productSizes.push(size);
+            productFormState.sizes.push(size);
             renderProductSizes();
             sizeInput.value = '';
             sizeInput.focus();
@@ -2697,7 +2704,7 @@
             
             sizesList.innerHTML = '';
             
-            productSizes.forEach((size, index) => {
+            productFormState.sizes.forEach((size, index) => {
                 const sizeTag = document.createElement('div');
                 sizeTag.className = 'size-tag';
                 sizeTag.innerHTML = `
@@ -2711,7 +2718,7 @@
         }
 
         function removeProductSize(index) {
-            productSizes.splice(index, 1);
+            productFormState.sizes.splice(index, 1);
             renderProductSizes();
         }
 
@@ -2727,41 +2734,67 @@
                 return;
             }
             
-            const newProduct = {
-                id: Date.now(),
-                name,
-                price,
-                stock,
-                category,
-                image: imageUrl || 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400&h=400&fit=crop',
-                sizes: [...productSizes]
-            };
+            let productId;
+            let productData;
             
-            state.products.push(newProduct);
+            if (productFormState.editingProductId) {
+                // Update existing product
+                productId = productFormState.editingProductId;
+                const productIndex = state.products.findIndex(p => p.id === productId);
+                
+                if (productIndex !== -1) {
+                    productData = {
+                        id: productId,
+                        name,
+                        price,
+                        stock,
+                        category,
+                        image: imageUrl || state.products[productIndex].image,
+                        sizes: [...productFormState.sizes]
+                    };
+                    
+                    state.products[productIndex] = productData;
+                    showMessage(`Product "${name}" updated successfully!`, 'success');
+                }
+            } else {
+                // Add new product
+                productId = Date.now();
+                productData = {
+                    id: productId,
+                    name,
+                    price,
+                    stock,
+                    category,
+                    image: imageUrl || 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400&h=400&fit=crop',
+                    sizes: [...productFormState.sizes]
+                };
+                
+                state.products.push(productData);
+                showMessage(`Product "${name}" added successfully!`, 'success');
+            }
+            
             saveProducts();
             
             // Sync to Firebase
-            await syncProductToFirebase(newProduct);
+            await syncProductToFirebase(productData);
             
-            // Clear form
-            document.getElementById('productName').value = '';
-            document.getElementById('productPrice').value = '';
-            document.getElementById('productStock').value = '';
-            document.getElementById('productCategory').value = '';
-            document.getElementById('productImageUrl').value = '';
+            // Reset form
+            resetProductForm();
             
-            // Clear sizes
-            productSizes.length = 0;
-            renderProductSizes();
-            
-            showMessage(`Product "${name}" added successfully!`, 'success');
+            // Update UI
             refreshInventory();
             renderProducts();
         }
 
         function editProduct(productId) {
             const product = state.products.find(p => p.id === productId);
-            if (!product) return;
+            if (!product) {
+                showMessage('Product not found', 'error');
+                return;
+            }
+            
+            // Store the product ID we're editing
+            productFormState.editingProductId = productId;
             
             // Fill form with product data
             document.getElementById('productName').value = product.name;
@@ -2771,27 +2804,67 @@
             document.getElementById('productImageUrl').value = product.image;
             
             // Fill sizes
-            productSizes.length = 0;
-            product.sizes.forEach(size => productSizes.push(size));
+            productFormState.sizes = [...product.sizes];
             renderProductSizes();
             
-            showMessage(`Editing "${product.name}"`, 'info');
+            // Change button text to "Update Product"
+            const addButton = document.querySelector('.product-form .btn-primary');
+            if (addButton) {
+                addButton.innerHTML = '<i class="fas fa-save"></i> Update Product';
+                addButton.onclick = function() { addSingleProduct(); };
+            }
+            
+            showMessage(`Editing "${product.name}" - Update the fields and click "Update Product"`, 'info');
+            
+            // Scroll to form
+            document.getElementById('adminTab').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function resetProductForm() {
+            // Clear form
+            document.getElementById('productName').value = '';
+            document.getElementById('productPrice').value = '';
+            document.getElementById('productStock').value = '';
+            document.getElementById('productCategory').value = '';
+            document.getElementById('productImageUrl').value = '';
+            
+            // Clear sizes
+            productFormState.sizes = [];
+            productFormState.editingProductId = null;
+            renderProductSizes();
+            
+            // Reset button text
+            const addButton = document.querySelector('.product-form .btn-primary');
+            if (addButton) {
+                addButton.innerHTML = '<i class="fas fa-plus"></i> Add Product';
+                addButton.onclick = function() { addSingleProduct(); };
+            }
         }
 
         async function deleteProduct(productId) {
-            if (!confirm('Are you sure you want to delete this product?')) return;
+            if (!confirm('Are you sure you want to delete this product? This will remove it from the store and Firebase.')) return;
             
             const productIndex = state.products.findIndex(p => p.id === productId);
-            if (productIndex === -1) return;
+            if (productIndex === -1) {
+                showMessage('Product not found', 'error');
+                return;
+            }
             
             const productName = state.products[productIndex].name;
+            
+            // Remove from local state
             state.products.splice(productIndex, 1);
             saveProducts();
             
             // Delete from Firebase
             await deleteProductFromFirebase(productId);
             
-            showMessage(`Product "${productName}" deleted`, 'success');
+            // If we were editing this product, reset the form
+            if (productFormState.editingProductId === productId) {
+                resetProductForm();
+            }
+            
+            showMessage(`Product "${productName}" deleted successfully`, 'success');
             refreshInventory();
             renderProducts();
         }
@@ -2821,21 +2894,21 @@
                             ${product.category}
                         </span>
                     </td>
-                    <td>${product.sizes.join(', ')}</td>
+                    <td>${product.sizes.join(', ') || 'One Size'}</td>
                     <td>$${product.price.toFixed(2)}</td>
                     <td>
                         <span class="product-stock ${product.stock > 10 ? 'in-stock' : product.stock > 0 ? 'low-stock' : 'out-of-stock'}" 
-                              style="font-size: 0.75rem;">
+                              style="font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: var(--radius);">
                             ${product.stock}
                         </span>
                     </td>
                     <td>
                         <div class="flex gap-2">
                             <button class="btn btn-primary btn-small" onclick="editProduct(${product.id})">
-                                <i class="fas fa-edit"></i>
+                                <i class="fas fa-edit"></i> Edit
                             </button>
-                            <button class="btn btn-secondary btn-small" onclick="deleteProduct(${product.id})">
-                                <i class="fas fa-trash"></i>
+                            <button class="btn btn-danger btn-small" onclick="deleteProduct(${product.id})">
+                                <i class="fas fa-trash"></i> Delete
                             </button>
                         </div>
                     </td>
@@ -2900,4 +2973,5 @@
     </script>
 </body>
 </html>
+
 
