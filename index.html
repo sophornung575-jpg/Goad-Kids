@@ -440,11 +440,11 @@
         }
 
         /* ========== ENHANCED PRODUCT IMAGE VIEWER ========== */
-        .product-image-viewer {
+        .product-image-container {
             position: relative;
-            height: 300px;
+            height: 250px;
             overflow: hidden;
-            border-radius: var(--radius);
+            border-radius: var(--radius) var(--radius) 0 0;
             background: var(--light);
             cursor: pointer;
         }
@@ -456,7 +456,7 @@
             transition: transform 0.5s ease;
         }
 
-        .product-image-viewer:hover .product-main-image {
+        .product-image-container:hover .product-main-image {
             transform: scale(1.05);
         }
 
@@ -470,7 +470,7 @@
             transition: opacity 0.3s ease;
         }
 
-        .product-image-viewer:hover .product-image-actions {
+        .product-image-container:hover .product-image-actions {
             opacity: 1;
         }
 
@@ -496,11 +496,9 @@
         .product-thumbnails {
             display: flex;
             gap: var(--space-sm);
-            margin-top: var(--space-sm);
+            padding: var(--space-sm);
             overflow-x: auto;
-            padding: var(--space-sm) 0;
-            scrollbar-width: thin;
-            scrollbar-color: var(--gray) transparent;
+            background: var(--light);
         }
 
         .product-thumbnails::-webkit-scrollbar {
@@ -712,6 +710,7 @@
             border-radius: var(--radius-lg);
             padding: var(--space-lg);
             margin-top: var(--space-lg);
+            display: none;
         }
 
         .gallery-header {
@@ -1531,8 +1530,8 @@
                 gap: var(--space-lg);
             }
             
-            .product-image-viewer {
-                height: 250px;
+            .product-image-container {
+                height: 200px;
             }
             
             .cart-item {
@@ -1588,7 +1587,7 @@
                 text-align: center;
             }
             
-            .product-image-viewer {
+            .product-image-container {
                 height: 200px;
             }
             
@@ -2208,6 +2207,9 @@
             images: []
         };
 
+        // Size selection state for each product
+        const sizeSelectionState = {};
+
         // 🔥 ImgBB API Key - GET YOURS FROM imgbb.com 🔥
         const IMGBB_API_KEY = 'YOUR_IMGBB_API_KEY_HERE';
 
@@ -2570,8 +2572,9 @@
         function updateImageGalleryPreview() {
             const galleryGrid = document.getElementById('galleryGrid');
             const imageCount = document.getElementById('imageCount');
+            const galleryPreview = document.getElementById('imageGalleryPreview');
             
-            if (!galleryGrid || !imageCount) return;
+            if (!galleryGrid || !imageCount || !galleryPreview) return;
             
             galleryGrid.innerHTML = '';
             imageCount.textContent = productFormState.images.length;
@@ -2595,10 +2598,7 @@
             });
             
             // Show/hide gallery preview
-            const galleryPreview = document.getElementById('imageGalleryPreview');
-            if (galleryPreview) {
-                galleryPreview.style.display = productFormState.images.length > 0 ? 'block' : 'none';
-            }
+            galleryPreview.style.display = productFormState.images.length > 0 ? 'block' : 'none';
         }
 
         function setAsMainImage(index) {
@@ -2625,9 +2625,11 @@
         }
 
         // ============================================
-        // LIGHTBOX IMAGE VIEWER
+        // LIGHTBOX IMAGE VIEWER - FIXED
         // ============================================
         function openLightbox(images, startIndex = 0) {
+            if (!images || images.length === 0) return;
+            
             lightboxState.images = images;
             lightboxState.currentIndex = startIndex;
             lightboxState.isZoomed = false;
@@ -2660,13 +2662,12 @@
 
         function updateLightbox() {
             const lightboxImage = document.getElementById('lightboxImage');
-            const lightboxCounter = document.getElementById('lightboxCounter');
             const currentImageIndex = document.getElementById('currentImageIndex');
             const totalImages = document.getElementById('totalImages');
             const lightboxThumbnails = document.getElementById('lightboxThumbnails');
             const zoomButton = document.getElementById('zoomButton');
             
-            if (lightboxImage && lightboxCounter && currentImageIndex && totalImages && lightboxThumbnails) {
+            if (lightboxImage && currentImageIndex && totalImages && lightboxThumbnails) {
                 // Update main image
                 if (lightboxState.images[lightboxState.currentIndex]) {
                     lightboxImage.src = lightboxState.images[lightboxState.currentIndex];
@@ -2705,12 +2706,14 @@
         }
 
         function nextImage() {
+            if (lightboxState.images.length === 0) return;
             lightboxState.currentIndex = (lightboxState.currentIndex + 1) % lightboxState.images.length;
             lightboxState.isZoomed = false;
             updateLightbox();
         }
 
         function previousImage() {
+            if (lightboxState.images.length === 0) return;
             lightboxState.currentIndex = (lightboxState.currentIndex - 1 + lightboxState.images.length) % lightboxState.images.length;
             lightboxState.isZoomed = false;
             updateLightbox();
@@ -2813,19 +2816,19 @@
         function loadSampleProducts() {
             state.products = [
                 {
-                    id: 1,
+                    id: 'product-1',
                     name: "Kids Cotton T-Shirt",
                     price: 12.99,
                     stock: 25,
                     category: "tshirts",
                     images: [
                         "https://images.unsplash.com/photo-1622290291468-2f3766aa2c47?w=400&h=400&fit=crop",
-                        "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w-400&h=400&fit=crop"
+                        "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400&h=400&fit=crop"
                     ],
                     sizes: ["S", "M", "L"]
                 },
                 {
-                    id: 2,
+                    id: 'product-2',
                     name: "Children's Jeans",
                     price: 24.99,
                     stock: 15,
@@ -2837,7 +2840,7 @@
                     sizes: ["2T", "3T", "4T"]
                 },
                 {
-                    id: 3,
+                    id: 'product-3',
                     name: "Kids Hoodie Jacket",
                     price: 29.99,
                     stock: 8,
@@ -2908,7 +2911,7 @@
                 }
             } else {
                 // Add new product
-                productId = Date.now();
+                productId = 'product-' + Date.now();
                 productData = {
                     id: productId,
                     name,
@@ -3236,12 +3239,16 @@
                     stockText = 'Out of Stock';
                 }
                 
+                // Get selected size for this product
+                const selectedSize = sizeSelectionState[product.id] || '';
+                
                 const productCard = document.createElement('div');
                 productCard.className = 'product-card';
                 productCard.innerHTML = `
-                    <div class="product-image-viewer" onclick="openLightbox(${JSON.stringify(images)}, 0)">
+                    <div class="product-image-container" onclick="openLightbox(${JSON.stringify(images)}, 0)">
                         <img src="${images[0]}" alt="${product.name}" class="product-main-image">
                         ${images.length > 1 ? `<div class="image-counter">${images.length} photos</div>` : ''}
+                        <div class="product-badge ${badgeClass}">${badgeText}</div>
                         <div class="product-image-actions">
                             <button class="product-image-action-btn" onclick="event.stopPropagation(); openLightbox(${JSON.stringify(images)}, 0)">
                                 <i class="fas fa-expand"></i>
@@ -3253,7 +3260,7 @@
                         ${images.map((img, index) => `
                             <img src="${img}" alt="Thumbnail ${index + 1}" 
                                  class="product-thumbnail ${index === 0 ? 'active' : ''}"
-                                 onclick="event.stopPropagation(); switchProductImage(this, ${product.id}, ${index}, ${JSON.stringify(images)})">
+                                 onclick="event.stopPropagation(); switchProductImage(this, '${product.id}', ${index}, ${JSON.stringify(images)})">
                         `).join('')}
                     </div>
                     ` : ''}
@@ -3271,8 +3278,8 @@
                             <label class="size-label">Size:</label>
                             <div class="size-options">
                                 ${product.sizes.map(size => `
-                                    <div class="size-option ${product.stock <= 0 ? 'disabled' : ''}" 
-                                         onclick="selectSize(this, ${product.id}, '${size}')"
+                                    <div class="size-option ${product.stock <= 0 ? 'disabled' : ''} ${selectedSize === size ? 'selected' : ''}" 
+                                         onclick="selectSize(this, '${product.id}', '${size}')"
                                          data-product="${product.id}">
                                         ${size}
                                     </div>
@@ -3283,12 +3290,12 @@
                         
                         <div class="product-actions">
                             <button class="btn btn-primary btn-add-to-cart" 
-                                    onclick="addToCart(${product.id})" 
+                                    onclick="addToCart('${product.id}')" 
                                     ${product.stock <= 0 ? 'disabled' : ''}>
                                 <i class="fas fa-cart-plus"></i> Add to Cart
                             </button>
                             ${state.isAdmin ? `
-                            <button class="btn btn-outline" onclick="editProduct(${product.id})">
+                            <button class="btn btn-outline" onclick="editProduct('${product.id}')">
                                 <i class="fas fa-edit"></i>
                             </button>
                             ` : ''}
@@ -3312,6 +3319,21 @@
             if (mainImage) {
                 mainImage.src = images[index];
             }
+        }
+
+        function selectSize(element, productId, size) {
+            const product = state.products.find(p => p.id === productId);
+            if (!product || product.stock <= 0) return;
+            
+            // Remove selected class from all sizes for this product
+            const productSizes = document.querySelectorAll(`.size-option[data-product="${productId}"]`);
+            productSizes.forEach(sizeEl => sizeEl.classList.remove('selected'));
+            
+            // Add selected class to clicked size
+            element.classList.add('selected');
+            
+            // Store selected size for this product
+            sizeSelectionState[productId] = size;
         }
 
         function refreshInventory() {
@@ -3354,10 +3376,10 @@
                     </td>
                     <td>
                         <div class="flex gap-2">
-                            <button class="btn btn-primary btn-small" onclick="editProduct(${product.id})">
+                            <button class="btn btn-primary btn-small" onclick="editProduct('${product.id}')">
                                 <i class="fas fa-edit"></i> Edit
                             </button>
-                            <button class="btn btn-danger btn-small" onclick="deleteProduct(${product.id})">
+                            <button class="btn btn-danger btn-small" onclick="deleteProduct('${product.id}')">
                                 <i class="fas fa-trash"></i> Delete
                             </button>
                         </div>
@@ -3368,7 +3390,7 @@
         }
 
         // ============================================
-        // CART MANAGEMENT
+        // CART MANAGEMENT - FIXED
         // ============================================
         function loadCart() {
             const saved = localStorage.getItem('goatCart');
@@ -3389,7 +3411,10 @@
 
         function addToCart(productId) {
             const product = state.products.find(p => p.id === productId);
-            if (!product) return;
+            if (!product) {
+                showMessage('Product not found', 'error');
+                return;
+            }
             
             if (product.stock <= 0) {
                 showMessage('This product is out of stock', 'error');
@@ -3397,12 +3422,17 @@
             }
             
             // Get selected size
-            const selectedSizeEl = document.querySelector(`.size-option.selected[data-product="${productId}"]`);
-            const size = selectedSizeEl ? selectedSizeEl.textContent.trim() : 'One Size';
+            const selectedSize = sizeSelectionState[productId] || 'One Size';
             
-            // Check if already in cart
+            // Check if size is required but not selected
+            if (product.sizes && product.sizes.length > 0 && !selectedSize && selectedSize !== 'One Size') {
+                showMessage('Please select a size first', 'error');
+                return;
+            }
+            
+            // Check if already in cart with same size
             const existingItem = state.cart.find(item => 
-                item.productId === productId && item.size === size
+                item.productId === productId && item.size === selectedSize
             );
             
             if (existingItem) {
@@ -3418,7 +3448,7 @@
                     productId,
                     name: product.name,
                     price: product.price,
-                    size,
+                    size: selectedSize,
                     quantity: 1,
                     image: images.length > 0 ? images[0] : ''
                 });
@@ -3576,15 +3606,6 @@
             renderProducts();
         }
 
-        function selectSize(element, productId, size) {
-            // Remove selected class from all sizes for this product
-            const productSizes = document.querySelectorAll(`.size-option[data-product="${productId}"]`);
-            productSizes.forEach(sizeEl => sizeEl.classList.remove('selected'));
-            
-            // Add selected class to clicked size
-            element.classList.add('selected');
-        }
-
         function selectPaymentMethod(method) {
             state.selectedPaymentMethod = method;
             
@@ -3599,7 +3620,7 @@
             }
         }
 
-        // Modal functions (placeholder - you'll need to implement these)
+        // Modal functions
         function openAdminLoginModal() {
             document.getElementById('adminLoginModal').classList.remove('hidden');
             document.getElementById('adminLoginModal').classList.add('active');
@@ -3638,13 +3659,20 @@
         function closeJoinStoreModal() {}
         function joinStore() {}
         function createNewStore() {}
-        function copyStoreId() {}
+        function copyStoreId() {
+            navigator.clipboard.writeText(state.storeId);
+            showMessage('Store ID copied to clipboard!', 'success');
+        }
         function generateShareLink() {}
         function copyShareLink() {}
         function shareViaWhatsApp() {}
         function exportInventory() {}
-        function proceedToPayway() {}
-        function sendOrderToMessenger() {}
+        function proceedToPayway() {
+            showMessage('This would redirect to ABA PayWay payment gateway', 'info');
+        }
+        function sendOrderToMessenger() {
+            showMessage('This would send order to Messenger', 'info');
+        }
     </script>
 </body>
 </html>
