@@ -1164,6 +1164,8 @@
             border-radius: var(--radius);
             padding: 1.5rem;
             margin-top: 1.5rem;
+            max-height: 300px;
+            overflow-y: auto;
         }
 
         .order-preview h4 {
@@ -1909,19 +1911,27 @@
                             <textarea id="customerNotes" class="form-control" rows="2" placeholder="Order Notes (optional)"></textarea>
                         </div>
                         
-                        <!-- Facebook Messenger Button - Opens Facebook Page -->
-                        <a href="https://facebook.com/Goatkids" target="_blank" class="messenger-btn" onclick="prepareMessengerOrder(event);">
+                        <!-- Facebook Messenger Button -->
+                        <button class="messenger-btn" onclick="sendOrderToMessenger()">
                             <i class="fab fa-facebook-messenger"></i>
-                            Send Order to Facebook Page
-                        </a>
+                            Send Order to Messenger
+                        </button>
                         
                         <!-- Order Preview -->
                         <div class="order-preview hidden" id="orderPreview">
                             <h4>Order Summary</h4>
                             <pre id="orderPreviewContent"></pre>
-                            <p class="text-center mt-4" style="color: var(--gray);">
+                            <div class="flex gap-2 mt-4">
+                                <button class="btn btn-primary" onclick="copyOrderToClipboard()">
+                                    <i class="fas fa-copy"></i> Copy Order
+                                </button>
+                                <button class="btn btn-secondary" onclick="openFacebookPage()">
+                                    <i class="fab fa-facebook"></i> Open Facebook
+                                </button>
+                            </div>
+                            <p class="text-center mt-4" style="color: var(--gray); font-size: 0.875rem;">
                                 <i class="fas fa-info-circle"></i>
-                                This order will be sent to our Facebook page. Our team will respond shortly.
+                                Copy the order and send it to our Facebook page: <strong>facebook.com/Goatkids</strong>
                             </p>
                         </div>
                     </div>
@@ -2232,7 +2242,8 @@
             },
             storeId: null,
             firebaseInitialized: false,
-            editingProductId: null
+            editingProductId: null,
+            currentOrderMessage: ''
         };
 
         const productFormState = {
@@ -2603,56 +2614,26 @@
         }
 
         // ============================================
-        // PAYMENT FUNCTIONS
+        // MESSENGER ORDER FUNCTIONS
         // ============================================
-        function preparePaywayPayment(event) {
+        function sendOrderToMessenger() {
+            // Validate customer info
             if (!validateCustomerInfo()) {
-                event.preventDefault();
-                showMessage('Please fill in your delivery information before proceeding to payment', 'error');
-                return false;
-            }
-            
-            if (state.cart.length === 0) {
-                event.preventDefault();
-                showMessage('Your cart is empty!', 'error');
-                return false;
-            }
-            
-            saveOrderData();
-            
-            const orderSummary = generateOrderSummary();
-            
-            if (confirm(`Your Order Summary:\n\n${orderSummary}\n\nProceed to ABA PayWay payment?`)) {
-                showMessage('Redirecting to ABA PayWay payment gateway...', 'info');
-                return true;
-            } else {
-                event.preventDefault();
-                return false;
-            }
-        }
-
-        function prepareMessengerOrder(event) {
-            if (!validateCustomerInfo()) {
-                event.preventDefault();
                 showMessage('Please fill in your delivery information before sending order', 'error');
                 return false;
             }
             
             if (state.cart.length === 0) {
-                event.preventDefault();
                 showMessage('Your cart is empty!', 'error');
                 return false;
             }
             
+            // Save order data
             saveOrderData();
             
+            // Generate order message
             const orderMessage = generateDetailedOrderMessage();
-            
-            localStorage.setItem('pendingOrder', JSON.stringify({
-                timestamp: Date.now(),
-                message: orderMessage,
-                orderData: getCurrentOrderData()
-            }));
+            state.currentOrderMessage = orderMessage;
             
             // Show order preview
             const orderPreview = document.getElementById('orderPreview');
@@ -2660,17 +2641,104 @@
             orderPreviewContent.textContent = orderMessage;
             orderPreview.classList.remove('hidden');
             
-            // Copy to clipboard
-            copyOrderDetailsToClipboard(orderMessage);
+            // Copy to clipboard automatically
+            copyToClipboard(orderMessage);
             
-            showMessage('Order details copied to clipboard! Opening Facebook page...', 'success');
-            
-            // Open Facebook page in new tab
-            setTimeout(() => {
-                window.open(FACEBOOK_PAGE, '_blank');
-            }, 1500);
+            showMessage('✅ Order details copied to clipboard! Click "Open Facebook" to send to our page.', 'success');
             
             return true;
+        }
+
+        function copyOrderToClipboard() {
+            if (state.currentOrderMessage) {
+                copyToClipboard(state.currentOrderMessage);
+                showMessage('Order details copied to clipboard!', 'success');
+            }
+        }
+
+        function openFacebookPage() {
+            window.open(FACEBOOK_PAGE, '_blank');
+        }
+
+        function copyToClipboard(text) {
+            // Try modern clipboard API first
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).catch(() => {
+                    // Fallback for older browsers
+                    fallbackCopyToClipboard(text);
+                });
+            } else {
+                // Fallback for older browsers
+                fallbackCopyToClipboard(text);
+            }
+        }
+
+        function fallbackCopyToClipboard(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+        }
+
+        function generateDetailedOrderMessage() {
+            const name = document.getElementById('customerName').value.trim();
+            const phone = document.getElementById('customerPhone').value.trim();
+            const address = document.getElementById('customerAddress').value.trim();
+            const notes = document.getElementById('customerNotes').value.trim();
+            
+            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const shipping = SHIPPING_COST;
+            const total = subtotal + shipping;
+            
+            // Create order message with emojis and formatting
+            let orderMessage = `🛍️ *GOAT KIDS - NEW ORDER* 🛍️\n\n`;
+            
+            // Customer Details Section
+            orderMessage += `👤 *CUSTOMER DETAILS*\n`;
+            orderMessage += `─────────────────\n`;
+            orderMessage += `📋 Name: ${name}\n`;
+            orderMessage += `📞 Phone: ${phone}\n`;
+            orderMessage += `📍 Address: ${address}\n`;
+            orderMessage += `💳 Payment: ${state.selectedPaymentMethod === 'payway' ? 'ABA PayWay' : 'Cash on Delivery'}\n`;
+            orderMessage += `🆔 Store ID: ${state.storeId}\n\n`;
+            
+            // Order Items Section
+            orderMessage += `📦 *ORDER ITEMS*\n`;
+            orderMessage += `─────────────────\n`;
+            
+            state.cart.forEach((item, index) => {
+                const itemTotal = item.price * item.quantity;
+                orderMessage += `${index + 1}. *${item.name}*\n`;
+                orderMessage += `   └─ Size: ${item.size} | Qty: ${item.quantity}\n`;
+                orderMessage += `   └─ Price: $${item.price.toFixed(2)} each\n`;
+                orderMessage += `   └─ Subtotal: $${itemTotal.toFixed(2)}\n\n`;
+            });
+            
+            // Order Summary Section
+            orderMessage += `💰 *ORDER SUMMARY*\n`;
+            orderMessage += `─────────────────\n`;
+            orderMessage += `📊 Subtotal: $${subtotal.toFixed(2)}\n`;
+            orderMessage += `🚚 Shipping: $${shipping.toFixed(2)}\n`;
+            orderMessage += `💵 *TOTAL AMOUNT: $${total.toFixed(2)}*\n\n`;
+            
+            // Notes Section (if any)
+            if (notes) {
+                orderMessage += `📝 *ADDITIONAL NOTES*\n`;
+                orderMessage += `─────────────────\n`;
+                orderMessage += `${notes}\n\n`;
+            }
+            
+            // Footer
+            orderMessage += `✨ *Thank you for shopping with GOAT KIDS!* ✨\n`;
+            orderMessage += `Please send this order to our Facebook page:\n`;
+            orderMessage += `🔗 facebook.com/Goatkids\n\n`;
+            orderMessage += `_Order generated on ${new Date().toLocaleString()}_`;
+            
+            return orderMessage;
         }
 
         function getCurrentOrderData() {
@@ -2689,81 +2757,6 @@
                 })),
                 storeId: state.storeId
             };
-        }
-
-        function generateDetailedOrderMessage() {
-            const orderData = getCurrentOrderData();
-            const name = orderData.customerName;
-            const phone = orderData.customerPhone;
-            const address = orderData.customerAddress;
-            const notes = orderData.customerNotes;
-            
-            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            const shipping = SHIPPING_COST;
-            const total = subtotal + shipping;
-            
-            let orderMessage = `🛍️ *GOAT KIDS - NEW ORDER* 🛍️\n\n`;
-            
-            orderMessage += `👤 *CUSTOMER DETAILS*\n`;
-            orderMessage += `─────────────────\n`;
-            orderMessage += `📋 Name: ${name}\n`;
-            orderMessage += `📞 Phone: ${phone}\n`;
-            orderMessage += `📍 Address: ${address}\n`;
-            orderMessage += `💳 Payment: ${orderData.paymentMethod === 'payway' ? 'ABA PayWay' : 'Cash on Delivery'}\n`;
-            orderMessage += `🆔 Store ID: ${orderData.storeId}\n\n`;
-            
-            orderMessage += `📦 *ORDER ITEMS*\n`;
-            orderMessage += `─────────────────\n`;
-            
-            state.cart.forEach((item, index) => {
-                const itemTotal = item.price * item.quantity;
-                orderMessage += `${index + 1}. *${item.name}*\n`;
-                orderMessage += `   └─ Size: ${item.size} | Qty: ${item.quantity} | Price: $${item.price.toFixed(2)}\n`;
-                orderMessage += `   └─ Subtotal: $${itemTotal.toFixed(2)}\n`;
-            });
-            
-            orderMessage += `\n💰 *ORDER SUMMARY*\n`;
-            orderMessage += `─────────────────\n`;
-            orderMessage += `📊 Subtotal: $${subtotal.toFixed(2)}\n`;
-            orderMessage += `🚚 Shipping: $${shipping.toFixed(2)}\n`;
-            orderMessage += `💵 *TOTAL AMOUNT: $${total.toFixed(2)}*\n\n`;
-            
-            if (notes) {
-                orderMessage += `📝 *ADDITIONAL NOTES*\n`;
-                orderMessage += `─────────────────\n`;
-                orderMessage += `${notes}\n\n`;
-            }
-            
-            orderMessage += `✨ *Thank you for shopping with GOAT KIDS!* ✨\n`;
-            orderMessage += `Please send this order to our Facebook page: facebook.com/Goatkids`;
-            
-            return orderMessage;
-        }
-
-        function generateOrderSummary() {
-            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            const shipping = SHIPPING_COST;
-            const total = subtotal + shipping;
-            
-            let summary = `Items: ${state.cart.length}\n`;
-            summary += `Subtotal: $${subtotal.toFixed(2)}\n`;
-            summary += `Shipping: $${shipping.toFixed(2)}\n`;
-            summary += `Total: $${total.toFixed(2)}`;
-            
-            return summary;
-        }
-
-        function copyOrderDetailsToClipboard(message) {
-            navigator.clipboard.writeText(message).then(() => {
-                console.log('Order details copied to clipboard');
-            }).catch(() => {
-                const textarea = document.createElement('textarea');
-                textarea.value = message;
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-            });
         }
 
         function saveOrderData() {
@@ -2828,6 +2821,48 @@
             }
             
             return isValid;
+        }
+
+        // ============================================
+        // PAYMENT FUNCTIONS
+        // ============================================
+        function preparePaywayPayment(event) {
+            if (!validateCustomerInfo()) {
+                event.preventDefault();
+                showMessage('Please fill in your delivery information before proceeding to payment', 'error');
+                return false;
+            }
+            
+            if (state.cart.length === 0) {
+                event.preventDefault();
+                showMessage('Your cart is empty!', 'error');
+                return false;
+            }
+            
+            saveOrderData();
+            
+            const orderSummary = generateOrderSummary();
+            
+            if (confirm(`Your Order Summary:\n\n${orderSummary}\n\nProceed to ABA PayWay payment?`)) {
+                showMessage('Redirecting to ABA PayWay payment gateway...', 'info');
+                return true;
+            } else {
+                event.preventDefault();
+                return false;
+            }
+        }
+
+        function generateOrderSummary() {
+            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const shipping = SHIPPING_COST;
+            const total = subtotal + shipping;
+            
+            let summary = `Items: ${state.cart.length}\n`;
+            summary += `Subtotal: $${subtotal.toFixed(2)}\n`;
+            summary += `Shipping: $${shipping.toFixed(2)}\n`;
+            summary += `Total: $${total.toFixed(2)}`;
+            
+            return summary;
         }
 
         // ============================================
@@ -3669,6 +3704,7 @@
             const emptyCart = document.getElementById('emptyCart');
             const cartItemsList = document.getElementById('cartItemsList');
             const cartSummary = document.getElementById('cartSummary');
+            const orderPreview = document.getElementById('orderPreview');
             
             if (!emptyCart || !cartItemsList || !cartSummary) return;
             
@@ -3676,6 +3712,7 @@
                 emptyCart.classList.remove('hidden');
                 cartItemsList.classList.add('hidden');
                 cartSummary.classList.add('hidden');
+                orderPreview.classList.add('hidden');
                 return;
             }
             
