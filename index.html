@@ -451,6 +451,7 @@
             border-color: var(--primary);
         }
 
+        /* ========== ENHANCED IMAGE VIEWER ========== */
         .product-image-container {
             position: relative;
             height: 250px;
@@ -479,6 +480,7 @@
             gap: var(--space-sm);
             opacity: 0;
             transition: opacity 0.3s ease;
+            z-index: 5;
         }
 
         .product-image-container:hover .product-image-actions {
@@ -488,8 +490,8 @@
         .product-image-action-btn {
             background: rgba(255, 255, 255, 0.9);
             border: none;
-            width: 36px;
-            height: 36px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             cursor: pointer;
             display: flex;
@@ -497,6 +499,7 @@
             justify-content: center;
             transition: var(--transition);
             box-shadow: var(--shadow);
+            font-size: 1.2rem;
         }
 
         .product-image-action-btn:hover {
@@ -510,10 +513,16 @@
             padding: var(--space-sm);
             overflow-x: auto;
             background: var(--light);
+            scrollbar-width: thin;
+            scrollbar-color: var(--gray) transparent;
         }
 
         .product-thumbnails::-webkit-scrollbar {
             height: 4px;
+        }
+
+        .product-thumbnails::-webkit-scrollbar-track {
+            background: transparent;
         }
 
         .product-thumbnails::-webkit-scrollbar-thumb {
@@ -551,8 +560,231 @@
             font-size: 0.75rem;
             padding: 0.25rem 0.5rem;
             border-radius: var(--radius-sm);
+            z-index: 2;
         }
 
+        /* ========== FULLSCREEN LIGHTBOX ========== */
+        .lightbox {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.98);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        .lightbox.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .lightbox-main-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lightbox-main-image {
+            max-width: 90%;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: var(--radius);
+            cursor: zoom-in;
+            transition: transform 0.3s ease;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .lightbox-main-image.zoomed {
+            transform: scale(2);
+            cursor: zoom-out;
+        }
+
+        .lightbox-controls {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent);
+            z-index: 10001;
+        }
+
+        .lightbox-close {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 1.8rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            backdrop-filter: blur(5px);
+        }
+
+        .lightbox-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .lightbox-nav {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .lightbox-nav-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            backdrop-filter: blur(5px);
+        }
+
+        .lightbox-nav-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .lightbox-nav-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .lightbox-thumbnails-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 1.5rem;
+            background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);
+            z-index: 10001;
+        }
+
+        .lightbox-thumbnails {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            align-items: center;
+            overflow-x: auto;
+            padding: 0.5rem;
+            max-width: 100%;
+        }
+
+        .lightbox-thumbnail {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            opacity: 0.5;
+            transition: var(--transition);
+            border: 3px solid transparent;
+            flex-shrink: 0;
+        }
+
+        .lightbox-thumbnail:hover {
+            opacity: 0.8;
+        }
+
+        .lightbox-thumbnail.active {
+            opacity: 1;
+            border-color: var(--primary);
+        }
+
+        .lightbox-counter {
+            position: fixed;
+            top: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 2rem;
+            font-size: 1rem;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.1);
+            z-index: 10001;
+        }
+
+        .lightbox-zoom-btn {
+            position: fixed;
+            bottom: 7rem;
+            right: 2rem;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-size: 1.8rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.1);
+            z-index: 10001;
+        }
+
+        .lightbox-zoom-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .lightbox-download-btn {
+            position: fixed;
+            bottom: 7rem;
+            left: 2rem;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-size: 1.8rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.1);
+            z-index: 10001;
+        }
+
+        .lightbox-download-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        /* Product Grid */
         .product-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -684,281 +916,7 @@
             flex: 1;
         }
 
-        .image-upload-container {
-            margin-bottom: var(--space-lg);
-        }
-
-        .image-upload-area {
-            border: 2px dashed var(--gray-light);
-            border-radius: var(--radius);
-            padding: var(--space-xl);
-            text-align: center;
-            cursor: pointer;
-            transition: var(--transition);
-            position: relative;
-        }
-
-        .image-upload-area:hover {
-            border-color: var(--primary);
-            background: var(--light);
-        }
-
-        .image-upload-icon {
-            font-size: 3rem;
-            color: var(--gray);
-            margin-bottom: var(--space-md);
-        }
-
-        .image-gallery-preview {
-            background: var(--light);
-            border-radius: var(--radius-lg);
-            padding: var(--space-lg);
-            margin-top: var(--space-lg);
-            display: none;
-        }
-
-        .gallery-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: var(--space-lg);
-            padding-bottom: var(--space-sm);
-            border-bottom: 1px solid var(--gray-light);
-        }
-
-        .gallery-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-            gap: var(--space-md);
-        }
-
-        .gallery-item {
-            position: relative;
-            border-radius: var(--radius);
-            overflow: hidden;
-            border: 2px solid var(--gray-light);
-            cursor: pointer;
-            transition: var(--transition);
-            aspect-ratio: 1;
-        }
-
-        .gallery-item:hover {
-            border-color: var(--primary);
-            transform: translateY(-2px);
-        }
-
-        .gallery-item img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .gallery-item-actions {
-            position: absolute;
-            top: 0;
-            right: 0;
-            left: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: var(--space-sm);
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .gallery-item:hover .gallery-item-actions {
-            opacity: 1;
-        }
-
-        .gallery-action-btn {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            border: none;
-            background: white;
-            color: var(--dark);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: var(--transition);
-        }
-
-        .gallery-action-btn:hover {
-            background: var(--primary);
-            color: white;
-            transform: scale(1.1);
-        }
-
-        .gallery-item-main {
-            position: absolute;
-            top: var(--space-sm);
-            left: var(--space-sm);
-            background: var(--success);
-            color: white;
-            font-size: 0.75rem;
-            padding: 0.25rem 0.5rem;
-            border-radius: var(--radius-sm);
-        }
-
-        .lightbox {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.95);
-            z-index: 2000;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            visibility: hidden;
-            transition: var(--transition);
-        }
-
-        .lightbox.active {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        .lightbox-main-image {
-            max-width: 90%;
-            max-height: 70vh;
-            object-fit: contain;
-            border-radius: var(--radius);
-            cursor: zoom-in;
-            transition: transform 0.3s ease;
-        }
-
-        .lightbox-main-image.zoomed {
-            transform: scale(1.5);
-            cursor: zoom-out;
-        }
-
-        .lightbox-controls {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            padding: var(--space-lg);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .lightbox-close {
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            color: white;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            font-size: 1.5rem;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: var(--transition);
-        }
-
-        .lightbox-close:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: scale(1.1);
-        }
-
-        .lightbox-nav {
-            display: flex;
-            gap: var(--space-lg);
-        }
-
-        .lightbox-nav-btn {
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            color: white;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            font-size: 1.25rem;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: var(--transition);
-        }
-
-        .lightbox-nav-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: scale(1.1);
-        }
-
-        .lightbox-thumbnails {
-            display: flex;
-            gap: var(--space-sm);
-            margin-top: var(--space-lg);
-            padding: var(--space-lg);
-            overflow-x: auto;
-            max-width: 90%;
-        }
-
-        .lightbox-thumbnail {
-            width: 80px;
-            height: 80px;
-            object-fit: cover;
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            opacity: 0.6;
-            transition: var(--transition);
-            border: 2px solid transparent;
-        }
-
-        .lightbox-thumbnail:hover {
-            opacity: 0.8;
-        }
-
-        .lightbox-thumbnail.active {
-            opacity: 1;
-            border-color: var(--primary);
-        }
-
-        .lightbox-zoom {
-            position: absolute;
-            bottom: var(--space-lg);
-            right: var(--space-lg);
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            color: white;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            font-size: 1.25rem;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: var(--transition);
-        }
-
-        .lightbox-zoom:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: scale(1.1);
-        }
-
-        .image-counter-lightbox {
-            position: absolute;
-            top: var(--space-lg);
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: var(--radius);
-            font-size: 0.875rem;
-        }
-
+        /* Cart Styles */
         .cart-container {
             background: white;
             border-radius: var(--radius-lg);
@@ -1200,6 +1158,27 @@
             display: block;
         }
 
+        .order-preview {
+            background: var(--light);
+            border: 2px solid var(--primary-light);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .order-preview h4 {
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+
+        .order-preview pre {
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: var(--dark);
+        }
+
         .admin-container {
             background: white;
             border-radius: var(--radius-lg);
@@ -1319,6 +1298,113 @@
             cursor: pointer;
             padding: 0.25rem;
             border-radius: var(--radius-sm);
+        }
+
+        .image-upload-container {
+            margin-bottom: var(--space-lg);
+        }
+
+        .image-upload-area {
+            border: 2px dashed var(--gray-light);
+            border-radius: var(--radius);
+            padding: var(--space-xl);
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .image-upload-area:hover {
+            border-color: var(--primary);
+            background: var(--light);
+        }
+
+        .image-upload-icon {
+            font-size: 3rem;
+            color: var(--gray);
+            margin-bottom: var(--space-md);
+        }
+
+        .image-gallery-preview {
+            background: white;
+            border-radius: var(--radius);
+            padding: var(--space-lg);
+            margin-top: var(--space-lg);
+            display: none;
+        }
+
+        .gallery-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-lg);
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: var(--space-md);
+        }
+
+        .gallery-item {
+            position: relative;
+            border-radius: var(--radius);
+            overflow: hidden;
+            aspect-ratio: 1;
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .gallery-item-main {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background: var(--success);
+            color: white;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
+        }
+
+        .gallery-item-actions {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .gallery-item:hover .gallery-item-actions {
+            opacity: 1;
+        }
+
+        .gallery-action-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
+            background: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .gallery-action-btn:hover {
+            background: var(--primary);
+            color: white;
+            transform: scale(1.1);
         }
 
         .inventory-table {
@@ -1536,39 +1622,22 @@
             .social-links {
                 justify-content: center;
             }
-            
-            .gallery-grid {
-                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-            }
-        }
 
-        @media (max-width: 480px) {
-            .product-grid {
-                grid-template-columns: 1fr;
+            .lightbox-nav-btn {
+                width: 40px;
+                height: 40px;
             }
-            
-            .btn-group {
-                flex-direction: column;
-            }
-            
-            .store-id-display {
-                flex-direction: column;
-                gap: var(--space-md);
-                text-align: center;
-            }
-            
-            .product-image-container {
-                height: 200px;
-            }
-            
-            .lightbox-main-image {
-                max-width: 95%;
-                max-height: 60vh;
-            }
-            
+
             .lightbox-thumbnail {
                 width: 60px;
                 height: 60px;
+            }
+
+            .lightbox-zoom-btn,
+            .lightbox-download-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 1.5rem;
             }
         }
     </style>
@@ -1588,34 +1657,42 @@
         </button>
     </div>
 
-    <!-- Lightbox Modal -->
+    <!-- Enhanced Lightbox Modal -->
     <div class="lightbox" id="imageLightbox">
         <div class="lightbox-controls">
             <button class="lightbox-close" onclick="closeLightbox()">
                 <i class="fas fa-times"></i>
             </button>
             <div class="lightbox-nav">
-                <button class="lightbox-nav-btn" onclick="previousImage()">
+                <button class="lightbox-nav-btn" onclick="previousImage()" id="prevImageBtn">
                     <i class="fas fa-chevron-left"></i>
                 </button>
-                <button class="lightbox-nav-btn" onclick="nextImage()">
+                <button class="lightbox-nav-btn" onclick="nextImage()" id="nextImageBtn">
                     <i class="fas fa-chevron-right"></i>
                 </button>
             </div>
         </div>
-        
-        <div class="image-counter-lightbox" id="lightboxCounter">
-            <span id="currentImageIndex">1</span> of <span id="totalImages">1</span>
+
+        <div class="lightbox-main-container">
+            <img id="lightboxImage" class="lightbox-main-image" src="" alt="Enlarged view" onclick="toggleZoom()">
         </div>
-        
-        <img id="lightboxImage" class="lightbox-main-image" src="" alt="Enlarged view" onclick="toggleZoom()">
-        
-        <button class="lightbox-zoom" onclick="toggleZoom()" id="zoomButton">
+
+        <div class="lightbox-counter" id="lightboxCounter">
+            <span id="currentImageIndex">1</span> / <span id="totalImages">1</span>
+        </div>
+
+        <button class="lightbox-zoom-btn" onclick="toggleZoom()" id="zoomButton">
             <i class="fas fa-search-plus"></i>
         </button>
-        
-        <div class="lightbox-thumbnails" id="lightboxThumbnails">
-            <!-- Thumbnails will be added here -->
+
+        <button class="lightbox-download-btn" onclick="downloadCurrentImage()" id="downloadButton">
+            <i class="fas fa-download"></i>
+        </button>
+
+        <div class="lightbox-thumbnails-container">
+            <div class="lightbox-thumbnails" id="lightboxThumbnails">
+                <!-- Thumbnails will be added here -->
+            </div>
         </div>
     </div>
 
@@ -1832,22 +1909,21 @@
                             <textarea id="customerNotes" class="form-control" rows="2" placeholder="Order Notes (optional)"></textarea>
                         </div>
                         
-                        <!-- Facebook Messenger Button -->
-                        <a href="#" class="messenger-btn" onclick="prepareMessengerOrder(event); return false;">
+                        <!-- Facebook Messenger Button - Opens Facebook Page -->
+                        <a href="https://facebook.com/Goatkids" target="_blank" class="messenger-btn" onclick="prepareMessengerOrder(event);">
                             <i class="fab fa-facebook-messenger"></i>
-                            Send Order via Messenger
+                            Send Order to Facebook Page
                         </a>
                         
-                        <!-- Order Summary Preview -->
-                        <div class="order-preview mt-8" id="orderPreview" style="background: var(--light); padding: 1rem; border-radius: var(--radius); display: none;">
-                            <h4 style="margin-bottom: 1rem;">Order Summary</h4>
-                            <div id="orderPreviewContent"></div>
+                        <!-- Order Preview -->
+                        <div class="order-preview hidden" id="orderPreview">
+                            <h4>Order Summary</h4>
+                            <pre id="orderPreviewContent"></pre>
+                            <p class="text-center mt-4" style="color: var(--gray);">
+                                <i class="fas fa-info-circle"></i>
+                                This order will be sent to our Facebook page. Our team will respond shortly.
+                            </p>
                         </div>
-                        
-                        <p class="text-center mt-8" style="color: var(--gray); font-size: 0.875rem;">
-                            <i class="fas fa-info-circle"></i>
-                            You'll be redirected to Facebook Messenger with your complete order details
-                        </p>
                     </div>
                 </div>
             </div>
@@ -1943,7 +2019,7 @@
                         </select>
                     </div>
                     
-                    <!-- Enhanced Image Upload -->
+                    <!-- Image Upload -->
                     <div class="image-upload-container">
                         <label class="form-label">Product Images</label>
                         
@@ -1952,7 +2028,7 @@
                                 <i class="fas fa-cloud-upload-alt"></i>
                             </div>
                             <p>Click to upload images or drag & drop</p>
-                            <small>Multiple images supported (Max 5 images, 32MB each)</small>
+                            <small>Multiple images supported (Max 5 images)</small>
                         </div>
                         
                         <input type="file" id="productImageFiles" accept="image/*" multiple class="hidden" 
@@ -1961,9 +2037,6 @@
                         <div class="mt-4">
                             <input type="text" id="productImageUrls" class="form-control" 
                                    placeholder="Or paste image URLs (separate with commas)">
-                            <small class="text-gray" style="display: block; margin-top: 0.5rem;">
-                                Separate multiple URLs with commas
-                            </small>
                         </div>
                         
                         <div class="image-gallery-preview mt-8" id="imageGalleryPreview">
@@ -2139,7 +2212,6 @@
         // CONSTANTS & CONFIGURATION
         // ============================================
         const PAYWAY_LINK = 'https://link.payway.com.kh/08407860s';
-        const MESSENGER_LINK = 'https://m.me/Goatkids';
         const FACEBOOK_PAGE = 'https://facebook.com/Goatkids';
         const IMGBB_API_KEY = 'YOUR_IMGBB_API_KEY_HERE';
         const SHIPPING_COST = 5.00;
@@ -2377,6 +2449,160 @@
         }
 
         // ============================================
+        // ENHANCED LIGHTBOX FUNCTIONS
+        // ============================================
+        function openLightbox(images, startIndex = 0) {
+            if (!images || images.length === 0) return;
+            
+            lightboxState.images = images;
+            lightboxState.currentIndex = startIndex;
+            lightboxState.isZoomed = false;
+            lightboxState.isOpen = true;
+            
+            updateLightbox();
+            
+            const lightbox = document.getElementById('imageLightbox');
+            if (lightbox) {
+                lightbox.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+            
+            // Update navigation buttons
+            updateNavButtons();
+            
+            document.addEventListener('keydown', handleLightboxKeyboard);
+        }
+
+        function closeLightbox() {
+            lightboxState.isOpen = false;
+            
+            const lightbox = document.getElementById('imageLightbox');
+            if (lightbox) {
+                lightbox.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+            
+            document.removeEventListener('keydown', handleLightboxKeyboard);
+        }
+
+        function updateLightbox() {
+            const lightboxImage = document.getElementById('lightboxImage');
+            const currentImageIndex = document.getElementById('currentImageIndex');
+            const totalImages = document.getElementById('totalImages');
+            const lightboxThumbnails = document.getElementById('lightboxThumbnails');
+            const zoomButton = document.getElementById('zoomButton');
+            
+            if (lightboxImage && currentImageIndex && totalImages && lightboxThumbnails) {
+                if (lightboxState.images[lightboxState.currentIndex]) {
+                    lightboxImage.src = lightboxState.images[lightboxState.currentIndex];
+                }
+                
+                currentImageIndex.textContent = lightboxState.currentIndex + 1;
+                totalImages.textContent = lightboxState.images.length;
+                
+                if (zoomButton) {
+                    zoomButton.innerHTML = lightboxState.isZoomed ? 
+                        '<i class="fas fa-search-minus"></i>' : 
+                        '<i class="fas fa-search-plus"></i>';
+                }
+                
+                // Update thumbnails
+                lightboxThumbnails.innerHTML = '';
+                lightboxState.images.forEach((image, index) => {
+                    const thumbnail = document.createElement('img');
+                    thumbnail.className = `lightbox-thumbnail ${index === lightboxState.currentIndex ? 'active' : ''}`;
+                    thumbnail.src = image;
+                    thumbnail.alt = `Thumbnail ${index + 1}`;
+                    thumbnail.onclick = () => {
+                        lightboxState.currentIndex = index;
+                        lightboxState.isZoomed = false;
+                        updateLightbox();
+                        updateNavButtons();
+                    };
+                    lightboxThumbnails.appendChild(thumbnail);
+                });
+                
+                lightboxImage.classList.remove('zoomed');
+                
+                // Scroll thumbnail into view
+                const activeThumb = lightboxThumbnails.querySelector('.active');
+                if (activeThumb) {
+                    activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                }
+            }
+            
+            updateNavButtons();
+        }
+
+        function updateNavButtons() {
+            const prevBtn = document.getElementById('prevImageBtn');
+            const nextBtn = document.getElementById('nextImageBtn');
+            
+            if (prevBtn && nextBtn) {
+                prevBtn.disabled = lightboxState.images.length <= 1;
+                nextBtn.disabled = lightboxState.images.length <= 1;
+            }
+        }
+
+        function nextImage() {
+            if (lightboxState.images.length === 0) return;
+            lightboxState.currentIndex = (lightboxState.currentIndex + 1) % lightboxState.images.length;
+            lightboxState.isZoomed = false;
+            updateLightbox();
+        }
+
+        function previousImage() {
+            if (lightboxState.images.length === 0) return;
+            lightboxState.currentIndex = (lightboxState.currentIndex - 1 + lightboxState.images.length) % lightboxState.images.length;
+            lightboxState.isZoomed = false;
+            updateLightbox();
+        }
+
+        function toggleZoom() {
+            lightboxState.isZoomed = !lightboxState.isZoomed;
+            const lightboxImage = document.getElementById('lightboxImage');
+            if (lightboxImage) {
+                lightboxImage.classList.toggle('zoomed', lightboxState.isZoomed);
+            }
+            updateLightbox();
+        }
+
+        function downloadCurrentImage() {
+            const currentImage = lightboxState.images[lightboxState.currentIndex];
+            if (currentImage) {
+                const link = document.createElement('a');
+                link.href = currentImage;
+                link.download = `product-image-${lightboxState.currentIndex + 1}.jpg`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        function handleLightboxKeyboard(event) {
+            if (!lightboxState.isOpen) return;
+            
+            switch(event.key) {
+                case 'Escape':
+                    closeLightbox();
+                    break;
+                case 'ArrowLeft':
+                    previousImage();
+                    break;
+                case 'ArrowRight':
+                    nextImage();
+                    break;
+                case '+':
+                case '=':
+                    toggleZoom();
+                    break;
+                case '-':
+                    if (lightboxState.isZoomed) toggleZoom();
+                    break;
+            }
+        }
+
+        // ============================================
         // PAYMENT FUNCTIONS
         // ============================================
         function preparePaywayPayment(event) {
@@ -2428,20 +2654,23 @@
                 orderData: getCurrentOrderData()
             }));
             
-            const orderPreview = generateOrderPreview();
+            // Show order preview
+            const orderPreview = document.getElementById('orderPreview');
+            const orderPreviewContent = document.getElementById('orderPreviewContent');
+            orderPreviewContent.textContent = orderMessage;
+            orderPreview.classList.remove('hidden');
             
-            if (confirm(`Please review your order:\n\n${orderPreview}\n\nSend this order via Messenger?`)) {
-                copyOrderDetailsToClipboard(orderMessage);
-                showMessage('Order details copied to clipboard! Redirecting to Messenger...', 'success');
-                
-                setTimeout(() => {
-                    window.open(MESSENGER_LINK, '_blank');
-                }, 1500);
-            } else {
-                event.preventDefault();
-            }
+            // Copy to clipboard
+            copyOrderDetailsToClipboard(orderMessage);
             
-            return false;
+            showMessage('Order details copied to clipboard! Opening Facebook page...', 'success');
+            
+            // Open Facebook page in new tab
+            setTimeout(() => {
+                window.open(FACEBOOK_PAGE, '_blank');
+            }, 1500);
+            
+            return true;
         }
 
         function getCurrentOrderData() {
@@ -2506,34 +2735,9 @@
             }
             
             orderMessage += `✨ *Thank you for shopping with GOAT KIDS!* ✨\n`;
-            orderMessage += `We will confirm your order shortly.`;
+            orderMessage += `Please send this order to our Facebook page: facebook.com/Goatkids`;
             
             return orderMessage;
-        }
-
-        function generateOrderPreview() {
-            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            const shipping = SHIPPING_COST;
-            const total = subtotal + shipping;
-            
-            let preview = `CUSTOMER:\n`;
-            preview += `Name: ${document.getElementById('customerName').value.trim()}\n`;
-            preview += `Phone: ${document.getElementById('customerPhone').value.trim()}\n`;
-            preview += `Payment: ${state.selectedPaymentMethod === 'payway' ? 'ABA PayWay' : 'Cash on Delivery'}\n\n`;
-            
-            preview += `ITEMS:\n`;
-            state.cart.forEach((item, index) => {
-                const itemTotal = item.price * item.quantity;
-                preview += `${index + 1}. ${item.name} (Size: ${item.size})\n`;
-                preview += `   ${item.quantity} x $${item.price.toFixed(2)} = $${itemTotal.toFixed(2)}\n`;
-            });
-            
-            preview += `\nSUMMARY:\n`;
-            preview += `Subtotal: $${subtotal.toFixed(2)}\n`;
-            preview += `Shipping: $${shipping.toFixed(2)}\n`;
-            preview += `TOTAL: $${total.toFixed(2)}`;
-            
-            return preview;
         }
 
         function generateOrderSummary() {
@@ -2750,13 +2954,13 @@
                 const galleryItem = document.createElement('div');
                 galleryItem.className = 'gallery-item';
                 galleryItem.innerHTML = `
-                    <img src="${image.url}" alt="${image.name}">
+                    <img src="${image.url}" alt="${image.name}" onclick="openLightbox(['${image.url}'], 0)">
                     ${image.isMain ? '<div class="gallery-item-main">Main</div>' : ''}
                     <div class="gallery-item-actions">
-                        <button class="gallery-action-btn" onclick="setAsMainImage(${index})" title="Set as main">
+                        <button class="gallery-action-btn" onclick="event.stopPropagation(); setAsMainImage(${index})" title="Set as main">
                             <i class="fas fa-star"></i>
                         </button>
-                        <button class="gallery-action-btn" onclick="removeImageFromProductForm(${index})" title="Remove">
+                        <button class="gallery-action-btn" onclick="event.stopPropagation(); removeImageFromProductForm(${index})" title="Remove">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -2787,121 +2991,6 @@
                 productFormState.images = [];
                 updateImageGalleryPreview();
                 document.getElementById('productImageUrls').value = '';
-            }
-        }
-
-        // ============================================
-        // LIGHTBOX FUNCTIONS
-        // ============================================
-        function openLightbox(images, startIndex = 0) {
-            if (!images || images.length === 0) return;
-            
-            lightboxState.images = images;
-            lightboxState.currentIndex = startIndex;
-            lightboxState.isZoomed = false;
-            lightboxState.isOpen = true;
-            
-            updateLightbox();
-            
-            const lightbox = document.getElementById('imageLightbox');
-            if (lightbox) {
-                lightbox.classList.add('active');
-                document.body.style.overflow = 'hidden';
-            }
-            
-            document.addEventListener('keydown', handleLightboxKeyboard);
-        }
-
-        function closeLightbox() {
-            lightboxState.isOpen = false;
-            
-            const lightbox = document.getElementById('imageLightbox');
-            if (lightbox) {
-                lightbox.classList.remove('active');
-                document.body.style.overflow = '';
-            }
-            
-            document.removeEventListener('keydown', handleLightboxKeyboard);
-        }
-
-        function updateLightbox() {
-            const lightboxImage = document.getElementById('lightboxImage');
-            const currentImageIndex = document.getElementById('currentImageIndex');
-            const totalImages = document.getElementById('totalImages');
-            const lightboxThumbnails = document.getElementById('lightboxThumbnails');
-            const zoomButton = document.getElementById('zoomButton');
-            
-            if (lightboxImage && currentImageIndex && totalImages && lightboxThumbnails) {
-                if (lightboxState.images[lightboxState.currentIndex]) {
-                    lightboxImage.src = lightboxState.images[lightboxState.currentIndex];
-                }
-                
-                currentImageIndex.textContent = lightboxState.currentIndex + 1;
-                totalImages.textContent = lightboxState.images.length;
-                
-                if (zoomButton) {
-                    zoomButton.innerHTML = lightboxState.isZoomed ? 
-                        '<i class="fas fa-search-minus"></i>' : 
-                        '<i class="fas fa-search-plus"></i>';
-                }
-                
-                lightboxThumbnails.innerHTML = '';
-                lightboxState.images.forEach((image, index) => {
-                    const thumbnail = document.createElement('img');
-                    thumbnail.className = `lightbox-thumbnail ${index === lightboxState.currentIndex ? 'active' : ''}`;
-                    thumbnail.src = image;
-                    thumbnail.onclick = () => {
-                        lightboxState.currentIndex = index;
-                        lightboxState.isZoomed = false;
-                        updateLightbox();
-                    };
-                    lightboxThumbnails.appendChild(thumbnail);
-                });
-                
-                lightboxImage.classList.remove('zoomed');
-            }
-        }
-
-        function nextImage() {
-            if (lightboxState.images.length === 0) return;
-            lightboxState.currentIndex = (lightboxState.currentIndex + 1) % lightboxState.images.length;
-            lightboxState.isZoomed = false;
-            updateLightbox();
-        }
-
-        function previousImage() {
-            if (lightboxState.images.length === 0) return;
-            lightboxState.currentIndex = (lightboxState.currentIndex - 1 + lightboxState.images.length) % lightboxState.images.length;
-            lightboxState.isZoomed = false;
-            updateLightbox();
-        }
-
-        function toggleZoom() {
-            lightboxState.isZoomed = !lightboxState.isZoomed;
-            const lightboxImage = document.getElementById('lightboxImage');
-            if (lightboxImage) {
-                lightboxImage.classList.toggle('zoomed', lightboxState.isZoomed);
-            }
-            updateLightbox();
-        }
-
-        function handleLightboxKeyboard(event) {
-            if (!lightboxState.isOpen) return;
-            
-            switch(event.key) {
-                case 'Escape':
-                    closeLightbox();
-                    break;
-                case 'ArrowLeft':
-                    previousImage();
-                    break;
-                case 'ArrowRight':
-                    nextImage();
-                    break;
-                case ' ':
-                case 'Enter':
-                    toggleZoom();
-                    break;
             }
         }
 
@@ -2973,7 +3062,8 @@
                     category: "tshirts",
                     images: [
                         "https://images.unsplash.com/photo-1622290291468-2f3766aa2c47?w=400&h=400&fit=crop",
-                        "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400&h=400&fit=crop"
+                        "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400&h=400&fit=crop",
+                        "https://images.unsplash.com/photo-1522771930-78848d9293e8?w=400&h=400&fit=crop"
                     ],
                     sizes: ["S", "M", "L"]
                 },
@@ -3731,7 +3821,6 @@
             }
         }
 
-        // Admin Modal Functions
         function openAdminLoginModal() {
             document.getElementById('adminLoginModal').classList.remove('hidden');
             document.getElementById('adminLoginModal').classList.add('active');
@@ -3764,7 +3853,6 @@
             showMessage('Logged out successfully', 'info');
         }
 
-        // Store Management Functions
         function copyStoreId() {
             navigator.clipboard.writeText(state.storeId);
             showMessage('Store ID copied to clipboard!', 'success');
