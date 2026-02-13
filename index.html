@@ -1158,29 +1158,6 @@
             display: block;
         }
 
-        .order-preview {
-            background: var(--light);
-            border: 2px solid var(--primary-light);
-            border-radius: var(--radius);
-            padding: 1.5rem;
-            margin-top: 1.5rem;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .order-preview h4 {
-            color: var(--primary);
-            margin-bottom: 1rem;
-        }
-
-        .order-preview pre {
-            white-space: pre-wrap;
-            font-family: monospace;
-            font-size: 0.9rem;
-            line-height: 1.6;
-            color: var(--dark);
-        }
-
         .admin-container {
             background: white;
             border-radius: var(--radius-lg);
@@ -1911,29 +1888,16 @@
                             <textarea id="customerNotes" class="form-control" rows="2" placeholder="Order Notes (optional)"></textarea>
                         </div>
                         
-                        <!-- Facebook Messenger Button -->
-                        <button class="messenger-btn" onclick="sendOrderToMessenger()">
+                        <!-- Direct Messenger Send Button -->
+                        <button class="messenger-btn" onclick="sendOrderToMessengerDirect()">
                             <i class="fab fa-facebook-messenger"></i>
-                            Send Order to Messenger
+                            Send Order via Messenger
                         </button>
                         
-                        <!-- Order Preview -->
-                        <div class="order-preview hidden" id="orderPreview">
-                            <h4>Order Summary</h4>
-                            <pre id="orderPreviewContent"></pre>
-                            <div class="flex gap-2 mt-4">
-                                <button class="btn btn-primary" onclick="copyOrderToClipboard()">
-                                    <i class="fas fa-copy"></i> Copy Order
-                                </button>
-                                <button class="btn btn-secondary" onclick="openFacebookPage()">
-                                    <i class="fab fa-facebook"></i> Open Facebook
-                                </button>
-                            </div>
-                            <p class="text-center mt-4" style="color: var(--gray); font-size: 0.875rem;">
-                                <i class="fas fa-info-circle"></i>
-                                Copy the order and send it to our Facebook page: <strong>facebook.com/Goatkids</strong>
-                            </p>
-                        </div>
+                        <p class="text-center mt-4" style="color: var(--gray); font-size: 0.875rem;">
+                            <i class="fas fa-info-circle"></i>
+                            This will open Messenger with your order ready to send to our page
+                        </p>
                     </div>
                 </div>
             </div>
@@ -2124,14 +2088,14 @@
                 <h3>GOAT KIDS</h3>
                 <p>Premium children's clothing store offering high-quality, comfortable clothing for kids of all ages.</p>
                 <div class="social-links">
+                    <a href="https://m.me/Goatkids" class="social-link" target="_blank" aria-label="Messenger">
+                        <i class="fab fa-facebook-messenger"></i>
+                    </a>
                     <a href="https://facebook.com/Goatkids" class="social-link" target="_blank" aria-label="Facebook">
                         <i class="fab fa-facebook-f"></i>
                     </a>
                     <a href="#" class="social-link" aria-label="Instagram">
                         <i class="fab fa-instagram"></i>
-                    </a>
-                    <a href="#" class="social-link" aria-label="Twitter">
-                        <i class="fab fa-twitter"></i>
                     </a>
                 </div>
             </div>
@@ -2141,7 +2105,7 @@
                 <p><i class="fas fa-map-marker-alt"></i> Rosato Avenue, Phnom Penh</p>
                 <p><i class="fas fa-phone"></i> +855 93 779077</p>
                 <p><i class="fas fa-envelope"></i> info@goatkids.com</p>
-                <p><i class="fab fa-facebook"></i> <a href="https://facebook.com/Goatkids" target="_blank">facebook.com/Goatkids</a></p>
+                <p><i class="fab fa-facebook-messenger"></i> <a href="https://m.me/Goatkids" target="_blank">Message us on Messenger</a></p>
             </div>
             
             <div class="footer-section">
@@ -2222,7 +2186,9 @@
         // CONSTANTS & CONFIGURATION
         // ============================================
         const PAYWAY_LINK = 'https://link.payway.com.kh/08407860s';
-        const FACEBOOK_PAGE = 'https://facebook.com/Goatkids';
+        const MESSENGER_PAGE_ID = 'Goatkids'; // Your Facebook page username
+        const MESSENGER_LINK = `https://m.me/${MESSENGER_PAGE_ID}`;
+        const FACEBOOK_PAGE = `https://facebook.com/${MESSENGER_PAGE_ID}`;
         const IMGBB_API_KEY = 'YOUR_IMGBB_API_KEY_HERE';
         const SHIPPING_COST = 5.00;
 
@@ -2614,9 +2580,9 @@
         }
 
         // ============================================
-        // MESSENGER ORDER FUNCTIONS
+        // DIRECT MESSENGER SEND FUNCTION
         // ============================================
-        function sendOrderToMessenger() {
+        function sendOrderToMessengerDirect() {
             // Validate customer info
             if (!validateCustomerInfo()) {
                 showMessage('Please fill in your delivery information before sending order', 'error');
@@ -2635,29 +2601,22 @@
             const orderMessage = generateDetailedOrderMessage();
             state.currentOrderMessage = orderMessage;
             
-            // Show order preview
-            const orderPreview = document.getElementById('orderPreview');
-            const orderPreviewContent = document.getElementById('orderPreviewContent');
-            orderPreviewContent.textContent = orderMessage;
-            orderPreview.classList.remove('hidden');
+            // Encode the message for URL
+            const encodedMessage = encodeURIComponent(orderMessage);
             
-            // Copy to clipboard automatically
+            // Create Messenger URL with pre-filled message
+            // Note: m.me links don't support pre-filled messages directly
+            // We'll open Messenger and copy to clipboard for them to paste
             copyToClipboard(orderMessage);
             
-            showMessage('✅ Order details copied to clipboard! Click "Open Facebook" to send to our page.', 'success');
+            // Show success message with option to open Messenger
+            if (confirm('✅ Order copied to clipboard!\n\nClick OK to open Messenger, then paste the order there.\n\nWould you like to open Messenger now?')) {
+                window.open(MESSENGER_LINK, '_blank');
+            }
+            
+            showMessage('Order copied to clipboard! Open Messenger and paste it there.', 'success');
             
             return true;
-        }
-
-        function copyOrderToClipboard() {
-            if (state.currentOrderMessage) {
-                copyToClipboard(state.currentOrderMessage);
-                showMessage('Order details copied to clipboard!', 'success');
-            }
-        }
-
-        function openFacebookPage() {
-            window.open(FACEBOOK_PAGE, '_blank');
         }
 
         function copyToClipboard(text) {
@@ -2695,7 +2654,7 @@
             const total = subtotal + shipping;
             
             // Create order message with emojis and formatting
-            let orderMessage = `🛍️ *GOAT KIDS - NEW ORDER* 🛍️\n\n`;
+            let orderMessage = `🛍️ *NEW ORDER FROM GOAT KIDS WEBSITE* 🛍️\n\n`;
             
             // Customer Details Section
             orderMessage += `👤 *CUSTOMER DETAILS*\n`;
@@ -2713,7 +2672,8 @@
             state.cart.forEach((item, index) => {
                 const itemTotal = item.price * item.quantity;
                 orderMessage += `${index + 1}. *${item.name}*\n`;
-                orderMessage += `   └─ Size: ${item.size} | Qty: ${item.quantity}\n`;
+                orderMessage += `   └─ Size: ${item.size}\n`;
+                orderMessage += `   └─ Quantity: ${item.quantity}\n`;
                 orderMessage += `   └─ Price: $${item.price.toFixed(2)} each\n`;
                 orderMessage += `   └─ Subtotal: $${itemTotal.toFixed(2)}\n\n`;
             });
@@ -2723,7 +2683,7 @@
             orderMessage += `─────────────────\n`;
             orderMessage += `📊 Subtotal: $${subtotal.toFixed(2)}\n`;
             orderMessage += `🚚 Shipping: $${shipping.toFixed(2)}\n`;
-            orderMessage += `💵 *TOTAL AMOUNT: $${total.toFixed(2)}*\n\n`;
+            orderMessage += `💵 *TOTAL: $${total.toFixed(2)}*\n\n`;
             
             // Notes Section (if any)
             if (notes) {
@@ -2733,10 +2693,8 @@
             }
             
             // Footer
-            orderMessage += `✨ *Thank you for shopping with GOAT KIDS!* ✨\n`;
-            orderMessage += `Please send this order to our Facebook page:\n`;
-            orderMessage += `🔗 facebook.com/Goatkids\n\n`;
-            orderMessage += `_Order generated on ${new Date().toLocaleString()}_`;
+            orderMessage += `✨ *Thank you!* ✨\n`;
+            orderMessage += `Please confirm this order.`;
             
             return orderMessage;
         }
@@ -3704,7 +3662,6 @@
             const emptyCart = document.getElementById('emptyCart');
             const cartItemsList = document.getElementById('cartItemsList');
             const cartSummary = document.getElementById('cartSummary');
-            const orderPreview = document.getElementById('orderPreview');
             
             if (!emptyCart || !cartItemsList || !cartSummary) return;
             
@@ -3712,7 +3669,6 @@
                 emptyCart.classList.remove('hidden');
                 cartItemsList.classList.add('hidden');
                 cartSummary.classList.add('hidden');
-                orderPreview.classList.add('hidden');
                 return;
             }
             
