@@ -452,7 +452,7 @@
             border-color: var(--primary);
         }
 
-        /* ========== SIMPLE MOBILE IMAGE VIEWER ========== */
+        /* ========== WORKING IMAGE VIEWER ========== */
         .product-image-container {
             position: relative;
             height: 280px;
@@ -536,7 +536,7 @@
             z-index: 5;
         }
 
-        /* ========== SIMPLE FULLSCREEN LIGHTBOX ========== */
+        /* ========== WORKING LIGHTBOX ========== */
         .lightbox {
             position: fixed;
             top: 0;
@@ -545,16 +545,12 @@
             height: 100%;
             background-color: black;
             z-index: 10000;
-            display: flex;
+            display: none;
             flex-direction: column;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s ease;
         }
 
         .lightbox.active {
-            opacity: 1;
-            visibility: visible;
+            display: flex;
         }
 
         .lightbox-header {
@@ -600,7 +596,6 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            touch-action: none;
         }
 
         .lightbox-image {
@@ -609,8 +604,8 @@
             width: auto;
             height: auto;
             object-fit: contain;
-            transition: transform 0.3s ease;
             cursor: pointer;
+            transition: transform 0.3s ease;
         }
 
         .lightbox-image.zoomed {
@@ -678,11 +673,6 @@
             justify-content: center;
             backdrop-filter: blur(5px);
             pointer-events: auto;
-        }
-
-        .lightbox-nav-btn:active {
-            transform: scale(0.95);
-            background: rgba(255,255,255,0.3);
         }
 
         .lightbox-nav-btn.hidden {
@@ -1604,7 +1594,7 @@
         </button>
     </div>
 
-    <!-- SIMPLE Lightbox Modal -->
+    <!-- WORKING Lightbox Modal -->
     <div class="lightbox" id="imageLightbox">
         <div class="lightbox-header">
             <button class="lightbox-close" onclick="closeLightbox()">
@@ -1624,9 +1614,9 @@
             </button>
         </div>
 
-        <div class="lightbox-image-container" id="lightboxImageContainer">
+        <div class="lightbox-image-container" onclick="closeLightboxOnBackground(event)">
             <img id="lightboxImage" class="lightbox-image" src="" alt="Full size" 
-                 onclick="toggleZoom()">
+                 onclick="toggleZoom(event)">
         </div>
 
         <div class="lightbox-footer">
@@ -1638,7 +1628,7 @@
     <header>
         <div class="header-container">
             <div class="logo" onclick="showTab('store')">
-                <i class=""></i>
+                <i class="fas fa-tshirt"></i>
                 <span>GOAT KIDS</span>
                 <span id="adminBadge" class="admin-badge hidden">ADMIN</span>
             </div>
@@ -1692,7 +1682,7 @@
         <!-- Store Tab -->
         <div id="storeTab" class="tab-content active">
             <div class="store-header">
-                <h1>GOAT KIDS clothing Store</h1>
+                <h1>GOAT KIDS Clothing Store</h1>
                 <p>Premium children's clothing with comfort and style</p>
                 <div class="mt-4">
                     <small>Store ID: <span id="currentStoreIdDisplay">Loading...</span></small>
@@ -1710,8 +1700,8 @@
                     <select id="categoryFilter" class="filter-select" onchange="filterProducts()" aria-label="Filter by category">
                         <option value="all">All Categories</option>
                         <option value="tshirts">T-Shirts</option>
-                        <option value="Dresses">Dresses</option>
-                        <option value="Jeans">Jeans</option>
+                        <option value="pants">Pants</option>
+                        <option value="hoodies">Hoodies</option>
                         <option value="shoes">Shoes</option>
                         <option value="accessories">Accessories</option>
                     </select>
@@ -1817,7 +1807,7 @@
                         <!-- ABA PayWay Button -->
                         <a href="https://link.payway.com.kh/08407860s" target="_blank" class="payway-btn" onclick="preparePaywayPayment(event);">
                             <i class="fas fa-lock"></i>
-                            Pay with ABA bank ($<span id="paywayTotal">0.00</span>)
+                            Pay with ABA PayWay ($<span id="paywayTotal">0.00</span>)
                         </a>
                     </div>
                     
@@ -1954,8 +1944,8 @@
                         <select id="productCategory" class="form-control">
                             <option value="">Select Category</option>
                             <option value="tshirts">T-Shirts</option>
-                            <option value="Dresses">Dresses</option>
-                            <option value="Jeans">Jeans</option>
+                            <option value="pants">Pants</option>
+                            <option value="hoodies">Hoodies</option>
                             <option value="shoes">Shoes</option>
                             <option value="accessories">Accessories</option>
                         </select>
@@ -2164,7 +2154,7 @@
         const MESSENGER_LINK = `https://m.me/${MESSENGER_PAGE_ID}`;
         const FACEBOOK_PAGE = `https://facebook.com/${MESSENGER_PAGE_ID}`;
         const IMGBB_API_KEY = 'YOUR_IMGBB_API_KEY_HERE';
-        const SHIPPING_COST = 2.00;
+        const SHIPPING_COST = 5.00;
 
         // ============================================
         // APPLICATION STATE
@@ -2193,7 +2183,7 @@
 
         const sizeSelectionState = {};
         
-        // Simple lightbox state
+        // WORKING lightbox state
         const lightboxState = {
             images: [],
             currentIndex: 0,
@@ -2400,7 +2390,7 @@
         }
 
         // ============================================
-        // SIMPLE LIGHTBOX FUNCTIONS - GUARANTEED TO WORK
+        // WORKING LIGHTBOX FUNCTIONS
         // ============================================
         function openLightbox(images, startIndex = 0) {
             // Convert to array if needed
@@ -2439,6 +2429,13 @@
             const lightbox = document.getElementById('imageLightbox');
             lightbox.classList.remove('active');
             document.body.style.overflow = '';
+        }
+
+        function closeLightboxOnBackground(event) {
+            // Close when clicking the background (not the image)
+            if (event.target === event.currentTarget) {
+                closeLightbox();
+            }
         }
 
         function updateLightbox() {
@@ -2502,7 +2499,10 @@
             updateLightbox();
         }
 
-        function toggleZoom() {
+        function toggleZoom(event) {
+            if (event) {
+                event.stopPropagation();
+            }
             const lightboxImage = document.getElementById('lightboxImage');
             lightboxState.isZoomed = !lightboxState.isZoomed;
             lightboxImage.classList.toggle('zoomed', lightboxState.isZoomed);
@@ -2992,7 +2992,7 @@
                     name: "Children's Jeans",
                     price: 24.99,
                     stock: 15,
-                    category: "Dresses",
+                    category: "pants",
                     images: [
                         "https://images.unsplash.com/photo-1542272604-787c3835535d?w=400&h=400&fit=crop",
                         "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=400&h=400&fit=crop"
@@ -3004,7 +3004,7 @@
                     name: "Kids Hoodie Jacket",
                     price: 29.99,
                     stock: 8,
-                    category: "Jeans",
+                    category: "hoodies",
                     images: [
                         "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop",
                         "https://images.unsplash.com/photo-1576871337632-b9aef4c17ab9?w=400&h=400&fit=crop"
@@ -3713,7 +3713,7 @@
 
         function adminLogin() {
             const password = document.getElementById('adminPassword').value;
-            if (password === 'N1255550') {
+            if (password === 'admin123') {
                 state.isAdmin = true;
                 localStorage.setItem('goatAdmin', 'true');
                 checkAdminStatus();
@@ -3799,5 +3799,3 @@
     </script>
 </body>
 </html>
-
-
