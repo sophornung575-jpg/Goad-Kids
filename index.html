@@ -1158,6 +1158,36 @@
             display: block;
         }
 
+        .order-summary-preview {
+            background: var(--light);
+            border: 2px solid var(--primary-light);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .order-summary-preview h4 {
+            color: var(--primary);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .order-summary-preview pre {
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: var(--dark);
+            background: white;
+            padding: 1rem;
+            border-radius: var(--radius);
+            border: 1px solid var(--gray-light);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
         .admin-container {
             background: white;
             border-radius: var(--radius-lg);
@@ -1888,15 +1918,24 @@
                             <textarea id="customerNotes" class="form-control" rows="2" placeholder="Order Notes (optional)"></textarea>
                         </div>
                         
-                        <!-- Direct Messenger Send Button -->
-                        <button class="messenger-btn" onclick="sendOrderToMessengerDirect()">
+                        <!-- Order Summary Preview -->
+                        <div class="order-summary-preview hidden" id="orderSummaryPreview">
+                            <h4>
+                                <i class="fas fa-receipt"></i>
+                                Your Order Summary
+                            </h4>
+                            <pre id="orderSummaryContent"></pre>
+                        </div>
+                        
+                        <!-- Send to Messenger Button -->
+                        <button class="messenger-btn" onclick="sendOrderToMessenger()">
                             <i class="fab fa-facebook-messenger"></i>
-                            Send Order via Messenger
+                            Place Order via Messenger
                         </button>
                         
                         <p class="text-center mt-4" style="color: var(--gray); font-size: 0.875rem;">
                             <i class="fas fa-info-circle"></i>
-                            This will open Messenger with your order ready to send to our page
+                            Click to send your complete order summary to our Messenger
                         </p>
                     </div>
                 </div>
@@ -2186,7 +2225,7 @@
         // CONSTANTS & CONFIGURATION
         // ============================================
         const PAYWAY_LINK = 'https://link.payway.com.kh/08407860s';
-        const MESSENGER_PAGE_ID = 'Goatkids'; // Your Facebook page username
+        const MESSENGER_PAGE_ID = 'Goatkids';
         const MESSENGER_LINK = `https://m.me/${MESSENGER_PAGE_ID}`;
         const FACEBOOK_PAGE = `https://facebook.com/${MESSENGER_PAGE_ID}`;
         const IMGBB_API_KEY = 'YOUR_IMGBB_API_KEY_HERE';
@@ -2208,8 +2247,7 @@
             },
             storeId: null,
             firebaseInitialized: false,
-            editingProductId: null,
-            currentOrderMessage: ''
+            editingProductId: null
         };
 
         const productFormState = {
@@ -2444,9 +2482,7 @@
                 document.body.style.overflow = 'hidden';
             }
             
-            // Update navigation buttons
             updateNavButtons();
-            
             document.addEventListener('keydown', handleLightboxKeyboard);
         }
 
@@ -2483,7 +2519,6 @@
                         '<i class="fas fa-search-plus"></i>';
                 }
                 
-                // Update thumbnails
                 lightboxThumbnails.innerHTML = '';
                 lightboxState.images.forEach((image, index) => {
                     const thumbnail = document.createElement('img');
@@ -2501,7 +2536,6 @@
                 
                 lightboxImage.classList.remove('zoomed');
                 
-                // Scroll thumbnail into view
                 const activeThumb = lightboxThumbnails.querySelector('.active');
                 if (activeThumb) {
                     activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
@@ -2580,12 +2614,12 @@
         }
 
         // ============================================
-        // DIRECT MESSENGER SEND FUNCTION
+        // MESSENGER ORDER FUNCTION
         // ============================================
-        function sendOrderToMessengerDirect() {
+        function sendOrderToMessenger() {
             // Validate customer info
             if (!validateCustomerInfo()) {
-                showMessage('Please fill in your delivery information before sending order', 'error');
+                showMessage('Please fill in your delivery information before placing order', 'error');
                 return false;
             }
             
@@ -2594,56 +2628,32 @@
                 return false;
             }
             
+            // Generate complete order summary
+            const orderSummary = generateCompleteOrderSummary();
+            
+            // Show order preview
+            const previewEl = document.getElementById('orderSummaryPreview');
+            const contentEl = document.getElementById('orderSummaryContent');
+            contentEl.textContent = orderSummary;
+            previewEl.classList.remove('hidden');
+            
+            // Encode for Messenger
+            const encodedMessage = encodeURIComponent(orderSummary);
+            const messengerUrl = `https://m.me/${MESSENGER_PAGE_ID}?text=${encodedMessage}`;
+            
             // Save order data
             saveOrderData();
             
-            // Generate order message
-            const orderMessage = generateDetailedOrderMessage();
-            state.currentOrderMessage = orderMessage;
-            
-            // Encode the message for URL
-            const encodedMessage = encodeURIComponent(orderMessage);
-            
-            // Create Messenger URL with pre-filled message
-            // Note: m.me links don't support pre-filled messages directly
-            // We'll open Messenger and copy to clipboard for them to paste
-            copyToClipboard(orderMessage);
-            
-            // Show success message with option to open Messenger
-            if (confirm('✅ Order copied to clipboard!\n\nClick OK to open Messenger, then paste the order there.\n\nWould you like to open Messenger now?')) {
-                window.open(MESSENGER_LINK, '_blank');
+            // Ask user to confirm and open Messenger
+            if (confirm('📱 Ready to place your order?\n\nClick OK to open Messenger with your complete order details.')) {
+                window.open(messengerUrl, '_blank');
+                showMessage('Order sent to Messenger!', 'success');
             }
-            
-            showMessage('Order copied to clipboard! Open Messenger and paste it there.', 'success');
             
             return true;
         }
 
-        function copyToClipboard(text) {
-            // Try modern clipboard API first
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).catch(() => {
-                    // Fallback for older browsers
-                    fallbackCopyToClipboard(text);
-                });
-            } else {
-                // Fallback for older browsers
-                fallbackCopyToClipboard(text);
-            }
-        }
-
-        function fallbackCopyToClipboard(text) {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
-        }
-
-        function generateDetailedOrderMessage() {
+        function generateCompleteOrderSummary() {
             const name = document.getElementById('customerName').value.trim();
             const phone = document.getElementById('customerPhone').value.trim();
             const address = document.getElementById('customerAddress').value.trim();
@@ -2653,50 +2663,57 @@
             const shipping = SHIPPING_COST;
             const total = subtotal + shipping;
             
-            // Create order message with emojis and formatting
-            let orderMessage = `🛍️ *NEW ORDER FROM GOAT KIDS WEBSITE* 🛍️\n\n`;
+            // Create comprehensive order summary
+            let orderSummary = `🛍️ *GOAT KIDS - NEW ORDER* 🛍️\n\n`;
             
-            // Customer Details Section
-            orderMessage += `👤 *CUSTOMER DETAILS*\n`;
-            orderMessage += `─────────────────\n`;
-            orderMessage += `📋 Name: ${name}\n`;
-            orderMessage += `📞 Phone: ${phone}\n`;
-            orderMessage += `📍 Address: ${address}\n`;
-            orderMessage += `💳 Payment: ${state.selectedPaymentMethod === 'payway' ? 'ABA PayWay' : 'Cash on Delivery'}\n`;
-            orderMessage += `🆔 Store ID: ${state.storeId}\n\n`;
+            // Store Information
+            orderSummary += `🏪 *STORE INFORMATION*\n`;
+            orderSummary += `─────────────────\n`;
+            orderSummary += `🆔 Store ID: ${state.storeId}\n`;
+            orderSummary += `📅 Order Date: ${new Date().toLocaleString()}\n\n`;
             
-            // Order Items Section
-            orderMessage += `📦 *ORDER ITEMS*\n`;
-            orderMessage += `─────────────────\n`;
+            // Customer Details
+            orderSummary += `👤 *CUSTOMER DETAILS*\n`;
+            orderSummary += `─────────────────\n`;
+            orderSummary += `📋 Name: ${name}\n`;
+            orderSummary += `📞 Phone: ${phone}\n`;
+            orderSummary += `📍 Address: ${address}\n`;
+            orderSummary += `💳 Payment: ${state.selectedPaymentMethod === 'payway' ? 'ABA PayWay' : 'Cash on Delivery'}\n\n`;
+            
+            // Order Items
+            orderSummary += `📦 *ORDER ITEMS*\n`;
+            orderSummary += `─────────────────\n`;
             
             state.cart.forEach((item, index) => {
                 const itemTotal = item.price * item.quantity;
-                orderMessage += `${index + 1}. *${item.name}*\n`;
-                orderMessage += `   └─ Size: ${item.size}\n`;
-                orderMessage += `   └─ Quantity: ${item.quantity}\n`;
-                orderMessage += `   └─ Price: $${item.price.toFixed(2)} each\n`;
-                orderMessage += `   └─ Subtotal: $${itemTotal.toFixed(2)}\n\n`;
+                orderSummary += `${index + 1}. *${item.name}*\n`;
+                orderSummary += `   └─ Size: ${item.size}\n`;
+                orderSummary += `   └─ Quantity: ${item.quantity}\n`;
+                orderSummary += `   └─ Price: $${item.price.toFixed(2)} each\n`;
+                orderSummary += `   └─ Subtotal: $${itemTotal.toFixed(2)}\n\n`;
             });
             
-            // Order Summary Section
-            orderMessage += `💰 *ORDER SUMMARY*\n`;
-            orderMessage += `─────────────────\n`;
-            orderMessage += `📊 Subtotal: $${subtotal.toFixed(2)}\n`;
-            orderMessage += `🚚 Shipping: $${shipping.toFixed(2)}\n`;
-            orderMessage += `💵 *TOTAL: $${total.toFixed(2)}*\n\n`;
+            // Order Summary
+            orderSummary += `💰 *ORDER SUMMARY*\n`;
+            orderSummary += `─────────────────\n`;
+            orderSummary += `📊 Subtotal: $${subtotal.toFixed(2)}\n`;
+            orderSummary += `🚚 Shipping: $${shipping.toFixed(2)}\n`;
+            orderSummary += `💵 *TOTAL AMOUNT: $${total.toFixed(2)}*\n\n`;
             
-            // Notes Section (if any)
+            // Additional Notes
             if (notes) {
-                orderMessage += `📝 *ADDITIONAL NOTES*\n`;
-                orderMessage += `─────────────────\n`;
-                orderMessage += `${notes}\n\n`;
+                orderSummary += `📝 *ADDITIONAL NOTES*\n`;
+                orderSummary += `─────────────────\n`;
+                orderSummary += `${notes}\n\n`;
             }
             
             // Footer
-            orderMessage += `✨ *Thank you!* ✨\n`;
-            orderMessage += `Please confirm this order.`;
+            orderSummary += `✅ *ORDER STATUS: PENDING CONFIRMATION*\n`;
+            orderSummary += `─────────────────\n`;
+            orderSummary += `Thank you for choosing GOAT KIDS!\n`;
+            orderSummary += `We will confirm your order shortly.`;
             
-            return orderMessage;
+            return orderSummary;
         }
 
         function getCurrentOrderData() {
@@ -3912,5 +3929,3 @@
     </script>
 </body>
 </html>
-
-
