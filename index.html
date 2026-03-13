@@ -451,7 +451,7 @@
             border-color: var(--primary);
         }
 
-        /* ========== ENHANCED IMAGE VIEWER ========== */
+        /* Enhanced Image Viewer */
         .product-image-container {
             position: relative;
             height: 250px;
@@ -563,7 +563,7 @@
             z-index: 2;
         }
 
-        /* ========== FULLSCREEN LIGHTBOX ========== */
+        /* Fullscreen Lightbox */
         .lightbox {
             position: fixed;
             top: 0;
@@ -1365,6 +1365,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+            cursor: pointer;
         }
 
         .gallery-item-main {
@@ -2613,6 +2614,48 @@
             }
         }
 
+        // Helper function to safely encode images array for HTML attributes
+        function encodeImagesForAttribute(images) {
+            return encodeURIComponent(JSON.stringify(images));
+        }
+
+        // Helper function to decode images from HTML attribute
+        function decodeImagesFromAttribute(encodedImages) {
+            try {
+                return JSON.parse(decodeURIComponent(encodedImages));
+            } catch (e) {
+                console.error('Failed to decode images:', e);
+                return [];
+            }
+        }
+
+        // Handle product image container click
+        function handleProductImageClick(container) {
+            const imagesData = container.getAttribute('data-images');
+            if (imagesData) {
+                const images = decodeImagesFromAttribute(imagesData);
+                openLightbox(images, 0);
+            }
+        }
+
+        // Handle view photos button click
+        function handleViewPhotos(button) {
+            const container = button.closest('.product-image-container');
+            if (container) {
+                const imagesData = container.getAttribute('data-images');
+                if (imagesData) {
+                    const images = decodeImagesFromAttribute(imagesData);
+                    openLightbox(images, 0);
+                }
+            }
+        }
+
+        // Handle thumbnail click
+        function handleThumbnailClick(thumbnail, productId, index, imagesData) {
+            const images = decodeImagesFromAttribute(imagesData);
+            switchProductImage(thumbnail, productId, index, images);
+        }
+
         // ============================================
         // MESSENGER ORDER FUNCTION
         // ============================================
@@ -3429,6 +3472,9 @@
                     images.push('https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400&h=400&fit=crop');
                 }
                 
+                // Encode images for safe HTML attribute usage
+                const encodedImages = encodeImagesForAttribute(images);
+                
                 let badgeClass, badgeText, stockClass, stockText;
                 
                 if (product.stock > 10) {
@@ -3460,7 +3506,7 @@
                             ${images.map((img, index) => `
                                 <img src="${img}" alt="Thumbnail ${index + 1}" 
                                      class="product-thumbnail ${index === 0 ? 'active' : ''}"
-                                     onclick="event.stopPropagation(); switchProductImage(this, '${product.id}', ${index}, ${JSON.stringify(images)})">
+                                     onclick="event.stopPropagation(); handleThumbnailClick(this, '${product.id}', ${index}, '${encodedImages}')">
                             `).join('')}
                         </div>
                     `;
@@ -3485,12 +3531,12 @@
                 }
                 
                 productCard.innerHTML = `
-                    <div class="product-image-container" onclick="openLightbox(${JSON.stringify(images)}, 0)">
+                    <div class="product-image-container" data-images="${encodedImages}" onclick="handleProductImageClick(this)">
                         <img src="${images[0]}" alt="${product.name}" class="product-main-image">
                         ${images.length > 1 ? `<div class="image-counter">${images.length} photos</div>` : ''}
                         <div class="product-badge ${badgeClass}">${badgeText}</div>
                         <div class="product-image-actions">
-                            <button class="product-image-action-btn" onclick="event.stopPropagation(); openLightbox(${JSON.stringify(images)}, 0)">
+                            <button class="product-image-action-btn" onclick="event.stopPropagation(); handleViewPhotos(this)">
                                 <i class="fas fa-expand"></i>
                             </button>
                         </div>
@@ -3569,7 +3615,7 @@
                     <td>
                         <img src="${mainImage}" alt="${product.name}" 
                              style="width: 50px; height: 50px; object-fit: cover; border-radius: var(--radius); cursor: pointer;"
-                             onclick="openLightbox(${JSON.stringify(images)}, 0)">
+                             onclick="openLightbox(${JSON.stringify(images).replace(/'/g, "\\'")}, 0)">
                         ${images.length > 1 ? `<div style="font-size: 0.75rem; color: var(--gray);">+${images.length - 1} more</div>` : ''}
                     </td>
                     <td>${product.name}</td>
@@ -3704,7 +3750,7 @@
                 cartItem.className = 'cart-item';
                 cartItem.innerHTML = `
                     <img src="${item.image}" alt="${item.name}" class="cart-item-image" 
-                         onclick="${images.length > 0 ? `openLightbox(${JSON.stringify(images)}, 0)` : ''}">
+                         onclick="${images.length > 0 ? `openLightbox(${JSON.stringify(images).replace(/'/g, "\\'")}, 0)` : ''}">
                     <div class="cart-item-details">
                         <div class="cart-item-name">${item.name}</div>
                         <div class="cart-item-size">Size: ${item.size}</div>
@@ -3929,6 +3975,3 @@
     </script>
 </body>
 </html>
-
-
-
