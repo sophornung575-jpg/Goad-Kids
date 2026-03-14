@@ -22,7 +22,8 @@
             query,
             where,
             serverTimestamp,
-            enableIndexedDbPersistence
+            enableIndexedDbPersistence,
+            getDocs
         } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js'
 
         // Firebase Configuration
@@ -42,7 +43,11 @@
 
         // Enable offline persistence
         enableIndexedDbPersistence(db).catch((err) => {
-            console.warn('Persistence failed:', err.code);
+            if (err.code == 'failed-precondition') {
+                console.warn('Persistence failed: Multiple tabs open');
+            } else if (err.code == 'unimplemented') {
+                console.warn('Persistence not supported');
+            }
         });
 
         // Make Firebase available globally
@@ -58,8 +63,10 @@
             query,
             where,
             serverTimestamp,
+            getDocs,
             storeId: null,
-            unsubscribe: null
+            unsubscribe: null,
+            isInitialized: true
         };
 
         console.log('Firebase initialized successfully');
@@ -173,6 +180,11 @@
             box-shadow: var(--shadow);
         }
 
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .btn-secondary {
             background: var(--secondary);
             color: white;
@@ -247,13 +259,14 @@
             right: 0;
             background: var(--dark);
             color: white;
-            padding: 0.5rem 1rem;
+            padding: 0.75rem 1.5rem;
             display: flex;
             align-items: center;
             justify-content: space-between;
             z-index: 1000;
             transform: translateY(-100%);
             transition: transform 0.3s ease;
+            font-size: 1rem;
         }
 
         .sync-status.show {
@@ -266,6 +279,7 @@
 
         .sync-status.offline {
             background: var(--warning);
+            color: var(--dark);
         }
 
         .sync-status.error {
@@ -517,9 +531,7 @@
             border-color: var(--primary);
         }
 
-        /* ========== LARGER PHOTO FRAMES ========== */
-        
-        /* Product Grid - Larger cards */
+        /* Larger Photo Frames */
         .product-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -541,7 +553,6 @@
             box-shadow: var(--shadow-lg);
         }
 
-        /* Larger image container */
         .product-image-container {
             position: relative;
             height: 320px;
@@ -563,7 +574,6 @@
             transform: scale(1.08);
         }
 
-        /* Larger image counter */
         .image-counter {
             position: absolute;
             top: var(--space-md);
@@ -579,7 +589,6 @@
             font-weight: 500;
         }
 
-        /* Larger image actions */
         .product-image-actions {
             position: absolute;
             bottom: var(--space-md);
@@ -616,7 +625,6 @@
             transform: scale(1.15);
         }
 
-        /* Larger product badge */
         .product-badge {
             position: absolute;
             top: var(--space-md);
@@ -630,7 +638,10 @@
             box-shadow: var(--shadow);
         }
 
-        /* Larger thumbnails */
+        .badge-new { background: var(--success); }
+        .badge-sale { background: var(--secondary); }
+        .badge-low { background: var(--warning); color: var(--dark); }
+
         .product-thumbnails {
             display: flex;
             gap: var(--space-sm);
@@ -678,7 +689,6 @@
             border-color: var(--primary);
         }
 
-        /* Larger product info */
         .product-info {
             padding: var(--space-xl);
         }
@@ -719,7 +729,10 @@
             font-weight: 500;
         }
 
-        /* Larger size options */
+        .in-stock { background: rgba(72, 187, 120, 0.1); color: var(--success); }
+        .low-stock { background: rgba(236, 201, 75, 0.1); color: var(--warning); }
+        .out-of-stock { background: rgba(245, 101, 101, 0.1); color: var(--danger); }
+
         .size-selector {
             margin-bottom: var(--space-lg);
         }
@@ -759,7 +772,11 @@
             border-color: var(--primary);
         }
 
-        /* Larger action buttons */
+        .size-option.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .product-actions {
             display: flex;
             gap: var(--space-md);
@@ -773,7 +790,7 @@
             font-weight: 600;
         }
 
-        /* ========== LIGHTBOX STYLES ========== */
+        /* Lightbox Styles */
         .lightbox {
             position: fixed;
             top: 0;
@@ -998,7 +1015,7 @@
             transform: scale(1.1);
         }
 
-        /* Cart image */
+        /* Cart Styles */
         .cart-item-image {
             width: 100px;
             height: 100px;
@@ -1013,95 +1030,6 @@
             transform: scale(1.05);
         }
 
-        /* Admin gallery images */
-        .gallery-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-            gap: var(--space-md);
-        }
-
-        .gallery-item {
-            position: relative;
-            border-radius: var(--radius);
-            overflow: hidden;
-            aspect-ratio: 1;
-            background: var(--light);
-        }
-
-        .gallery-item img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            object-position: center;
-            cursor: pointer;
-            transition: transform 0.3s ease;
-        }
-
-        .gallery-item:hover img {
-            transform: scale(1.05);
-        }
-
-        .gallery-item-main {
-            position: absolute;
-            top: 5px;
-            left: 5px;
-            background: var(--success);
-            color: white;
-            font-size: 0.7rem;
-            padding: 2px 6px;
-            border-radius: var(--radius-sm);
-            z-index: 2;
-        }
-
-        .gallery-item-actions {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .gallery-item:hover .gallery-item-actions {
-            opacity: 1;
-        }
-
-        .gallery-action-btn {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            border: none;
-            background: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: var(--transition);
-        }
-
-        .gallery-action-btn:hover {
-            background: var(--primary);
-            color: white;
-            transform: scale(1.1);
-        }
-
-        /* Inventory table image */
-        .inventory-table img {
-            width: 60px;
-            height: 60px;
-            object-fit: cover;
-            object-position: center;
-            border-radius: var(--radius);
-            cursor: pointer;
-        }
-
-        /* Cart Styles */
         .cart-container {
             background: white;
             border-radius: var(--radius-lg);
@@ -1547,6 +1475,83 @@
             font-size: 1.25rem;
         }
 
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: var(--space-md);
+        }
+
+        .gallery-item {
+            position: relative;
+            border-radius: var(--radius);
+            overflow: hidden;
+            aspect-ratio: 1;
+            background: var(--light);
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        .gallery-item:hover img {
+            transform: scale(1.05);
+        }
+
+        .gallery-item-main {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background: var(--success);
+            color: white;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
+            z-index: 2;
+        }
+
+        .gallery-item-actions {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .gallery-item:hover .gallery-item-actions {
+            opacity: 1;
+        }
+
+        .gallery-action-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
+            background: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .gallery-action-btn:hover {
+            background: var(--primary);
+            color: white;
+            transform: scale(1.1);
+        }
+
         .inventory-table {
             width: 100%;
             border-collapse: collapse;
@@ -1570,6 +1575,15 @@
 
         .inventory-table tr:hover {
             background: var(--light);
+        }
+
+        .inventory-table img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            object-position: center;
+            border-radius: var(--radius);
+            cursor: pointer;
         }
 
         .modal-overlay {
@@ -1707,7 +1721,7 @@
             font-size: 1rem;
         }
 
-        /* ========== MOBILE RESPONSIVE ========== */
+        /* Mobile Responsive */
         @media (max-width: 768px) {
             .container {
                 padding: 0 var(--space-md);
@@ -1745,7 +1759,6 @@
                 min-width: 100%;
             }
             
-            /* Larger mobile images */
             .product-grid {
                 grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
                 gap: var(--space-lg);
@@ -1759,10 +1772,6 @@
                 width: 44px;
                 height: 44px;
                 font-size: 1.3rem;
-            }
-            
-            .product-thumbnails {
-                padding: var(--space-sm);
             }
             
             .product-thumbnail {
@@ -1779,7 +1788,6 @@
                 scrollbar-width: none;
             }
             
-            /* Lightbox mobile adjustments */
             .lightbox-main-image {
                 max-width: 100%;
                 max-height: 75vh;
@@ -1789,14 +1797,6 @@
                 transform: scale(1.5);
             }
             
-            .lightbox-thumbnails-container {
-                padding: 1rem;
-            }
-            
-            .lightbox-thumbnails {
-                gap: 0.5rem;
-            }
-            
             .lightbox-thumbnail {
                 width: 60px;
                 height: 60px;
@@ -1804,11 +1804,6 @@
             
             .lightbox-thumbnails::-webkit-scrollbar {
                 display: none;
-            }
-            
-            .lightbox-thumbnails {
-                -ms-overflow-style: none;
-                scrollbar-width: none;
             }
             
             .lightbox-controls {
@@ -1825,7 +1820,6 @@
             .lightbox-counter {
                 font-size: 0.875rem;
                 padding: 0.5rem 1rem;
-                top: 1rem;
             }
             
             .lightbox-zoom-btn,
@@ -1836,7 +1830,6 @@
                 bottom: 6rem;
             }
             
-            /* Cart mobile adjustments */
             .cart-item {
                 grid-template-columns: 1fr;
                 text-align: center;
@@ -1876,13 +1869,10 @@
                 justify-content: center;
             }
             
-            /* Admin gallery mobile */
             .gallery-grid {
                 grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-                gap: var(--space-sm);
             }
             
-            /* Inventory table mobile */
             .inventory-table {
                 font-size: 0.875rem;
             }
@@ -1898,7 +1888,6 @@
             }
         }
 
-        /* Extra small devices */
         @media (max-width: 480px) {
             .product-image-container {
                 height: 250px;
@@ -1936,14 +1925,9 @@
             }
         }
 
-        /* Landscape mode */
         @media (max-width: 896px) and (orientation: landscape) {
             .lightbox-main-image {
                 max-height: 70vh;
-            }
-            
-            .lightbox-thumbnails-container {
-                padding: 0.75rem;
             }
             
             .lightbox-thumbnail {
@@ -1951,16 +1935,11 @@
                 height: 55px;
             }
             
-            .lightbox-controls {
-                padding: 0.75rem;
-            }
-            
             .product-image-container {
                 height: 220px;
             }
         }
 
-        /* Tablet optimization */
         @media (min-width: 769px) and (max-width: 1024px) {
             .product-grid {
                 grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -1975,17 +1954,12 @@
                 height: 75px;
             }
             
-            .lightbox-main-image {
-                max-height: 80vh;
-            }
-            
             .lightbox-thumbnail {
                 width: 70px;
                 height: 70px;
             }
         }
 
-        /* Touch device optimizations */
         @media (hover: none) and (pointer: coarse) {
             .product-image-actions {
                 opacity: 1;
@@ -1993,25 +1967,17 @@
             }
             
             .product-image-action-btn {
-                background: rgba(255, 255, 255, 0.95);
                 width: 52px;
                 height: 52px;
                 font-size: 1.5rem;
-                box-shadow: var(--shadow-lg);
             }
             
             .lightbox-nav-btn,
             .lightbox-close,
             .lightbox-zoom-btn,
             .lightbox-download-btn {
-                background: rgba(255, 255, 255, 0.25);
-                backdrop-filter: blur(10px);
                 width: 52px;
                 height: 52px;
-            }
-            
-            .product-thumbnails {
-                padding: var(--space-md) var(--space-sm);
             }
             
             .product-thumbnail {
@@ -2035,7 +2001,6 @@
             }
         }
 
-        /* Image loading animation */
         .product-image-container img {
             background: linear-gradient(110deg, #ececec 8%, #f5f5f5 18%, #ececec 33%);
             background-size: 200% 100%;
@@ -2386,7 +2351,7 @@
                         <button class="btn btn-outline btn-large" onclick="openJoinStoreModal()">
                             <i class="fas fa-sign-in-alt"></i> Join Store
                         </button>
-                        <button class="btn btn-success btn-large" onclick="syncToFirebase()">
+                        <button class="btn btn-success btn-large" onclick="syncToFirebase()" id="adminSyncBtn">
                             <i class="fas fa-sync-alt"></i> Sync Now
                         </button>
                     </div>
@@ -2649,7 +2614,8 @@
             },
             storeId: null,
             firebaseInitialized: false,
-            editingProductId: null
+            editingProductId: null,
+            syncInProgress: false
         };
 
         const productFormState = {
@@ -2680,29 +2646,46 @@
             setupMobileMenu();
             checkAdminStatus();
             
-            await waitForFirebase();
+            // Wait for Firebase to be ready
+            const firebaseReady = await waitForFirebase();
+            if (!firebaseReady) {
+                showSyncStatus('Firebase connection failed - working offline', 'offline');
+            }
+            
             await initializeStore();
             
             loadLocalProducts();
             loadCart();
             
-            await setupFirebaseListener();
+            if (firebaseReady) {
+                await setupFirebaseListener();
+            }
             
             showTab('store');
             selectPaymentMethod('payway');
             setupImageUploadDragDrop();
             
-            showSyncStatus('Connected to Firebase', 'success');
+            if (firebaseReady) {
+                showSyncStatus('Connected to Firebase', 'success');
+            }
         }
 
         async function waitForFirebase() {
             return new Promise((resolve) => {
+                let attempts = 0;
+                const maxAttempts = 20;
+                
                 const check = () => {
-                    if (window.firebase && window.firebase.db) {
+                    if (window.firebase && window.firebase.db && window.firebase.isInitialized) {
                         state.firebaseInitialized = true;
-                        resolve();
+                        console.log('Firebase is ready');
+                        resolve(true);
+                    } else if (attempts < maxAttempts) {
+                        attempts++;
+                        setTimeout(check, 200);
                     } else {
-                        setTimeout(check, 100);
+                        console.warn('Firebase timeout - working offline');
+                        resolve(false);
                     }
                 };
                 check();
@@ -2744,7 +2727,10 @@
         }
 
         async function setupFirebaseListener() {
-            if (!state.firebaseInitialized || !state.storeId) return;
+            if (!state.firebaseInitialized || !state.storeId) {
+                console.warn('Cannot setup listener - Firebase not ready');
+                return;
+            }
             
             try {
                 const { db, collection, query, where, onSnapshot } = window.firebase;
@@ -2773,8 +2759,19 @@
                             });
                         });
                         
-                        state.products = products;
-                        localStorage.setItem('goatProducts', JSON.stringify(products));
+                        // Merge with local products to preserve any unsynced changes
+                        const localProducts = JSON.parse(localStorage.getItem('goatProducts') || '[]');
+                        const mergedProducts = [...products];
+                        
+                        // Add local products that don't exist in Firebase
+                        localProducts.forEach(localProduct => {
+                            if (!products.some(p => p.id === localProduct.id)) {
+                                mergedProducts.push(localProduct);
+                            }
+                        });
+                        
+                        state.products = mergedProducts;
+                        localStorage.setItem('goatProducts', JSON.stringify(mergedProducts));
                         
                         if (document.getElementById('storeTab').classList.contains('active')) {
                             renderProducts();
@@ -2783,16 +2780,17 @@
                             refreshInventory();
                         }
                         
-                        showSyncStatus('Products updated in real-time', 'success');
+                        showSyncStatus('Products updated from cloud', 'success');
                     },
                     (error) => {
                         console.error('Firestore listener error:', error);
-                        showSyncStatus('Connection lost, using local data', 'offline');
+                        showSyncStatus('Connection lost - working offline', 'offline');
                     }
                 );
                 
             } catch (error) {
                 console.error('Error setting up Firebase listener:', error);
+                showSyncStatus('Failed to connect to cloud', 'offline');
             }
         }
 
@@ -3492,7 +3490,7 @@
             }
         }
 
-        // Update floating cart count
+        // Update cart count
         function updateCartCount() {
             const count = state.cart.reduce((total, item) => total + item.quantity, 0);
             document.getElementById('cartCountNav').textContent = count;
@@ -3517,7 +3515,7 @@
         function loadSampleProducts() {
             state.products = [
                 {
-                    id: 'product-1',
+                    id: 'product-' + Date.now() + '-1',
                     name: "Kids Cotton T-Shirt",
                     price: 12.99,
                     stock: 25,
@@ -3530,7 +3528,7 @@
                     sizes: ["S", "M", "L", "XL"]
                 },
                 {
-                    id: 'product-2',
+                    id: 'product-' + Date.now() + '-2',
                     name: "Children's Jeans",
                     price: 24.99,
                     stock: 15,
@@ -3542,7 +3540,7 @@
                     sizes: ["2T", "3T", "4T", "5T"]
                 },
                 {
-                    id: 'product-3',
+                    id: 'product-' + Date.now() + '-3',
                     name: "Kids Hoodie Jacket",
                     price: 29.99,
                     stock: 8,
@@ -3609,7 +3607,7 @@
                     showMessage(`Product "${name}" updated successfully!`, 'success');
                 }
             } else {
-                productId = 'product-' + Date.now();
+                productId = 'product-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
                 productData = {
                     id: productId,
                     name,
@@ -3625,7 +3623,14 @@
             }
             
             saveProducts();
-            await syncProductToFirebase(productData);
+            
+            // Sync to Firebase if available
+            if (state.firebaseInitialized && state.storeId) {
+                await syncProductToFirebase(productData);
+            } else {
+                showMessage('Product saved locally. Click Sync to save to cloud.', 'info');
+            }
+            
             resetProductForm();
             refreshInventory();
             renderProducts();
@@ -3703,7 +3708,10 @@
             state.products.splice(productIndex, 1);
             saveProducts();
             
-            await deleteProductFromFirebase(productId);
+            // Sync deletion to Firebase if available
+            if (state.firebaseInitialized && state.storeId) {
+                await deleteProductFromFirebase(productId);
+            }
             
             if (productFormState.editingProductId === productId) {
                 resetProductForm();
@@ -3715,58 +3723,117 @@
         }
 
         // ============================================
-        // FIREBASE SYNC FUNCTIONS
+        // FIREBASE SYNC FUNCTIONS - FIXED
         // ============================================
         async function syncToFirebase() {
-            if (!state.firebaseInitialized || !state.storeId) {
-                showSyncStatus('Firebase not initialized', 'error');
+            // Check if Firebase is initialized
+            if (!state.firebaseInitialized || !window.firebase || !window.firebase.db) {
+                showSyncStatus('Firebase not initialized. Please refresh the page.', 'error');
                 return;
             }
+            
+            if (!state.storeId) {
+                showSyncStatus('No store ID found', 'error');
+                return;
+            }
+            
+            if (state.syncInProgress) {
+                showSyncStatus('Sync already in progress...', 'info');
+                return;
+            }
+            
+            state.syncInProgress = true;
+            const syncBtn = document.getElementById('syncBtn');
+            const adminSyncBtn = document.getElementById('adminSyncBtn');
+            
+            if (syncBtn) syncBtn.disabled = true;
+            if (adminSyncBtn) adminSyncBtn.disabled = true;
             
             showSyncStatus('Syncing to Firebase...', 'info');
             
             try {
                 const { db, doc, setDoc, serverTimestamp } = window.firebase;
                 
+                let successCount = 0;
+                let errorCount = 0;
+                
                 for (const product of state.products) {
-                    const productRef = doc(db, 'stores', state.storeId, 'products', product.id.toString());
-                    await setDoc(productRef, {
-                        ...product,
-                        active: true,
-                        updatedAt: serverTimestamp(),
-                        storeId: state.storeId
-                    }, { merge: true });
+                    try {
+                        // Ensure product has all required fields
+                        const productData = {
+                            id: product.id,
+                            name: product.name || '',
+                            price: product.price || 0,
+                            stock: product.stock || 0,
+                            category: product.category || 'uncategorized',
+                            images: product.images || [],
+                            sizes: product.sizes || [],
+                            active: true,
+                            updatedAt: serverTimestamp(),
+                            storeId: state.storeId
+                        };
+                        
+                        const productRef = doc(db, 'stores', state.storeId, 'products', product.id.toString());
+                        await setDoc(productRef, productData, { merge: true });
+                        successCount++;
+                        
+                    } catch (productError) {
+                        console.error('Error syncing product:', product.id, productError);
+                        errorCount++;
+                    }
                 }
                 
-                showSyncStatus('Products synced to Firebase', 'success');
+                if (errorCount === 0) {
+                    showSyncStatus(`Successfully synced ${successCount} products to Firebase`, 'success');
+                } else {
+                    showSyncStatus(`Synced ${successCount} products with ${errorCount} errors`, 'warning');
+                }
                 
             } catch (error) {
                 console.error('Error syncing to Firebase:', error);
                 showSyncStatus('Sync failed: ' + error.message, 'error');
+            } finally {
+                state.syncInProgress = false;
+                if (syncBtn) syncBtn.disabled = false;
+                if (adminSyncBtn) adminSyncBtn.disabled = false;
             }
         }
 
         async function syncProductToFirebase(product) {
-            if (!state.firebaseInitialized || !state.storeId) return;
+            if (!state.firebaseInitialized || !state.storeId || !window.firebase) {
+                console.log('Firebase not available, product saved locally only');
+                return;
+            }
             
             try {
                 const { db, doc, setDoc, serverTimestamp } = window.firebase;
-                const productRef = doc(db, 'stores', state.storeId, 'products', product.id.toString());
-                await setDoc(productRef, {
-                    ...product,
+                
+                const productData = {
+                    id: product.id,
+                    name: product.name || '',
+                    price: product.price || 0,
+                    stock: product.stock || 0,
+                    category: product.category || 'uncategorized',
+                    images: product.images || [],
+                    sizes: product.sizes || [],
                     active: true,
                     updatedAt: serverTimestamp(),
                     storeId: state.storeId
-                }, { merge: true });
+                };
+                
+                const productRef = doc(db, 'stores', state.storeId, 'products', product.id.toString());
+                await setDoc(productRef, productData, { merge: true });
                 
                 console.log('Product synced to Firebase:', product.name);
+                
             } catch (error) {
-                console.error('Error syncing product:', error);
+                console.error('Error syncing product to Firebase:', error);
+                showMessage('Product saved locally but cloud sync failed', 'warning');
             }
         }
 
         async function deleteProductFromFirebase(productId) {
-            if (!state.firebaseInitialized || !state.storeId) return;
+            if (!state.firebaseInitialized || !state.storeId || !window.firebase) return;
             
             try {
                 const { db, doc, updateDoc } = window.firebase;
