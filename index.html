@@ -7,26 +7,12 @@
     <meta name="theme-color" content="#667eea">
     <title>GOAT KIDS - Children's Clothing Store</title>
     
-    <!-- Firebase SDK -->
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js'
-        import { 
-            getFirestore, 
-            collection, 
-            doc, 
-            setDoc, 
-            getDoc, 
-            updateDoc, 
-            deleteDoc, 
-            onSnapshot,
-            query,
-            where,
-            serverTimestamp,
-            enableIndexedDbPersistence,
-            getDocs
-        } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js'
-
-        // Firebase Configuration
+    <!-- Load Firebase using CDN script tags instead of module -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    
+    <script>
+        // Firebase Configuration - Using compat version for better compatibility
         const firebaseConfig = {
             apiKey: "AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU",
             authDomain: "goat-kids-store.firebaseapp.com",
@@ -37,53 +23,46 @@
             measurementId: "G-V41CZRMTN5"
         };
 
+        // Initialize Firebase with error handling
+        let firebaseInitialized = false;
+        
         try {
             // Initialize Firebase
-            const app = initializeApp(firebaseConfig);
-            const db = getFirestore(app);
-
+            firebase.initializeApp(firebaseConfig);
+            window.db = firebase.firestore();
+            
             // Enable offline persistence
-            enableIndexedDbPersistence(db).catch((err) => {
-                if (err.code == 'failed-precondition') {
-                    console.warn('Persistence failed: Multiple tabs open');
-                } else if (err.code == 'unimplemented') {
-                    console.warn('Persistence not supported');
-                }
-            });
-
-            // Make Firebase available globally
-            window.firebase = {
-                db,
-                collection,
-                doc,
-                setDoc,
-                getDoc,
-                updateDoc,
-                deleteDoc,
-                onSnapshot,
-                query,
-                where,
-                serverTimestamp,
-                getDocs,
-                storeId: null,
-                unsubscribe: null,
-                isInitialized: true
-            };
-
+            window.db.enablePersistence()
+                .then(() => console.log('Firebase persistence enabled'))
+                .catch((err) => {
+                    if (err.code == 'failed-precondition') {
+                        console.warn('Persistence failed: Multiple tabs open');
+                    } else if (err.code == 'unimplemented') {
+                        console.warn('Persistence not supported');
+                    }
+                });
+            
+            firebaseInitialized = true;
             console.log('Firebase initialized successfully');
             
-            // Dispatch event to notify that Firebase is ready
-            window.dispatchEvent(new CustomEvent('firebase-ready'));
+            // Make Firebase available globally
+            window.firebase = {
+                db: window.db,
+                firestore: firebase.firestore,
+                initialized: true
+            };
             
         } catch (error) {
             console.error('Firebase initialization failed:', error);
-            window.firebase = {
-                isInitialized: false,
-                error: error.message
-            };
-            // Dispatch event even on failure to continue with offline mode
-            window.dispatchEvent(new CustomEvent('firebase-ready', { detail: { error: true } }));
+            window.firebase = { initialized: false };
         }
+        
+        // Dispatch event when Firebase is ready (or failed)
+        setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('firebase-ready', { 
+                detail: { success: firebaseInitialized } 
+            }));
+        }, 100);
     </script>
     
     <!-- Styles -->
@@ -2651,16 +2630,16 @@
         // INITIALIZATION
         // ============================================
         document.addEventListener('DOMContentLoaded', async () => {
-            await initializeApp();
-        });
-
-        async function initializeApp() {
+            // Show initializing status
             showSyncStatus('Initializing...', 'info');
             
+            // Setup mobile menu
             setupMobileMenu();
+            
+            // Check admin status
             checkAdminStatus();
             
-            // Initialize store ID first (always works)
+            // Initialize store ID (always works)
             await initializeStore();
             
             // Load local products (always works)
@@ -2669,54 +2648,29 @@
             // Load cart (always works)
             loadCart();
             
-            // Try to initialize Firebase, but don't wait forever
-            const firebaseReady = await initializeFirebaseWithTimeout(5000);
+            // Setup image upload drag drop
+            setupImageUploadDragDrop();
             
-            if (firebaseReady) {
-                await setupFirebaseListener();
+            // Show store tab
+            showTab('store');
+            
+            // Select payment method
+            selectPaymentMethod('payway');
+            
+            // Check Firebase status
+            checkFirebaseStatus();
+        });
+
+        function checkFirebaseStatus() {
+            // Check if Firebase is available
+            if (window.firebase && window.firebase.initialized && window.db) {
+                state.firebaseInitialized = true;
                 showSyncStatus('Connected to Firebase', 'success');
+                setupFirebaseListener();
             } else {
+                state.firebaseInitialized = false;
                 showSyncStatus('Working offline - no cloud connection', 'offline');
             }
-            
-            // Setup UI
-            showTab('store');
-            selectPaymentMethod('payway');
-            setupImageUploadDragDrop();
-        }
-
-        async function initializeFirebaseWithTimeout(timeoutMs) {
-            return new Promise((resolve) => {
-                // Check if Firebase is already available
-                if (window.firebase && window.firebase.isInitialized) {
-                    state.firebaseInitialized = true;
-                    resolve(true);
-                    return;
-                }
-                
-                // Listen for Firebase ready event
-                const handleFirebaseReady = (event) => {
-                    clearTimeout(timeoutId);
-                    window.removeEventListener('firebase-ready', handleFirebaseReady);
-                    
-                    if (event.detail && event.detail.error) {
-                        state.firebaseInitialized = false;
-                        resolve(false);
-                    } else {
-                        state.firebaseInitialized = true;
-                        resolve(true);
-                    }
-                };
-                
-                window.addEventListener('firebase-ready', handleFirebaseReady);
-                
-                // Set timeout
-                const timeoutId = setTimeout(() => {
-                    window.removeEventListener('firebase-ready', handleFirebaseReady);
-                    state.firebaseInitialized = false;
-                    resolve(false);
-                }, timeoutMs);
-            });
         }
 
         async function initializeStore() {
@@ -2754,23 +2708,20 @@
         }
 
         async function setupFirebaseListener() {
-            if (!state.firebaseInitialized || !state.storeId || !window.firebase || !window.firebase.db) {
-                console.warn('Cannot setup listener - Firebase not ready');
+            if (!state.firebaseInitialized || !state.storeId || !window.db) {
                 return;
             }
             
             try {
-                const { db, collection, query, where, onSnapshot } = window.firebase;
+                const productsRef = window.db.collection('stores').doc(state.storeId).collection('products');
+                const query = productsRef.where('active', '==', true);
                 
-                const productsRef = collection(db, 'stores', state.storeId, 'products');
-                const productsQuery = query(productsRef, where('active', '==', true));
-                
-                if (window.firebase.unsubscribe) {
-                    window.firebase.unsubscribe();
+                // Unsubscribe previous listener
+                if (window.firebaseUnsubscribe) {
+                    window.firebaseUnsubscribe();
                 }
                 
-                window.firebase.unsubscribe = onSnapshot(
-                    productsQuery,
+                window.firebaseUnsubscribe = query.onSnapshot(
                     (snapshot) => {
                         const products = [];
                         snapshot.forEach(doc => {
@@ -2786,11 +2737,10 @@
                             });
                         });
                         
-                        // Merge with local products to preserve any unsynced changes
+                        // Merge with local products
                         const localProducts = JSON.parse(localStorage.getItem('goatProducts') || '[]');
                         const mergedProducts = [...products];
                         
-                        // Add local products that don't exist in Firebase
                         localProducts.forEach(localProduct => {
                             if (!products.some(p => p.id === localProduct.id)) {
                                 mergedProducts.push(localProduct);
@@ -2806,8 +2756,6 @@
                         if (document.getElementById('adminTab').classList.contains('active')) {
                             refreshInventory();
                         }
-                        
-                        showSyncStatus('Products updated from cloud', 'success');
                     },
                     (error) => {
                         console.error('Firestore listener error:', error);
@@ -2817,7 +2765,6 @@
                 
             } catch (error) {
                 console.error('Error setting up Firebase listener:', error);
-                showSyncStatus('Failed to connect to cloud', 'offline');
             }
         }
 
@@ -2825,20 +2772,22 @@
             const mobileMenuBtn = document.getElementById('mobileMenuBtn');
             const mobileNav = document.getElementById('mobileNav');
             
-            mobileMenuBtn.addEventListener('click', () => {
-                mobileNav.classList.toggle('active');
-                mobileMenuBtn.innerHTML = mobileNav.classList.contains('active') ? 
-                    '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
-            });
-            
-            document.addEventListener('click', (event) => {
-                if (mobileNav.classList.contains('active') && 
-                    !mobileNav.contains(event.target) && 
-                    !mobileMenuBtn.contains(event.target)) {
-                    mobileNav.classList.remove('active');
-                    mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
-                }
-            });
+            if (mobileMenuBtn && mobileNav) {
+                mobileMenuBtn.addEventListener('click', () => {
+                    mobileNav.classList.toggle('active');
+                    mobileMenuBtn.innerHTML = mobileNav.classList.contains('active') ? 
+                        '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
+                });
+                
+                document.addEventListener('click', (event) => {
+                    if (mobileNav.classList.contains('active') && 
+                        !mobileNav.contains(event.target) && 
+                        !mobileMenuBtn.contains(event.target)) {
+                        mobileNav.classList.remove('active');
+                        mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
+                    }
+                });
+            }
         }
 
         function checkAdminStatus() {
@@ -2847,9 +2796,9 @@
             const adminNavLinkMobile = document.getElementById('adminNavLinkMobile');
             
             if (state.isAdmin) {
-                adminBadge?.classList.remove('hidden');
-                adminNavLink?.classList.remove('hidden');
-                adminNavLinkMobile?.classList.remove('hidden');
+                if (adminBadge) adminBadge.classList.remove('hidden');
+                if (adminNavLink) adminNavLink.classList.remove('hidden');
+                if (adminNavLinkMobile) adminNavLinkMobile.classList.remove('hidden');
             }
         }
 
@@ -3652,7 +3601,7 @@
             saveProducts();
             
             // Sync to Firebase if available
-            if (state.firebaseInitialized && state.storeId && window.firebase && window.firebase.db) {
+            if (state.firebaseInitialized && window.db) {
                 await syncProductToFirebase(productData);
             } else {
                 showMessage('Product saved locally. Click Sync to save to cloud.', 'info');
@@ -3736,7 +3685,7 @@
             saveProducts();
             
             // Sync deletion to Firebase if available
-            if (state.firebaseInitialized && state.storeId && window.firebase && window.firebase.db) {
+            if (state.firebaseInitialized && window.db) {
                 await deleteProductFromFirebase(productId);
             }
             
@@ -3754,7 +3703,7 @@
         // ============================================
         async function syncToFirebase() {
             // Check if Firebase is initialized
-            if (!state.firebaseInitialized || !window.firebase || !window.firebase.db) {
+            if (!state.firebaseInitialized || !window.db) {
                 showSyncStatus('Firebase not available. Working offline.', 'offline');
                 return;
             }
@@ -3779,8 +3728,6 @@
             showSyncStatus('Syncing to Firebase...', 'info');
             
             try {
-                const { db, doc, setDoc, serverTimestamp } = window.firebase;
-                
                 let successCount = 0;
                 let errorCount = 0;
                 
@@ -3796,12 +3743,12 @@
                             images: product.images || [],
                             sizes: product.sizes || [],
                             active: true,
-                            updatedAt: serverTimestamp(),
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                             storeId: state.storeId
                         };
                         
-                        const productRef = doc(db, 'stores', state.storeId, 'products', product.id.toString());
-                        await setDoc(productRef, productData, { merge: true });
+                        const productRef = window.db.collection('stores').doc(state.storeId).collection('products').doc(product.id.toString());
+                        await productRef.set(productData, { merge: true });
                         successCount++;
                         
                     } catch (productError) {
@@ -3827,14 +3774,12 @@
         }
 
         async function syncProductToFirebase(product) {
-            if (!state.firebaseInitialized || !state.storeId || !window.firebase || !window.firebase.db) {
+            if (!state.firebaseInitialized || !state.storeId || !window.db) {
                 console.log('Firebase not available, product saved locally only');
                 return;
             }
             
             try {
-                const { db, doc, setDoc, serverTimestamp } = window.firebase;
-                
                 const productData = {
                     id: product.id,
                     name: product.name || '',
@@ -3844,12 +3789,12 @@
                     images: product.images || [],
                     sizes: product.sizes || [],
                     active: true,
-                    updatedAt: serverTimestamp(),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     storeId: state.storeId
                 };
                 
-                const productRef = doc(db, 'stores', state.storeId, 'products', product.id.toString());
-                await setDoc(productRef, productData, { merge: true });
+                const productRef = window.db.collection('stores').doc(state.storeId).collection('products').doc(product.id.toString());
+                await productRef.set(productData, { merge: true });
                 
                 console.log('Product synced to Firebase:', product.name);
                 
@@ -3860,14 +3805,13 @@
         }
 
         async function deleteProductFromFirebase(productId) {
-            if (!state.firebaseInitialized || !state.storeId || !window.firebase || !window.firebase.db) return;
+            if (!state.firebaseInitialized || !state.storeId || !window.db) return;
             
             try {
-                const { db, doc, updateDoc } = window.firebase;
-                const productRef = doc(db, 'stores', state.storeId, 'products', productId.toString());
-                await updateDoc(productRef, {
+                const productRef = window.db.collection('stores').doc(state.storeId).collection('products').doc(productId.toString());
+                await productRef.update({
                     active: false,
-                    updatedAt: window.firebase.serverTimestamp()
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 
                 console.log('Product marked as inactive in Firebase:', productId);
