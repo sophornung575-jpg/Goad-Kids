@@ -37,39 +37,53 @@
             measurementId: "G-V41CZRMTN5"
         };
 
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        try {
+            // Initialize Firebase
+            const app = initializeApp(firebaseConfig);
+            const db = getFirestore(app);
 
-        // Enable offline persistence
-        enableIndexedDbPersistence(db).catch((err) => {
-            if (err.code == 'failed-precondition') {
-                console.warn('Persistence failed: Multiple tabs open');
-            } else if (err.code == 'unimplemented') {
-                console.warn('Persistence not supported');
-            }
-        });
+            // Enable offline persistence
+            enableIndexedDbPersistence(db).catch((err) => {
+                if (err.code == 'failed-precondition') {
+                    console.warn('Persistence failed: Multiple tabs open');
+                } else if (err.code == 'unimplemented') {
+                    console.warn('Persistence not supported');
+                }
+            });
 
-        // Make Firebase available globally
-        window.firebase = {
-            db,
-            collection,
-            doc,
-            setDoc,
-            getDoc,
-            updateDoc,
-            deleteDoc,
-            onSnapshot,
-            query,
-            where,
-            serverTimestamp,
-            getDocs,
-            storeId: null,
-            unsubscribe: null,
-            isInitialized: true
-        };
+            // Make Firebase available globally
+            window.firebase = {
+                db,
+                collection,
+                doc,
+                setDoc,
+                getDoc,
+                updateDoc,
+                deleteDoc,
+                onSnapshot,
+                query,
+                where,
+                serverTimestamp,
+                getDocs,
+                storeId: null,
+                unsubscribe: null,
+                isInitialized: true
+            };
 
-        console.log('Firebase initialized successfully');
+            console.log('Firebase initialized successfully');
+            
+            // Dispatch event to notify that Firebase is ready
+            window.dispatchEvent(new CustomEvent('firebase-ready'));
+            
+        } catch (error) {
+            console.error('Firebase initialization failed:', error);
+            window.firebase = {
+                isInitialized: false,
+                error: error.message
+            };
+            // Dispatch event even on failure to continue with offline mode
+            window.dispatchEvent(new CustomEvent('firebase-ready', { detail: { error: true } }));
+        }
     </script>
     
     <!-- Styles -->
@@ -2030,7 +2044,7 @@
     <div class="sync-status" id="syncStatus">
         <div class="flex items-center gap-2">
             <i class="fas fa-sync-alt fa-spin" id="syncIcon"></i>
-            <span id="syncText">Connecting to Firebase...</span>
+            <span id="syncText">Initializing...</span>
         </div>
         <button onclick="hideSyncStatus()" class="btn btn-small btn-outline" style="color: white; border-color: white;">
             <i class="fas fa-times"></i>
@@ -2646,49 +2660,62 @@
             setupMobileMenu();
             checkAdminStatus();
             
-            // Wait for Firebase to be ready
-            const firebaseReady = await waitForFirebase();
-            if (!firebaseReady) {
-                showSyncStatus('Firebase connection failed - working offline', 'offline');
-            }
-            
+            // Initialize store ID first (always works)
             await initializeStore();
             
+            // Load local products (always works)
             loadLocalProducts();
+            
+            // Load cart (always works)
             loadCart();
+            
+            // Try to initialize Firebase, but don't wait forever
+            const firebaseReady = await initializeFirebaseWithTimeout(5000);
             
             if (firebaseReady) {
                 await setupFirebaseListener();
+                showSyncStatus('Connected to Firebase', 'success');
+            } else {
+                showSyncStatus('Working offline - no cloud connection', 'offline');
             }
             
+            // Setup UI
             showTab('store');
             selectPaymentMethod('payway');
             setupImageUploadDragDrop();
-            
-            if (firebaseReady) {
-                showSyncStatus('Connected to Firebase', 'success');
-            }
         }
 
-        async function waitForFirebase() {
+        async function initializeFirebaseWithTimeout(timeoutMs) {
             return new Promise((resolve) => {
-                let attempts = 0;
-                const maxAttempts = 20;
+                // Check if Firebase is already available
+                if (window.firebase && window.firebase.isInitialized) {
+                    state.firebaseInitialized = true;
+                    resolve(true);
+                    return;
+                }
                 
-                const check = () => {
-                    if (window.firebase && window.firebase.db && window.firebase.isInitialized) {
-                        state.firebaseInitialized = true;
-                        console.log('Firebase is ready');
-                        resolve(true);
-                    } else if (attempts < maxAttempts) {
-                        attempts++;
-                        setTimeout(check, 200);
-                    } else {
-                        console.warn('Firebase timeout - working offline');
+                // Listen for Firebase ready event
+                const handleFirebaseReady = (event) => {
+                    clearTimeout(timeoutId);
+                    window.removeEventListener('firebase-ready', handleFirebaseReady);
+                    
+                    if (event.detail && event.detail.error) {
+                        state.firebaseInitialized = false;
                         resolve(false);
+                    } else {
+                        state.firebaseInitialized = true;
+                        resolve(true);
                     }
                 };
-                check();
+                
+                window.addEventListener('firebase-ready', handleFirebaseReady);
+                
+                // Set timeout
+                const timeoutId = setTimeout(() => {
+                    window.removeEventListener('firebase-ready', handleFirebaseReady);
+                    state.firebaseInitialized = false;
+                    resolve(false);
+                }, timeoutMs);
             });
         }
 
@@ -2727,7 +2754,7 @@
         }
 
         async function setupFirebaseListener() {
-            if (!state.firebaseInitialized || !state.storeId) {
+            if (!state.firebaseInitialized || !state.storeId || !window.firebase || !window.firebase.db) {
                 console.warn('Cannot setup listener - Firebase not ready');
                 return;
             }
@@ -3625,7 +3652,7 @@
             saveProducts();
             
             // Sync to Firebase if available
-            if (state.firebaseInitialized && state.storeId) {
+            if (state.firebaseInitialized && state.storeId && window.firebase && window.firebase.db) {
                 await syncProductToFirebase(productData);
             } else {
                 showMessage('Product saved locally. Click Sync to save to cloud.', 'info');
@@ -3709,7 +3736,7 @@
             saveProducts();
             
             // Sync deletion to Firebase if available
-            if (state.firebaseInitialized && state.storeId) {
+            if (state.firebaseInitialized && state.storeId && window.firebase && window.firebase.db) {
                 await deleteProductFromFirebase(productId);
             }
             
@@ -3728,7 +3755,7 @@
         async function syncToFirebase() {
             // Check if Firebase is initialized
             if (!state.firebaseInitialized || !window.firebase || !window.firebase.db) {
-                showSyncStatus('Firebase not initialized. Please refresh the page.', 'error');
+                showSyncStatus('Firebase not available. Working offline.', 'offline');
                 return;
             }
             
@@ -3800,7 +3827,7 @@
         }
 
         async function syncProductToFirebase(product) {
-            if (!state.firebaseInitialized || !state.storeId || !window.firebase) {
+            if (!state.firebaseInitialized || !state.storeId || !window.firebase || !window.firebase.db) {
                 console.log('Firebase not available, product saved locally only');
                 return;
             }
@@ -3833,7 +3860,7 @@
         }
 
         async function deleteProductFromFirebase(productId) {
-            if (!state.firebaseInitialized || !state.storeId || !window.firebase) return;
+            if (!state.firebaseInitialized || !state.storeId || !window.firebase || !window.firebase.db) return;
             
             try {
                 const { db, doc, updateDoc } = window.firebase;
