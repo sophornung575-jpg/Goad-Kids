@@ -50,6 +50,7 @@
         
     } catch (error) {
         console.error('Firebase failed:', error);
+        window.firebaseInitialized = false;
         window.dispatchEvent(new CustomEvent('firebase-ready', { 
             detail: { success: false } 
         }));
@@ -2597,7 +2598,7 @@
                 search: ''
             },
             storeId: null,
-            firebaseInitialized: false,
+            firebaseInitialized: window.firebaseInitialized || false,
             editingProductId: null,
             syncInProgress: false
         };
@@ -2649,12 +2650,12 @@
             selectPaymentMethod('payway');
             
             // Check Firebase status
-            checkFirebaseStatus();
+            setTimeout(checkFirebaseStatus, 1000);
         });
 
         function checkFirebaseStatus() {
             // Check if Firebase is available
-            if (window.firebase && window.firebase.initialized && window.db) {
+            if (window.firebaseInitialized && window.db) {
                 state.firebaseInitialized = true;
                 showSyncStatus('Connected to Firebase', 'success');
                 setupFirebaseListener();
@@ -3460,8 +3461,6 @@
         // Update cart count
         function updateCartCount() {
             const count = state.cart.reduce((total, item) => total + item.quantity, 0);
-            document.getElementById('cartCountNav').textContent = count;
-            document.getElementById('cartCountMobile').textContent = count;
             document.getElementById('floatingCartCount').textContent = count;
         }
 
@@ -3734,7 +3733,7 @@
                             images: product.images || [],
                             sizes: product.sizes || [],
                             active: true,
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            updatedAt: new Date().toISOString(), // Use ISO string instead of serverTimestamp
                             storeId: state.storeId
                         };
                         
@@ -3780,7 +3779,7 @@
                     images: product.images || [],
                     sizes: product.sizes || [],
                     active: true,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: new Date().toISOString(), // Use ISO string instead of serverTimestamp
                     storeId: state.storeId
                 };
                 
@@ -3802,7 +3801,7 @@
                 const productRef = window.db.collection('stores').doc(state.storeId).collection('products').doc(productId.toString());
                 await productRef.update({
                     active: false,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    updatedAt: new Date().toISOString() // Use ISO string instead of serverTimestamp
                 });
                 
                 console.log('Product marked as inactive in Firebase:', productId);
