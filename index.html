@@ -11,59 +11,50 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     
-    <script>
-        // Firebase Configuration - Using compat version for better compatibility
-        const firebaseConfig = {
-            apiKey: "AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU",
-            authDomain: "goat-kids-store.firebaseapp.com",
-            projectId: "goat-kids-store",
-            storageBucket: "goat-kids-store.firebasestorage.app",
-            messagingSenderId: "372035223463",
-            appId: "1:372035223463:web:a9948932607e81da2a4082",
-            measurementId: "G-V41CZRMTN5"
-        };
+<script>
+    // Firebase Configuration
+    const firebaseConfig = {
+        apiKey: "AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU",
+        authDomain: "goat-kids-store.firebaseapp.com",
+        projectId: "goat-kids-store",
+        storageBucket: "goat-kids-store.firebasestorage.app",
+        messagingSenderId: "372035223463",
+        appId: "1:372035223463:web:a9948932607e81da2a4082"
+    };
 
-        // Initialize Firebase with error handling
-        let firebaseInitialized = false;
+    // Make Firebase available globally
+    window.firebaseInitialized = false;
+    
+    try {
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        window.db = firebase.firestore();
         
-        try {
-            // Initialize Firebase
-            firebase.initializeApp(firebaseConfig);
-            window.db = firebase.firestore();
-            
-            // Enable offline persistence
-            window.db.enablePersistence()
-                .then(() => console.log('Firebase persistence enabled'))
-                .catch((err) => {
-                    if (err.code == 'failed-precondition') {
-                        console.warn('Persistence failed: Multiple tabs open');
-                    } else if (err.code == 'unimplemented') {
-                        console.warn('Persistence not supported');
-                    }
-                });
-            
-            firebaseInitialized = true;
-            console.log('Firebase initialized successfully');
-            
-            // Make Firebase available globally
-            window.firebase = {
-                db: window.db,
-                firestore: firebase.firestore,
-                initialized: true
-            };
-            
-        } catch (error) {
-            console.error('Firebase initialization failed:', error);
-            window.firebase = { initialized: false };
-        }
+        // Enable offline persistence (optional - remove if causing issues)
+        window.db.enablePersistence({experimentalForceOwningTab: true})
+            .catch((err) => {
+                if (err.code == 'failed-precondition') {
+                    console.log('Multiple tabs open - persistence disabled');
+                } else if (err.code == 'unimplemented') {
+                    console.log('Browser doesn\'t support persistence');
+                }
+            });
         
-        // Dispatch event when Firebase is ready (or failed)
-        setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('firebase-ready', { 
-                detail: { success: firebaseInitialized } 
-            }));
-        }, 100);
-    </script>
+        window.firebaseInitialized = true;
+        console.log('Firebase initialized successfully');
+        
+        // Dispatch ready event
+        window.dispatchEvent(new CustomEvent('firebase-ready', { 
+            detail: { success: true } 
+        }));
+        
+    } catch (error) {
+        console.error('Firebase failed:', error);
+        window.dispatchEvent(new CustomEvent('firebase-ready', { 
+            detail: { success: false } 
+        }));
+    }
+</script>
     
     <!-- Styles -->
     <style>
