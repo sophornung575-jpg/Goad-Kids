@@ -3,16 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
     <title>GOAT KIDS - Children's Clothing Store</title>
     
-    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     
     <script>
-        // Initialize Firebase
+        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU",
             authDomain: "goat-kids-store.firebaseapp.com",
@@ -22,32 +20,20 @@
             appId: "1:372035223463:web:a9948932607e81da2a4082"
         };
 
-        let db = null;
-        let firebaseAvailable = false;
-
-        try {
-            firebase.initializeApp(firebaseConfig);
-            db = firebase.firestore();
-            
-            // Test connection
-            db.collection('_test_').doc('_connection_').set({
-                timestamp: new Date().toISOString()
-            }).then(() => {
-                console.log('✅ Firebase connected successfully');
-                firebaseAvailable = true;
-                // Delete test document
-                db.collection('_test_').doc('_connection_').delete();
-            }).catch((error) => {
-                console.warn('⚠️ Firebase connection failed:', error.message);
-                console.log('📱 Working in offline mode - data stored locally');
-                firebaseAvailable = false;
-            });
-            
-        } catch (error) {
-            console.warn('⚠️ Firebase initialization failed:', error.message);
-            console.log('📱 Working in offline mode - data stored locally');
-            firebaseAvailable = false;
-        }
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        
+        // Enable offline persistence
+        db.enablePersistence({ synchronizeTabs: true }).catch(function(err) {
+            if (err.code === 'failed-precondition') {
+                console.log('Multiple tabs open, persistence can only be enabled in one tab at a time.');
+            } else if (err.code === 'unimplemented') {
+                console.log('The current browser does not support all of the features required to enable persistence');
+            }
+        });
+        
+        console.log('🔥 Firebase initialized');
     </script>
     
     <style>
@@ -58,39 +44,29 @@
             --danger:#f56565;--info:#4299e1;--dark:#2d3748;
             --light:#f7fafc;--gray:#a0aec0;--gray-light:#e2e8f0;--gray-dark:#4a5568;
             --radius:8px;--radius-lg:12px;--radius-xl:16px;
-            --shadow:0 1px 3px 0 rgba(0,0,0,0.1);--shadow-lg:0 10px 15px -3px rgba(0,0,0,0.1);
-            --transition:all 0.3s ease;
+            --shadow:0 1px 3px rgba(0,0,0,0.1);--shadow-lg:0 10px 15px rgba(0,0,0,0.1);
         }
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--light);color:var(--dark);line-height:1.5;min-height:100vh}
         .container{max-width:1400px;margin:0 auto;padding:0 1.5rem}
         .hidden{display:none!important}
-        .flex{display:flex}
-        .items-center{align-items:center}
-        .justify-between{justify-content:space-between}
-        .gap-2{gap:0.5rem}.gap-4{gap:1rem}
-        .mt-4{margin-top:1rem}.mt-8{margin-top:2rem}
-        .mb-4{margin-bottom:1rem}.mb-8{margin-bottom:2rem}
-        .text-center{text-align:center}
-        .w-full{width:100%}
-        h1,h2,h3,h4{font-weight:600;line-height:1.2}
-        h1{font-size:2.5rem}h2{font-size:2rem}h3{font-size:1.5rem}h4{font-size:1.25rem}
+        .flex{display:flex}.items-center{align-items:center}.justify-between{justify-content:space-between}
+        .gap-2{gap:0.5rem}.gap-4{gap:1rem}.mt-4{margin-top:1rem}.mt-8{margin-top:2rem}.mb-4{margin-bottom:1rem}
+        .text-center{text-align:center}.w-full{width:100%}
+        h1,h2,h3{font-weight:600;line-height:1.2}
+        h1{font-size:2.5rem}h2{font-size:2rem}h3{font-size:1.5rem}
         
-        .btn{display:inline-flex;align-items:center;justify-content:center;gap:0.5rem;padding:0.625rem 1.25rem;border:none;border-radius:var(--radius);font-size:1rem;font-weight:500;cursor:pointer;transition:var(--transition);text-decoration:none}
-        .btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-dark);transform:translateY(-1px)}
-        .btn-secondary{background:var(--secondary);color:#fff}
-        .btn-outline{background:transparent;border:2px solid var(--primary);color:var(--primary)}.btn-outline:hover{background:var(--primary);color:#fff}
-        .btn-small{padding:0.375rem 0.75rem;font-size:0.875rem}
-        .btn-large{padding:0.875rem 1.75rem;font-size:1.125rem}
+        .btn{display:inline-flex;align-items:center;justify-content:center;gap:0.5rem;padding:0.6rem 1.2rem;border:none;border-radius:var(--radius);font-size:1rem;font-weight:500;cursor:pointer;transition:all 0.3s;text-decoration:none}
+        .btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-dark)}
+        .btn-outline{background:transparent;border:2px solid var(--primary);color:var(--primary)}
+        .btn-outline:hover{background:var(--primary);color:#fff}
+        .btn-small{padding:0.35rem 0.7rem;font-size:0.85rem}
+        .btn-large{padding:0.85rem 1.7rem;font-size:1.1rem}
         .btn-success{background:var(--success);color:#fff}
         .btn-danger{background:var(--danger);color:#fff}
         .btn-info{background:var(--info);color:#fff}
         .btn:disabled{opacity:0.5;cursor:not-allowed}
         
-        .payway-btn,.messenger-btn{display:flex;align-items:center;justify-content:center;gap:0.5rem;width:100%;padding:1rem;border:none;border-radius:var(--radius);font-size:1rem;font-weight:600;cursor:pointer;margin-top:1.5rem;text-decoration:none;color:#fff}
-        .payway-btn{background:linear-gradient(135deg,#006AFF,#00C6FF)}
-        .messenger-btn{background:linear-gradient(135deg,#0084FF,#006AFF)}
-        
-        .status-bar{position:fixed;top:0;left:0;right:0;z-index:1000;padding:0.5rem 1rem;display:flex;align-items:center;justify-content:center;gap:0.5rem;font-size:0.85rem;font-weight:500;transform:translateY(-100%);transition:transform 0.3s}
+        .status-bar{position:fixed;top:0;left:0;right:0;z-index:1000;padding:0.6rem 1rem;display:flex;align-items:center;justify-content:center;gap:0.5rem;font-size:0.85rem;transform:translateY(-100%);transition:transform 0.3s}
         .status-bar.show{transform:translateY(0)}
         .status-bar.online{background:var(--success);color:#fff}
         .status-bar.offline{background:var(--warning);color:var(--dark)}
@@ -99,19 +75,15 @@
         header{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.05);position:sticky;top:0;z-index:100}
         .header-container{max-width:1400px;margin:0 auto;padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between}
         .logo{display:flex;align-items:center;gap:0.5rem;font-size:1.5rem;font-weight:700;color:var(--primary);cursor:pointer}
-        .connection-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:0.25rem}
-        .connection-dot.online{background:var(--success)}
-        .connection-dot.offline{background:var(--warning)}
-        .admin-badge{background:var(--secondary);color:#fff;font-size:0.75rem;padding:0.125rem 0.5rem;border-radius:4px;margin-left:0.5rem}
-        .mobile-menu-btn{display:none;background:none;border:none;font-size:1.5rem;color:var(--dark);cursor:pointer}
+        .admin-badge{background:var(--secondary);color:#fff;font-size:0.7rem;padding:0.1rem 0.5rem;border-radius:4px;margin-left:0.5rem}
+        .mobile-menu-btn{display:none;background:none;border:none;font-size:1.5rem;cursor:pointer}
         .desktop-nav{display:flex;gap:1rem;align-items:center}
-        .nav-link{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 1rem;color:var(--gray-dark);text-decoration:none;border-radius:var(--radius);transition:var(--transition)}
-        .nav-link:hover{background:var(--gray-light);color:var(--dark)}
+        .nav-link{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 1rem;color:var(--gray-dark);text-decoration:none;border-radius:var(--radius)}
+        .nav-link:hover{background:var(--gray-light)}
         .nav-link.active{background:var(--primary-light);color:var(--primary-dark)}
         
-        .floating-cart{position:fixed;bottom:2rem;right:2rem;background:var(--primary);color:#fff;width:65px;height:65px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow-lg);z-index:99;border:3px solid #fff}
-        .floating-cart:hover{transform:scale(1.1)}
-        .floating-cart-count{position:absolute;top:-5px;right:-5px;background:var(--secondary);color:#fff;font-size:0.8rem;font-weight:700;min-width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+        .floating-cart{position:fixed;bottom:2rem;right:2rem;background:var(--primary);color:#fff;width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow-lg);z-index:99;border:3px solid #fff}
+        .floating-cart-count{position:absolute;top:-5px;right:-5px;background:var(--secondary);color:#fff;font-size:0.75rem;font-weight:700;min-width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
         
         .mobile-nav{display:none;flex-direction:column;background:#fff;border-top:1px solid var(--gray-light);padding:1rem}
         .mobile-nav.active{display:flex}
@@ -122,66 +94,59 @@
         
         .search-container{background:#fff;padding:1.5rem;border-radius:var(--radius-lg);margin-bottom:2rem;box-shadow:var(--shadow)}
         .search-box{position:relative;margin-bottom:1rem}
-        .search-input{width:100%;padding:0.875rem 0.875rem 0.875rem 3rem;border:2px solid var(--gray-light);border-radius:var(--radius);font-size:1rem}
+        .search-input{width:100%;padding:0.85rem 0.85rem 0.85rem 3rem;border:2px solid var(--gray-light);border-radius:var(--radius);font-size:1rem}
         .search-input:focus{outline:none;border-color:var(--primary)}
         .search-icon{position:absolute;left:1rem;top:50%;transform:translateY(-50%);color:var(--gray)}
         .filter-group{display:flex;gap:0.75rem;flex-wrap:wrap}
-        .filter-select{flex:1;min-width:150px;padding:0.75rem 0.875rem;border:2px solid var(--gray-light);border-radius:var(--radius);background:#fff;font-size:0.95rem;cursor:pointer}
+        .filter-select{flex:1;min-width:140px;padding:0.7rem;border:2px solid var(--gray-light);border-radius:var(--radius);background:#fff;font-size:0.9rem;cursor:pointer}
         
         .product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.5rem;margin-top:1.5rem}
-        .product-card{background:#fff;border-radius:var(--radius-xl);overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);transition:var(--transition);border:1px solid var(--gray-light)}
+        .product-card{background:#fff;border-radius:var(--radius-xl);overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);transition:all 0.3s;border:1px solid var(--gray-light)}
         .product-card:hover{transform:translateY(-4px);box-shadow:var(--shadow-lg)}
-        .product-image-container{position:relative;height:250px;overflow:hidden;background:#f0f0f0}
+        .product-image-container{position:relative;height:240px;overflow:hidden;background:#f0f0f0}
         .product-main-image{width:100%;height:100%;object-fit:cover}
-        .product-badge{position:absolute;top:0.75rem;right:0.75rem;padding:0.375rem 0.875rem;border-radius:2rem;font-size:0.8rem;font-weight:600;color:#fff}
+        .product-badge{position:absolute;top:0.75rem;right:0.75rem;padding:0.3rem 0.8rem;border-radius:2rem;font-size:0.75rem;font-weight:600;color:#fff}
         .badge-new{background:var(--success)}.badge-sale{background:var(--secondary)}.badge-low{background:var(--warning);color:var(--dark)}
         .product-info{padding:1.25rem}
-        .product-category{display:inline-block;background:var(--primary-light);color:var(--primary-dark);padding:0.25rem 0.75rem;border-radius:2rem;font-size:0.8rem;margin-bottom:0.5rem}
-        .product-title{font-size:1.2rem;font-weight:600;margin-bottom:0.25rem}
-        .product-price{font-size:1.5rem;font-weight:700;color:var(--primary);margin-bottom:0.5rem}
-        .product-stock{display:inline-flex;align-items:center;gap:0.25rem;padding:0.25rem 0.75rem;border-radius:2rem;font-size:0.8rem;margin-bottom:0.75rem}
+        .product-category{display:inline-block;background:var(--primary-light);color:var(--primary-dark);padding:0.2rem 0.7rem;border-radius:2rem;font-size:0.75rem;margin-bottom:0.5rem}
+        .product-title{font-size:1.15rem;font-weight:600;margin-bottom:0.25rem}
+        .product-price{font-size:1.4rem;font-weight:700;color:var(--primary);margin-bottom:0.5rem}
+        .product-stock{display:inline-flex;align-items:center;gap:0.25rem;padding:0.25rem 0.7rem;border-radius:2rem;font-size:0.8rem;margin-bottom:0.75rem}
         .in-stock{background:rgba(72,187,120,0.1);color:var(--success)}
         .low-stock{background:rgba(236,201,75,0.1);color:var(--warning)}
         .out-of-stock{background:rgba(245,101,101,0.1);color:var(--danger)}
-        
-        .size-selector{margin-bottom:1rem}
-        .size-label{display:block;margin-bottom:0.375rem;font-size:0.9rem;font-weight:600}
-        .size-options{display:flex;gap:0.375rem;flex-wrap:wrap}
-        .size-option{padding:0.375rem 0.875rem;border:2px solid var(--gray-light);border-radius:var(--radius);font-size:0.9rem;cursor:pointer;background:#fff}
-        .size-option.selected{background:var(--primary);color:#fff;border-color:var(--primary)}
         .product-actions{display:flex;gap:0.5rem;margin-top:1rem}
-        .btn-add-to-cart{flex:1;padding:0.75rem;font-size:1rem;font-weight:600}
+        .btn-add-to-cart{flex:1;padding:0.7rem;font-size:1rem;font-weight:600}
         
-        .cart-container{background:#fff;border-radius:var(--radius-lg);padding:1.5rem;box-shadow:var(--shadow);margin-bottom:1.5rem}
-        .cart-empty{text-align:center;padding:3rem 1rem}
-        .cart-empty-icon{font-size:3.5rem;color:var(--gray-light);margin-bottom:1rem}
+        .cart-container{background:#fff;border-radius:var(--radius-lg);padding:1.5rem;box-shadow:var(--shadow)}
+        .cart-empty{text-align:center;padding:3rem}
+        .cart-empty-icon{font-size:3rem;color:var(--gray-light);margin-bottom:1rem}
         .cart-item{display:grid;grid-template-columns:auto 1fr auto auto;gap:1rem;align-items:center;padding:1rem;border-bottom:1px solid var(--gray-light)}
-        .cart-item-image{width:80px;height:80px;object-fit:cover;border-radius:var(--radius)}
-        .cart-item-name{font-weight:600}
-        .cart-item-price{color:var(--primary);font-size:0.9rem}
-        .cart-item-quantity{display:flex;align-items:center;gap:0.375rem}
-        .quantity-btn{width:32px;height:32px;border:2px solid var(--gray-light);background:#fff;border-radius:50%;cursor:pointer;font-weight:600}
-        .cart-item-total{font-weight:700;min-width:80px;text-align:right}
-        .remove-item{background:none;border:none;color:var(--danger);font-size:1.25rem;cursor:pointer}
+        .cart-item-image{width:70px;height:70px;object-fit:cover;border-radius:var(--radius)}
+        .cart-item-name{font-weight:600}.cart-item-price{color:var(--primary);font-size:0.85rem}
+        .cart-item-quantity{display:flex;align-items:center;gap:0.3rem}
+        .quantity-btn{width:30px;height:30px;border:2px solid var(--gray-light);background:#fff;border-radius:50%;cursor:pointer;font-weight:600}
+        .cart-item-total{font-weight:700;min-width:70px;text-align:right}
+        .remove-item{background:none;border:none;color:var(--danger);font-size:1.2rem;cursor:pointer}
         
         .cart-summary{background:var(--light);border-radius:var(--radius);padding:1.25rem;margin-top:1.25rem}
-        .cart-total-row{display:flex;justify-content:space-between;padding:0.75rem 0;border-bottom:1px solid var(--gray-light)}
-        .cart-total-row:last-child{border-bottom:none;font-weight:700;font-size:1.25rem}
+        .cart-total-row{display:flex;justify-content:space-between;padding:0.7rem 0;border-bottom:1px solid var(--gray-light)}
+        .cart-total-row:last-child{border-bottom:none;font-weight:700;font-size:1.2rem}
         
         .payment-options{display:flex;gap:0.75rem;margin:1rem 0;flex-wrap:wrap}
-        .payment-option{flex:1;min-width:200px;padding:1rem;border:2px solid var(--gray-light);border-radius:var(--radius);cursor:pointer;display:flex;align-items:center;gap:0.75rem}
+        .payment-option{flex:1;min-width:180px;padding:1rem;border:2px solid var(--gray-light);border-radius:var(--radius);cursor:pointer;display:flex;align-items:center;gap:0.75rem}
         .payment-option.selected{border-color:var(--primary);background:rgba(102,126,234,0.05)}
-        .payment-icon{font-size:2rem;color:var(--primary)}
+        .payment-icon{font-size:1.8rem;color:var(--primary)}
         
         .form-group{margin-bottom:1rem}
-        .form-control{width:100%;padding:0.75rem 1rem;border:2px solid var(--gray-light);border-radius:var(--radius);font-size:0.95rem}
+        .form-control{width:100%;padding:0.7rem 0.9rem;border:2px solid var(--gray-light);border-radius:var(--radius);font-size:0.95rem}
         .form-control:focus{outline:none;border-color:var(--primary)}
-        textarea.form-control{resize:vertical;min-height:80px}
-        .error-message{color:var(--danger);font-size:0.8rem;margin-top:0.25rem}
+        textarea.form-control{resize:vertical;min-height:70px}
+        .error-message{color:var(--danger);font-size:0.8rem;margin-top:0.2rem}
         
         .admin-container{background:#fff;border-radius:var(--radius-lg);padding:1.5rem;box-shadow:var(--shadow)}
         .admin-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--gray-light);flex-wrap:wrap;gap:0.75rem}
-        .section-title{display:flex;align-items:center;gap:0.5rem;margin:2rem 0 1rem;padding-bottom:0.5rem;border-bottom:2px solid var(--gray-light);font-size:1.5rem}
+        .section-title{display:flex;align-items:center;gap:0.5rem;margin:2rem 0 1rem;padding-bottom:0.5rem;border-bottom:2px solid var(--gray-light);font-size:1.3rem}
         .section-title-with-actions{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem}
         
         .order-card{background:#fff;border-radius:var(--radius);padding:1.25rem;margin-bottom:0.75rem;border:2px solid var(--warning)}
@@ -189,32 +154,29 @@
         
         .store-id-section{background:var(--light);border-radius:var(--radius);padding:1.25rem;margin-bottom:1.5rem}
         .store-id-display{display:flex;justify-content:space-between;align-items:center;background:#fff;padding:1.25rem;border-radius:var(--radius);margin-bottom:0.75rem}
-        .store-id-value{font-family:monospace;font-size:1.75rem;font-weight:700;color:var(--primary)}
+        .store-id-value{font-family:monospace;font-size:1.5rem;font-weight:700;color:var(--primary)}
         
-        .inventory-table{width:100%;border-collapse:collapse;margin-top:1rem;font-size:0.95rem}
-        .inventory-table th{background:var(--primary-light);color:var(--primary-dark);padding:0.875rem;text-align:left}
-        .inventory-table td{padding:0.75rem;border-bottom:1px solid var(--gray-light)}
+        .inventory-table{width:100%;border-collapse:collapse;margin-top:1rem;font-size:0.9rem}
+        .inventory-table th{background:var(--primary-light);color:var(--primary-dark);padding:0.8rem;text-align:left}
+        .inventory-table td{padding:0.7rem;border-bottom:1px solid var(--gray-light)}
         
-        .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;opacity:0;visibility:hidden;transition:var(--transition)}
+        .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;opacity:0;visibility:hidden;transition:all 0.3s}
         .modal-overlay.active{opacity:1;visibility:visible}
-        .modal{background:#fff;border-radius:var(--radius-lg);padding:1.5rem;max-width:450px;width:90%}
+        .modal{background:#fff;border-radius:var(--radius-lg);padding:1.5rem;max-width:400px;width:90%}
         .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
         .modal-close{background:none;border:none;font-size:1.5rem;color:var(--gray);cursor:pointer}
         
-        footer{background:var(--dark);color:#fff;padding:2rem 0;margin-top:2rem}
-        .footer-container{max-width:1400px;margin:0 auto;padding:0 1.5rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:2rem}
-        .copyright{text-align:center;padding-top:1.5rem;margin-top:1.5rem;border-top:1px solid rgba(255,255,255,0.1);font-size:0.9rem}
+        .firebase-setup-note{background:#fff3cd;border:2px solid var(--warning);border-radius:var(--radius);padding:1rem;margin-bottom:1rem}
+        .firebase-setup-note code{background:rgba(0,0,0,0.1);padding:0.2rem 0.4rem;border-radius:4px;font-size:0.9rem}
         
         @media(max-width:768px){
             .header-container{padding:0.75rem 1rem}
-            h1{font-size:1.75rem}h2{font-size:1.5rem}
-            .mobile-menu-btn{display:block}.desktop-nav{display:none}
-            .filter-group{flex-direction:column}
-            .product-grid{grid-template-columns:1fr}.product-image-container{height:220px}
-            .cart-item{grid-template-columns:1fr;text-align:center}.cart-item-total{text-align:center}
-            .payment-options{flex-direction:column}.admin-header{flex-direction:column}
-            .section-title-with-actions{flex-direction:column;align-items:flex-start}
-            .floating-cart{width:55px;height:55px;bottom:1.25rem;right:1.25rem}
+            h1{font-size:1.7rem}.mobile-menu-btn{display:block}.desktop-nav{display:none}
+            .filter-group{flex-direction:column}.product-grid{grid-template-columns:1fr}
+            .product-image-container{height:200px}.cart-item{grid-template-columns:1fr;text-align:center}
+            .cart-item-total{text-align:center}.payment-options{flex-direction:column}
+            .admin-header{flex-direction:column}.section-title-with-actions{flex-direction:column;align-items:flex-start}
+            .floating-cart{width:50px;height:50px;bottom:1rem;right:1rem}
         }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -222,8 +184,7 @@
 <body>
     <!-- Status Bar -->
     <div class="status-bar" id="statusBar">
-        <span id="statusText">Loading...</span>
-        <button onclick="document.getElementById('statusBar').classList.remove('show')" style="background:none;border:none;color:inherit;cursor:pointer;margin-left:0.5rem">&times;</button>
+        <span id="statusText">Connecting...</span>
     </div>
 
     <!-- Floating Cart -->
@@ -236,24 +197,19 @@
     <header>
         <div class="header-container">
             <div class="logo" onclick="showTab('store')">
-                <span class="connection-dot offline" id="connDot"></span>
-                <span>GOAT KIDS</span>
+                <span>🐐 GOAT KIDS</span>
                 <span id="adminBadge" class="admin-badge hidden">ADMIN</span>
             </div>
             <button class="mobile-menu-btn" id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
             <nav class="desktop-nav">
                 <a href="#" class="nav-link active" onclick="showTab('store');return false"><i class="fas fa-store"></i>Store</a>
                 <a href="#" class="nav-link hidden" id="adminNavLink" onclick="showTab('admin');return false"><i class="fas fa-cog"></i>Admin</a>
-                <button class="btn btn-small btn-success" onclick="syncNow()" id="syncBtn" disabled>
+                <button class="btn btn-small btn-success" onclick="syncToFirebase()" id="syncBtn">
                     <i class="fas fa-cloud-upload-alt"></i>Sync
                 </button>
             </nav>
         </div>
-        <nav class="mobile-nav" id="mobileNav">
-            <a href="#" class="nav-link" onclick="showTab('store');return false"><i class="fas fa-store"></i>Store</a>
-            <a href="#" class="nav-link hidden" id="adminNavLinkMobile" onclick="showTab('admin');return false"><i class="fas fa-cog"></i>Admin</a>
-            <button class="btn btn-success w-full mt-4" onclick="syncNow()"><i class="fas fa-cloud-upload-alt"></i>Sync Data</button>
-        </nav>
+    </nav>
     </header>
 
     <!-- Main Content -->
@@ -265,30 +221,40 @@
                 <p>Premium Children's Clothing</p>
                 <small style="opacity:0.8">Store ID: <span id="currentStoreIdDisplay">...</span></small>
             </div>
+            
+            <!-- Firebase Setup Note (shows only if Firebase is not working) -->
+            <div class="firebase-setup-note hidden" id="firebaseNote">
+                <strong>⚠️ Firebase Connection Issue</strong>
+                <p style="margin-top:0.5rem;font-size:0.9rem">
+                    To enable cloud sync, please set your Firestore rules to:
+                    <br><code>allow read, write: if true;</code>
+                    <br>Go to: Firebase Console → Firestore Database → Rules
+                </p>
+                <button class="btn btn-small btn-outline mt-4" onclick="document.getElementById('firebaseNote').classList.add('hidden')">Dismiss</button>
+            </div>
+            
             <div class="search-container">
                 <div class="search-box">
                     <i class="fas fa-search search-icon"></i>
-                    <input type="text" id="searchInput" class="search-input" placeholder="Search products..." oninput="searchProducts()">
+                    <input type="text" id="searchInput" class="search-input" placeholder="Search products..." oninput="filterAndRender()">
                 </div>
                 <div class="filter-group">
-                    <select id="categoryFilter" class="filter-select" onchange="filterProducts()">
-                        <option value="all">All Categories</option><option value="tshirts">T-Shirts</option>
-                        <option value="Dresses">Dresses</option><option value="Baby Jeans">Baby Jeans</option>
-                        <option value="shoes">Shoes</option>
+                    <select id="categoryFilter" class="filter-select" onchange="filterAndRender()">
+                        <option value="all">All Categories</option>
+                        <option value="tshirts">T-Shirts</option>
+                        <option value="Dresses">Dresses</option>
+                        <option value="Baby Jeans">Baby Jeans</option>
                     </select>
-                    <select id="stockFilter" class="filter-select" onchange="filterProducts()">
-                        <option value="all">All Stock</option><option value="in-stock">In Stock</option>
-                        <option value="low-stock">Low Stock</option><option value="out-of-stock">Out of Stock</option>
-                    </select>
-                    <select id="priceFilter" class="filter-select" onchange="filterProducts()">
-                        <option value="all">All Prices</option><option value="0-20">Under $20</option>
-                        <option value="20-30">$20-$30</option><option value="30+">Over $30</option>
+                    <select id="stockFilter" class="filter-select" onchange="filterAndRender()">
+                        <option value="all">All Stock</option>
+                        <option value="in-stock">In Stock</option>
+                        <option value="out-of-stock">Out of Stock</option>
                     </select>
                 </div>
             </div>
             <div class="product-grid" id="productGrid"></div>
             <div class="text-center mt-8">
-                <button onclick="openAdminLoginModal()" class="btn btn-outline btn-large"><i class="fas fa-user-shield"></i>Admin Access</button>
+                <button onclick="openAdminModal()" class="btn btn-outline btn-large"><i class="fas fa-user-shield"></i>Admin Access</button>
             </div>
         </div>
 
@@ -299,10 +265,10 @@
                 <div id="cartItems">
                     <div class="cart-empty" id="emptyCart">
                         <div class="cart-empty-icon"><i class="fas fa-shopping-cart"></i></div>
-                        <h3>Your cart is empty</h3>
-                        <button class="btn btn-primary btn-large mt-8" onclick="showTab('store')">Browse Store</button>
+                        <h3>Cart is empty</h3>
+                        <button class="btn btn-primary btn-large mt-4" onclick="showTab('store')">Browse Store</button>
                     </div>
-                    <div class="cart-items-list hidden" id="cartItemsList"></div>
+                    <div class="hidden" id="cartItemsList"></div>
                 </div>
                 <div class="cart-summary hidden" id="cartSummary">
                     <div class="cart-totals">
@@ -310,7 +276,7 @@
                         <div class="cart-total-row"><span>Shipping</span><span>$2.00</span></div>
                         <div class="cart-total-row"><span>Total</span><span id="cartTotal">$0.00</span></div>
                     </div>
-                    <h3 style="margin-top:1rem"><i class="fas fa-credit-card"></i> Payment Method</h3>
+                    <h3 style="margin-top:1rem"><i class="fas fa-credit-card"></i> Payment</h3>
                     <div class="payment-options">
                         <div class="payment-option selected" id="payOption" onclick="selectPayment('payway')">
                             <div class="payment-icon"><i class="fas fa-university"></i></div>
@@ -321,15 +287,15 @@
                             <div><strong>Cash on Delivery</strong><br><small style="color:var(--gray)">Pay on receipt</small></div>
                         </div>
                     </div>
-                    <a href="https://link.payway.com.kh/08407860s" target="_blank" class="payway-btn" onclick="return handlePayway(event)">
+                    <a href="https://link.payway.com.kh/08407860s" target="_blank" class="payway-btn" onclick="return handlePayway(event)" style="display:flex;align-items:center;justify-content:center;gap:0.5rem;width:100%;padding:1rem;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;margin-top:1rem;text-decoration:none;color:#fff;background:linear-gradient(135deg,#006AFF,#00C6FF)">
                         <i class="fas fa-lock"></i> Pay with ABA ($<span id="paywayTotal">0.00</span>)
                     </a>
-                    <h3 style="margin-top:1.5rem"><i class="fas fa-user"></i> Delivery Information</h3>
-                    <div class="form-group"><input type="text" id="customerName" class="form-control" placeholder="Full Name *"><span class="error-message hidden" id="nameError">Required</span></div>
-                    <div class="form-group"><input type="tel" id="customerPhone" class="form-control" placeholder="Phone Number *"><span class="error-message hidden" id="phoneError">Required (e.g., 012345678)</span></div>
-                    <div class="form-group"><textarea id="customerAddress" class="form-control" rows="2" placeholder="Delivery Address *"></textarea><span class="error-message hidden" id="addressError">Required</span></div>
-                    <div class="form-group"><textarea id="customerNotes" class="form-control" rows="2" placeholder="Order Notes (optional)"></textarea></div>
-                    <button class="messenger-btn" onclick="placeOrder()">
+                    <h3 style="margin-top:1.5rem"><i class="fas fa-user"></i> Delivery Info</h3>
+                    <div class="form-group"><input type="text" id="customerName" class="form-control" placeholder="Full Name *"></div>
+                    <div class="form-group"><input type="tel" id="customerPhone" class="form-control" placeholder="Phone *"></div>
+                    <div class="form-group"><textarea id="customerAddress" class="form-control" rows="2" placeholder="Address *"></textarea></div>
+                    <div class="form-group"><textarea id="customerNotes" class="form-control" rows="2" placeholder="Notes (optional)"></textarea></div>
+                    <button class="messenger-btn" onclick="placeOrder()" style="display:flex;align-items:center;justify-content:center;gap:0.5rem;width:100%;padding:1rem;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;margin-top:1rem;text-decoration:none;color:#fff;background:linear-gradient(135deg,#0084FF,#006AFF)">
                         <i class="fab fa-facebook-messenger"></i> Place Order via Messenger
                     </button>
                     <p style="text-align:center;margin-top:0.75rem;color:var(--gray);font-size:0.85rem">
@@ -350,251 +316,290 @@
                     </div>
                 </div>
 
-                <!-- Orders Section -->
                 <div class="section-title-with-actions">
                     <div class="section-title" style="margin:0;padding:0;border:none">
-                        <i class="fas fa-clock"></i> Pending Orders (<span id="pendingOrderCount">0</span>)
+                        <i class="fas fa-clock"></i> Pending Orders (<span id="pendingCount">0</span>)
                     </div>
                     <div class="flex gap-2">
-                        <button class="btn btn-info btn-small" onclick="exportPendingCSV()"><i class="fas fa-file-csv"></i> Export CSV</button>
-                        <button class="btn btn-success btn-small" onclick="confirmAllOrders()"><i class="fas fa-check-double"></i> Confirm All</button>
+                        <button class="btn btn-info btn-small" onclick="exportPendingCSV()"><i class="fas fa-file-csv"></i> Export</button>
+                        <button class="btn btn-success btn-small" onclick="confirmAll()"><i class="fas fa-check-double"></i> Confirm All</button>
                     </div>
                 </div>
-                <div id="pendingOrdersContainer" style="margin-top:0.5rem">
-                    <p style="text-align:center;padding:2rem;color:var(--gray)">No pending orders</p>
-                </div>
+                <div id="pendingContainer" style="margin-top:0.5rem"><p style="text-align:center;padding:2rem;color:var(--gray)">No pending orders</p></div>
 
                 <div class="section-title-with-actions" style="margin-top:1.5rem">
                     <div class="section-title" style="margin:0;padding:0;border:none">
-                        <i class="fas fa-history"></i> Order History (<span id="confirmedOrderCount">0</span>)
+                        <i class="fas fa-history"></i> History (<span id="historyCount">0</span>)
                     </div>
-                    <button class="btn btn-info btn-small" onclick="exportHistoryCSV()"><i class="fas fa-file-csv"></i> Export CSV</button>
+                    <button class="btn btn-info btn-small" onclick="exportHistoryCSV()"><i class="fas fa-file-csv"></i> Export</button>
                 </div>
-                <div id="orderHistoryContainer" style="margin-top:0.5rem">
-                    <p style="text-align:center;padding:2rem;color:var(--gray)">No history</p>
-                </div>
+                <div id="historyContainer" style="margin-top:0.5rem"><p style="text-align:center;padding:2rem;color:var(--gray)">No history</p></div>
 
-                <!-- Store Info -->
                 <div class="section-title"><i class="fas fa-store"></i> Store Info</div>
                 <div class="store-id-section">
                     <div class="store-id-display">
-                        <div><small style="color:var(--gray)">Store ID:</small><div class="store-id-value" id="currentStoreId">...</div></div>
-                        <button class="btn btn-primary" onclick="copyStoreId()"><i class="fas fa-copy"></i> Copy</button>
+                        <div><small style="color:var(--gray)">Store ID:</small><div class="store-id-value" id="storeIdDisplay">...</div></div>
+                        <button class="btn btn-primary" onclick="copyStoreId()">Copy ID</button>
                     </div>
-                    <button class="btn btn-success w-full" onclick="syncNow()"><i class="fas fa-cloud-upload-alt"></i> Sync to Cloud</button>
+                    <button class="btn btn-success w-full" onclick="syncToFirebase()"><i class="fas fa-cloud-upload-alt"></i> Sync to Cloud</button>
                 </div>
 
-                <!-- Add Product -->
                 <div class="section-title"><i class="fas fa-plus-circle"></i> Add Product</div>
                 <div style="background:var(--light);padding:1.25rem;border-radius:var(--radius)">
                     <div class="form-group"><input type="text" id="productName" class="form-control" placeholder="Product Name"></div>
                     <div class="flex gap-4" style="margin-bottom:1rem">
-                        <div class="form-group" style="flex:1;margin-bottom:0"><input type="number" id="productPrice" class="form-control" placeholder="Price" step="0.01"></div>
-                        <div class="form-group" style="flex:1;margin-bottom:0"><input type="number" id="productStock" class="form-control" placeholder="Stock"></div>
+                        <div style="flex:1"><input type="number" id="productPrice" class="form-control" placeholder="Price" step="0.01"></div>
+                        <div style="flex:1"><input type="number" id="productStock" class="form-control" placeholder="Stock"></div>
                     </div>
-                    <div class="form-group"><select id="productCategory" class="form-control"><option value="">Select Category</option><option value="tshirts">T-Shirts</option><option value="Dresses">Dresses</option><option value="Baby Jeans">Baby Jeans</option></select></div>
+                    <div class="form-group"><select id="productCategory" class="form-control"><option value="">Category</option><option value="tshirts">T-Shirts</option><option value="Dresses">Dresses</option><option value="Baby Jeans">Baby Jeans</option></select></div>
                     <div class="flex gap-2">
-                        <button class="btn btn-primary" onclick="addProduct()" style="flex:1"><i class="fas fa-plus"></i> Add Product</button>
-                        <button class="btn btn-outline" onclick="loadSamples()"><i class="fas fa-download"></i> Load Samples</button>
+                        <button class="btn btn-primary" onclick="addProduct()" style="flex:1">Add Product</button>
+                        <button class="btn btn-outline" onclick="loadSamples()">Load Samples</button>
                     </div>
                 </div>
 
-                <!-- Inventory -->
                 <div class="section-title"><i class="fas fa-boxes"></i> Inventory (<span id="productCount">0</span>)</div>
                 <div style="overflow-x:auto">
                     <table class="inventory-table">
                         <thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead>
-                        <tbody id="inventoryTableBody"></tbody>
+                        <tbody id="inventoryBody"></tbody>
                     </table>
                 </div>
             </div>
         </div>
     </main>
 
-    <footer>
-        <div class="footer-container">
-            <div><h3 style="color:#fff;margin-bottom:0.5rem">GOAT KIDS</h3><p style="opacity:0.8">Premium children's clothing store</p></div>
-            <div><h3 style="color:#fff;margin-bottom:0.5rem">Contact</h3><p style="opacity:0.8"><i class="fas fa-phone"></i> +855 93 779077</p></div>
-        </div>
-        <div class="copyright">&copy; 2024 GOAT KIDS. All rights reserved.</div>
-    </footer>
-
     <!-- Admin Login Modal -->
-    <div class="modal-overlay hidden" id="adminLoginModal">
+    <div class="modal-overlay hidden" id="adminModal">
         <div class="modal">
-            <div class="modal-header">
-                <h3><i class="fas fa-user-shield"></i> Admin Login</h3>
-                <button class="modal-close" onclick="closeAdminLoginModal()">&times;</button>
-            </div>
-            <div class="form-group">
-                <input type="password" id="adminPassword" class="form-control" placeholder="Enter password">
-            </div>
-            <div class="flex gap-2">
-                <button class="btn btn-primary" onclick="adminLogin()" style="flex:1">Login</button>
-                <button class="btn btn-outline" onclick="closeAdminLoginModal()">Cancel</button>
-            </div>
+            <div class="modal-header"><h3><i class="fas fa-user-shield"></i> Admin Login</h3><button class="modal-close" onclick="closeAdminModal()">&times;</button></div>
+            <div class="form-group"><input type="password" id="adminPassword" class="form-control" placeholder="Password"></div>
+            <div class="flex gap-2"><button class="btn btn-primary" onclick="adminLogin()" style="flex:1">Login</button><button class="btn btn-outline" onclick="closeAdminModal()">Cancel</button></div>
         </div>
     </div>
 
     <script>
-    // ==================== APPLICATION STATE ====================
+    // ==================== STATE ====================
     const STATE = {
         products: [],
         cart: [],
         isAdmin: localStorage.getItem('goatAdmin') === 'true',
         paymentMethod: 'payway',
-        filter: { category: 'all', stock: 'all', price: 'all', search: '' },
+        filter: { category: 'all', stock: 'all', search: '' },
         storeId: null,
-        fbAvailable: false,
-        pending: [],
-        confirmed: []
+        firebaseOnline: false,
+        pendingOrders: [],
+        confirmedOrders: []
     };
 
-    // ==================== INITIALIZATION ====================
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('🚀 GOAT KIDS starting...');
+    // ==================== INIT ====================
+    document.addEventListener('DOMContentLoaded', async function() {
+        console.log('🚀 Starting GOAT KIDS...');
         
-        // Setup mobile menu
-        const menuBtn = document.getElementById('mobileMenuBtn');
-        const mobileNav = document.getElementById('mobileNav');
-        if (menuBtn && mobileNav) {
-            menuBtn.addEventListener('click', function() {
-                mobileNav.classList.toggle('active');
-                menuBtn.innerHTML = mobileNav.classList.contains('active') ? '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
-            });
-        }
+        // Mobile menu
+        document.getElementById('mobileMenuBtn').addEventListener('click', function() {
+            const nav = document.createElement('div');
+            // Simple mobile menu toggle
+            const existing = document.querySelector('.mobile-nav');
+            if (existing) existing.remove();
+            else {
+                const mn = document.createElement('div');
+                mn.className = 'mobile-nav active';
+                mn.innerHTML = `
+                    <a href="#" class="nav-link" onclick="showTab('store')"><i class="fas fa-store"></i>Store</a>
+                    ${STATE.isAdmin ? '<a href="#" class="nav-link" onclick="showTab(\'admin\')"><i class="fas fa-cog"></i>Admin</a>' : ''}
+                    <button class="btn btn-success w-full mt-4" onclick="syncToFirebase()">Sync</button>
+                `;
+                document.querySelector('header').appendChild(mn);
+            }
+        });
         
-        // Check admin
+        // Admin setup
         if (STATE.isAdmin) {
-            document.getElementById('adminBadge')?.classList.remove('hidden');
-            document.getElementById('adminNavLink')?.classList.remove('hidden');
-            document.getElementById('adminNavLinkMobile')?.classList.remove('hidden');
+            document.getElementById('adminBadge').classList.remove('hidden');
+            document.getElementById('adminNavLink').classList.remove('hidden');
         }
         
-        // Setup store ID
+        // Store ID
         let sid = localStorage.getItem('goatStoreId');
         if (!sid) {
-            sid = 'GOAT-' + Math.floor(1000 + Math.random() * 9000);
+            const params = new URLSearchParams(window.location.search);
+            sid = params.get('store') || ('GOAT-' + Math.floor(1000 + Math.random() * 9000));
             localStorage.setItem('goatStoreId', sid);
         }
         STATE.storeId = sid;
         document.getElementById('currentStoreIdDisplay').textContent = sid;
-        document.getElementById('currentStoreId').textContent = sid;
+        document.getElementById('storeIdDisplay').textContent = sid;
         
         // Load cart
         STATE.cart = JSON.parse(localStorage.getItem('goatCart') || '[]');
         updateCartBadge();
         
-        // Load data
-        loadAllData();
-        
         // Check Firebase
-        setTimeout(function() {
-            STATE.fbAvailable = (typeof firebaseAvailable !== 'undefined' && firebaseAvailable);
-            updateConnectionStatus();
-            document.getElementById('syncBtn').disabled = !STATE.fbAvailable;
-        }, 2000);
+        await checkFirebaseConnection();
+        
+        // Load data (from Firebase or local)
+        await loadData();
         
         // Show store
         showTab('store');
         
-        console.log('✅ GOAT KIDS ready');
+        console.log('✅ Ready. Firebase:', STATE.firebaseOnline ? 'ONLINE' : 'OFFLINE');
     });
 
-    function updateConnectionStatus() {
-        const dot = document.getElementById('connDot');
-        const bar = document.getElementById('statusBar');
-        const txt = document.getElementById('statusText');
+    async function checkFirebaseConnection() {
+        showStatus('Checking cloud connection...', 'offline');
         
-        if (STATE.fbAvailable) {
-            dot.className = 'connection-dot online';
-            bar.className = 'status-bar show online';
-            txt.textContent = '✅ Connected to cloud - data syncs across devices';
+        try {
+            // Test write to Firebase
+            const testRef = db.collection('_connection_test').doc('test');
+            await testRef.set({ timestamp: new Date().toISOString() });
+            await testRef.delete();
+            
+            STATE.firebaseOnline = true;
+            showStatus('✅ Connected to cloud - sync available', 'online');
+            document.getElementById('syncBtn').disabled = false;
+            
+            // Hide status after 3 seconds
+            setTimeout(() => {
+                document.getElementById('statusBar').classList.remove('show');
+            }, 3000);
+            
+            console.log('🔥 Firebase connection: OK');
+        } catch (error) {
+            STATE.firebaseOnline = false;
+            console.warn('⚠️ Firebase connection failed:', error.message);
+            
+            if (error.message.includes('Missing or insufficient permissions')) {
+                showStatus('⚠️ Firebase needs permission setup - see note below', 'offline');
+                document.getElementById('firebaseNote').classList.remove('hidden');
+            } else {
+                showStatus('📱 Working offline - data saved locally', 'offline');
+            }
+            
+            document.getElementById('syncBtn').disabled = true;
+        }
+    }
+
+    async function loadData() {
+        if (STATE.firebaseOnline) {
+            try {
+                // Load products from Firebase
+                const prodSnap = await db.collection('stores').doc(STATE.storeId).collection('products').where('active', '==', true).get();
+                const products = [];
+                prodSnap.forEach(doc => {
+                    const data = doc.data();
+                    products.push({
+                        id: doc.id,
+                        name: data.name || '',
+                        price: data.price || 0,
+                        stock: data.stock || 0,
+                        category: data.category || '',
+                        images: data.images || [],
+                        sizes: data.sizes || []
+                    });
+                });
+                
+                if (products.length > 0) {
+                    STATE.products = products;
+                    saveProductsLocal();
+                    console.log(`📦 Loaded ${products.length} products from cloud`);
+                } else {
+                    loadProductsLocal();
+                }
+                
+                // Load orders from Firebase
+                const orderSnap = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
+                STATE.pendingOrders = [];
+                STATE.confirmedOrders = [];
+                orderSnap.forEach(doc => {
+                    const data = doc.data();
+                    if (data.status === 'pending') {
+                        STATE.pendingOrders.push({ ...data, orderId: doc.id });
+                    } else {
+                        STATE.confirmedOrders.push({ ...data, orderId: doc.id });
+                    }
+                });
+                saveOrdersLocal();
+                console.log(`📋 Loaded orders from cloud`);
+                
+            } catch (error) {
+                console.error('Error loading from Firebase:', error);
+                loadProductsLocal();
+                loadOrdersLocal();
+            }
         } else {
-            dot.className = 'connection-dot offline';
-            bar.className = 'status-bar show offline';
-            txt.textContent = '📱 Offline mode - data stored on this device only';
-        }
-        
-        setTimeout(function() { bar.classList.remove('show'); }, 5000);
-    }
-
-    function loadAllData() {
-        // Load products
-        const savedProducts = localStorage.getItem('goatProducts');
-        STATE.products = savedProducts ? JSON.parse(savedProducts) : [];
-        
-        // Load orders
-        STATE.pending = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
-        STATE.confirmed = JSON.parse(localStorage.getItem('confirmedOrders') || '[]');
-        
-        if (STATE.products.length === 0) {
-            loadSamples();
+            loadProductsLocal();
+            loadOrdersLocal();
         }
     }
 
-    function saveProducts() {
+    function loadProductsLocal() {
+        const saved = localStorage.getItem('goatProducts');
+        STATE.products = saved ? JSON.parse(saved) : [];
+        if (STATE.products.length === 0) loadSamples();
+    }
+
+    function loadOrdersLocal() {
+        STATE.pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
+        STATE.confirmedOrders = JSON.parse(localStorage.getItem('confirmedOrders') || '[]');
+    }
+
+    function saveProductsLocal() {
         localStorage.setItem('goatProducts', JSON.stringify(STATE.products));
     }
 
-    function saveOrders() {
-        localStorage.setItem('pendingOrders', JSON.stringify(STATE.pending));
-        localStorage.setItem('confirmedOrders', JSON.stringify(STATE.confirmed.slice(-50)));
-    }
-
-    function saveCart() {
-        localStorage.setItem('goatCart', JSON.stringify(STATE.cart));
-        updateCartBadge();
+    function saveOrdersLocal() {
+        localStorage.setItem('pendingOrders', JSON.stringify(STATE.pendingOrders));
+        localStorage.setItem('confirmedOrders', JSON.stringify(STATE.confirmedOrders.slice(-50)));
     }
 
     // ==================== SYNC ====================
-    async function syncNow() {
-        if (!STATE.fbAvailable || !db) {
-            showToast('Firebase not available. Working offline.', 'warning');
+    async function syncToFirebase() {
+        if (!STATE.firebaseOnline) {
+            showStatus('Not connected to cloud', 'offline');
+            document.getElementById('statusBar').classList.add('show');
+            setTimeout(() => document.getElementById('statusBar').classList.remove('show'), 3000);
             return;
         }
         
-        const bar = document.getElementById('statusBar');
-        const txt = document.getElementById('statusText');
-        bar.className = 'status-bar show online';
-        txt.textContent = '🔄 Syncing to cloud...';
+        showStatus('Syncing to cloud...', 'online');
+        document.getElementById('statusBar').classList.add('show');
         
         try {
-            const batch = db.batch();
-            const productsRef = db.collection('stores').doc(STATE.storeId).collection('products');
-            
             // Sync products
-            for (const p of STATE.products) {
-                const docRef = productsRef.doc(p.id);
-                batch.set(docRef, {
-                    name: p.name, price: p.price, stock: p.stock,
-                    category: p.category, images: p.images || [],
-                    sizes: p.sizes || [], active: true,
+            for (const product of STATE.products) {
+                await db.collection('stores').doc(STATE.storeId).collection('products').doc(product.id).set({
+                    name: product.name,
+                    price: product.price,
+                    stock: product.stock,
+                    category: product.category,
+                    images: product.images || [],
+                    sizes: product.sizes || [],
+                    active: true,
                     updatedAt: new Date().toISOString()
                 }, { merge: true });
             }
             
-            await batch.commit();
-            
             // Sync orders
-            const ordersRef = db.collection('stores').doc(STATE.storeId).collection('orders');
-            const allOrders = [...STATE.pending, ...STATE.confirmed];
-            for (const o of allOrders) {
-                await ordersRef.doc(o.orderId).set({
-                    ...o, updatedAt: new Date().toISOString()
+            const allOrders = [...STATE.pendingOrders, ...STATE.confirmedOrders];
+            for (const order of allOrders) {
+                await db.collection('stores').doc(STATE.storeId).collection('orders').doc(order.orderId).set({
+                    ...order,
+                    updatedAt: new Date().toISOString()
                 }, { merge: true });
             }
             
-            txt.textContent = '✅ Synced successfully!';
-            setTimeout(function() { bar.classList.remove('show'); }, 3000);
+            showStatus('✅ Synced successfully!', 'online');
             showToast('Data synced to cloud! ✅', 'success');
             
         } catch (error) {
             console.error('Sync error:', error);
-            txt.textContent = '❌ Sync failed: ' + error.message;
-            bar.className = 'status-bar show error';
-            showToast('Sync failed. Check console for details.', 'error');
+            showStatus('❌ Sync failed: ' + error.message, 'error');
+            showToast('Sync failed. Check console.', 'error');
         }
+        
+        setTimeout(() => document.getElementById('statusBar').classList.remove('show'), 3000);
     }
 
     // ==================== NAVIGATION ====================
@@ -607,21 +612,14 @@
             tab.classList.remove('hidden');
             tab.classList.add('active');
             
-            const navLink = document.querySelector(`.nav-link[onclick*="${name}"]`);
-            if (navLink) navLink.classList.add('active');
-            
             if (name === 'store') renderProducts();
-            if (name === 'cart') { renderCart(); updatePaywayTotal(); }
+            if (name === 'cart') { renderCart(); updatePayway(); }
             if (name === 'admin') { renderInventory(); renderPending(); renderHistory(); }
         }
-        
-        const mobileNav = document.getElementById('mobileNav');
-        if (mobileNav) mobileNav.classList.remove('active');
     }
 
     function updateCartBadge() {
-        const count = STATE.cart.reduce((t, i) => t + i.quantity, 0);
-        document.getElementById('floatingCartCount').textContent = count;
+        document.getElementById('floatingCartCount').textContent = STATE.cart.reduce((t, i) => t + i.quantity, 0);
     }
 
     // ==================== PRODUCTS ====================
@@ -631,7 +629,8 @@
             { id:'p2', name:"Children's Jeans", price:24.99, stock:15, category:'Dresses', images:['https://images.unsplash.com/photo-1542272604-787c3835535d?w=400'], sizes:['2T','3T','4T'] },
             { id:'p3', name:'Kids Hoodie', price:29.99, stock:8, category:'Baby Jeans', images:['https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400'], sizes:['S','M','L'] }
         ];
-        saveProducts();
+        saveProductsLocal();
+        if (STATE.firebaseOnline) syncToFirebase();
         renderProducts();
         showToast('Sample products loaded!', 'success');
     }
@@ -643,21 +642,20 @@
         const category = document.getElementById('productCategory').value;
         
         if (!name || isNaN(price) || price <= 0 || isNaN(stock) || stock < 0 || !category) {
-            showToast('Please fill all fields correctly', 'error');
+            showToast('Fill all fields correctly', 'error');
             return;
         }
         
-        const product = {
+        STATE.products.push({
             id: 'p' + Date.now(),
             name, price, stock, category,
             images: ['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'],
             sizes: []
-        };
+        });
         
-        STATE.products.push(product);
-        saveProducts();
+        saveProductsLocal();
+        if (STATE.firebaseOnline) syncToFirebase();
         
-        // Clear form
         document.getElementById('productName').value = '';
         document.getElementById('productPrice').value = '';
         document.getElementById('productStock').value = '';
@@ -671,10 +669,11 @@
     function deleteProduct(id) {
         if (!confirm('Delete this product?')) return;
         STATE.products = STATE.products.filter(p => p.id !== id);
-        saveProducts();
+        saveProductsLocal();
+        if (STATE.firebaseOnline) db.collection('stores').doc(STATE.storeId).collection('products').doc(id).update({ active: false });
         renderProducts();
         renderInventory();
-        showToast('Product deleted', 'success');
+        showToast('Deleted', 'success');
     }
 
     function renderProducts() {
@@ -685,48 +684,32 @@
             if (STATE.filter.search && !p.name.toLowerCase().includes(STATE.filter.search)) return false;
             if (STATE.filter.category !== 'all' && p.category !== STATE.filter.category) return false;
             if (STATE.filter.stock === 'in-stock' && p.stock <= 0) return false;
-            if (STATE.filter.stock === 'low-stock' && (p.stock > 5 || p.stock <= 0)) return false;
             if (STATE.filter.stock === 'out-of-stock' && p.stock > 0) return false;
-            if (STATE.filter.price === '0-20' && p.price >= 20) return false;
-            if (STATE.filter.price === '20-30' && (p.price < 20 || p.price >= 30)) return false;
-            if (STATE.filter.price === '30+' && p.price < 30) return false;
             return true;
         });
         
         if (filtered.length === 0) {
-            grid.innerHTML = '<div style="text-align:center;padding:3rem;grid-column:1/-1"><h3>No products found</h3><button class="btn btn-outline mt-4" onclick="resetFilters()">Reset Filters</button></div>';
+            grid.innerHTML = '<div style="text-align:center;padding:3rem;grid-column:1/-1"><h3>No products</h3></div>';
             return;
         }
         
         grid.innerHTML = filtered.map(p => {
             const img = (p.images && p.images[0]) || 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400';
-            const [badge, badgeText, stockClass, stockText] = 
+            const [badge, text, sClass, sText] = 
                 p.stock > 10 ? ['badge-new','NEW','in-stock','In Stock'] :
                 p.stock > 0 ? ['badge-low','LOW','low-stock','Low Stock'] :
                 ['badge-sale','SOLD OUT','out-of-stock','Out of Stock'];
             
             return `<div class="product-card">
-                <div class="product-image-container">
-                    <img src="${img}" alt="${p.name}" class="product-main-image" loading="lazy">
-                    <div class="product-badge ${badge}">${badgeText}</div>
-                </div>
+                <div class="product-image-container"><img src="${img}" class="product-main-image" loading="lazy"><div class="product-badge ${badge}">${text}</div></div>
                 <div class="product-info">
                     <span class="product-category">${p.category}</span>
                     <h3 class="product-title">${p.name}</h3>
                     <div class="product-price">$${p.price.toFixed(2)}</div>
-                    <div class="product-stock ${stockClass}">${stockText} (${p.stock})</div>
-                    ${p.sizes && p.sizes.length > 0 ? `
-                        <div class="size-selector">
-                            <label class="size-label">Size:</label>
-                            <div class="size-options">
-                                ${p.sizes.map(s => `<div class="size-option" onclick="selectSize(this,'${p.id}','${s}')">${s}</div>`).join('')}
-                            </div>
-                        </div>` : ''}
+                    <div class="product-stock ${sClass}">${sText} (${p.stock})</div>
                     <div class="product-actions">
-                        <button class="btn btn-primary btn-add-to-cart" onclick="addToCart('${p.id}')" ${p.stock <= 0 ? 'disabled' : ''}>
-                            <i class="fas fa-cart-plus"></i> Add to Cart
-                        </button>
-                        ${STATE.isAdmin ? `<button class="btn btn-outline" onclick="showTab('admin');deleteProduct('${p.id}')"><i class="fas fa-trash"></i></button>` : ''}
+                        <button class="btn btn-primary btn-add-to-cart" onclick="addToCart('${p.id}')" ${p.stock<=0?'disabled':''}>Add to Cart</button>
+                        ${STATE.isAdmin ? `<button class="btn btn-outline" onclick="deleteProduct('${p.id}')"><i class="fas fa-trash"></i></button>` : ''}
                     </div>
                 </div>
             </div>`;
@@ -735,288 +718,172 @@
 
     function renderInventory() {
         document.getElementById('productCount').textContent = STATE.products.length;
-        const tbody = document.getElementById('inventoryTableBody');
+        const tbody = document.getElementById('inventoryBody');
         if (!tbody) return;
-        
         tbody.innerHTML = STATE.products.map(p => `
             <tr>
-                <td><strong>${p.name}</strong></td>
-                <td>${p.category}</td>
-                <td>$${p.price.toFixed(2)}</td>
-                <td><span class="product-stock ${p.stock > 10 ? 'in-stock' : p.stock > 0 ? 'low-stock' : 'out-of-stock'}">${p.stock}</span></td>
+                <td><strong>${p.name}</strong></td><td>${p.category}</td><td>$${p.price.toFixed(2)}</td>
+                <td>${p.stock}</td>
                 <td><button class="btn btn-danger btn-small" onclick="deleteProduct('${p.id}')"><i class="fas fa-trash"></i></button></td>
             </tr>
         `).join('');
     }
 
-    function selectSize(el, productId, size) {
-        const productCard = el.closest('.product-card');
-        productCard.querySelectorAll('.size-option').forEach(s => s.classList.remove('selected'));
-        el.classList.add('selected');
-        if (!STATE._selectedSizes) STATE._selectedSizes = {};
-        STATE._selectedSizes[productId] = size;
-    }
-
-    function searchProducts() {
+    function filterAndRender() {
         STATE.filter.search = document.getElementById('searchInput').value.toLowerCase();
-        renderProducts();
-    }
-
-    function filterProducts() {
         STATE.filter.category = document.getElementById('categoryFilter').value;
         STATE.filter.stock = document.getElementById('stockFilter').value;
-        STATE.filter.price = document.getElementById('priceFilter').value;
-        renderProducts();
-    }
-
-    function resetFilters() {
-        document.getElementById('searchInput').value = '';
-        document.getElementById('categoryFilter').value = 'all';
-        document.getElementById('stockFilter').value = 'all';
-        document.getElementById('priceFilter').value = 'all';
-        STATE.filter = { category: 'all', stock: 'all', price: 'all', search: '' };
         renderProducts();
     }
 
     // ==================== CART ====================
-    function addToCart(productId) {
-        const product = STATE.products.find(p => p.id === productId);
-        if (!product || product.stock <= 0) {
-            showToast('Out of stock', 'error');
-            return;
-        }
+    function addToCart(pid) {
+        const product = STATE.products.find(p => p.id === pid);
+        if (!product || product.stock <= 0) { showToast('Out of stock', 'error'); return; }
         
-        const size = (STATE._selectedSizes && STATE._selectedSizes[productId]) || 'One Size';
-        const existing = STATE.cart.find(i => i.productId === productId && i.size === size);
-        
+        const existing = STATE.cart.find(i => i.productId === pid);
         if (existing) {
-            if (existing.quantity < product.stock) {
-                existing.quantity++;
-            } else {
-                showToast('Stock limit reached', 'error');
-                return;
-            }
+            if (existing.quantity < product.stock) existing.quantity++;
+            else { showToast('Stock limit', 'error'); return; }
         } else {
-            STATE.cart.push({
-                productId, name: product.name, price: product.price,
-                size, quantity: 1, image: (product.images && product.images[0]) || ''
-            });
+            STATE.cart.push({ productId: pid, name: product.name, price: product.price, quantity: 1, image: (product.images&&product.images[0])||'' });
         }
         
-        saveCart();
+        localStorage.setItem('goatCart', JSON.stringify(STATE.cart));
+        updateCartBadge();
         renderCart();
-        updatePaywayTotal();
-        showToast(`${product.name} added to cart`, 'success');
+        updatePayway();
+        showToast('Added to cart', 'success');
     }
 
     function renderCart() {
-        const emptyEl = document.getElementById('emptyCart');
-        const listEl = document.getElementById('cartItemsList');
-        const summaryEl = document.getElementById('cartSummary');
+        const empty = document.getElementById('emptyCart');
+        const list = document.getElementById('cartItemsList');
+        const sum = document.getElementById('cartSummary');
         
         if (STATE.cart.length === 0) {
-            emptyEl.classList.remove('hidden');
-            listEl.classList.add('hidden');
-            summaryEl.classList.add('hidden');
-            return;
+            empty.classList.remove('hidden'); list.classList.add('hidden'); sum.classList.add('hidden'); return;
         }
+        empty.classList.add('hidden'); list.classList.remove('hidden'); sum.classList.remove('hidden');
         
-        emptyEl.classList.add('hidden');
-        listEl.classList.remove('hidden');
-        summaryEl.classList.remove('hidden');
-        
-        listEl.innerHTML = STATE.cart.map((item, i) => {
-            const total = item.price * item.quantity;
+        list.innerHTML = STATE.cart.map((item, i) => {
+            const t = item.price * item.quantity;
             return `<div class="cart-item">
-                <img src="${item.image}" alt="${item.name}" class="cart-item-image" onerror="this.src='https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100'">
-                <div>
-                    <div class="cart-item-name">${item.name}</div>
-                    <div style="color:var(--gray);font-size:0.9rem">Size: ${item.size}</div>
-                    <div class="cart-item-price">$${item.price.toFixed(2)}</div>
-                    <div class="cart-item-quantity">
-                        <button class="quantity-btn" onclick="updateQty(${i}, ${item.quantity - 1})">-</button>
-                        <span>${item.quantity}</span>
-                        <button class="quantity-btn" onclick="updateQty(${i}, ${item.quantity + 1})">+</button>
-                    </div>
-                </div>
-                <div class="cart-item-total">$${total.toFixed(2)}</div>
-                <button class="remove-item" onclick="removeFromCart(${i})"><i class="fas fa-trash"></i></button>
+                <img src="${item.image}" class="cart-item-image" onerror="this.src='https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100'">
+                <div><div class="cart-item-name">${item.name}</div><div class="cart-item-price">$${item.price.toFixed(2)}</div>
+                <div class="cart-item-quantity"><button class="quantity-btn" onclick="updQty(${i},${item.quantity-1})">-</button><span>${item.quantity}</span><button class="quantity-btn" onclick="updQty(${i},${item.quantity+1})">+</button></div></div>
+                <div class="cart-item-total">$${t.toFixed(2)}</div>
+                <button class="remove-item" onclick="remCart(${i})"><i class="fas fa-trash"></i></button>
             </div>`;
         }).join('');
         
-        const subtotal = STATE.cart.reduce((s, i) => s + i.price * i.quantity, 0);
-        document.getElementById('cartSubtotal').textContent = '$' + subtotal.toFixed(2);
-        document.getElementById('cartTotal').textContent = '$' + (subtotal + 2).toFixed(2);
+        const sub = STATE.cart.reduce((s,i) => s + i.price*i.quantity, 0);
+        document.getElementById('cartSubtotal').textContent = '$'+sub.toFixed(2);
+        document.getElementById('cartTotal').textContent = '$'+(sub+2).toFixed(2);
     }
 
-    function updateQty(index, qty) {
-        if (qty < 1) { removeFromCart(index); return; }
-        STATE.cart[index].quantity = qty;
-        saveCart();
-        renderCart();
-        updatePaywayTotal();
-    }
-
-    function removeFromCart(index) {
-        STATE.cart.splice(index, 1);
-        saveCart();
-        renderCart();
-        updatePaywayTotal();
-    }
-
-    function updatePaywayTotal() {
-        const total = STATE.cart.reduce((s, i) => s + i.price * i.quantity, 0) + 2;
-        document.getElementById('paywayTotal').textContent = total.toFixed(2);
-    }
-
-    function selectPayment(method) {
-        STATE.paymentMethod = method;
-        document.getElementById('payOption').classList.toggle('selected', method === 'payway');
-        document.getElementById('codOption').classList.toggle('selected', method === 'cod');
-    }
+    function updQty(i, q) { if (q < 1) { remCart(i); return; } STATE.cart[i].quantity = q; localStorage.setItem('goatCart', JSON.stringify(STATE.cart)); updateCartBadge(); renderCart(); updatePayway(); }
+    function remCart(i) { STATE.cart.splice(i,1); localStorage.setItem('goatCart', JSON.stringify(STATE.cart)); updateCartBadge(); renderCart(); updatePayway(); }
+    function updatePayway() { document.getElementById('paywayTotal').textContent = (STATE.cart.reduce((s,i)=>s+i.price*i.quantity,0)+2).toFixed(2); }
+    function selectPayment(m) { STATE.paymentMethod = m; }
 
     // ==================== ORDERS ====================
     function placeOrder() {
-        // Validate
         const name = document.getElementById('customerName').value.trim();
         const phone = document.getElementById('customerPhone').value.trim();
         const address = document.getElementById('customerAddress').value.trim();
         
-        let valid = true;
-        document.getElementById('nameError').classList.add('hidden');
-        document.getElementById('phoneError').classList.add('hidden');
-        document.getElementById('addressError').classList.add('hidden');
+        if (!name || !phone || !address) { showToast('Fill all delivery info', 'error'); return; }
+        if (STATE.cart.length === 0) { showToast('Cart empty', 'error'); return; }
         
-        if (!name) { document.getElementById('nameError').classList.remove('hidden'); valid = false; }
-        if (!phone) { document.getElementById('phoneError').classList.remove('hidden'); valid = false; }
-        if (!address) { document.getElementById('addressError').classList.remove('hidden'); valid = false; }
-        if (!valid) return;
-        
-        if (STATE.cart.length === 0) { showToast('Cart is empty', 'error'); return; }
-        
-        // Create order
-        const orderId = 'ORD-' + Date.now();
-        const subtotal = STATE.cart.reduce((s, i) => s + i.price * i.quantity, 0);
+        const oid = 'ORD-' + Date.now();
+        const sub = STATE.cart.reduce((s,i) => s + i.price*i.quantity, 0);
         const order = {
-            orderId, timestamp: Date.now(), orderDate: new Date().toLocaleString(),
-            status: 'pending',
+            orderId: oid, timestamp: Date.now(), orderDate: new Date().toLocaleString(), status: 'pending',
             customerName: name, customerPhone: phone, customerAddress: address,
             customerNotes: document.getElementById('customerNotes').value.trim(),
             paymentMethod: STATE.paymentMethod, storeId: STATE.storeId,
-            cart: STATE.cart.map(i => ({
-                productId: i.productId, name: i.name, size: i.size,
-                quantity: i.quantity, price: i.price, subtotal: i.price * i.quantity
-            })),
-            subtotal, shipping: 2, total: subtotal + 2
+            cart: STATE.cart.map(i => ({ productId:i.productId, name:i.name, quantity:i.quantity, price:i.price, subtotal:i.price*i.quantity })),
+            subtotal: sub, shipping: 2, total: sub+2
         };
         
-        STATE.pending.push(order);
-        saveOrders();
+        STATE.pendingOrders.push(order);
+        saveOrdersLocal();
+        if (STATE.firebaseOnline) syncOrderToFirebase(order);
         
-        // Generate message
-        let msg = `🛍️ *GOAT KIDS ORDER*\n\n`;
-        msg += `🆔 ${orderId}\n📅 ${order.orderDate}\n\n`;
-        msg += `👤 ${name}\n📞 ${phone}\n📍 ${address}\n\n`;
-        msg += `📦 *ITEMS:*\n`;
-        order.cart.forEach((it, i) => {
-            msg += `${i+1}. ${it.name} (${it.size}) x${it.quantity} = $${it.subtotal.toFixed(2)}\n`;
-        });
-        msg += `\n💰 Total: $${order.total.toFixed(2)}\n`;
-        msg += `💳 ${STATE.paymentMethod === 'payway' ? 'ABA PayWay' : 'COD'}\n\n`;
-        msg += `⏳ STATUS: PENDING CONFIRMATION`;
+        let msg = `🛍️ *GOAT KIDS ORDER*\n🆔 ${oid}\n📅 ${order.orderDate}\n\n👤 ${name}\n📞 ${phone}\n📍 ${address}\n\n📦 ITEMS:\n`;
+        order.cart.forEach((it,i) => msg += `${i+1}. ${it.name} x${it.quantity} = $${it.subtotal.toFixed(2)}\n`);
+        msg += `\n💰 Total: $${order.total.toFixed(2)}\n\n⏳ PENDING CONFIRMATION`;
         
-        // Clear cart
         STATE.cart = [];
-        saveCart();
-        renderCart();
-        updatePaywayTotal();
+        localStorage.setItem('goatCart','[]');
+        updateCartBadge(); renderCart(); updatePayway();
         
-        // Open Messenger
-        if (confirm('Order placed! Open Messenger to send details?')) {
-            window.open(`https://m.me/Goatkids?text=${encodeURIComponent(msg)}`, '_blank');
-        }
-        
-        if (STATE.isAdmin && document.getElementById('adminTab').classList.contains('active')) {
-            renderPending();
-        }
-        
-        showToast('Order sent! Pending confirmation.', 'success');
+        if (confirm('Order placed! Open Messenger?')) window.open(`https://m.me/Goatkids?text=${encodeURIComponent(msg)}`,'_blank');
+        if (STATE.isAdmin) renderPending();
+        showToast('Order sent!', 'success');
     }
 
-    function handlePayway(event) {
-        if (STATE.cart.length === 0) {
-            event.preventDefault();
-            showToast('Cart is empty', 'error');
-            return false;
-        }
+    function handlePayway(e) {
+        if (STATE.cart.length === 0) { e.preventDefault(); showToast('Cart empty','error'); return false; }
         placeOrder();
         return true;
     }
 
-    function confirmOrder(orderId) {
-        const idx = STATE.pending.findIndex(o => o.orderId === orderId);
+    async function syncOrderToFirebase(order) {
+        if (!STATE.firebaseOnline) return;
+        try {
+            await db.collection('stores').doc(STATE.storeId).collection('orders').doc(order.orderId).set(order);
+        } catch(e) { console.error('Order sync error:', e); }
+    }
+
+    function confirmOrder(oid) {
+        const idx = STATE.pendingOrders.findIndex(o => o.orderId === oid);
         if (idx < 0) return;
+        const order = STATE.pendingOrders[idx];
         
-        const order = STATE.pending[idx];
-        
-        // Check stock
         for (const item of order.cart) {
             const product = STATE.products.find(p => p.id === item.productId);
-            if (!product || product.stock < item.quantity) {
-                showToast(`Not enough stock for: ${item.name}`, 'error');
-                return;
-            }
+            if (!product || product.stock < item.quantity) { showToast(`Not enough stock: ${item.name}`, 'error'); return; }
         }
         
-        // Reduce stock
         for (const item of order.cart) {
             const product = STATE.products.find(p => p.id === item.productId);
             if (product) product.stock = Math.max(0, product.stock - item.quantity);
         }
-        saveProducts();
+        saveProductsLocal();
         
         order.status = 'confirmed';
         order.confirmedAt = new Date().toLocaleString();
-        STATE.confirmed.push(order);
-        STATE.pending.splice(idx, 1);
-        saveOrders();
+        STATE.confirmedOrders.push(order);
+        STATE.pendingOrders.splice(idx, 1);
+        saveOrdersLocal();
+        if (STATE.firebaseOnline) syncToFirebase();
         
-        renderPending();
-        renderHistory();
-        renderProducts();
-        renderInventory();
-        
-        showToast(`Order ${orderId} confirmed! Stock reduced.`, 'success');
+        renderPending(); renderHistory(); renderProducts(); renderInventory();
+        showToast(`Order ${oid} confirmed!`, 'success');
     }
 
-    function rejectOrder(orderId) {
-        const idx = STATE.pending.findIndex(o => o.orderId === orderId);
+    function rejectOrder(oid) {
+        const idx = STATE.pendingOrders.findIndex(o => o.orderId === oid);
         if (idx < 0) return;
-        
-        const order = STATE.pending[idx];
-        const reason = prompt('Reason for rejection:') || 'No reason';
-        
+        const order = STATE.pendingOrders[idx];
         order.status = 'rejected';
         order.rejectedAt = new Date().toLocaleString();
-        order.rejectionReason = reason;
-        STATE.confirmed.push(order);
-        STATE.pending.splice(idx, 1);
-        saveOrders();
-        
-        renderPending();
-        renderHistory();
-        showToast(`Order ${orderId} rejected.`, 'warning');
+        order.rejectionReason = prompt('Reason:') || 'No reason';
+        STATE.confirmedOrders.push(order);
+        STATE.pendingOrders.splice(idx, 1);
+        saveOrdersLocal();
+        if (STATE.firebaseOnline) syncToFirebase();
+        renderPending(); renderHistory();
+        showToast('Order rejected', 'warning');
     }
 
-    function confirmAllOrders() {
-        if (STATE.pending.length === 0) {
-            showToast('No pending orders', 'warning');
-            return;
-        }
+    function confirmAll() {
+        if (STATE.pendingOrders.length === 0) { showToast('No pending orders', 'warning'); return; }
+        if (!confirm(`Confirm ALL ${STATE.pendingOrders.length} orders?`)) return;
         
-        if (!confirm(`Confirm ALL ${STATE.pending.length} orders? Stock will be reduced.`)) return;
-        
-        const orders = [...STATE.pending];
+        const orders = [...STATE.pendingOrders];
         for (const order of orders) {
             for (const item of order.cart) {
                 const product = STATE.products.find(p => p.id === item.productId);
@@ -1024,213 +891,98 @@
             }
             order.status = 'confirmed';
             order.confirmedAt = new Date().toLocaleString();
-            STATE.confirmed.push(order);
+            STATE.confirmedOrders.push(order);
         }
-        
-        STATE.pending = [];
-        saveProducts();
-        saveOrders();
-        
-        renderPending();
-        renderHistory();
-        renderProducts();
-        renderInventory();
-        
+        STATE.pendingOrders = [];
+        saveProductsLocal();
+        saveOrdersLocal();
+        if (STATE.firebaseOnline) syncToFirebase();
+        renderPending(); renderHistory(); renderProducts(); renderInventory();
         showToast(`${orders.length} orders confirmed!`, 'success');
     }
 
     function renderPending() {
-        const container = document.getElementById('pendingOrdersContainer');
-        document.getElementById('pendingOrderCount').textContent = STATE.pending.length;
-        if (!container) return;
-        
-        if (STATE.pending.length === 0) {
-            container.innerHTML = '<p style="text-align:center;padding:2rem;color:var(--gray)">✅ No pending orders</p>';
-            return;
-        }
-        
-        container.innerHTML = STATE.pending.map(o => {
-            let itemsHtml = o.cart.map(it => 
-                `<div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:0.25rem">
-                    <span>${it.quantity}x ${it.name} (${it.size})</span>
-                    <span>$${it.subtotal.toFixed(2)}</span>
-                </div>`
-            ).join('');
-            
-            return `<div class="order-card" style="margin-bottom:0.75rem">
-                <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:0.75rem">
-                    <div>
-                        <strong style="color:var(--warning)">⏳ PENDING</strong>
-                        <div style="font-size:0.85rem;color:var(--gray)">🆔 ${o.orderId} | 📅 ${o.orderDate}</div>
-                    </div>
+        const c = document.getElementById('pendingContainer');
+        document.getElementById('pendingCount').textContent = STATE.pendingOrders.length;
+        if (!c) return;
+        if (STATE.pendingOrders.length === 0) { c.innerHTML = '<p style="text-align:center;padding:2rem;color:var(--gray)">No pending</p>'; return; }
+        c.innerHTML = STATE.pendingOrders.map(o => `
+            <div class="order-card">
+                <div style="display:flex;justify-content:space-between;margin-bottom:0.75rem">
+                    <div><strong style="color:var(--warning)">⏳ PENDING</strong><br><small>🆔 ${o.orderId} | ${o.orderDate}</small></div>
                 </div>
-                <div style="background:var(--light);padding:0.75rem;border-radius:var(--radius);margin-bottom:0.75rem;font-size:0.9rem">
-                    👤 ${o.customerName} | 📞 ${o.customerPhone}<br>📍 ${o.customerAddress}
-                </div>
-                <div style="margin-bottom:0.5rem">${itemsHtml}</div>
+                <div style="background:var(--light);padding:0.75rem;border-radius:var(--radius);margin-bottom:0.5rem;font-size:0.9rem">👤 ${o.customerName} | 📞 ${o.customerPhone}</div>
+                <div style="margin-bottom:0.5rem">${o.cart.map(it => `<div style="display:flex;justify-content:space-between;font-size:0.85rem"><span>${it.quantity}x ${it.name}</span><span>$${it.subtotal.toFixed(2)}</span></div>`).join('')}</div>
                 <div style="font-weight:700;margin-bottom:0.75rem">Total: $${o.total.toFixed(2)}</div>
                 <div class="flex gap-2">
                     <button class="btn btn-success btn-small" onclick="confirmOrder('${o.orderId}')" style="flex:1">✅ Confirm</button>
                     <button class="btn btn-danger btn-small" onclick="rejectOrder('${o.orderId}')" style="flex:1">❌ Reject</button>
                 </div>
-            </div>`;
-        }).join('');
+            </div>
+        `).join('');
     }
 
     function renderHistory() {
-        const container = document.getElementById('orderHistoryContainer');
-        document.getElementById('confirmedOrderCount').textContent = STATE.confirmed.length;
-        if (!container) return;
-        
-        if (STATE.confirmed.length === 0) {
-            container.innerHTML = '<p style="text-align:center;padding:2rem;color:var(--gray)">No order history</p>';
-            return;
-        }
-        
-        container.innerHTML = [...STATE.confirmed].reverse().map(o => {
-            const isConfirmed = o.status === 'confirmed';
-            return `<div class="order-card ${o.status}" style="border-color:${isConfirmed ? 'var(--success)' : 'var(--danger)'};opacity:${isConfirmed ? '1' : '0.7'};margin-bottom:0.5rem">
-                <div style="display:flex;justify-content:space-between;align-items:start">
-                    <div>
-                        <strong style="color:${isConfirmed ? 'var(--success)' : 'var(--danger)'}">${isConfirmed ? '✅' : '❌'} ${o.status.toUpperCase()}</strong>
-                        <div style="font-size:0.85rem;color:var(--gray)">🆔 ${o.orderId} | 📅 ${o.orderDate}</div>
-                        ${isConfirmed ? `<div style="font-size:0.8rem;color:var(--gray)">Confirmed: ${o.confirmedAt}</div>` : `<div style="font-size:0.8rem;color:var(--gray)">Rejected: ${o.rejectedAt}</div>`}
-                    </div>
-                    <strong>$${o.total.toFixed(2)}</strong>
-                </div>
-                <div style="font-size:0.9rem;margin-top:0.25rem">👤 ${o.customerName}</div>
+        const c = document.getElementById('historyContainer');
+        document.getElementById('historyCount').textContent = STATE.confirmedOrders.length;
+        if (!c) return;
+        if (STATE.confirmedOrders.length === 0) { c.innerHTML = '<p style="text-align:center;padding:2rem;color:var(--gray)">No history</p>'; return; }
+        c.innerHTML = [...STATE.confirmedOrders].reverse().map(o => {
+            const ok = o.status === 'confirmed';
+            return `<div class="order-card ${o.status}" style="border-color:${ok?'var(--success)':'var(--danger)'};opacity:${ok?'1':'0.7'};margin-bottom:0.5rem">
+                <div style="display:flex;justify-content:space-between"><div><strong style="color:${ok?'var(--success)':'var(--danger)'}">${ok?'✅':'❌'} ${o.status.toUpperCase()}</strong><br><small>🆔 ${o.orderId} | ${o.orderDate}</small></div><strong>$${o.total.toFixed(2)}</strong></div>
+                <div style="font-size:0.85rem">👤 ${o.customerName}</div>
             </div>`;
         }).join('');
     }
 
-    // ==================== CSV EXPORT ====================
-    function escapeCSV(val) {
-        if (val === null || val === undefined) return '';
-        const str = String(val);
-        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-            return '"' + str.replace(/"/g, '""') + '"';
-        }
-        return str;
+    // ==================== CSV ====================
+    function escCSV(v) { if (!v) return ''; const s = String(v); return s.includes(',')||s.includes('"') ? '"'+s.replace(/"/g,'""')+'"' : s; }
+    function dlCSV(csv, fn) {
+        const b = new Blob(['\uFEFF'+csv], {type:'text/csv'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = fn;
+        a.click(); URL.revokeObjectURL(a.href);
     }
-
-    function downloadCSV(csvContent, filename) {
-        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
-    }
-
     function exportPendingCSV() {
-        if (STATE.pending.length === 0) { showToast('No pending orders', 'warning'); return; }
-        
-        let csv = 'Order ID,Date,Customer,Phone,Address,Payment,Item,Size,Quantity,Price,Subtotal,Total\n';
-        STATE.pending.forEach(o => {
-            o.cart.forEach(it => {
-                csv += [escapeCSV(o.orderId), escapeCSV(o.orderDate), escapeCSV(o.customerName),
-                    escapeCSV(o.customerPhone), escapeCSV(o.customerAddress), escapeCSV(o.paymentMethod),
-                    escapeCSV(it.name), escapeCSV(it.size), it.quantity,
-                    it.price.toFixed(2), it.subtotal.toFixed(2), o.total.toFixed(2)
-                ].join(',') + '\n';
-            });
-        });
-        
-        downloadCSV(csv, `GOAT_KIDS_Pending_${new Date().toISOString().split('T')[0]}.csv`);
-        showToast('Pending orders exported!', 'success');
+        if (!STATE.pendingOrders.length) { showToast('No pending','warning'); return; }
+        let csv = 'Order ID,Date,Customer,Phone,Item,Quantity,Price,Subtotal,Total\n';
+        STATE.pendingOrders.forEach(o => o.cart.forEach(it => csv += [escCSV(o.orderId),escCSV(o.orderDate),escCSV(o.customerName),escCSV(o.customerPhone),escCSV(it.name),it.quantity,it.price.toFixed(2),it.subtotal.toFixed(2),o.total.toFixed(2)].join(',')+'\n'));
+        dlCSV(csv, `Pending_${new Date().toISOString().split('T')[0]}.csv`);
+        showToast('Exported!','success');
     }
-
     function exportHistoryCSV() {
-        if (STATE.confirmed.length === 0) { showToast('No order history', 'warning'); return; }
-        
-        let csv = 'Order ID,Date,Status,Confirmed/Rejected,Customer,Phone,Address,Item,Size,Quantity,Price,Subtotal,Total\n';
-        STATE.confirmed.forEach(o => {
-            o.cart.forEach(it => {
-                csv += [escapeCSV(o.orderId), escapeCSV(o.orderDate), escapeCSV(o.status),
-                    escapeCSV(o.confirmedAt || o.rejectedAt || ''), escapeCSV(o.customerName),
-                    escapeCSV(o.customerPhone), escapeCSV(o.customerAddress),
-                    escapeCSV(it.name), escapeCSV(it.size), it.quantity,
-                    it.price.toFixed(2), it.subtotal.toFixed(2), o.total.toFixed(2)
-                ].join(',') + '\n';
-            });
-        });
-        
-        downloadCSV(csv, `GOAT_KIDS_History_${new Date().toISOString().split('T')[0]}.csv`);
-        showToast('Order history exported!', 'success');
+        if (!STATE.confirmedOrders.length) { showToast('No history','warning'); return; }
+        let csv = 'Order ID,Date,Status,Customer,Phone,Item,Quantity,Price,Subtotal,Total\n';
+        STATE.confirmedOrders.forEach(o => o.cart.forEach(it => csv += [escCSV(o.orderId),escCSV(o.orderDate),escCSV(o.status),escCSV(o.customerName),escCSV(o.customerPhone),escCSV(it.name),it.quantity,it.price.toFixed(2),it.subtotal.toFixed(2),o.total.toFixed(2)].join(',')+'\n'));
+        dlCSV(csv, `History_${new Date().toISOString().split('T')[0]}.csv`);
+        showToast('Exported!','success');
     }
 
-    // ==================== UTILITIES ====================
-    function showToast(message, type = 'info') {
-        const colors = { success: 'var(--success)', error: 'var(--danger)', warning: 'var(--warning)', info: 'var(--primary)' };
-        const icons = { success: 'check-circle', error: 'exclamation-circle', warning: 'exclamation-triangle', info: 'info-circle' };
-        
-        const existing = document.querySelector('.toast-message');
-        if (existing) existing.remove();
-        
+    // ==================== UTILS ====================
+    function showStatus(text, type) {
+        const bar = document.getElementById('statusBar');
+        document.getElementById('statusText').textContent = text;
+        bar.className = 'status-bar show ' + type;
+    }
+    function showToast(msg, type) {
+        const c = {success:'var(--success)',error:'var(--danger)',warning:'var(--warning)',info:'var(--primary)'};
         const el = document.createElement('div');
-        el.className = 'toast-message';
-        el.innerHTML = `<div style="position:fixed;top:60px;right:20px;padding:0.75rem 1.5rem;border-radius:8px;background:${colors[type]};color:#fff;box-shadow:0 10px 25px rgba(0,0,0,0.2);z-index:9999;display:flex;align-items:center;gap:0.5rem;font-size:0.95rem;max-width:350px">
-            <i class="fas fa-${icons[type]}"></i><span>${message}</span>
-        </div>`;
+        el.innerHTML = `<div style="position:fixed;top:60px;right:20px;padding:0.75rem 1.5rem;border-radius:8px;background:${c[type]};color:#fff;box-shadow:0 10px 25px rgba(0,0,0,0.2);z-index:9999;font-size:0.95rem">${msg}</div>`;
         document.body.appendChild(el);
-        
-        setTimeout(() => {
-            el.style.opacity = '0';
-            el.style.transform = 'translateX(20px)';
-            el.style.transition = 'all 0.3s ease';
-            setTimeout(() => el.remove(), 300);
-        }, 3000);
+        setTimeout(() => el.remove(), 3000);
     }
-
-    function openAdminLoginModal() {
-        document.getElementById('adminLoginModal').classList.add('active');
-        document.getElementById('adminLoginModal').classList.remove('hidden');
-    }
-
-    function closeAdminLoginModal() {
-        document.getElementById('adminLoginModal').classList.remove('active');
-        document.getElementById('adminLoginModal').classList.add('hidden');
-    }
-
+    function openAdminModal() { document.getElementById('adminModal').classList.add('active'); document.getElementById('adminModal').classList.remove('hidden'); }
+    function closeAdminModal() { document.getElementById('adminModal').classList.remove('active'); document.getElementById('adminModal').classList.add('hidden'); }
     function adminLogin() {
-        const password = document.getElementById('adminPassword').value;
-        if (password === 'N1255550') {
-            STATE.isAdmin = true;
-            localStorage.setItem('goatAdmin', 'true');
+        if (document.getElementById('adminPassword').value === 'N1255550') {
+            STATE.isAdmin = true; localStorage.setItem('goatAdmin','true');
             document.getElementById('adminBadge').classList.remove('hidden');
             document.getElementById('adminNavLink').classList.remove('hidden');
-            document.getElementById('adminNavLinkMobile').classList.remove('hidden');
-            showTab('admin');
-            closeAdminLoginModal();
-            showToast('Admin login successful!', 'success');
-        } else {
-            showToast('Incorrect password', 'error');
-        }
+            showTab('admin'); closeAdminModal(); showToast('Admin login!','success');
+        } else { showToast('Wrong password','error'); }
     }
-
-    function adminLogout() {
-        STATE.isAdmin = false;
-        localStorage.removeItem('goatAdmin');
-        document.getElementById('adminBadge').classList.add('hidden');
-        document.getElementById('adminNavLink').classList.add('hidden');
-        document.getElementById('adminNavLinkMobile').classList.add('hidden');
-        showTab('store');
-        showToast('Logged out', 'info');
-    }
-
-    function copyStoreId() {
-        navigator.clipboard.writeText(STATE.storeId).then(() => {
-            showToast('Store ID copied!', 'success');
-        }).catch(() => {
-            showToast('Could not copy. Store ID: ' + STATE.storeId, 'info');
-        });
-    }
-
-    console.log('✅ GOAT KIDS application loaded');
-    console.log('📱 Mode:', STATE.fbAvailable ? 'Online (Firebase)' : 'Offline (Local Storage)');
-    console.log('🆔 Store ID:', STATE.storeId);
+    function adminLogout() { STATE.isAdmin = false; localStorage.removeItem('goatAdmin'); showTab('store'); showToast('Logged out','info'); }
+    function copyStoreId() { navigator.clipboard.writeText(STATE.storeId); showToast('Copied!','success'); }
     </script>
 </body>
 </html>
