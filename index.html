@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
     <title>GOAT KIDS - Children's Clothing Store</title>
     
@@ -10,7 +11,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     
     <script>
-        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU",
             authDomain: "goat-kids-store.firebaseapp.com",
@@ -19,20 +19,9 @@
             messagingSenderId: "372035223463",
             appId: "1:372035223463:web:a9948932607e81da2a4082"
         };
-
-        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-        
-        // Enable offline persistence
-        db.enablePersistence({ synchronizeTabs: true }).catch(function(err) {
-            if (err.code === 'failed-precondition') {
-                console.log('Multiple tabs open, persistence can only be enabled in one tab at a time.');
-            } else if (err.code === 'unimplemented') {
-                console.log('The current browser does not support all of the features required to enable persistence');
-            }
-        });
-        
+        db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
         console.log('🔥 Firebase initialized');
     </script>
     
@@ -64,6 +53,7 @@
         .btn-success{background:var(--success);color:#fff}
         .btn-danger{background:var(--danger);color:#fff}
         .btn-info{background:var(--info);color:#fff}
+        .btn-warning{background:var(--warning);color:var(--dark)}
         .btn:disabled{opacity:0.5;cursor:not-allowed}
         
         .status-bar{position:fixed;top:0;left:0;right:0;z-index:1000;padding:0.6rem 1rem;display:flex;align-items:center;justify-content:center;gap:0.5rem;font-size:0.85rem;transform:translateY(-100%);transition:transform 0.3s}
@@ -162,12 +152,17 @@
         
         .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;opacity:0;visibility:hidden;transition:all 0.3s}
         .modal-overlay.active{opacity:1;visibility:visible}
-        .modal{background:#fff;border-radius:var(--radius-lg);padding:1.5rem;max-width:400px;width:90%}
+        .modal{background:#fff;border-radius:var(--radius-lg);padding:1.5rem;max-width:500px;width:90%;max-height:90vh;overflow-y:auto}
         .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
         .modal-close{background:none;border:none;font-size:1.5rem;color:var(--gray);cursor:pointer}
         
         .firebase-setup-note{background:#fff3cd;border:2px solid var(--warning);border-radius:var(--radius);padding:1rem;margin-bottom:1rem}
         .firebase-setup-note code{background:rgba(0,0,0,0.1);padding:0.2rem 0.4rem;border-radius:4px;font-size:0.9rem}
+        
+        /* Edit Modal Styles */
+        .edit-modal-content{padding:1rem 0}
+        .edit-modal-content label{display:block;margin-bottom:0.5rem;font-weight:600;color:var(--dark)}
+        .edit-modal-content .current-value{color:var(--gray);font-size:0.85rem;margin-bottom:0.75rem}
         
         @media(max-width:768px){
             .header-container{padding:0.75rem 1rem}
@@ -209,7 +204,11 @@
                 </button>
             </nav>
         </div>
-    </nav>
+        <nav class="mobile-nav" id="mobileNav">
+            <a href="#" class="nav-link" onclick="showTab('store');return false"><i class="fas fa-store"></i>Store</a>
+            <a href="#" class="nav-link hidden" id="adminNavLinkMobile" onclick="showTab('admin');return false"><i class="fas fa-cog"></i>Admin</a>
+            <button class="btn btn-success w-full mt-4" onclick="syncToFirebase()"><i class="fas fa-cloud-upload-alt"></i>Sync</button>
+        </nav>
     </header>
 
     <!-- Main Content -->
@@ -222,13 +221,10 @@
                 <small style="opacity:0.8">Store ID: <span id="currentStoreIdDisplay">...</span></small>
             </div>
             
-            <!-- Firebase Setup Note (shows only if Firebase is not working) -->
             <div class="firebase-setup-note hidden" id="firebaseNote">
                 <strong>⚠️ Firebase Connection Issue</strong>
                 <p style="margin-top:0.5rem;font-size:0.9rem">
-                    To enable cloud sync, please set your Firestore rules to:
-                    <br><code>allow read, write: if true;</code>
-                    <br>Go to: Firebase Console → Firestore Database → Rules
+                    To enable cloud sync, set Firestore rules to: <code>allow read, write: if true;</code>
                 </p>
                 <button class="btn btn-small btn-outline mt-4" onclick="document.getElementById('firebaseNote').classList.add('hidden')">Dismiss</button>
             </div>
@@ -378,6 +374,43 @@
         </div>
     </div>
 
+    <!-- Edit Product Modal -->
+    <div class="modal-overlay hidden" id="editProductModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit"></i> Edit Product</h3>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <div class="edit-modal-content">
+                <input type="hidden" id="editProductId">
+                <div class="form-group">
+                    <label>Product Name</label>
+                    <input type="text" id="editProductName" class="form-control" readonly style="background:var(--light)">
+                </div>
+                <div class="form-group">
+                    <label>Category</label>
+                    <select id="editProductCategory" class="form-control">
+                        <option value="tshirts">T-Shirts</option>
+                        <option value="Dresses">Dresses</option>
+                        <option value="Baby Jeans">Baby Jeans</option>
+                        <option value="shoes">Shoes</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Price ($)</label>
+                    <input type="number" id="editProductPrice" class="form-control" step="0.01" min="0">
+                </div>
+                <div class="form-group">
+                    <label>Stock Quantity</label>
+                    <input type="number" id="editProductStock" class="form-control" min="0">
+                </div>
+                <button class="btn btn-primary w-full btn-large" onclick="saveEditProduct()">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
     // ==================== STATE ====================
     const STATE = {
@@ -398,19 +431,10 @@
         
         // Mobile menu
         document.getElementById('mobileMenuBtn').addEventListener('click', function() {
-            const nav = document.createElement('div');
-            // Simple mobile menu toggle
-            const existing = document.querySelector('.mobile-nav');
-            if (existing) existing.remove();
-            else {
-                const mn = document.createElement('div');
-                mn.className = 'mobile-nav active';
-                mn.innerHTML = `
-                    <a href="#" class="nav-link" onclick="showTab('store')"><i class="fas fa-store"></i>Store</a>
-                    ${STATE.isAdmin ? '<a href="#" class="nav-link" onclick="showTab(\'admin\')"><i class="fas fa-cog"></i>Admin</a>' : ''}
-                    <button class="btn btn-success w-full mt-4" onclick="syncToFirebase()">Sync</button>
-                `;
-                document.querySelector('header').appendChild(mn);
+            const nav = document.getElementById('mobileNav');
+            if (nav) {
+                nav.classList.toggle('active');
+                this.innerHTML = nav.classList.contains('active') ? '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
             }
         });
         
@@ -418,6 +442,7 @@
         if (STATE.isAdmin) {
             document.getElementById('adminBadge').classList.remove('hidden');
             document.getElementById('adminNavLink').classList.remove('hidden');
+            document.getElementById('adminNavLinkMobile').classList.remove('hidden');
         }
         
         // Store ID
@@ -438,7 +463,7 @@
         // Check Firebase
         await checkFirebaseConnection();
         
-        // Load data (from Firebase or local)
+        // Load data
         await loadData();
         
         // Show store
@@ -451,7 +476,6 @@
         showStatus('Checking cloud connection...', 'offline');
         
         try {
-            // Test write to Firebase
             const testRef = db.collection('_connection_test').doc('test');
             await testRef.set({ timestamp: new Date().toISOString() });
             await testRef.delete();
@@ -460,18 +484,14 @@
             showStatus('✅ Connected to cloud - sync available', 'online');
             document.getElementById('syncBtn').disabled = false;
             
-            // Hide status after 3 seconds
-            setTimeout(() => {
-                document.getElementById('statusBar').classList.remove('show');
-            }, 3000);
-            
+            setTimeout(() => document.getElementById('statusBar').classList.remove('show'), 3000);
             console.log('🔥 Firebase connection: OK');
         } catch (error) {
             STATE.firebaseOnline = false;
             console.warn('⚠️ Firebase connection failed:', error.message);
             
             if (error.message.includes('Missing or insufficient permissions')) {
-                showStatus('⚠️ Firebase needs permission setup - see note below', 'offline');
+                showStatus('⚠️ Firebase needs permission setup', 'offline');
                 document.getElementById('firebaseNote').classList.remove('hidden');
             } else {
                 showStatus('📱 Working offline - data saved locally', 'offline');
@@ -484,7 +504,6 @@
     async function loadData() {
         if (STATE.firebaseOnline) {
             try {
-                // Load products from Firebase
                 const prodSnap = await db.collection('stores').doc(STATE.storeId).collection('products').where('active', '==', true).get();
                 const products = [];
                 prodSnap.forEach(doc => {
@@ -508,7 +527,6 @@
                     loadProductsLocal();
                 }
                 
-                // Load orders from Firebase
                 const orderSnap = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
                 STATE.pendingOrders = [];
                 STATE.confirmedOrders = [];
@@ -567,7 +585,6 @@
         document.getElementById('statusBar').classList.add('show');
         
         try {
-            // Sync products
             for (const product of STATE.products) {
                 await db.collection('stores').doc(STATE.storeId).collection('products').doc(product.id).set({
                     name: product.name,
@@ -581,7 +598,6 @@
                 }, { merge: true });
             }
             
-            // Sync orders
             const allOrders = [...STATE.pendingOrders, ...STATE.confirmedOrders];
             for (const order of allOrders) {
                 await db.collection('stores').doc(STATE.storeId).collection('orders').doc(order.orderId).set({
@@ -611,6 +627,9 @@
         if (tab) {
             tab.classList.remove('hidden');
             tab.classList.add('active');
+            
+            const navLink = document.querySelector(`.nav-link[onclick*="${name}"]`);
+            if (navLink) navLink.classList.add('active');
             
             if (name === 'store') renderProducts();
             if (name === 'cart') { renderCart(); updatePayway(); }
@@ -666,14 +685,74 @@
         showToast(`"${name}" added!`, 'success');
     }
 
-    function deleteProduct(id) {
-        if (!confirm('Delete this product?')) return;
-        STATE.products = STATE.products.filter(p => p.id !== id);
+    // ==================== EDIT PRODUCT FUNCTIONALITY ====================
+    function openEditModal(productId) {
+        const product = STATE.products.find(p => p.id === productId);
+        if (!product) return;
+        
+        document.getElementById('editProductId').value = product.id;
+        document.getElementById('editProductName').value = product.name;
+        document.getElementById('editProductCategory').value = product.category;
+        document.getElementById('editProductPrice').value = product.price;
+        document.getElementById('editProductStock').value = product.stock;
+        
+        document.getElementById('editProductModal').classList.add('active');
+        document.getElementById('editProductModal').classList.remove('hidden');
+    }
+
+    function closeEditModal() {
+        document.getElementById('editProductModal').classList.remove('active');
+        document.getElementById('editProductModal').classList.add('hidden');
+    }
+
+    function saveEditProduct() {
+        const productId = document.getElementById('editProductId').value;
+        const product = STATE.products.find(p => p.id === productId);
+        if (!product) return;
+        
+        const category = document.getElementById('editProductCategory').value;
+        const price = parseFloat(document.getElementById('editProductPrice').value);
+        const stock = parseInt(document.getElementById('editProductStock').value);
+        
+        if (isNaN(price) || price < 0) {
+            showToast('Please enter a valid price', 'error');
+            return;
+        }
+        
+        if (isNaN(stock) || stock < 0) {
+            showToast('Please enter a valid stock quantity', 'error');
+            return;
+        }
+        
+        // Update product
+        product.category = category;
+        product.price = price;
+        product.stock = stock;
+        
+        // Save changes
         saveProductsLocal();
-        if (STATE.firebaseOnline) db.collection('stores').doc(STATE.storeId).collection('products').doc(id).update({ active: false });
+        if (STATE.firebaseOnline) syncToFirebase();
+        
+        // Close modal and refresh displays
+        closeEditModal();
         renderProducts();
         renderInventory();
-        showToast('Deleted', 'success');
+        
+        showToast(`"${product.name}" updated! Stock: ${stock}, Price: $${price.toFixed(2)}`, 'success');
+    }
+
+    function deleteProduct(id) {
+        if (!confirm('Delete this product? This cannot be undone.')) return;
+        
+        const product = STATE.products.find(p => p.id === id);
+        STATE.products = STATE.products.filter(p => p.id !== id);
+        saveProductsLocal();
+        if (STATE.firebaseOnline) {
+            db.collection('stores').doc(STATE.storeId).collection('products').doc(id).update({ active: false });
+        }
+        renderProducts();
+        renderInventory();
+        showToast(`"${product ? product.name : 'Product'}" deleted`, 'success');
     }
 
     function renderProducts() {
@@ -689,7 +768,7 @@
         });
         
         if (filtered.length === 0) {
-            grid.innerHTML = '<div style="text-align:center;padding:3rem;grid-column:1/-1"><h3>No products</h3></div>';
+            grid.innerHTML = '<div style="text-align:center;padding:3rem;grid-column:1/-1"><h3>No products found</h3></div>';
             return;
         }
         
@@ -708,8 +787,10 @@
                     <div class="product-price">$${p.price.toFixed(2)}</div>
                     <div class="product-stock ${sClass}">${sText} (${p.stock})</div>
                     <div class="product-actions">
-                        <button class="btn btn-primary btn-add-to-cart" onclick="addToCart('${p.id}')" ${p.stock<=0?'disabled':''}>Add to Cart</button>
-                        ${STATE.isAdmin ? `<button class="btn btn-outline" onclick="deleteProduct('${p.id}')"><i class="fas fa-trash"></i></button>` : ''}
+                        <button class="btn btn-primary btn-add-to-cart" onclick="addToCart('${p.id}')" ${p.stock<=0?'disabled':''}>
+                            <i class="fas fa-cart-plus"></i> Add to Cart
+                        </button>
+                        ${STATE.isAdmin ? `<button class="btn btn-outline" onclick="showTab('admin');openEditModal('${p.id}')"><i class="fas fa-edit"></i></button>` : ''}
                     </div>
                 </div>
             </div>`;
@@ -720,11 +801,27 @@
         document.getElementById('productCount').textContent = STATE.products.length;
         const tbody = document.getElementById('inventoryBody');
         if (!tbody) return;
+        
         tbody.innerHTML = STATE.products.map(p => `
             <tr>
-                <td><strong>${p.name}</strong></td><td>${p.category}</td><td>$${p.price.toFixed(2)}</td>
-                <td>${p.stock}</td>
-                <td><button class="btn btn-danger btn-small" onclick="deleteProduct('${p.id}')"><i class="fas fa-trash"></i></button></td>
+                <td><strong>${p.name}</strong></td>
+                <td><span style="background:var(--primary-light);color:var(--primary-dark);padding:0.2rem 0.7rem;border-radius:2rem;font-size:0.8rem">${p.category}</span></td>
+                <td>$${p.price.toFixed(2)}</td>
+                <td>
+                    <span class="product-stock ${p.stock > 10 ? 'in-stock' : p.stock > 0 ? 'low-stock' : 'out-of-stock'}">
+                        ${p.stock}
+                    </span>
+                </td>
+                <td>
+                    <div class="flex gap-2">
+                        <button class="btn btn-warning btn-small" onclick="openEditModal('${p.id}')" title="Edit stock & price">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button class="btn btn-danger btn-small" onclick="deleteProduct('${p.id}')" title="Delete product">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
             </tr>
         `).join('');
     }
@@ -744,7 +841,7 @@
         const existing = STATE.cart.find(i => i.productId === pid);
         if (existing) {
             if (existing.quantity < product.stock) existing.quantity++;
-            else { showToast('Stock limit', 'error'); return; }
+            else { showToast('Stock limit reached', 'error'); return; }
         } else {
             STATE.cart.push({ productId: pid, name: product.name, price: product.price, quantity: 1, image: (product.images&&product.images[0])||'' });
         }
@@ -753,7 +850,7 @@
         updateCartBadge();
         renderCart();
         updatePayway();
-        showToast('Added to cart', 'success');
+        showToast('Added to cart!', 'success');
     }
 
     function renderCart() {
@@ -770,8 +867,15 @@
             const t = item.price * item.quantity;
             return `<div class="cart-item">
                 <img src="${item.image}" class="cart-item-image" onerror="this.src='https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100'">
-                <div><div class="cart-item-name">${item.name}</div><div class="cart-item-price">$${item.price.toFixed(2)}</div>
-                <div class="cart-item-quantity"><button class="quantity-btn" onclick="updQty(${i},${item.quantity-1})">-</button><span>${item.quantity}</span><button class="quantity-btn" onclick="updQty(${i},${item.quantity+1})">+</button></div></div>
+                <div>
+                    <div class="cart-item-name">${item.name}</div>
+                    <div class="cart-item-price">$${item.price.toFixed(2)}</div>
+                    <div class="cart-item-quantity">
+                        <button class="quantity-btn" onclick="updQty(${i},${item.quantity-1})">-</button>
+                        <span>${item.quantity}</span>
+                        <button class="quantity-btn" onclick="updQty(${i},${item.quantity+1})">+</button>
+                    </div>
+                </div>
                 <div class="cart-item-total">$${t.toFixed(2)}</div>
                 <button class="remove-item" onclick="remCart(${i})"><i class="fas fa-trash"></i></button>
             </div>`;
@@ -785,7 +889,7 @@
     function updQty(i, q) { if (q < 1) { remCart(i); return; } STATE.cart[i].quantity = q; localStorage.setItem('goatCart', JSON.stringify(STATE.cart)); updateCartBadge(); renderCart(); updatePayway(); }
     function remCart(i) { STATE.cart.splice(i,1); localStorage.setItem('goatCart', JSON.stringify(STATE.cart)); updateCartBadge(); renderCart(); updatePayway(); }
     function updatePayway() { document.getElementById('paywayTotal').textContent = (STATE.cart.reduce((s,i)=>s+i.price*i.quantity,0)+2).toFixed(2); }
-    function selectPayment(m) { STATE.paymentMethod = m; }
+    function selectPayment(m) { STATE.paymentMethod = m; document.getElementById('payOption').classList.toggle('selected', m==='payway'); document.getElementById('codOption').classList.toggle('selected', m==='cod'); }
 
     // ==================== ORDERS ====================
     function placeOrder() {
@@ -809,7 +913,9 @@
         
         STATE.pendingOrders.push(order);
         saveOrdersLocal();
-        if (STATE.firebaseOnline) syncOrderToFirebase(order);
+        if (STATE.firebaseOnline) {
+            db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order).catch(e => console.error('Order sync error:', e));
+        }
         
         let msg = `🛍️ *GOAT KIDS ORDER*\n🆔 ${oid}\n📅 ${order.orderDate}\n\n👤 ${name}\n📞 ${phone}\n📍 ${address}\n\n📦 ITEMS:\n`;
         order.cart.forEach((it,i) => msg += `${i+1}. ${it.name} x${it.quantity} = $${it.subtotal.toFixed(2)}\n`);
@@ -819,22 +925,15 @@
         localStorage.setItem('goatCart','[]');
         updateCartBadge(); renderCart(); updatePayway();
         
-        if (confirm('Order placed! Open Messenger?')) window.open(`https://m.me/Goatkids?text=${encodeURIComponent(msg)}`,'_blank');
+        if (confirm('Order placed! Open Messenger to send details?')) window.open(`https://m.me/Goatkids?text=${encodeURIComponent(msg)}`,'_blank');
         if (STATE.isAdmin) renderPending();
-        showToast('Order sent!', 'success');
+        showToast('Order sent! Pending confirmation.', 'success');
     }
 
     function handlePayway(e) {
         if (STATE.cart.length === 0) { e.preventDefault(); showToast('Cart empty','error'); return false; }
         placeOrder();
         return true;
-    }
-
-    async function syncOrderToFirebase(order) {
-        if (!STATE.firebaseOnline) return;
-        try {
-            await db.collection('stores').doc(STATE.storeId).collection('orders').doc(order.orderId).set(order);
-        } catch(e) { console.error('Order sync error:', e); }
     }
 
     function confirmOrder(oid) {
@@ -861,7 +960,7 @@
         if (STATE.firebaseOnline) syncToFirebase();
         
         renderPending(); renderHistory(); renderProducts(); renderInventory();
-        showToast(`Order ${oid} confirmed!`, 'success');
+        showToast(`Order ${oid} confirmed! Stock reduced.`, 'success');
     }
 
     function rejectOrder(oid) {
@@ -870,7 +969,7 @@
         const order = STATE.pendingOrders[idx];
         order.status = 'rejected';
         order.rejectedAt = new Date().toLocaleString();
-        order.rejectionReason = prompt('Reason:') || 'No reason';
+        order.rejectionReason = prompt('Reason for rejection:') || 'No reason';
         STATE.confirmedOrders.push(order);
         STATE.pendingOrders.splice(idx, 1);
         saveOrdersLocal();
@@ -881,7 +980,7 @@
 
     function confirmAll() {
         if (STATE.pendingOrders.length === 0) { showToast('No pending orders', 'warning'); return; }
-        if (!confirm(`Confirm ALL ${STATE.pendingOrders.length} orders?`)) return;
+        if (!confirm(`Confirm ALL ${STATE.pendingOrders.length} orders? Stock will be reduced.`)) return;
         
         const orders = [...STATE.pendingOrders];
         for (const order of orders) {
@@ -905,13 +1004,13 @@
         const c = document.getElementById('pendingContainer');
         document.getElementById('pendingCount').textContent = STATE.pendingOrders.length;
         if (!c) return;
-        if (STATE.pendingOrders.length === 0) { c.innerHTML = '<p style="text-align:center;padding:2rem;color:var(--gray)">No pending</p>'; return; }
+        if (STATE.pendingOrders.length === 0) { c.innerHTML = '<p style="text-align:center;padding:2rem;color:var(--gray)">No pending orders</p>'; return; }
         c.innerHTML = STATE.pendingOrders.map(o => `
             <div class="order-card">
                 <div style="display:flex;justify-content:space-between;margin-bottom:0.75rem">
                     <div><strong style="color:var(--warning)">⏳ PENDING</strong><br><small>🆔 ${o.orderId} | ${o.orderDate}</small></div>
                 </div>
-                <div style="background:var(--light);padding:0.75rem;border-radius:var(--radius);margin-bottom:0.5rem;font-size:0.9rem">👤 ${o.customerName} | 📞 ${o.customerPhone}</div>
+                <div style="background:var(--light);padding:0.75rem;border-radius:var(--radius);margin-bottom:0.5rem;font-size:0.9rem">👤 ${o.customerName} | 📞 ${o.customerPhone}<br>📍 ${o.customerAddress}</div>
                 <div style="margin-bottom:0.5rem">${o.cart.map(it => `<div style="display:flex;justify-content:space-between;font-size:0.85rem"><span>${it.quantity}x ${it.name}</span><span>$${it.subtotal.toFixed(2)}</span></div>`).join('')}</div>
                 <div style="font-weight:700;margin-bottom:0.75rem">Total: $${o.total.toFixed(2)}</div>
                 <div class="flex gap-2">
@@ -930,13 +1029,16 @@
         c.innerHTML = [...STATE.confirmedOrders].reverse().map(o => {
             const ok = o.status === 'confirmed';
             return `<div class="order-card ${o.status}" style="border-color:${ok?'var(--success)':'var(--danger)'};opacity:${ok?'1':'0.7'};margin-bottom:0.5rem">
-                <div style="display:flex;justify-content:space-between"><div><strong style="color:${ok?'var(--success)':'var(--danger)'}">${ok?'✅':'❌'} ${o.status.toUpperCase()}</strong><br><small>🆔 ${o.orderId} | ${o.orderDate}</small></div><strong>$${o.total.toFixed(2)}</strong></div>
-                <div style="font-size:0.85rem">👤 ${o.customerName}</div>
+                <div style="display:flex;justify-content:space-between">
+                    <div><strong style="color:${ok?'var(--success)':'var(--danger)'}">${ok?'✅':'❌'} ${o.status.toUpperCase()}</strong><br><small>🆔 ${o.orderId}</small></div>
+                    <strong>$${o.total.toFixed(2)}</strong>
+                </div>
+                <div style="font-size:0.85rem;margin-top:0.25rem">👤 ${o.customerName}</div>
             </div>`;
         }).join('');
     }
 
-    // ==================== CSV ====================
+    // ==================== CSV EXPORT ====================
     function escCSV(v) { if (!v) return ''; const s = String(v); return s.includes(',')||s.includes('"') ? '"'+s.replace(/"/g,'""')+'"' : s; }
     function dlCSV(csv, fn) {
         const b = new Blob(['\uFEFF'+csv], {type:'text/csv'});
@@ -944,17 +1046,17 @@
         a.click(); URL.revokeObjectURL(a.href);
     }
     function exportPendingCSV() {
-        if (!STATE.pendingOrders.length) { showToast('No pending','warning'); return; }
-        let csv = 'Order ID,Date,Customer,Phone,Item,Quantity,Price,Subtotal,Total\n';
-        STATE.pendingOrders.forEach(o => o.cart.forEach(it => csv += [escCSV(o.orderId),escCSV(o.orderDate),escCSV(o.customerName),escCSV(o.customerPhone),escCSV(it.name),it.quantity,it.price.toFixed(2),it.subtotal.toFixed(2),o.total.toFixed(2)].join(',')+'\n'));
-        dlCSV(csv, `Pending_${new Date().toISOString().split('T')[0]}.csv`);
+        if (!STATE.pendingOrders.length) { showToast('No pending orders','warning'); return; }
+        let csv = 'Order ID,Date,Customer,Phone,Address,Item,Quantity,Price,Subtotal,Total\n';
+        STATE.pendingOrders.forEach(o => o.cart.forEach(it => csv += [escCSV(o.orderId),escCSV(o.orderDate),escCSV(o.customerName),escCSV(o.customerPhone),escCSV(o.customerAddress),escCSV(it.name),it.quantity,it.price.toFixed(2),it.subtotal.toFixed(2),o.total.toFixed(2)].join(',')+'\n'));
+        dlCSV(csv, `Pending_Orders_${new Date().toISOString().split('T')[0]}.csv`);
         showToast('Exported!','success');
     }
     function exportHistoryCSV() {
         if (!STATE.confirmedOrders.length) { showToast('No history','warning'); return; }
         let csv = 'Order ID,Date,Status,Customer,Phone,Item,Quantity,Price,Subtotal,Total\n';
         STATE.confirmedOrders.forEach(o => o.cart.forEach(it => csv += [escCSV(o.orderId),escCSV(o.orderDate),escCSV(o.status),escCSV(o.customerName),escCSV(o.customerPhone),escCSV(it.name),it.quantity,it.price.toFixed(2),it.subtotal.toFixed(2),o.total.toFixed(2)].join(',')+'\n'));
-        dlCSV(csv, `History_${new Date().toISOString().split('T')[0]}.csv`);
+        dlCSV(csv, `Order_History_${new Date().toISOString().split('T')[0]}.csv`);
         showToast('Exported!','success');
     }
 
@@ -967,9 +1069,9 @@
     function showToast(msg, type) {
         const c = {success:'var(--success)',error:'var(--danger)',warning:'var(--warning)',info:'var(--primary)'};
         const el = document.createElement('div');
-        el.innerHTML = `<div style="position:fixed;top:60px;right:20px;padding:0.75rem 1.5rem;border-radius:8px;background:${c[type]};color:#fff;box-shadow:0 10px 25px rgba(0,0,0,0.2);z-index:9999;font-size:0.95rem">${msg}</div>`;
+        el.innerHTML = `<div style="position:fixed;top:60px;right:20px;padding:0.75rem 1.5rem;border-radius:8px;background:${c[type]};color:#fff;box-shadow:0 10px 25px rgba(0,0,0,0.2);z-index:9999;font-size:0.95rem;max-width:350px">${msg}</div>`;
         document.body.appendChild(el);
-        setTimeout(() => el.remove(), 3000);
+        setTimeout(() => { el.firstChild.style.opacity='0'; el.firstChild.style.transition='opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 3000);
     }
     function openAdminModal() { document.getElementById('adminModal').classList.add('active'); document.getElementById('adminModal').classList.remove('hidden'); }
     function closeAdminModal() { document.getElementById('adminModal').classList.remove('active'); document.getElementById('adminModal').classList.add('hidden'); }
@@ -978,11 +1080,23 @@
             STATE.isAdmin = true; localStorage.setItem('goatAdmin','true');
             document.getElementById('adminBadge').classList.remove('hidden');
             document.getElementById('adminNavLink').classList.remove('hidden');
-            showTab('admin'); closeAdminModal(); showToast('Admin login!','success');
-        } else { showToast('Wrong password','error'); }
+            document.getElementById('adminNavLinkMobile').classList.remove('hidden');
+            showTab('admin'); closeAdminModal(); showToast('Admin login successful!','success');
+        } else { showToast('Incorrect password','error'); }
     }
-    function adminLogout() { STATE.isAdmin = false; localStorage.removeItem('goatAdmin'); showTab('store'); showToast('Logged out','info'); }
-    function copyStoreId() { navigator.clipboard.writeText(STATE.storeId); showToast('Copied!','success'); }
+    function adminLogout() { 
+        STATE.isAdmin = false; localStorage.removeItem('goatAdmin');
+        document.getElementById('adminBadge').classList.add('hidden');
+        document.getElementById('adminNavLink').classList.add('hidden');
+        document.getElementById('adminNavLinkMobile').classList.add('hidden');
+        showTab('store'); showToast('Logged out','info');
+    }
+    function copyStoreId() { navigator.clipboard.writeText(STATE.storeId); showToast('Store ID copied!','success'); }
+
+    console.log('✅ GOAT KIDS application ready');
+    console.log('📱 Firebase:', STATE.firebaseOnline ? 'ONLINE' : 'OFFLINE');
+    console.log('🆔 Store ID:', STATE.storeId);
+    console.log('🔑 Admin password: N1255550');
     </script>
 </body>
 </html>
