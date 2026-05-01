@@ -116,6 +116,16 @@
         .product-actions{display:flex;gap:0.5rem;margin-top:1rem}
         .btn-add-to-cart{flex:1;padding:0.7rem;font-size:1rem;font-weight:600}
         
+        /* Image Upload Styles */
+        .image-upload-area{border:2px dashed var(--gray-light);border-radius:var(--radius);padding:1.5rem;text-align:center;cursor:pointer;transition:all 0.3s;margin-bottom:1rem;background:#fafafa}
+        .image-upload-area:hover{border-color:var(--primary);background:var(--light)}
+        .image-upload-area i{font-size:2.5rem;color:var(--gray);margin-bottom:0.5rem}
+        .image-preview-container{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.75rem}
+        .image-preview{position:relative;width:80px;height:80px;border-radius:var(--radius);overflow:hidden;border:2px solid var(--gray-light)}
+        .image-preview img{width:100%;height:100%;object-fit:cover}
+        .image-preview .remove-preview{position:absolute;top:2px;right:2px;background:var(--danger);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:0.7rem;display:flex;align-items:center;justify-content:center}
+        .image-url-input{margin-top:0.5rem}
+        
         .cart-container{background:#fff;border-radius:var(--radius-lg);padding:1.5rem;box-shadow:var(--shadow)}
         .cart-empty{text-align:center;padding:3rem}
         .cart-empty-icon{font-size:3rem;color:var(--gray-light);margin-bottom:1rem}
@@ -267,6 +277,22 @@
                     <div class="flex gap-4" style="margin-bottom:1rem"><div style="flex:1"><input type="number" id="productPrice" class="form-control" placeholder="Price" step="0.01"></div></div>
                     <div class="form-group"><select id="productCategory" class="form-control"><option value="">Category</option><option value="tshirts">T-Shirts</option><option value="Dresses">Dresses</option><option value="Baby Jeans">Baby Jeans</option></select></div>
                     
+                    <!-- IMAGE UPLOAD SECTION -->
+                    <div class="form-group">
+                        <label style="font-weight:600;margin-bottom:0.5rem;display:block">Product Images:</label>
+                        <div class="image-upload-area" onclick="document.getElementById('imageFileInput').click()">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p>Click to upload images or paste URL below</p>
+                            <small style="color:var(--gray)">Max 5 images supported</small>
+                        </div>
+                        <input type="file" id="imageFileInput" accept="image/*" multiple style="display:none" onchange="handleImageUpload(event)">
+                        <div class="image-preview-container" id="imagePreviewContainer"></div>
+                        <div class="image-url-input">
+                            <input type="text" id="imageUrlInput" class="form-control" placeholder="Or paste image URL (e.g., from ImgBB)">
+                            <button class="btn btn-outline btn-small mt-4" onclick="addImageUrl()">Add URL</button>
+                        </div>
+                    </div>
+                    
                     <!-- SIZE MANAGEMENT -->
                     <div class="form-group">
                         <label style="font-weight:600;margin-bottom:0.5rem;display:block">Sizes & Stock:</label>
@@ -282,7 +308,7 @@
                 </div>
 
                 <div class="section-title">Inventory (<span id="productCount">0</span>)</div>
-                <div style="overflow-x:auto"><table class="inventory-table"><thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Size Breakdown</th><th>Total Stock</th><th>Actions</th></tr></thead><tbody id="inventoryBody"></tbody></table></div>
+                <div style="overflow-x:auto"><table class="inventory-table"><thead><tr><th>Image</th><th>Product</th><th>Category</th><th>Price</th><th>Size Breakdown</th><th>Total Stock</th><th>Actions</th></tr></thead><tbody id="inventoryBody"></tbody></table></div>
             </div>
         </div>
     </main>
@@ -296,6 +322,17 @@
         <div class="form-group"><label style="font-weight:600">Product Name</label><input type="text" id="editProductName" class="form-control" readonly style="background:var(--light)"></div>
         <div class="form-group"><label style="font-weight:600">Category</label><select id="editProductCategory" class="form-control"><option value="tshirts">T-Shirts</option><option value="Dresses">Dresses</option><option value="Baby Jeans">Baby Jeans</option></select></div>
         <div class="form-group"><label style="font-weight:600">Price ($)</label><input type="number" id="editProductPrice" class="form-control" step="0.01"></div>
+        
+        <!-- Edit Images -->
+        <div class="form-group">
+            <label style="font-weight:600">Images</label>
+            <div class="image-preview-container" id="editImagePreviewContainer"></div>
+            <div class="flex gap-2 mt-4">
+                <input type="text" id="editImageUrlInput" class="form-control" placeholder="Add image URL">
+                <button class="btn btn-outline btn-small" onclick="addEditImageUrl()">Add</button>
+            </div>
+        </div>
+        
         <div class="form-group">
             <label style="font-weight:600">Size Inventory</label>
             <div id="editSizeInventory" class="size-edit-grid"></div>
@@ -304,6 +341,9 @@
     </div></div>
 
 <script>
+// ==================== CONFIG ====================
+const IMGBB_API_KEY = ''; // Add your ImgBB API key here: https://api.imgbb.com/
+
 // ==================== STATE ====================
 const STATE = {
     products: [],
@@ -315,7 +355,9 @@ const STATE = {
     firebaseOnline: false,
     pendingOrders: [],
     confirmedOrders: [],
-    newProductSizes: [] // Temporary storage for new product sizes
+    newProductSizes: [],
+    newProductImages: [], // Temporary images for new product
+    editProductImages: [] // Temporary images for editing
 };
 
 // ==================== INIT ====================
@@ -350,16 +392,95 @@ document.addEventListener('DOMContentLoaded', async function() {
     showTab('store');
 });
 
+// ==================== IMAGE UPLOAD ====================
+function handleImageUpload(event) {
+    const files = Array.from(event.target.files);
+    
+    if (STATE.newProductImages.length + files.length > 5) {
+        showToast('Maximum 5 images allowed', 'error');
+        return;
+    }
+    
+    files.forEach(file => {
+        if (file.size > 32 * 1024 * 1024) {
+            showToast(`File ${file.name} is too large (max 32MB)`, 'error');
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            STATE.newProductImages.push(e.target.result);
+            renderImagePreviews();
+        };
+        reader.readAsDataURL(file);
+    });
+    
+    event.target.value = '';
+}
+
+function addImageUrl() {
+    const url = document.getElementById('imageUrlInput').value.trim();
+    if (!url) return;
+    
+    if (STATE.newProductImages.length >= 5) {
+        showToast('Maximum 5 images', 'error');
+        return;
+    }
+    
+    STATE.newProductImages.push(url);
+    document.getElementById('imageUrlInput').value = '';
+    renderImagePreviews();
+}
+
+function removeNewImage(index) {
+    STATE.newProductImages.splice(index, 1);
+    renderImagePreviews();
+}
+
+function renderImagePreviews() {
+    const container = document.getElementById('imagePreviewContainer');
+    container.innerHTML = STATE.newProductImages.map((img, i) => `
+        <div class="image-preview">
+            <img src="${img}" alt="Preview ${i+1}">
+            <button class="remove-preview" onclick="removeNewImage(${i})">&times;</button>
+        </div>
+    `).join('');
+}
+
+// Edit image functions
+function addEditImageUrl() {
+    const url = document.getElementById('editImageUrlInput').value.trim();
+    if (!url) return;
+    
+    if (STATE.editProductImages.length >= 5) {
+        showToast('Maximum 5 images', 'error');
+        return;
+    }
+    
+    STATE.editProductImages.push(url);
+    document.getElementById('editImageUrlInput').value = '';
+    renderEditImagePreviews();
+}
+
+function removeEditImage(index) {
+    STATE.editProductImages.splice(index, 1);
+    renderEditImagePreviews();
+}
+
+function renderEditImagePreviews() {
+    const container = document.getElementById('editImagePreviewContainer');
+    container.innerHTML = STATE.editProductImages.map((img, i) => `
+        <div class="image-preview">
+            <img src="${img}" alt="Preview ${i+1}">
+            <button class="remove-preview" onclick="removeEditImage(${i})">&times;</button>
+        </div>
+    `).join('');
+}
+
 // ==================== SIZE HELPERS ====================
 function getTotalStock(product) {
     if (!product.sizes || product.sizes.length === 0) return product.stock || 0;
     return product.sizes.reduce((sum, s) => sum + (s.qty || 0), 0);
-}
-
-function getSizeStock(product, sizeName) {
-    if (!product.sizes) return 0;
-    const sizeObj = product.sizes.find(s => s.name === sizeName);
-    return sizeObj ? sizeObj.qty : 0;
 }
 
 function hasStock(product) {
@@ -442,7 +563,7 @@ function showTab(name) {
 }
 function updateCartBadge() { document.getElementById('floatingCartCount').textContent = STATE.cart.reduce((t,i)=>t+i.quantity,0); }
 
-// ==================== SIZE MANAGEMENT FOR NEW PRODUCT ====================
+// ==================== SIZE MANAGEMENT ====================
 function addSizeToNewProduct() {
     const name = document.getElementById('newSizeName').value.trim().toUpperCase();
     const qty = parseInt(document.getElementById('newSizeQty').value) || 0;
@@ -473,7 +594,6 @@ function loadSamples() {
         { id:'p2', name:"Children's Jeans", price:24.99, stock:15, category:'Dresses', images:['https://images.unsplash.com/photo-1542272604-787c3835535d?w=400'], sizes:[{name:'2T',qty:4},{name:'3T',qty:6},{name:'4T',qty:5}] },
         { id:'p3', name:'Kids Hoodie', price:29.99, stock:8, category:'Baby Jeans', images:['https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400'], sizes:[{name:'S',qty:2},{name:'M',qty:4},{name:'L',qty:2}] }
     ];
-    // Update total stock based on sizes
     STATE.products.forEach(p => { p.stock = getTotalStock(p); });
     saveProductsLocal();
     if (STATE.firebaseOnline) syncToFirebase();
@@ -489,27 +609,32 @@ function addProduct() {
     if (!name || isNaN(price) || price <= 0 || !category) { showToast('Fill all fields','error'); return; }
     if (STATE.newProductSizes.length === 0) { showToast('Add at least one size','error'); return; }
     
+    // Use uploaded images or fallback
+    const images = STATE.newProductImages.length > 0 ? [...STATE.newProductImages] : ['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'];
     const totalStock = STATE.newProductSizes.reduce((s, sz) => s + sz.qty, 0);
     
     STATE.products.push({
         id: 'p' + Date.now(),
         name, price, stock: totalStock, category,
-        images: ['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'],
+        images: images,
         sizes: [...STATE.newProductSizes]
     });
     
     saveProductsLocal();
     if (STATE.firebaseOnline) syncToFirebase();
     
+    // Reset form
     document.getElementById('productName').value = '';
     document.getElementById('productPrice').value = '';
     document.getElementById('productCategory').value = '';
     STATE.newProductSizes = [];
+    STATE.newProductImages = [];
     renderNewProductSizes();
+    renderImagePreviews();
     
     renderProducts();
     renderInventory();
-    showToast(`"${name}" added! (${totalStock} total)`, 'success');
+    showToast(`"${name}" added!`, 'success');
 }
 
 function openEditModal(productId) {
@@ -520,6 +645,10 @@ function openEditModal(productId) {
     document.getElementById('editProductName').value = product.name;
     document.getElementById('editProductCategory').value = product.category;
     document.getElementById('editProductPrice').value = product.price;
+    
+    // Load images for editing
+    STATE.editProductImages = [...(product.images || [])];
+    renderEditImagePreviews();
     
     // Render size inventory editor
     const sizeContainer = document.getElementById('editSizeInventory');
@@ -550,6 +679,7 @@ function saveEditProduct() {
     
     product.category = document.getElementById('editProductCategory').value;
     product.price = parseFloat(document.getElementById('editProductPrice').value);
+    product.images = [...STATE.editProductImages];
     
     // Update size quantities
     const sizeInputs = document.querySelectorAll('.edit-size-qty');
@@ -561,7 +691,6 @@ function saveEditProduct() {
         }
     });
     
-    // Recalculate total stock
     product.stock = getTotalStock(product);
     
     saveProductsLocal();
@@ -570,7 +699,7 @@ function saveEditProduct() {
     closeEditModal();
     renderProducts();
     renderInventory();
-    showToast(`"${product.name}" updated! Total: ${product.stock}`, 'success');
+    showToast(`"${product.name}" updated!`, 'success');
 }
 
 function deleteProduct(id) {
@@ -618,7 +747,7 @@ function renderProducts() {
         }
         
         return `<div class="product-card">
-            <div class="product-image-container"><img src="${img}" class="product-main-image" loading="lazy"><div class="product-badge ${badge}">${text}</div></div>
+            <div class="product-image-container"><img src="${img}" class="product-main-image" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'"><div class="product-badge ${badge}">${text}</div></div>
             <div class="product-info">
                 <span class="product-category">${p.category}</span>
                 <h3 class="product-title">${p.name}</h3>
@@ -668,8 +797,10 @@ function renderInventory() {
         }
         
         const totalStock = getTotalStock(p);
+        const img = (p.images&&p.images[0])||'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60';
         
         return `<tr>
+            <td><img src="${img}" alt="${p.name}" style="width:50px;height:50px;object-fit:cover;border-radius:4px" onerror="this.src='https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60'"></td>
             <td><strong>${p.name}</strong></td>
             <td><span style="background:var(--primary-light);color:var(--primary-dark);padding:0.2rem 0.5rem;border-radius:2rem;font-size:0.75rem">${p.category}</span></td>
             <td>$${p.price.toFixed(2)}</td>
@@ -703,12 +834,10 @@ function addToCart(pid) {
     
     const size = selSize || 'One Size';
     
-    // Check size-specific stock
     if (product.sizes && product.sizes.length > 0) {
         const sizeObj = product.sizes.find(s => s.name === size);
         if (!sizeObj || sizeObj.qty <= 0) { showToast(`Size ${size} is out of stock`,'error'); return; }
         
-        // Check how many of this size are already in cart
         const cartQty = STATE.cart.filter(i => i.productId === pid && i.size === size).reduce((s,i) => s + i.quantity, 0);
         if (cartQty >= sizeObj.qty) { showToast(`Only ${sizeObj.qty} available in size ${size}`,'error'); return; }
     }
@@ -792,7 +921,6 @@ function confirmOrder(oid) {
     if (idx<0) return;
     const order = STATE.pendingOrders[idx];
     
-    // Check stock for each item (including size)
     for (const item of order.cart) {
         const product = STATE.products.find(p=>p.id===item.productId);
         if (!product) { showToast(`Product not found: ${item.name}`,'error'); return; }
@@ -800,15 +928,13 @@ function confirmOrder(oid) {
         if (product.sizes && product.sizes.length > 0) {
             const sizeObj = product.sizes.find(s=>s.name===item.size);
             if (!sizeObj || sizeObj.qty < item.quantity) {
-                showToast(`Not enough stock: ${item.name} size ${item.size} (${sizeObj?sizeObj.qty:0} available)`,'error');
-                return;
+                showToast(`Not enough stock: ${item.name} size ${item.size}`,'error'); return;
             }
         } else if (product.stock < item.quantity) {
             showToast(`Not enough stock: ${item.name}`,'error'); return;
         }
     }
     
-    // Reduce stock
     for (const item of order.cart) {
         const product = STATE.products.find(p=>p.id===item.productId);
         if (product) {
