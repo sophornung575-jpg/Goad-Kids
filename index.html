@@ -25,941 +25,760 @@
     try {
         firebase.initializeApp(firebaseConfig);
         window.db = firebase.firestore();
-        
-        window.db.enablePersistence({experimentalForceOwningTab: true})
-            .catch((err) => {
-                if (err.code == 'failed-precondition') {
-                    console.log('Multiple tabs open - persistence disabled');
-                } else if (err.code == 'unimplemented') {
-                    console.log('Browser doesn\'t support persistence');
-                }
-            });
-        
+        window.db.enablePersistence({experimentalForceOwningTab: true}).catch(() => {});
         window.firebaseInitialized = true;
-        console.log('✅ Firebase initialized successfully');
-        
-    } catch (error) {
-        console.error('Firebase failed:', error);
-        window.firebaseInitialized = false;
+        console.log('✅ Firebase ready');
+    } catch (e) {
+        console.error('Firebase error:', e);
     }
 </script>
     
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        :root {
-            --primary: #667eea; --primary-light: #a3b4f6; --primary-dark: #5a67d8;
-            --secondary: #ed64a6; --success: #48bb78; --warning: #ecc94b;
-            --danger: #f56565; --info: #4299e1; --dark: #2d3748;
-            --light: #f7fafc; --gray: #a0aec0; --gray-light: #e2e8f0; --gray-dark: #4a5568;
-            --space-xs: 0.25rem; --space-sm: 0.5rem; --space-md: 1rem;
-            --space-lg: 1.5rem; --space-xl: 2rem; --space-2xl: 3rem;
-            --radius-sm: 4px; --radius: 8px; --radius-lg: 12px; --radius-xl: 16px;
-            --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05);
-            --shadow: 0 1px 3px 0 rgba(0,0,0,0.1);
-            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
-            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
-            --transition: all 0.3s ease;
+        *{margin:0;padding:0;box-sizing:border-box}
+        :root{
+            --primary:#667eea;--primary-light:#a3b4f6;--primary-dark:#5a67d8;
+            --secondary:#ed64a6;--success:#48bb78;--warning:#ecc94b;
+            --danger:#f56565;--info:#4299e1;--dark:#2d3748;
+            --light:#f7fafc;--gray:#a0aec0;--gray-light:#e2e8f0;--gray-dark:#4a5568;
+            --radius:8px;--radius-lg:12px;--radius-xl:16px;
+            --shadow:0 1px 3px 0 rgba(0,0,0,0.1);--shadow-lg:0 10px 15px -3px rgba(0,0,0,0.1);
+            --transition:all 0.3s ease;
         }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: var(--light); color: var(--dark); line-height: 1.5; min-height: 100vh;
-        }
-
-        .container { max-width: 1400px; margin: 0 auto; padding: 0 var(--space-lg); }
-        .hidden { display: none !important; }
-        .flex { display: flex; }
-        .items-center { align-items: center; }
-        .justify-between { justify-content: space-between; }
-        .gap-2 { gap: var(--space-sm); }
-        .gap-4 { gap: var(--space-md); }
-        .gap-8 { gap: var(--space-xl); }
-        .mt-4 { margin-top: var(--space-md); }
-        .mt-8 { margin-top: var(--space-xl); }
-        .mb-4 { margin-bottom: var(--space-md); }
-        .mb-8 { margin-bottom: var(--space-xl); }
-        .text-center { text-align: center; }
-        .w-full { width: 100%; }
-
-        h1, h2, h3, h4 { font-weight: 600; line-height: 1.2; }
-        h1 { font-size: 2.5rem; }
-        h2 { font-size: 2rem; }
-        h3 { font-size: 1.5rem; }
-        h4 { font-size: 1.25rem; }
-
-        .btn {
-            display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm);
-            padding: 0.625rem 1.25rem; border: none; border-radius: var(--radius);
-            font-size: 1rem; font-weight: 500; cursor: pointer; transition: var(--transition);
-            text-decoration: none; outline: none;
-        }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: var(--shadow); }
-        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-secondary { background: var(--secondary); color: white; }
-        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
-        .btn-outline:hover { background: var(--primary); color: white; }
-        .btn-small { padding: 0.375rem 0.75rem; font-size: 0.875rem; }
-        .btn-large { padding: 0.875rem 1.75rem; font-size: 1.125rem; }
-        .btn-success { background: var(--success); color: white; }
-        .btn-danger { background: var(--danger); color: white; }
-        .btn-warning { background: var(--warning); color: var(--dark); }
-        .btn-info { background: var(--info); color: white; }
-
-        .payway-btn, .messenger-btn {
-            display: flex; align-items: center; justify-content: center; gap: var(--space-sm);
-            width: 100%; padding: 1rem; border: none; border-radius: var(--radius);
-            font-size: 1rem; font-weight: 600; cursor: pointer; transition: var(--transition);
-            margin-top: var(--space-lg); text-decoration: none; color: white;
-        }
-        .payway-btn { background: linear-gradient(135deg, #006AFF 0%, #00C6FF 100%); }
-        .messenger-btn { background: linear-gradient(135deg, #0084FF 0%, #006AFF 100%); }
-        .payway-btn:hover, .messenger-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
-
-        .sync-status {
-            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-            padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between;
-            font-size: 1rem; transform: translateY(-100%); transition: transform 0.3s ease;
-            background: var(--dark); color: white;
-        }
-        .sync-status.show { transform: translateY(0); }
-        .sync-status.online { background: var(--success); }
-        .sync-status.offline { background: var(--warning); color: var(--dark); }
-        .sync-status.error { background: var(--danger); }
-        .sync-status.syncing { background: var(--info); }
-
-        header { background: white; box-shadow: var(--shadow-sm); position: sticky; top: 0; z-index: 100; }
-        .header-container { max-width: 1400px; margin: 0 auto; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; }
-
-        .logo { display: flex; align-items: center; gap: var(--space-sm); font-size: 1.5rem; font-weight: 700; color: var(--primary); text-decoration: none; cursor: pointer; }
-        .admin-badge { background: var(--secondary); color: white; font-size: 0.75rem; padding: 0.125rem 0.5rem; border-radius: var(--radius-sm); margin-left: var(--space-sm); }
-        .mobile-menu-btn { display: none; background: none; border: none; font-size: 1.5rem; color: var(--dark); cursor: pointer; padding: 0.5rem; }
-        .desktop-nav { display: flex; gap: var(--space-md); align-items: center; }
-
-        .nav-link { display: flex; align-items: center; gap: var(--space-sm); padding: 0.5rem 1rem; color: var(--gray-dark); text-decoration: none; border-radius: var(--radius); transition: var(--transition); }
-        .nav-link:hover { background: var(--gray-light); color: var(--dark); }
-        .nav-link.active { background: var(--primary-light); color: var(--primary-dark); }
-
-        .floating-cart {
-            position: fixed; bottom: 2rem; right: 2rem; background: var(--primary); color: white;
-            width: 70px; height: 70px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; box-shadow: var(--shadow-lg); transition: var(--transition); z-index: 99; border: 3px solid white;
-        }
-        .floating-cart:hover { transform: scale(1.1); background: var(--primary-dark); }
-        .floating-cart-count {
-            position: absolute; top: -5px; right: -5px; background: var(--secondary); color: white;
-            font-size: 0.875rem; font-weight: bold; min-width: 25px; height: 25px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center; border: 2px solid white;
-        }
-
-        .mobile-nav { display: none; flex-direction: column; background: white; border-top: 1px solid var(--gray-light); padding: 1rem; }
-        .mobile-nav.active { display: flex; }
-
-        main { min-height: calc(100vh - 200px); padding: var(--space-xl) 0; }
-
-        .store-header {
-            text-align: center; padding: var(--space-2xl) 0; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            color: white; margin-bottom: var(--space-xl); border-radius: 0 0 var(--radius-xl) var(--radius-xl);
-        }
-        .store-header h1 { margin-bottom: var(--space-sm); font-size: 3rem; }
-
-        .search-container { background: white; padding: var(--space-xl); border-radius: var(--radius-lg); margin-bottom: var(--space-xl); box-shadow: var(--shadow); }
-        .search-box { position: relative; margin-bottom: var(--space-lg); }
-        .search-input { width: 100%; padding: 1rem 1rem 1rem 3.5rem; border: 2px solid var(--gray-light); border-radius: var(--radius); font-size: 1.1rem; }
-        .search-input:focus { outline: none; border-color: var(--primary); }
-        .search-icon { position: absolute; left: 1.25rem; top: 50%; transform: translateY(-50%); color: var(--gray); font-size: 1.25rem; }
-        .filter-group { display: flex; gap: var(--space-md); flex-wrap: wrap; }
-        .filter-select { flex: 1; min-width: 180px; padding: 0.875rem 1rem; border: 2px solid var(--gray-light); border-radius: var(--radius); background: white; font-size: 1rem; cursor: pointer; }
-
-        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: var(--space-2xl); margin-top: var(--space-xl); }
-        .product-card { background: white; border-radius: var(--radius-xl); overflow: hidden; box-shadow: var(--shadow-md); transition: var(--transition); border: 1px solid var(--gray-light); }
-        .product-card:hover { transform: translateY(-6px); box-shadow: var(--shadow-lg); }
-        .product-image-container { position: relative; height: 380px; overflow: hidden; border-radius: var(--radius-xl) var(--radius-xl) 0 0; background: #f0f0f0; }
-        .product-main-image { width: 100%; height: 100%; object-fit: cover; }
-        .product-badge { position: absolute; top: var(--space-md); right: var(--space-md); padding: 0.5rem 1rem; border-radius: 2rem; font-size: 0.875rem; font-weight: 600; color: white; }
-        .badge-new { background: var(--success); }
-        .badge-sale { background: var(--secondary); }
-        .badge-low { background: var(--warning); color: var(--dark); }
-
-        .product-info { padding: var(--space-xl); }
-        .product-title { font-size: 1.35rem; font-weight: 600; margin-bottom: var(--space-xs); }
-        .product-category { display: inline-block; background: var(--primary-light); color: var(--primary-dark); padding: 0.375rem 1rem; border-radius: 2rem; font-size: 0.875rem; margin-bottom: var(--space-sm); }
-        .product-price { font-size: 1.75rem; font-weight: 700; color: var(--primary); margin-bottom: var(--space-sm); }
-        .product-stock { display: inline-flex; align-items: center; gap: var(--space-xs); padding: 0.375rem 1rem; border-radius: 2rem; font-size: 0.875rem; margin-bottom: var(--space-md); }
-        .in-stock { background: rgba(72,187,120,0.1); color: var(--success); }
-        .low-stock { background: rgba(236,201,75,0.1); color: var(--warning); }
-        .out-of-stock { background: rgba(245,101,101,0.1); color: var(--danger); }
-
-        .size-selector { margin-bottom: var(--space-lg); }
-        .size-label { display: block; margin-bottom: var(--space-sm); font-size: 1rem; color: var(--gray-dark); font-weight: 600; }
-        .size-options { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
-        .size-option { padding: 0.5rem 1.25rem; border: 2px solid var(--gray-light); border-radius: var(--radius); font-size: 1rem; cursor: pointer; background: white; }
-        .size-option.selected { background: var(--primary); color: white; border-color: var(--primary); }
-        .size-option.disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .product-actions { display: flex; gap: var(--space-md); margin-top: var(--space-lg); }
-        .btn-add-to-cart { flex: 1; padding: 1rem; font-size: 1.125rem; font-weight: 600; }
-
-        .cart-container { background: white; border-radius: var(--radius-lg); padding: var(--space-xl); box-shadow: var(--shadow); margin-bottom: var(--space-xl); }
-        .cart-title { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-xl); font-size: 2rem; }
-        .cart-empty { text-align: center; padding: var(--space-2xl); }
-        .cart-empty-icon { font-size: 4rem; color: var(--gray-light); margin-bottom: var(--space-lg); }
-        .cart-item { display: grid; grid-template-columns: auto 1fr auto auto; gap: var(--space-xl); align-items: center; padding: var(--space-xl); border-bottom: 1px solid var(--gray-light); }
-        .cart-item-image { width: 100px; height: 100px; object-fit: cover; border-radius: var(--radius); }
-        .cart-item-name { font-weight: 600; font-size: 1.25rem; }
-        .cart-item-price { color: var(--primary); }
-        .cart-item-quantity { display: flex; align-items: center; gap: var(--space-sm); }
-        .quantity-btn { width: 36px; height: 36px; border: 2px solid var(--gray-light); background: white; border-radius: 50%; cursor: pointer; font-weight: 600; }
-        .cart-item-total { font-weight: 700; font-size: 1.25rem; min-width: 120px; text-align: right; }
-        .remove-item { background: none; border: none; color: var(--danger); font-size: 1.5rem; cursor: pointer; }
-
-        .cart-summary { background: var(--light); border-radius: var(--radius); padding: var(--space-xl); margin-top: var(--space-xl); }
-        .cart-total-row { display: flex; justify-content: space-between; padding: var(--space-md) 0; border-bottom: 1px solid var(--gray-light); font-size: 1.125rem; }
-        .cart-total-row:last-child { border-bottom: none; font-weight: 700; font-size: 1.5rem; }
-
-        .payment-options { display: flex; gap: var(--space-md); margin: var(--space-lg) 0; flex-wrap: wrap; }
-        .payment-option { flex: 1; min-width: 280px; padding: var(--space-xl); border: 2px solid var(--gray-light); border-radius: var(--radius); cursor: pointer; display: flex; align-items: center; gap: var(--space-lg); }
-        .payment-option.selected { border-color: var(--primary); background: rgba(102,126,234,0.05); }
-        .payment-icon { font-size: 2.5rem; color: var(--primary); }
-        .payment-name { font-weight: 600; }
-        .payment-desc { font-size: 0.875rem; color: var(--gray); }
-
-        .checkout-form { margin-top: var(--space-xl); }
-        .form-group { margin-bottom: var(--space-lg); }
-        .form-control { width: 100%; padding: 1rem 1.25rem; border: 2px solid var(--gray-light); border-radius: var(--radius); font-size: 1rem; }
-        .form-control:focus { outline: none; border-color: var(--primary); }
-        textarea.form-control { resize: vertical; min-height: 120px; }
-        .error-message { color: var(--danger); font-size: 0.875rem; margin-top: var(--space-xs); }
-
-        .order-summary-preview { background: var(--light); border: 2px solid var(--primary-light); border-radius: var(--radius); padding: 1.5rem; margin: 1.5rem 0; }
-        .order-summary-preview pre { white-space: pre-wrap; font-family: monospace; font-size: 0.9rem; line-height: 1.6; background: white; padding: 1rem; border-radius: var(--radius); max-height: 300px; overflow-y: auto; }
-
-        .admin-container { background: white; border-radius: var(--radius-lg); padding: var(--space-xl); box-shadow: var(--shadow); margin-bottom: var(--space-xl); }
-        .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-xl); padding-bottom: var(--space-lg); border-bottom: 1px solid var(--gray-light); flex-wrap: wrap; gap: var(--space-md); }
-        .section-title { display: flex; align-items: center; gap: var(--space-sm); margin: var(--space-2xl) 0 var(--space-lg); padding-bottom: var(--space-sm); border-bottom: 2px solid var(--gray-light); font-size: 1.75rem; }
-        .section-title-with-actions { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-md); }
-
-        .store-id-section { background: var(--light); border-radius: var(--radius); padding: var(--space-xl); margin-bottom: var(--space-xl); }
-        .store-id-display { display: flex; justify-content: space-between; align-items: center; background: white; padding: var(--space-xl); border-radius: var(--radius); margin-bottom: var(--space-lg); }
-        .store-id-value { font-family: monospace; font-size: 2rem; font-weight: 700; color: var(--primary); }
-
-        .size-management { background: white; border-radius: var(--radius); padding: var(--space-xl); margin: var(--space-lg) 0; }
-        .size-input-group { display: flex; gap: var(--space-sm); margin-bottom: var(--space-md); }
-        .size-input { flex: 1; padding: 1rem; border: 2px solid var(--gray-light); border-radius: var(--radius); font-size: 1rem; }
-        .size-list { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
-        .size-tag { background: var(--primary-light); color: var(--primary-dark); padding: 0.75rem 1.25rem; border-radius: var(--radius); display: flex; align-items: center; gap: var(--space-sm); }
-
-        .inventory-table { width: 100%; border-collapse: collapse; margin-top: var(--space-lg); }
-        .inventory-table th { background: var(--primary-light); color: var(--primary-dark); padding: var(--space-lg); text-align: left; }
-        .inventory-table td { padding: var(--space-lg); border-bottom: 1px solid var(--gray-light); }
-
-        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: var(--transition); }
-        .modal-overlay.active { opacity: 1; visibility: visible; }
-        .modal { background: white; border-radius: var(--radius-lg); padding: var(--space-xl); max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-lg); }
-        .modal-close { background: none; border: none; font-size: 1.5rem; color: var(--gray); cursor: pointer; }
-
-        .order-card { background: white; border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1rem; border: 2px solid var(--warning); }
-        .order-card.confirmed { border-color: var(--success); }
-        .order-card.rejected { border-color: var(--danger); opacity: 0.7; }
-
-        .export-section { background: var(--light); border-radius: var(--radius); padding: var(--space-lg); margin-bottom: var(--space-lg); border: 2px dashed var(--primary-light); }
-
-        footer { background: var(--dark); color: white; padding: var(--space-2xl) 0; margin-top: var(--space-2xl); }
-        .footer-container { max-width: 1400px; margin: 0 auto; padding: 0 var(--space-lg); display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-2xl); }
-        .copyright { text-align: center; padding-top: var(--space-xl); margin-top: var(--space-xl); border-top: 1px solid rgba(255,255,255,0.1); }
-
-        .sync-indicator {
-            display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 0.5rem;
-        }
-        .sync-indicator.online { background: var(--success); }
-        .sync-indicator.offline { background: var(--warning); }
-        .sync-indicator.syncing { background: var(--info); animation: pulse 1s infinite; }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-
-        @media (max-width: 768px) {
-            .container { padding: 0 var(--space-md); }
-            .header-container { padding: 1rem; }
-            h1 { font-size: 2rem; }
-            .mobile-menu-btn { display: block; }
-            .desktop-nav { display: none; }
-            .filter-group { flex-direction: column; }
-            .product-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
-            .product-image-container { height: 280px; }
-            .cart-item { grid-template-columns: 1fr; text-align: center; }
-            .payment-options { flex-direction: column; }
-            .admin-header { flex-direction: column; }
-            .footer-container { grid-template-columns: 1fr; text-align: center; }
-            .section-title-with-actions { flex-direction: column; align-items: flex-start; }
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--light);color:var(--dark);line-height:1.5;min-height:100vh}
+        .container{max-width:1400px;margin:0 auto;padding:0 1.5rem}
+        .hidden{display:none!important}
+        .flex{display:flex}
+        .items-center{align-items:center}
+        .justify-between{justify-content:space-between}
+        .gap-2{gap:0.5rem}
+        .gap-4{gap:1rem}
+        .mt-4{margin-top:1rem}
+        .mt-8{margin-top:2rem}
+        .mb-4{margin-bottom:1rem}
+        .mb-8{margin-bottom:2rem}
+        .text-center{text-align:center}
+        .w-full{width:100%}
+        h1,h2,h3,h4{font-weight:600;line-height:1.2}
+        h1{font-size:2.5rem}h2{font-size:2rem}h3{font-size:1.5rem}h4{font-size:1.25rem}
+        .btn{display:inline-flex;align-items:center;justify-content:center;gap:0.5rem;padding:0.625rem 1.25rem;border:none;border-radius:var(--radius);font-size:1rem;font-weight:500;cursor:pointer;transition:var(--transition);text-decoration:none}
+        .btn-primary{background:var(--primary);color:#fff}
+        .btn-primary:hover{background:var(--primary-dark);transform:translateY(-1px)}
+        .btn-secondary{background:var(--secondary);color:#fff}
+        .btn-outline{background:transparent;border:2px solid var(--primary);color:var(--primary)}
+        .btn-outline:hover{background:var(--primary);color:#fff}
+        .btn-small{padding:0.375rem 0.75rem;font-size:0.875rem}
+        .btn-large{padding:0.875rem 1.75rem;font-size:1.125rem}
+        .btn-success{background:var(--success);color:#fff}
+        .btn-danger{background:var(--danger);color:#fff}
+        .btn-info{background:var(--info);color:#fff}
+        .payway-btn,.messenger-btn{display:flex;align-items:center;justify-content:center;gap:0.5rem;width:100%;padding:1rem;border:none;border-radius:var(--radius);font-size:1rem;font-weight:600;cursor:pointer;margin-top:1.5rem;text-decoration:none;color:#fff}
+        .payway-btn{background:linear-gradient(135deg,#006AFF,#00C6FF)}
+        .messenger-btn{background:linear-gradient(135deg,#0084FF,#006AFF)}
+        .sync-status{position:fixed;top:0;left:0;right:0;z-index:1000;padding:0.75rem 1.5rem;display:flex;align-items:center;justify-content:space-between;font-size:0.9rem;transform:translateY(-100%);transition:transform 0.3s;background:var(--dark);color:#fff}
+        .sync-status.show{transform:translateY(0)}
+        .sync-status.online{background:var(--success)}
+        .sync-status.offline{background:var(--warning);color:var(--dark)}
+        header{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.05);position:sticky;top:0;z-index:100}
+        .header-container{max-width:1400px;margin:0 auto;padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between}
+        .logo{display:flex;align-items:center;gap:0.5rem;font-size:1.5rem;font-weight:700;color:var(--primary);cursor:pointer}
+        .admin-badge{background:var(--secondary);color:#fff;font-size:0.75rem;padding:0.125rem 0.5rem;border-radius:4px;margin-left:0.5rem}
+        .mobile-menu-btn{display:none;background:none;border:none;font-size:1.5rem;color:var(--dark);cursor:pointer}
+        .desktop-nav{display:flex;gap:1rem;align-items:center}
+        .nav-link{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 1rem;color:var(--gray-dark);text-decoration:none;border-radius:var(--radius);transition:var(--transition)}
+        .nav-link:hover{background:var(--gray-light);color:var(--dark)}
+        .nav-link.active{background:var(--primary-light);color:var(--primary-dark)}
+        .floating-cart{position:fixed;bottom:2rem;right:2rem;background:var(--primary);color:#fff;width:70px;height:70px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow-lg);z-index:99;border:3px solid #fff}
+        .floating-cart:hover{transform:scale(1.1);background:var(--primary-dark)}
+        .floating-cart-count{position:absolute;top:-5px;right:-5px;background:var(--secondary);color:#fff;font-size:0.875rem;font-weight:700;min-width:25px;height:25px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+        .mobile-nav{display:none;flex-direction:column;background:#fff;border-top:1px solid var(--gray-light);padding:1rem}
+        .mobile-nav.active{display:flex}
+        main{min-height:calc(100vh - 200px);padding:2rem 0}
+        .store-header{text-align:center;padding:3rem 0;background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;margin-bottom:2rem;border-radius:0 0 var(--radius-xl) var(--radius-xl)}
+        .store-header h1{font-size:3rem;margin-bottom:0.5rem}
+        .search-container{background:#fff;padding:2rem;border-radius:var(--radius-lg);margin-bottom:2rem;box-shadow:var(--shadow)}
+        .search-box{position:relative;margin-bottom:1.5rem}
+        .search-input{width:100%;padding:1rem 1rem 1rem 3.5rem;border:2px solid var(--gray-light);border-radius:var(--radius);font-size:1.1rem}
+        .search-input:focus{outline:none;border-color:var(--primary)}
+        .search-icon{position:absolute;left:1.25rem;top:50%;transform:translateY(-50%);color:var(--gray);font-size:1.25rem}
+        .filter-group{display:flex;gap:1rem;flex-wrap:wrap}
+        .filter-select{flex:1;min-width:180px;padding:0.875rem 1rem;border:2px solid var(--gray-light);border-radius:var(--radius);background:#fff;font-size:1rem;cursor:pointer}
+        .product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:2rem;margin-top:2rem}
+        .product-card{background:#fff;border-radius:var(--radius-xl);overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);transition:var(--transition);border:1px solid var(--gray-light)}
+        .product-card:hover{transform:translateY(-6px);box-shadow:var(--shadow-lg)}
+        .product-image-container{position:relative;height:300px;overflow:hidden;background:#f0f0f0}
+        .product-main-image{width:100%;height:100%;object-fit:cover}
+        .product-badge{position:absolute;top:1rem;right:1rem;padding:0.5rem 1rem;border-radius:2rem;font-size:0.875rem;font-weight:600;color:#fff}
+        .badge-new{background:var(--success)}
+        .badge-sale{background:var(--secondary)}
+        .badge-low{background:var(--warning);color:var(--dark)}
+        .product-info{padding:1.5rem}
+        .product-title{font-size:1.35rem;font-weight:600;margin-bottom:0.5rem}
+        .product-category{display:inline-block;background:var(--primary-light);color:var(--primary-dark);padding:0.375rem 1rem;border-radius:2rem;font-size:0.875rem;margin-bottom:0.5rem}
+        .product-price{font-size:1.75rem;font-weight:700;color:var(--primary);margin-bottom:0.5rem}
+        .product-stock{display:inline-flex;align-items:center;gap:0.25rem;padding:0.375rem 1rem;border-radius:2rem;font-size:0.875rem;margin-bottom:1rem}
+        .in-stock{background:rgba(72,187,120,0.1);color:var(--success)}
+        .low-stock{background:rgba(236,201,75,0.1);color:var(--warning)}
+        .out-of-stock{background:rgba(245,101,101,0.1);color:var(--danger)}
+        .size-selector{margin-bottom:1.5rem}
+        .size-label{display:block;margin-bottom:0.5rem;font-weight:600}
+        .size-options{display:flex;gap:0.5rem;flex-wrap:wrap}
+        .size-option{padding:0.5rem 1.25rem;border:2px solid var(--gray-light);border-radius:var(--radius);font-size:1rem;cursor:pointer;background:#fff}
+        .size-option.selected{background:var(--primary);color:#fff;border-color:var(--primary)}
+        .size-option.disabled{opacity:0.5;cursor:not-allowed}
+        .product-actions{display:flex;gap:1rem;margin-top:1.5rem}
+        .btn-add-to-cart{flex:1;padding:1rem;font-size:1.125rem;font-weight:600}
+        .cart-container{background:#fff;border-radius:var(--radius-lg);padding:2rem;box-shadow:var(--shadow);margin-bottom:2rem}
+        .cart-empty{text-align:center;padding:3rem}
+        .cart-empty-icon{font-size:4rem;color:var(--gray-light);margin-bottom:1.5rem}
+        .cart-item{display:grid;grid-template-columns:auto 1fr auto auto;gap:2rem;align-items:center;padding:1.5rem;border-bottom:1px solid var(--gray-light)}
+        .cart-item-image{width:100px;height:100px;object-fit:cover;border-radius:var(--radius)}
+        .cart-item-name{font-weight:600;font-size:1.25rem}
+        .cart-item-price{color:var(--primary)}
+        .cart-item-quantity{display:flex;align-items:center;gap:0.5rem}
+        .quantity-btn{width:36px;height:36px;border:2px solid var(--gray-light);background:#fff;border-radius:50%;cursor:pointer;font-weight:600;font-size:1.125rem}
+        .cart-item-total{font-weight:700;font-size:1.25rem;min-width:120px;text-align:right}
+        .remove-item{background:none;border:none;color:var(--danger);font-size:1.5rem;cursor:pointer}
+        .cart-summary{background:var(--light);border-radius:var(--radius);padding:2rem;margin-top:2rem}
+        .cart-total-row{display:flex;justify-content:space-between;padding:1rem 0;border-bottom:1px solid var(--gray-light);font-size:1.125rem}
+        .cart-total-row:last-child{border-bottom:none;font-weight:700;font-size:1.5rem}
+        .payment-options{display:flex;gap:1rem;margin:1.5rem 0;flex-wrap:wrap}
+        .payment-option{flex:1;min-width:250px;padding:1.5rem;border:2px solid var(--gray-light);border-radius:var(--radius);cursor:pointer;display:flex;align-items:center;gap:1rem}
+        .payment-option.selected{border-color:var(--primary);background:rgba(102,126,234,0.05)}
+        .payment-icon{font-size:2.5rem;color:var(--primary)}
+        .payment-name{font-weight:600}
+        .payment-desc{font-size:0.875rem;color:var(--gray)}
+        .form-group{margin-bottom:1.5rem}
+        .form-control{width:100%;padding:1rem 1.25rem;border:2px solid var(--gray-light);border-radius:var(--radius);font-size:1rem}
+        .form-control:focus{outline:none;border-color:var(--primary)}
+        textarea.form-control{resize:vertical;min-height:100px}
+        .error-message{color:var(--danger);font-size:0.875rem;margin-top:0.25rem}
+        .order-summary-preview{background:var(--light);border:2px solid var(--primary-light);border-radius:var(--radius);padding:1.5rem;margin:1.5rem 0}
+        .order-summary-preview pre{white-space:pre-wrap;font-family:monospace;font-size:0.9rem;background:#fff;padding:1rem;border-radius:var(--radius);max-height:300px;overflow-y:auto}
+        .admin-container{background:#fff;border-radius:var(--radius-lg);padding:2rem;box-shadow:var(--shadow)}
+        .admin-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:2rem;padding-bottom:1.5rem;border-bottom:1px solid var(--gray-light);flex-wrap:wrap;gap:1rem}
+        .section-title{display:flex;align-items:center;gap:0.5rem;margin:3rem 0 1.5rem;padding-bottom:0.5rem;border-bottom:2px solid var(--gray-light);font-size:1.75rem}
+        .section-title-with-actions{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem}
+        .order-card{background:#fff;border-radius:var(--radius);padding:1.5rem;margin-bottom:1rem;border:2px solid var(--warning)}
+        .order-card.confirmed{border-color:var(--success)}
+        .order-card.rejected{border-color:var(--danger);opacity:0.7}
+        .inventory-table{width:100%;border-collapse:collapse;margin-top:1.5rem}
+        .inventory-table th{background:var(--primary-light);color:var(--primary-dark);padding:1rem;text-align:left}
+        .inventory-table td{padding:1rem;border-bottom:1px solid var(--gray-light)}
+        .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;opacity:0;visibility:hidden;transition:var(--transition)}
+        .modal-overlay.active{opacity:1;visibility:visible}
+        .modal{background:#fff;border-radius:var(--radius-lg);padding:2rem;max-width:500px;width:90%}
+        .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem}
+        .modal-close{background:none;border:none;font-size:1.5rem;color:var(--gray);cursor:pointer}
+        .store-id-section{background:var(--light);border-radius:var(--radius);padding:1.5rem;margin-bottom:2rem}
+        .store-id-display{display:flex;justify-content:space-between;align-items:center;background:#fff;padding:1.5rem;border-radius:var(--radius);margin-bottom:1rem}
+        .store-id-value{font-family:monospace;font-size:2rem;font-weight:700;color:var(--primary)}
+        .size-management{background:#fff;border-radius:var(--radius);padding:1.5rem;margin:1.5rem 0}
+        .size-input-group{display:flex;gap:0.5rem;margin-bottom:1rem}
+        .size-input{flex:1;padding:1rem;border:2px solid var(--gray-light);border-radius:var(--radius);font-size:1rem}
+        .size-list{display:flex;gap:0.5rem;flex-wrap:wrap}
+        .size-tag{background:var(--primary-light);color:var(--primary-dark);padding:0.75rem 1.25rem;border-radius:var(--radius);display:flex;align-items:center;gap:0.5rem}
+        .remove-size{background:none;border:none;color:var(--primary-dark);cursor:pointer}
+        footer{background:var(--dark);color:#fff;padding:3rem 0;margin-top:3rem}
+        .footer-container{max-width:1400px;margin:0 auto;padding:0 1.5rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:3rem}
+        .copyright{text-align:center;padding-top:2rem;margin-top:2rem;border-top:1px solid rgba(255,255,255,0.1)}
+        @media(max-width:768px){
+            .container{padding:0 1rem}
+            h1{font-size:2rem}
+            .mobile-menu-btn{display:block}
+            .desktop-nav{display:none}
+            .filter-group{flex-direction:column}
+            .product-grid{grid-template-columns:1fr}
+            .product-image-container{height:250px}
+            .cart-item{grid-template-columns:1fr;text-align:center}
+            .payment-options{flex-direction:column}
+            .admin-header{flex-direction:column}
+            .section-title-with-actions{flex-direction:column;align-items:flex-start}
         }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="sync-status" id="syncStatus">
-        <div class="flex items-center gap-2">
-            <span class="sync-indicator" id="syncIndicator"></span>
-            <span id="syncText">Initializing...</span>
-        </div>
-        <button onclick="hideSyncStatus()" class="btn btn-small btn-outline" style="color:white;border-color:white;">
-            <i class="fas fa-times"></i>
-        </button>
+        <div class="flex items-center gap-2"><span id="syncText">Initializing...</span></div>
+        <button onclick="document.getElementById('syncStatus').classList.remove('show')" class="btn btn-small btn-outline" style="color:#fff;border-color:#fff"><i class="fas fa-times"></i></button>
     </div>
-
-    <div class="floating-cart" onclick="showTab('cart')">
-        <i class="fas fa-shopping-cart"></i>
-        <span class="floating-cart-count" id="floatingCartCount">0</span>
-    </div>
-
+    <div class="floating-cart" onclick="showTab('cart')"><i class="fas fa-shopping-cart" style="font-size:1.5rem"></i><span class="floating-cart-count" id="floatingCartCount">0</span></div>
     <header>
         <div class="header-container">
-            <div class="logo" onclick="showTab('store')">
-                <span>GOAT KIDS</span>
-                <span class="sync-indicator" id="headerSyncIndicator" style="width:8px;height:8px;"></span>
-                <span id="adminBadge" class="admin-badge hidden">ADMIN</span>
-            </div>
+            <div class="logo" onclick="showTab('store')"><span>GOAT KIDS</span><span id="adminBadge" class="admin-badge hidden">ADMIN</span></div>
             <button class="mobile-menu-btn" id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
             <nav class="desktop-nav">
-                <a href="#" class="nav-link active" onclick="showTab('store');return false;"><i class="fas fa-store"></i>Store</a>
-                <a href="#" class="nav-link hidden" id="adminNavLink" onclick="showTab('admin');return false;"><i class="fas fa-cog"></i>Admin</a>
-                <button class="btn btn-small btn-success" onclick="syncAllData()" id="syncBtn"><i class="fas fa-cloud-upload-alt"></i>Sync Now</button>
+                <a href="#" class="nav-link active" onclick="showTab('store');return false"><i class="fas fa-store"></i>Store</a>
+                <a href="#" class="nav-link hidden" id="adminNavLink" onclick="showTab('admin');return false"><i class="fas fa-cog"></i>Admin</a>
+                <button class="btn btn-small btn-success" onclick="syncAllData()"><i class="fas fa-cloud-upload-alt"></i>Sync</button>
             </nav>
         </div>
         <nav class="mobile-nav" id="mobileNav">
-            <a href="#" class="nav-link" onclick="showTab('store');return false;"><i class="fas fa-store"></i>Store</a>
-            <a href="#" class="nav-link hidden" id="adminNavLinkMobile" onclick="showTab('admin');return false;"><i class="fas fa-cog"></i>Admin</a>
-            <button class="btn btn-success w-full mt-4" onclick="syncAllData()"><i class="fas fa-cloud-upload-alt"></i>Sync Now</button>
+            <a href="#" class="nav-link" onclick="showTab('store');return false"><i class="fas fa-store"></i>Store</a>
+            <a href="#" class="nav-link hidden" id="adminNavLinkMobile" onclick="showTab('admin');return false"><i class="fas fa-cog"></i>Admin</a>
+            <button class="btn btn-success w-full mt-4" onclick="syncAllData()"><i class="fas fa-cloud-upload-alt"></i>Sync</button>
         </nav>
     </header>
-
     <main class="container">
-        <!-- Store Tab - Same as before -->
         <div id="storeTab" class="tab-content active">
-            <div class="store-header">
-                <h1>GOAT KIDS Clothing Store</h1>
-                <p>Premium children's clothing with comfort and style</p>
-                <div class="mt-4"><small>Store ID: <span id="currentStoreIdDisplay">Loading...</span></small></div>
-            </div>
+            <div class="store-header"><h1>GOAT KIDS</h1><p>Premium Children's Clothing</p><small>Store: <span id="currentStoreIdDisplay">...</span></small></div>
             <div class="search-container">
-                <div class="search-box">
-                    <i class="fas fa-search search-icon"></i>
-                    <input type="text" id="searchInput" class="search-input" placeholder="Search products..." oninput="searchProducts()">
-                </div>
+                <div class="search-box"><i class="fas fa-search search-icon"></i><input type="text" id="searchInput" class="search-input" placeholder="Search..." oninput="searchProducts()"></div>
                 <div class="filter-group">
-                    <select id="categoryFilter" class="filter-select" onchange="filterProducts()">
-                        <option value="all">All Categories</option>
-                        <option value="tshirts">T-Shirts</option><option value="Dresses">Dresses</option>
-                        <option value="Baby Jeans">Baby Jeans</option><option value="shoes">Shoes</option>
-                        <option value="accessories">Accessories</option>
-                    </select>
-                    <select id="stockFilter" class="filter-select" onchange="filterProducts()">
-                        <option value="all">All Stock</option><option value="in-stock">In Stock</option>
-                        <option value="low-stock">Low Stock</option><option value="out-of-stock">Out of Stock</option>
-                    </select>
-                    <select id="priceFilter" class="filter-select" onchange="filterProducts()">
-                        <option value="all">All Prices</option><option value="0-20">Under $20</option>
-                        <option value="20-30">$20 - $30</option><option value="30+">Over $30</option>
-                    </select>
+                    <select id="categoryFilter" class="filter-select" onchange="filterProducts()"><option value="all">All</option><option value="tshirts">T-Shirts</option><option value="Dresses">Dresses</option><option value="Baby Jeans">Baby Jeans</option><option value="shoes">Shoes</option></select>
+                    <select id="stockFilter" class="filter-select" onchange="filterProducts()"><option value="all">All Stock</option><option value="in-stock">In Stock</option><option value="low-stock">Low Stock</option><option value="out-of-stock">Out of Stock</option></select>
+                    <select id="priceFilter" class="filter-select" onchange="filterProducts()"><option value="all">All Prices</option><option value="0-20">Under $20</option><option value="20-30">$20-$30</option><option value="30+">Over $30</option></select>
                 </div>
             </div>
             <div class="product-grid" id="productGrid"></div>
-            <div class="text-center mt-8">
-                <button onclick="openAdminLoginModal()" class="btn btn-outline btn-large"><i class="fas fa-user-shield"></i>Admin Access</button>
-            </div>
+            <div class="text-center mt-8"><button onclick="openAdminLoginModal()" class="btn btn-outline btn-large"><i class="fas fa-user-shield"></i>Admin Access</button></div>
         </div>
-
-        <!-- Cart Tab - Same as before -->
         <div id="cartTab" class="tab-content hidden">
             <div class="cart-container">
                 <h2 class="cart-title"><i class="fas fa-shopping-cart"></i>Shopping Cart</h2>
-                <div class="cart-items" id="cartItems">
-                    <div class="cart-empty" id="emptyCart">
-                        <div class="cart-empty-icon"><i class="fas fa-shopping-cart"></i></div>
-                        <h3>Your cart is empty</h3>
-                        <button class="btn btn-primary btn-large mt-8" onclick="showTab('store')"><i class="fas fa-store"></i>Browse Store</button>
-                    </div>
-                    <div class="cart-items-list hidden" id="cartItemsList"></div>
-                </div>
+                <div id="cartItems"><div class="cart-empty" id="emptyCart"><div class="cart-empty-icon"><i class="fas fa-shopping-cart"></i></div><h3>Cart is empty</h3><button class="btn btn-primary btn-large mt-8" onclick="showTab('store')">Browse Store</button></div><div class="cart-items-list hidden" id="cartItemsList"></div></div>
                 <div class="cart-summary hidden" id="cartSummary">
-                    <div class="cart-totals">
-                        <div class="cart-total-row"><span>Subtotal</span><span id="cartSubtotal">$0.00</span></div>
-                        <div class="cart-total-row"><span>Shipping</span><span id="cartShipping">$2.00</span></div>
-                        <div class="cart-total-row"><span>Total</span><span id="cartTotal">$0.00</span></div>
+                    <div class="cart-totals"><div class="cart-total-row"><span>Subtotal</span><span id="cartSubtotal">$0.00</span></div><div class="cart-total-row"><span>Shipping</span><span>$2.00</span></div><div class="cart-total-row"><span>Total</span><span id="cartTotal">$0.00</span></div></div>
+                    <h3 class="mb-4"><i class="fas fa-credit-card"></i>Payment</h3>
+                    <div class="payment-options">
+                        <div class="payment-option selected" onclick="selectPaymentMethod('payway')"><div class="payment-icon"><i class="fas fa-university"></i></div><div><div class="payment-name">ABA PayWay</div><div class="payment-desc">Online payment</div></div></div>
+                        <div class="payment-option" onclick="selectPaymentMethod('cod')"><div class="payment-icon"><i class="fas fa-truck"></i></div><div><div class="payment-name">Cash on Delivery</div><div class="payment-desc">Pay on receipt</div></div></div>
                     </div>
-                    <div class="payment-methods">
-                        <h3 class="mb-4"><i class="fas fa-credit-card"></i>Payment Method</h3>
-                        <div class="payment-options">
-                            <div class="payment-option selected" id="paywayOption" onclick="selectPaymentMethod('payway')">
-                                <div class="payment-icon"><i class="fas fa-university"></i></div>
-                                <div><div class="payment-name">ABA Payment</div><div class="payment-desc">Secure online payment</div></div>
-                            </div>
-                            <div class="payment-option" id="codOption" onclick="selectPaymentMethod('cod')">
-                                <div class="payment-icon"><i class="fas fa-truck"></i></div>
-                                <div><div class="payment-name">Cash on Delivery</div><div class="payment-desc">Pay when you receive</div></div>
-                            </div>
-                        </div>
-                        <a href="https://link.payway.com.kh/08407860s" target="_blank" class="payway-btn" onclick="preparePaywayPayment(event);">
-                            <i class="fas fa-lock"></i>Pay with ABA PayWay ($<span id="paywayTotal">0.00</span>)
-                        </a>
-                    </div>
-                    <div class="checkout-form">
-                        <h3 class="mb-4"><i class="fas fa-user"></i>Delivery Information</h3>
-                        <div class="form-group"><input type="text" id="customerName" class="form-control" placeholder="Your Full Name"><span class="error-message hidden" id="nameError">Please enter your name</span></div>
-                        <div class="form-group"><input type="tel" id="customerPhone" class="form-control" placeholder="Phone Number"><span class="error-message hidden" id="phoneError">Please enter a valid phone number</span></div>
-                        <div class="form-group"><textarea id="customerAddress" class="form-control" rows="3" placeholder="Delivery Address"></textarea><span class="error-message hidden" id="addressError">Please enter your address</span></div>
-                        <div class="form-group"><textarea id="customerNotes" class="form-control" rows="2" placeholder="Order Notes (optional)"></textarea></div>
-                        <div class="order-summary-preview hidden" id="orderSummaryPreview"><h4><i class="fas fa-receipt"></i>Your Order Summary</h4><pre id="orderSummaryContent"></pre></div>
-                        <button class="messenger-btn" onclick="sendOrderToMessenger()"><i class="fab fa-facebook-messenger"></i>Place Order via Messenger</button>
-                        <p class="text-center mt-4" style="color:var(--gray);font-size:0.875rem;"><i class="fas fa-info-circle"></i> Seller will confirm. Stock reduces after confirmation.</p>
-                    </div>
+                    <a href="https://link.payway.com.kh/08407860s" target="_blank" class="payway-btn" onclick="preparePaywayPayment(event)"><i class="fas fa-lock"></i>Pay with ABA ($<span id="paywayTotal">0.00</span>)</a>
+                    <h3 class="mb-4 mt-8"><i class="fas fa-user"></i>Delivery Info</h3>
+                    <div class="form-group"><input type="text" id="customerName" class="form-control" placeholder="Full Name"><span class="error-message hidden" id="nameError">Required</span></div>
+                    <div class="form-group"><input type="tel" id="customerPhone" class="form-control" placeholder="Phone"><span class="error-message hidden" id="phoneError">Invalid phone</span></div>
+                    <div class="form-group"><textarea id="customerAddress" class="form-control" rows="2" placeholder="Address"></textarea><span class="error-message hidden" id="addressError">Required</span></div>
+                    <div class="form-group"><textarea id="customerNotes" class="form-control" rows="2" placeholder="Notes (optional)"></textarea></div>
+                    <div class="order-summary-preview hidden" id="orderSummaryPreview"><h4><i class="fas fa-receipt"></i>Order Summary</h4><pre id="orderSummaryContent"></pre></div>
+                    <button class="messenger-btn" onclick="sendOrderToMessenger()"><i class="fab fa-facebook-messenger"></i>Place Order via Messenger</button>
+                    <p class="text-center mt-4" style="color:var(--gray);font-size:0.875rem"><i class="fas fa-info-circle"></i> Stock reduces after seller confirmation</p>
                 </div>
             </div>
         </div>
-
-        <!-- Admin Tab - Same as before -->
         <div id="adminTab" class="tab-content hidden">
             <div class="admin-container">
-                <div class="admin-header">
-                    <h2 class="admin-title"><i class="fas fa-cog"></i>Admin Panel</h2>
-                    <div class="flex gap-2">
-                        <button class="btn btn-outline btn-large" onclick="showTab('store')"><i class="fas fa-store"></i>Store</button>
-                        <button class="btn btn-secondary btn-large" onclick="adminLogout()"><i class="fas fa-sign-out-alt"></i>Logout</button>
-                    </div>
-                </div>
-
-                <div class="section-title-with-actions">
-                    <div class="section-title" style="margin:0;padding:0;border:none;"><i class="fas fa-clock"></i>Pending Orders (<span id="pendingOrderCount">0</span>)</div>
-                    <div class="flex gap-2">
-                        <button class="btn btn-info btn-large" onclick="exportPendingOrdersCSV()"><i class="fas fa-file-csv"></i>Export CSV</button>
-                        <button class="btn btn-success btn-large" onclick="confirmAllOrders()"><i class="fas fa-check-double"></i>Confirm All</button>
-                    </div>
-                </div>
-                <div id="pendingOrdersContainer"><div style="text-align:center;padding:2rem;color:var(--gray);"><i class="fas fa-check-circle" style="font-size:3rem;"></i><p>No pending orders</p></div></div>
-
-                <div class="section-title-with-actions">
-                    <div class="section-title" style="margin:0;padding:0;border:none;"><i class="fas fa-history"></i>Order History (<span id="confirmedOrderCount">0</span>)</div>
-                    <button class="btn btn-info btn-large" onclick="exportOrderHistoryCSV()"><i class="fas fa-file-csv"></i>Export CSV</button>
-                </div>
-                <div id="orderHistoryContainer"><div style="text-align:center;padding:2rem;color:var(--gray);"><i class="fas fa-history" style="font-size:3rem;"></i><p>No order history</p></div></div>
-
-                <div class="section-title"><i class="fas fa-store"></i>Store Management</div>
+                <div class="admin-header"><h2 class="admin-title"><i class="fas fa-cog"></i>Admin Panel</h2><div class="flex gap-2"><button class="btn btn-outline btn-large" onclick="showTab('store')">Store</button><button class="btn btn-secondary btn-large" onclick="adminLogout()">Logout</button></div></div>
+                <div class="section-title-with-actions"><div class="section-title" style="margin:0;padding:0;border:none"><i class="fas fa-clock"></i>Pending (<span id="pendingOrderCount">0</span>)</div><div class="flex gap-2"><button class="btn btn-info btn-large" onclick="exportPendingCSV()"><i class="fas fa-file-csv"></i>Export CSV</button><button class="btn btn-success btn-large" onclick="confirmAllOrders()"><i class="fas fa-check-double"></i>Confirm All</button></div></div>
+                <div id="pendingOrdersContainer"><p style="text-align:center;padding:2rem;color:var(--gray)">No pending orders</p></div>
+                <div class="section-title-with-actions"><div class="section-title" style="margin:0;padding:0;border:none"><i class="fas fa-history"></i>History (<span id="confirmedOrderCount">0</span>)</div><button class="btn btn-info btn-large" onclick="exportHistoryCSV()"><i class="fas fa-file-csv"></i>Export CSV</button></div>
+                <div id="orderHistoryContainer"><p style="text-align:center;padding:2rem;color:var(--gray)">No history</p></div>
+                <div class="section-title"><i class="fas fa-store"></i>Store Info</div>
                 <div class="store-id-section">
-                    <div class="store-id-display">
-                        <div><small>Store ID:</small><div class="store-id-value" id="currentStoreId">GOAT-1234</div></div>
-                        <button class="btn btn-primary btn-large" onclick="copyStoreId()"><i class="fas fa-copy"></i>Copy ID</button>
-                    </div>
-                    <div class="flex gap-2">
-                        <button class="btn btn-success btn-large" onclick="syncAllData()"><i class="fas fa-cloud-upload-alt"></i>Sync All Data</button>
-                    </div>
+                    <div class="store-id-display"><div><small>Store ID:</small><div class="store-id-value" id="currentStoreId">...</div></div><button class="btn btn-primary btn-large" onclick="copyStoreId()">Copy ID</button></div>
+                    <button class="btn btn-success btn-large w-full" onclick="syncAllData()"><i class="fas fa-cloud-upload-alt"></i>Sync All Data to Cloud</button>
                 </div>
-
-                <div class="section-title"><i class="fas fa-plus-circle"></i>Add New Product</div>
-                <div class="product-form">
+                <div class="section-title"><i class="fas fa-plus-circle"></i>Add Product</div>
+                <div class="product-form" style="background:var(--light);padding:1.5rem;border-radius:var(--radius)">
                     <div class="form-group"><input type="text" id="productName" class="form-control" placeholder="Product Name"></div>
-                    <div class="flex gap-4 mb-4">
-                        <div class="form-group" style="flex:1;"><input type="number" id="productPrice" class="form-control" placeholder="Price" step="0.01"></div>
-                        <div class="form-group" style="flex:1;"><input type="number" id="productStock" class="form-control" placeholder="Stock"></div>
-                    </div>
-                    <div class="form-group">
-                        <select id="productCategory" class="form-control">
-                            <option value="">Select Category</option><option value="tshirts">T-Shirts</option>
-                            <option value="Dresses">Dresses</option><option value="Baby Jeans">Baby Jeans</option>
-                        </select>
-                    </div>
-                    <div class="size-management">
-                        <label class="form-label">Available Sizes</label>
-                        <div class="size-input-group">
-                            <input type="text" id="newSize" class="size-input" placeholder="Size (e.g., S, M, L)">
-                            <button class="btn btn-primary btn-large" onclick="addSizeToProduct()"><i class="fas fa-plus"></i>Add</button>
-                        </div>
-                        <div class="size-list" id="productSizesList"></div>
-                    </div>
-                    <div class="flex gap-2">
-                        <button class="btn btn-primary btn-large" onclick="addSingleProduct()"><i class="fas fa-plus"></i>Add Product</button>
-                        <button class="btn btn-outline btn-large" onclick="loadSampleProducts()"><i class="fas fa-download"></i>Sample Products</button>
-                    </div>
+                    <div class="flex gap-4 mb-4"><div class="form-group" style="flex:1"><input type="number" id="productPrice" class="form-control" placeholder="Price" step="0.01"></div><div class="form-group" style="flex:1"><input type="number" id="productStock" class="form-control" placeholder="Stock"></div></div>
+                    <div class="form-group"><select id="productCategory" class="form-control"><option value="">Category</option><option value="tshirts">T-Shirts</option><option value="Dresses">Dresses</option><option value="Baby Jeans">Baby Jeans</option></select></div>
+                    <div class="size-management"><label class="form-label">Sizes</label><div class="size-input-group"><input type="text" id="newSize" class="size-input" placeholder="Size"><button class="btn btn-primary btn-large" onclick="addSize()">Add</button></div><div class="size-list" id="productSizesList"></div></div>
+                    <div class="flex gap-2"><button class="btn btn-primary btn-large" onclick="addProduct()">Add Product</button><button class="btn btn-outline btn-large" onclick="loadSamples()">Load Samples</button></div>
                 </div>
-
                 <div class="section-title"><i class="fas fa-boxes"></i>Inventory (<span id="productCount">0</span>)</div>
-                <div style="overflow-x:auto;">
-                    <table class="inventory-table">
-                        <thead><tr><th>Product</th><th>Category</th><th>Sizes</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead>
-                        <tbody id="inventoryTableBody"></tbody>
-                    </table>
-                </div>
+                <div style="overflow-x:auto"><table class="inventory-table"><thead><tr><th>Product</th><th>Category</th><th>Sizes</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead><tbody id="inventoryTableBody"></tbody></table></div>
             </div>
         </div>
     </main>
+    <footer><div class="footer-container"><div><h3>GOAT KIDS</h3><p>Premium children's clothing</p></div><div><h3>Contact</h3><p><i class="fas fa-phone"></i> +855 93 779077</p></div></div><div class="copyright">&copy; 2024 GOAT KIDS</div></footer>
+    <div class="modal-overlay hidden" id="adminLoginModal"><div class="modal"><div class="modal-header"><h3 class="modal-title"><i class="fas fa-user-shield"></i>Admin Login</h3><button class="modal-close" onclick="closeAdminLoginModal()">&times;</button></div><div class="form-group"><input type="password" id="adminPassword" class="form-control" placeholder="Password"></div><div class="flex gap-2 mt-8"><button class="btn btn-primary w-full btn-large" onclick="adminLogin()">Login</button><button class="btn btn-outline btn-large" onclick="closeAdminLoginModal()">Cancel</button></div></div></div>
 
-    <footer>
-        <div class="footer-container">
-            <div class="footer-section"><h3>GOAT KIDS</h3><p>Premium children's clothing store</p></div>
-            <div class="footer-section"><h3>Contact</h3><p><i class="fas fa-phone"></i> +855 93 779077</p></div>
-        </div>
-        <div class="copyright">&copy; 2024 GOAT KIDS</div>
-    </footer>
+<script>
+// ============ STATE ============
+const S = {
+    products: [], cart: [],
+    isAdmin: localStorage.getItem('goatAdmin') === 'true',
+    payment: 'payway',
+    filter: { category: 'all', stock: 'all', price: 'all', search: '' },
+    storeId: null,
+    fbReady: window.firebaseInitialized || false,
+    pending: [], confirmed: [],
+    editId: null
+};
+const sizes = [];
+const selSizes = {};
 
-    <div class="modal-overlay hidden" id="adminLoginModal">
-        <div class="modal">
-            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-user-shield"></i>Admin Login</h3><button class="modal-close" onclick="closeAdminLoginModal()">&times;</button></div>
-            <div class="form-group"><input type="password" id="adminPassword" class="form-control" placeholder="Enter admin password"></div>
-            <div class="flex gap-2 mt-8">
-                <button class="btn btn-primary w-full btn-large" onclick="adminLogin()"><i class="fas fa-sign-in-alt"></i>Login</button>
-                <button class="btn btn-outline btn-large" onclick="closeAdminLoginModal()">Cancel</button>
-            </div>
-        </div>
-    </div>
+// ============ INIT ============
+document.addEventListener('DOMContentLoaded', async () => {
+    const btn = document.getElementById('mobileMenuBtn');
+    const nav = document.getElementById('mobileNav');
+    btn.onclick = () => { nav.classList.toggle('active'); btn.innerHTML = nav.classList.contains('active') ? '<i class="fas fa-times"></i>' : '<i class="fas fa-bars">'; };
+    
+    if (S.isAdmin) {
+        document.getElementById('adminBadge').classList.remove('hidden');
+        document.getElementById('adminNavLink').classList.remove('hidden');
+        document.getElementById('adminNavLinkMobile').classList.remove('hidden');
+    }
+    
+    let sid = localStorage.getItem('goatStoreId');
+    if (!sid) { sid = 'GOAT-' + Math.floor(1000 + Math.random() * 9000); localStorage.setItem('goatStoreId', sid); }
+    S.storeId = sid;
+    document.getElementById('currentStoreIdDisplay').textContent = sid;
+    document.getElementById('currentStoreId').textContent = sid;
+    
+    S.cart = JSON.parse(localStorage.getItem('goatCart') || '[]');
+    updateCartCount();
+    
+    await loadData();
+    showTab('store');
+});
 
-    <script>
-        // ============================================
-        // CONFIGURATION
-        // ============================================
-        const PAYWAY_LINK = 'https://link.payway.com.kh/08407860s';
-        const MESSENGER_PAGE_ID = 'Goatkids';
-        const SHIPPING_COST = 2.00;
-
-        const state = {
-            products: [],
-            cart: [],
-            isAdmin: localStorage.getItem('goatAdmin') === 'true',
-            selectedPaymentMethod: 'payway',
-            currentFilter: { category: 'all', stock: 'all', price: 'all', search: '' },
-            storeId: null,
-            firebaseInitialized: window.firebaseInitialized || false,
-            isOnline: false,
-            pendingOrders: [],
-            confirmedOrders: []
-        };
-
-        const productFormState = { sizes: [], editingProductId: null, images: [] };
-        const sizeSelectionState = {};
-
-        // ============================================
-        // INITIALIZATION
-        // ============================================
-        document.addEventListener('DOMContentLoaded', async () => {
-            setupMobileMenu();
-            checkAdminStatus();
-            await initializeStore();
-            loadLocalData();
-            loadCart();
-            showTab('store');
-            selectPaymentMethod('payway');
+async function loadData() {
+    showStatus('Loading data...', 'info');
+    
+    // Try Firebase first
+    if (S.fbReady && window.db) {
+        try {
+            const snap = await window.db.collection('stores').doc(S.storeId).collection('products').where('active','==',true).get();
+            const prods = [];
+            snap.forEach(d => { const dt = d.data(); prods.push({ id: d.id, name: dt.name||'', price: dt.price||0, stock: dt.stock||0, category: dt.category||'', images: dt.images||[], sizes: dt.sizes||[] }); });
+            if (prods.length > 0) { S.products = prods; saveLocal(); }
             
-            // Try to connect to Firebase and load data
-            await connectToFirebase();
+            const oSnap = await window.db.collection('stores').doc(S.storeId).collection('orders').get();
+            S.pending = []; S.confirmed = [];
+            oSnap.forEach(d => { const dt = d.data(); if (dt.status === 'pending') S.pending.push({...dt, orderId: d.id}); else S.confirmed.push({...dt, orderId: d.id}); });
+            saveOrders();
+            
+            showStatus('Connected to cloud', 'success');
+        } catch(e) {
+            console.error('Firebase load error:', e);
+            loadLocalFallback();
+        }
+    } else {
+        loadLocalFallback();
+    }
+}
+
+function loadLocalFallback() {
+    const saved = localStorage.getItem('goatProducts');
+    S.products = saved ? JSON.parse(saved) : [];
+    S.pending = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
+    S.confirmed = JSON.parse(localStorage.getItem('confirmedOrders') || '[]');
+    if (S.products.length === 0) loadSamples();
+    showStatus('Working offline', 'offline');
+}
+
+function showStatus(text, type) {
+    const el = document.getElementById('syncStatus');
+    const txt = document.getElementById('syncText');
+    if (!el || !txt) return;
+    txt.textContent = text;
+    el.className = 'sync-status show';
+    if (type === 'success') el.classList.add('online');
+    if (type === 'offline') el.classList.add('offline');
+    if (type === 'error') el.classList.add('error');
+    if (type === 'success') setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ============ SYNC ============
+async function syncAllData() {
+    if (!S.fbReady || !window.db) { msg('Firebase not available', 'error'); return; }
+    showStatus('Syncing...', 'info');
+    try {
+        for (const p of S.products) {
+            await window.db.collection('stores').doc(S.storeId).collection('products').doc(p.id).set({
+                id:p.id, name:p.name, price:p.price, stock:p.stock, category:p.category,
+                images:p.images||[], sizes:p.sizes||[], active:true,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, {merge:true});
+        }
+        for (const o of [...S.pending, ...S.confirmed]) {
+            await window.db.collection('stores').doc(S.storeId).collection('orders').doc(o.orderId).set({
+                ...o, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, {merge:true});
+        }
+        showStatus('Synced!', 'success');
+        msg('All data synced to cloud! ✅', 'success');
+    } catch(e) {
+        showStatus('Sync failed', 'error');
+        msg('Sync failed', 'error');
+    }
+}
+
+function saveLocal() { localStorage.setItem('goatProducts', JSON.stringify(S.products)); }
+function saveOrders() {
+    localStorage.setItem('pendingOrders', JSON.stringify(S.pending));
+    localStorage.setItem('confirmedOrders', JSON.stringify(S.confirmed.slice(-50)));
+}
+
+// ============ TABS ============
+function showTab(name) {
+    document.querySelectorAll('.tab-content').forEach(t => { t.classList.add('hidden'); t.classList.remove('active'); });
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    const tab = document.getElementById(name + 'Tab');
+    if (tab) {
+        tab.classList.remove('hidden'); tab.classList.add('active');
+        const nav = document.querySelector(`.nav-link[onclick*="${name}"]`);
+        if (nav) nav.classList.add('active');
+        if (name === 'store') renderProducts();
+        if (name === 'cart') { renderCart(); updatePayway(); }
+        if (name === 'admin') { refreshInv(); renderPending(); renderHistory(); }
+    }
+    document.getElementById('mobileNav')?.classList.remove('active');
+}
+
+function updateCartCount() { document.getElementById('floatingCartCount').textContent = S.cart.reduce((t,i) => t + i.quantity, 0); }
+
+// ============ PRODUCTS ============
+function loadSamples() {
+    S.products = [
+        { id:'p1', name:'Kids Cotton T-Shirt', price:12.99, stock:25, category:'tshirts', images:['https://images.unsplash.com/photo-1622290291468-2f3766aa2c47?w=600'], sizes:['S','M','L','XL'] },
+        { id:'p2', name:"Children's Jeans", price:24.99, stock:15, category:'Dresses', images:['https://images.unsplash.com/photo-1542272604-787c3835535d?w=600'], sizes:['2T','3T','4T'] },
+        { id:'p3', name:'Kids Hoodie', price:29.99, stock:8, category:'Baby Jeans', images:['https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=600'], sizes:['S','M','L'] }
+    ];
+    saveLocal(); renderProducts(); msg('Samples loaded!','success');
+}
+
+function addProduct() {
+    const name = document.getElementById('productName').value.trim();
+    const price = parseFloat(document.getElementById('productPrice').value);
+    const stock = parseInt(document.getElementById('productStock').value);
+    const cat = document.getElementById('productCategory').value;
+    if (!name || !price || isNaN(stock) || !cat) { msg('Fill all fields','error'); return; }
+    const p = {
+        id: S.editId || ('p'+Date.now()),
+        name, price, stock, category: cat,
+        images: ['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=600'],
+        sizes: [...sizes]
+    };
+    if (S.editId) {
+        const idx = S.products.findIndex(x => x.id === S.editId);
+        if (idx >= 0) S.products[idx] = p;
+    } else {
+        S.products.push(p);
+    }
+    saveLocal(); resetForm(); refreshInv(); renderProducts();
+    if (S.fbReady) syncAllData();
+    msg(`Product "${name}" saved!`,'success');
+}
+
+function editProduct(id) {
+    const p = S.products.find(x => x.id === id);
+    if (!p) return;
+    S.editId = id;
+    document.getElementById('productName').value = p.name;
+    document.getElementById('productPrice').value = p.price;
+    document.getElementById('productStock').value = p.stock;
+    document.getElementById('productCategory').value = p.category;
+    sizes.length = 0; sizes.push(...p.sizes); renderSizes();
+}
+
+function deleteProduct(id) {
+    if (!confirm('Delete?')) return;
+    S.products = S.products.filter(x => x.id !== id);
+    saveLocal(); refreshInv(); renderProducts();
+    if (S.fbReady) syncAllData();
+    msg('Deleted','success');
+}
+
+function addSize() {
+    const s = document.getElementById('newSize').value.trim().toUpperCase();
+    if (s && !sizes.includes(s)) { sizes.push(s); renderSizes(); }
+    document.getElementById('newSize').value = '';
+}
+
+function renderSizes() {
+    const el = document.getElementById('productSizesList');
+    if (el) el.innerHTML = sizes.map((s,i) => `<div class="size-tag">${s}<button class="remove-size" onclick="sizes.splice(${i},1);renderSizes()"><i class="fas fa-times"></i></button></div>`).join('');
+}
+
+function resetForm() {
+    ['productName','productPrice','productStock'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('productCategory').value = '';
+    sizes.length = 0; S.editId = null; renderSizes();
+}
+
+function renderProducts() {
+    const grid = document.getElementById('productGrid');
+    if (!grid) return;
+    let filtered = S.products.filter(p => {
+        if (S.filter.search && !p.name.toLowerCase().includes(S.filter.search)) return false;
+        if (S.filter.category !== 'all' && p.category !== S.filter.category) return false;
+        if (S.filter.stock === 'in-stock' && p.stock <= 0) return false;
+        if (S.filter.stock === 'low-stock' && (p.stock > 5 || p.stock <= 0)) return false;
+        if (S.filter.stock === 'out-of-stock' && p.stock > 0) return false;
+        if (S.filter.price === '0-20' && p.price >= 20) return false;
+        if (S.filter.price === '20-30' && (p.price < 20 || p.price >= 30)) return false;
+        if (S.filter.price === '30+' && p.price < 30) return false;
+        return true;
+    });
+    if (filtered.length === 0) { grid.innerHTML = '<p style="text-align:center;padding:3rem">No products found</p>'; return; }
+    grid.innerHTML = filtered.map(p => {
+        const img = (p.images && p.images.length) ? p.images[0] : 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=600';
+        const [bc, bt, sc, st] = p.stock > 10 ? ['badge-new','NEW','in-stock','In Stock'] : p.stock > 0 ? ['badge-low','LOW','low-stock','Low Stock'] : ['badge-sale','SOLD','out-of-stock','Out of Stock'];
+        return `<div class="product-card">
+            <div class="product-image-container"><img src="${img}" alt="${p.name}" class="product-main-image" loading="lazy"><div class="product-badge ${bc}">${bt}</div></div>
+            <div class="product-info">
+                <span class="product-category">${p.category}</span>
+                <h3 class="product-title">${p.name}</h3>
+                <div class="product-price">$${p.price.toFixed(2)}</div>
+                <div class="product-stock ${sc}">${st} (${p.stock})</div>
+                ${p.sizes && p.sizes.length ? `<div class="size-selector"><label class="size-label">Size:</label><div class="size-options">${p.sizes.map(s => `<div class="size-option" onclick="selSize(this,'${p.id}','${s}')">${s}</div>`).join('')}</div></div>` : ''}
+                <div class="product-actions">
+                    <button class="btn btn-primary btn-add-to-cart" onclick="addToCart('${p.id}')" ${p.stock<=0?'disabled':''}><i class="fas fa-cart-plus"></i>Add to Cart</button>
+                    ${S.isAdmin ? `<button class="btn btn-outline" onclick="showTab('admin');editProduct('${p.id}')"><i class="fas fa-edit"></i></button>` : ''}
+                </div>
+            </div></div>`;
+    }).join('');
+}
+
+function selSize(el, pid, size) {
+    document.querySelectorAll(`.size-option[onclick*="${pid}"]`).forEach(s => s.classList.remove('selected'));
+    el.classList.add('selected');
+    selSizes[pid] = size;
+}
+
+function refreshInv() {
+    document.getElementById('productCount').textContent = S.products.length;
+    const tbody = document.getElementById('inventoryTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = S.products.map(p => `<tr>
+        <td><strong>${p.name}</strong></td><td>${p.category}</td><td>${(p.sizes||[]).join(', ')||'One Size'}</td>
+        <td>$${p.price.toFixed(2)}</td><td>${p.stock}</td>
+        <td><div class="flex gap-2"><button class="btn btn-primary btn-small" onclick="editProduct('${p.id}')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct('${p.id}')"><i class="fas fa-trash"></i></button></div></td>
+    </tr>`).join('');
+}
+
+function searchProducts() { S.filter.search = document.getElementById('searchInput').value.toLowerCase(); renderProducts(); }
+function filterProducts() {
+    S.filter.category = document.getElementById('categoryFilter').value;
+    S.filter.stock = document.getElementById('stockFilter').value;
+    S.filter.price = document.getElementById('priceFilter').value;
+    renderProducts();
+}
+
+// ============ CART ============
+function addToCart(pid) {
+    const p = S.products.find(x => x.id === pid);
+    if (!p || p.stock <= 0) { msg('Out of stock','error'); return; }
+    const size = selSizes[pid] || 'One Size';
+    const exist = S.cart.find(i => i.productId === pid && i.size === size);
+    if (exist) {
+        if (exist.quantity < p.stock) exist.quantity++;
+        else { msg('Stock limit','error'); return; }
+    } else {
+        S.cart.push({ productId: pid, name: p.name, price: p.price, size, quantity: 1, image: (p.images&&p.images[0])||'' });
+    }
+    localStorage.setItem('goatCart', JSON.stringify(S.cart));
+    updateCartCount(); renderCart(); updatePayway();
+    msg(`${p.name} added`,'success');
+}
+
+function renderCart() {
+    const empty = document.getElementById('emptyCart');
+    const list = document.getElementById('cartItemsList');
+    const sum = document.getElementById('cartSummary');
+    if (S.cart.length === 0) { empty.classList.remove('hidden'); list.classList.add('hidden'); sum.classList.add('hidden'); return; }
+    empty.classList.add('hidden'); list.classList.remove('hidden'); sum.classList.remove('hidden');
+    list.innerHTML = S.cart.map((item, i) => {
+        const t = item.price * item.quantity;
+        return `<div class="cart-item">
+            <img src="${item.image}" alt="${item.name}" class="cart-item-image">
+            <div><div class="cart-item-name">${item.name}</div><div>Size: ${item.size}</div><div class="cart-item-price">$${item.price.toFixed(2)}</div>
+            <div class="cart-item-quantity"><button class="quantity-btn" onclick="updQty(${i},${item.quantity-1})">-</button><span>${item.quantity}</span><button class="quantity-btn" onclick="updQty(${i},${item.quantity+1})">+</button></div></div>
+            <div class="cart-item-total">$${t.toFixed(2)}</div>
+            <button class="remove-item" onclick="remCart(${i})"><i class="fas fa-trash"></i></button>
+        </div>`;
+    }).join('');
+    const sub = S.cart.reduce((s,i) => s + i.price*i.quantity, 0);
+    document.getElementById('cartSubtotal').textContent = '$'+sub.toFixed(2);
+    document.getElementById('cartTotal').textContent = '$'+(sub+2).toFixed(2);
+}
+
+function updQty(i, q) { if (q < 1) { remCart(i); return; } S.cart[i].quantity = q; localStorage.setItem('goatCart', JSON.stringify(S.cart)); updateCartCount(); renderCart(); updatePayway(); }
+function remCart(i) { S.cart.splice(i,1); localStorage.setItem('goatCart', JSON.stringify(S.cart)); updateCartCount(); renderCart(); updatePayway(); }
+function updatePayway() { document.getElementById('paywayTotal').textContent = (S.cart.reduce((s,i)=>s+i.price*i.quantity,0)+2).toFixed(2); }
+
+// ============ ORDERS ============
+function sendOrderToMessenger() {
+    if (!validateCust()) return;
+    if (S.cart.length === 0) { msg('Cart empty','error'); return; }
+    const oid = 'ORD-'+Date.now();
+    const sub = S.cart.reduce((s,i) => s + i.price*i.quantity, 0);
+    const order = {
+        orderId: oid, timestamp: Date.now(), orderDate: new Date().toLocaleString(), status: 'pending',
+        customerName: document.getElementById('customerName').value.trim(),
+        customerPhone: document.getElementById('customerPhone').value.trim(),
+        customerAddress: document.getElementById('customerAddress').value.trim(),
+        customerNotes: document.getElementById('customerNotes').value.trim(),
+        paymentMethod: S.payment, storeId: S.storeId,
+        cart: S.cart.map(i => ({ productId:i.productId, name:i.name, size:i.size, quantity:i.quantity, price:i.price, subtotal:i.price*i.quantity })),
+        subtotal: sub, shipping: 2, total: sub+2
+    };
+    S.pending.push(order); saveOrders();
+    let sm = `🛍️ *GOAT KIDS ORDER*\n🆔 ${oid}\n📅 ${order.orderDate}\n\n👤 ${order.customerName}\n📞 ${order.customerPhone}\n📍 ${order.customerAddress}\n\n📦 ITEMS:\n`;
+    order.cart.forEach((it,i) => sm += `${i+1}. ${it.name} (${it.size}) x${it.quantity} = $${it.subtotal.toFixed(2)}\n`);
+    sm += `\n💰 Total: $${order.total.toFixed(2)}\n💳 ${S.payment==='payway'?'ABA':'COD'}\n\n⏳ PENDING CONFIRMATION`;
+    document.getElementById('orderSummaryContent').textContent = sm;
+    document.getElementById('orderSummaryPreview').classList.remove('hidden');
+    S.cart = []; localStorage.setItem('goatCart','[]'); updateCartCount(); renderCart(); updatePayway();
+    if (S.fbReady) syncAllData();
+    if (confirm('Open Messenger?')) window.open(`https://m.me/Goatkids?text=${encodeURIComponent(sm)}`,'_blank');
+    if (S.isAdmin) renderPending();
+    msg('Order sent! Pending confirmation.','success');
+}
+
+function preparePaywayPayment(e) {
+    if (!validateCust()) { e.preventDefault(); return; }
+    if (S.cart.length === 0) { e.preventDefault(); msg('Cart empty','error'); return; }
+    sendOrderToMessenger();
+}
+
+function validateCust() {
+    const n = document.getElementById('customerName').value.trim();
+    const p = document.getElementById('customerPhone').value.trim();
+    const a = document.getElementById('customerAddress').value.trim();
+    let ok = true;
+    ['nameError','phoneError','addressError'].forEach(id => document.getElementById(id).classList.add('hidden'));
+    if (!n) { document.getElementById('nameError').classList.remove('hidden'); ok = false; }
+    if (!p || !/^(?:\+855|0)[1-9][0-9]{7,8}$/.test(p)) { document.getElementById('phoneError').classList.remove('hidden'); ok = false; }
+    if (!a) { document.getElementById('addressError').classList.remove('hidden'); ok = false; }
+    return ok;
+}
+
+function confirmOrder(oid) {
+    const idx = S.pending.findIndex(o => o.orderId === oid);
+    if (idx < 0) return;
+    const order = S.pending[idx];
+    // Check stock
+    for (const it of order.cart) {
+        const p = S.products.find(x => x.id === it.productId);
+        if (!p || p.stock < it.quantity) { msg(`Not enough stock for ${it.name}`,'error'); return; }
+    }
+    // Reduce stock
+    for (const it of order.cart) {
+        const p = S.products.find(x => x.id === it.productId);
+        if (p) p.stock = Math.max(0, p.stock - it.quantity);
+    }
+    saveLocal();
+    order.status = 'confirmed'; order.confirmedAt = new Date().toLocaleString();
+    S.confirmed.push(order); S.pending.splice(idx,1);
+    saveOrders();
+    if (S.fbReady) syncAllData();
+    renderPending(); renderHistory(); renderProducts(); refreshInv();
+    msg(`Order ${oid} confirmed! Stock reduced.`,'success');
+    if (confirm('Send confirmation via Messenger?')) {
+        window.open(`https://m.me/Goatkids?text=${encodeURIComponent('✅ Order '+oid+' confirmed! Total: $'+order.total.toFixed(2))}`,'_blank');
+    }
+}
+
+function rejectOrder(oid) {
+    const idx = S.pending.findIndex(o => o.orderId === oid);
+    if (idx < 0) return;
+    const order = S.pending[idx];
+    const reason = prompt('Reason:') || 'No reason';
+    order.status = 'rejected'; order.rejectedAt = new Date().toLocaleString(); order.rejectionReason = reason;
+    S.confirmed.push(order); S.pending.splice(idx,1);
+    saveOrders();
+    if (S.fbReady) syncAllData();
+    renderPending(); renderHistory();
+    msg(`Order ${oid} rejected.`,'warning');
+}
+
+function confirmAllOrders() {
+    if (S.pending.length === 0) { msg('No pending orders','warning'); return; }
+    if (!confirm(`Confirm ALL ${S.pending.length} orders?`)) return;
+    const orders = [...S.pending];
+    for (const order of orders) {
+        for (const it of order.cart) {
+            const p = S.products.find(x => x.id === it.productId);
+            if (p) p.stock = Math.max(0, p.stock - it.quantity);
+        }
+        order.status = 'confirmed'; order.confirmedAt = new Date().toLocaleString();
+        S.confirmed.push(order);
+    }
+    S.pending = [];
+    saveLocal(); saveOrders();
+    if (S.fbReady) syncAllData();
+    renderPending(); renderHistory(); renderProducts(); refreshInv();
+    msg(`${orders.length} orders confirmed!`,'success');
+}
+
+function renderPending() {
+    const c = document.getElementById('pendingOrdersContainer');
+    document.getElementById('pendingOrderCount').textContent = S.pending.length;
+    if (!c) return;
+    if (S.pending.length === 0) { c.innerHTML = '<p style="text-align:center;padding:2rem;color:var(--gray)">No pending orders</p>'; return; }
+    c.innerHTML = S.pending.map(o => {
+        let items = o.cart.map(it => `<div style="display:flex;justify-content:space-between"><span>${it.quantity}x ${it.name} (${it.size})</span><span>$${it.subtotal.toFixed(2)}</span></div>`).join('');
+        return `<div class="order-card">
+            <div style="display:flex;justify-content:space-between;margin-bottom:1rem"><div><h4 style="color:var(--warning)">⏳ PENDING</h4><small>🆔 ${o.orderId} | 📅 ${o.orderDate}</small></div><span style="background:var(--warning);padding:0.25rem 0.75rem;border-radius:1rem;font-weight:600">PENDING</span></div>
+            <div style="background:var(--light);padding:1rem;border-radius:var(--radius);margin-bottom:1rem">👤 ${o.customerName} | 📞 ${o.customerPhone}<br>📍 ${o.customerAddress} | 💳 ${o.paymentMethod==='payway'?'ABA':'COD'}</div>
+            <div style="margin-bottom:1rem">${items}<div style="border-top:2px solid var(--gray-light);padding-top:0.5rem;margin-top:0.5rem;font-weight:700">Total: $${o.total.toFixed(2)}</div></div>
+            ${o.customerNotes ? `<div style="padding:0.75rem;background:#fff;border-left:3px solid var(--primary);margin-bottom:1rem">📝 ${o.customerNotes}</div>` : ''}
+            <div class="flex gap-2"><button class="btn btn-success" onclick="confirmOrder('${o.orderId}')" style="flex:1">✅ Confirm</button><button class="btn btn-danger" onclick="rejectOrder('${o.orderId}')" style="flex:1">❌ Reject</button></div>
+        </div>`;
+    }).join('');
+}
+
+function renderHistory() {
+    const c = document.getElementById('orderHistoryContainer');
+    document.getElementById('confirmedOrderCount').textContent = S.confirmed.length;
+    if (!c) return;
+    if (S.confirmed.length === 0) { c.innerHTML = '<p style="text-align:center;padding:2rem;color:var(--gray)">No history</p>'; return; }
+    c.innerHTML = [...S.confirmed].reverse().map(o => {
+        const ok = o.status === 'confirmed';
+        return `<div class="order-card ${o.status}" style="border-color:${ok?'var(--success)':'var(--danger)'};opacity:${ok?'1':'0.7'}">
+            <div style="display:flex;justify-content:space-between"><div><h4 style="color:${ok?'var(--success)':'var(--danger)'}">${ok?'✅':'❌'} ${o.status.toUpperCase()}</h4><small>🆔 ${o.orderId} | 📅 ${o.orderDate}</small>${ok?`<br><small>Confirmed: ${o.confirmedAt}</small>`:`<br><small>Rejected: ${o.rejectedAt} - ${o.rejectionReason}</small>`}</div><span style="background:${ok?'var(--success)':'var(--danger)'};color:#fff;padding:0.25rem 0.75rem;border-radius:1rem">${o.status.toUpperCase()}</span></div>
+            <div style="margin-top:0.5rem">👤 ${o.customerName} | 💰 $${o.total.toFixed(2)}</div>
+        </div>`;
+    }).join('');
+}
+
+// ============ CSV EXPORT ============
+function escCSV(f) { if (f === null || f === undefined) return ''; const s = String(f); return s.includes(',')||s.includes('"')||s.includes('\n') ? '"'+s.replace(/"/g,'""')+'"' : s; }
+function dlCSV(csv, fn) {
+    const b = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = fn;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+function exportPendingCSV() {
+    if (S.pending.length === 0) { msg('No pending orders','warning'); return; }
+    let csv = 'Order ID,Date,Status,Customer,Phone,Address,Payment,Item,Size,Qty,Price,Subtotal,Total,Notes\n';
+    S.pending.forEach(o => {
+        o.cart.forEach((it,i) => {
+            csv += [escCSV(o.orderId),escCSV(o.orderDate),escCSV(o.status),escCSV(o.customerName),escCSV(o.customerPhone),escCSV(o.customerAddress),escCSV(o.paymentMethod),escCSV(it.name),escCSV(it.size),it.quantity,it.price.toFixed(2),it.subtotal.toFixed(2),(i===0?o.total.toFixed(2):''),(i===0?escCSV(o.customerNotes||''):'')].join(',')+'\n';
         });
+    });
+    dlCSV(csv, `GOAT_Pending_${new Date().toISOString().split('T')[0]}.csv`);
+    msg('Pending orders exported!','success');
+}
+function exportHistoryCSV() {
+    if (S.confirmed.length === 0) { msg('No history','warning'); return; }
+    let csv = 'Order ID,Date,Status,Confirmed/Rejected,Reason,Customer,Phone,Address,Payment,Item,Size,Qty,Price,Subtotal,Total\n';
+    S.confirmed.forEach(o => {
+        o.cart.forEach((it,i) => {
+            csv += [escCSV(o.orderId),escCSV(o.orderDate),escCSV(o.status),escCSV(o.confirmedAt||o.rejectedAt||''),escCSV(o.rejectionReason||''),escCSV(o.customerName),escCSV(o.customerPhone),escCSV(o.customerAddress),escCSV(o.paymentMethod),escCSV(it.name),escCSV(it.size),it.quantity,it.price.toFixed(2),it.subtotal.toFixed(2),(i===0?o.total.toFixed(2):'')].join(',')+'\n';
+        });
+    });
+    dlCSV(csv, `GOAT_History_${new Date().toISOString().split('T')[0]}.csv`);
+    msg('History exported!','success');
+}
 
-        async function connectToFirebase() {
-            updateSyncStatus('Connecting to cloud...', 'syncing');
-            
-            if (!window.firebaseInitialized || !window.db) {
-                updateSyncStatus('Working offline - Firebase not available', 'offline');
-                state.isOnline = false;
-                return;
-            }
-            
-            try {
-                // Test connection
-                await window.db.collection('stores').doc(state.storeId).get();
-                
-                state.isOnline = true;
-                state.firebaseInitialized = true;
-                updateSyncStatus('Connected to cloud', 'success');
-                
-                // Load data from Firebase
-                await loadProductsFromFirebase();
-                await loadOrdersFromFirebase();
-                
-                // Setup real-time listeners
-                setupFirebaseListeners();
-                
-                // If no products loaded, use local
-                if (state.products.length === 0) {
-                    loadLocalProducts();
-                    await syncProductsToFirebase();
-                }
-                
-            } catch (error) {
-                console.error('Firebase connection error:', error);
-                state.isOnline = false;
-                updateSyncStatus('Working offline - using local data', 'offline');
-                loadLocalProducts();
-                loadLocalOrders();
-            }
-        }
-
-        function updateSyncStatus(text, status) {
-            const statusEl = document.getElementById('syncStatus');
-            const textEl = document.getElementById('syncText');
-            const indicator = document.getElementById('syncIndicator');
-            const headerIndicator = document.getElementById('headerSyncIndicator');
-            
-            if (textEl) textEl.textContent = text;
-            
-            if (indicator) {
-                indicator.className = 'sync-indicator ' + status;
-            }
-            if (headerIndicator) {
-                headerIndicator.className = 'sync-indicator ' + status;
-            }
-            
-            if (statusEl && (status === 'offline' || status === 'error')) {
-                statusEl.className = 'sync-status show ' + status;
-            } else if (statusEl && status === 'success') {
-                statusEl.className = 'sync-status show online';
-                setTimeout(() => { if (statusEl) statusEl.classList.remove('show'); }, 3000);
-            }
-        }
-
-        async function initializeStore() {
-            let storeId = localStorage.getItem('goatStoreId');
-            if (!storeId) {
-                const urlParams = new URLSearchParams(window.location.search);
-                storeId = urlParams.get('store') || ('GOAT-' + Math.floor(1000 + Math.random() * 9000));
-                localStorage.setItem('goatStoreId', storeId);
-            }
-            state.storeId = storeId;
-            document.getElementById('currentStoreIdDisplay').textContent = storeId;
-            const currentStoreEl = document.getElementById('currentStoreId');
-            if (currentStoreEl) currentStoreEl.textContent = storeId;
-            return storeId;
-        }
-
-        function setupMobileMenu() {
-            const btn = document.getElementById('mobileMenuBtn');
-            const nav = document.getElementById('mobileNav');
-            if (btn && nav) {
-                btn.addEventListener('click', () => {
-                    nav.classList.toggle('active');
-                    btn.innerHTML = nav.classList.contains('active') ? '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
-                });
-            }
-        }
-
-        function checkAdminStatus() {
-            if (state.isAdmin) {
-                document.getElementById('adminBadge')?.classList.remove('hidden');
-                document.getElementById('adminNavLink')?.classList.remove('hidden');
-                document.getElementById('adminNavLinkMobile')?.classList.remove('hidden');
-            }
-        }
-
-        // ============================================
-        // FIREBASE DATA LOADING
-        // ============================================
-        async function loadProductsFromFirebase() {
-            if (!state.firebaseInitialized || !window.db) return;
-            
-            try {
-                const snapshot = await window.db.collection('stores')
-                    .doc(state.storeId)
-                    .collection('products')
-                    .where('active', '==', true)
-                    .get();
-                
-                const products = [];
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    products.push({
-                        id: doc.id,
-                        name: data.name || '',
-                        price: data.price || 0,
-                        stock: data.stock || 0,
-                        category: data.category || '',
-                        images: data.images || [],
-                        sizes: data.sizes || []
-                    });
-                });
-                
-                if (products.length > 0) {
-                    state.products = products;
-                    saveProductsLocally();
-                    renderProducts();
-                }
-                
-                console.log(`✅ Loaded ${products.length} products from Firebase`);
-            } catch (error) {
-                console.error('Error loading products:', error);
-            }
-        }
-
-        async function loadOrdersFromFirebase() {
-            if (!state.firebaseInitialized || !window.db) return;
-            
-            try {
-                // Load pending orders
-                const pendingSnapshot = await window.db.collection('stores')
-                    .doc(state.storeId)
-                    .collection('orders')
-                    .where('status', '==', 'pending')
-                    .get();
-                
-                state.pendingOrders = [];
-                pendingSnapshot.forEach(doc => {
-                    state.pendingOrders.push({ ...doc.data(), orderId: doc.id });
-                });
-                savePendingOrdersLocally();
-                
-                // Load confirmed/rejected orders
-                const historySnapshot = await window.db.collection('stores')
-                    .doc(state.storeId)
-                    .collection('orders')
-                    .where('status', 'in', ['confirmed', 'rejected'])
-                    .orderBy('timestamp', 'desc')
-                    .limit(50)
-                    .get();
-                
-                state.confirmedOrders = [];
-                historySnapshot.forEach(doc => {
-                    state.confirmedOrders.push({ ...doc.data(), orderId: doc.id });
-                });
-                saveConfirmedOrdersLocally();
-                
-                console.log(`✅ Loaded orders: ${state.pendingOrders.length} pending, ${state.confirmedOrders.length} history`);
-            } catch (error) {
-                console.error('Error loading orders:', error);
-            }
-        }
-
-        function setupFirebaseListeners() {
-            if (!state.firebaseInitialized || !window.db) return;
-            
-            // Listen for product changes
-            const productsRef = window.db.collection('stores')
-                .doc(state.storeId)
-                .collection('products')
-                .where('active', '==', true);
-            
-            if (window.productsUnsubscribe) window.productsUnsubscribe();
-            
-            window.productsUnsubscribe = productsRef.onSnapshot(snapshot => {
-                const products = [];
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    products.push({
-                        id: doc.id,
-                        name: data.name || '',
-                        price: data.price || 0,
-                        stock: data.stock || 0,
-                        category: data.category || '',
-                        images: data.images || [],
-                        sizes: data.sizes || []
-                    });
-                });
-                
-                if (products.length > 0) {
-                    state.products = products;
-                    saveProductsLocally();
-                    
-                    if (document.getElementById('storeTab').classList.contains('active')) {
-                        renderProducts();
-                    }
-                    if (document.getElementById('adminTab').classList.contains('active')) {
-                        refreshInventory();
-                    }
-                }
-            });
-            
-            // Listen for order changes
-            const ordersRef = window.db.collection('stores')
-                .doc(state.storeId)
-                .collection('orders');
-            
-            if (window.ordersUnsubscribe) window.ordersUnsubscribe();
-            
-            window.ordersUnsubscribe = ordersRef.onSnapshot(snapshot => {
-                const pending = [];
-                const confirmed = [];
-                
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    if (data.status === 'pending') {
-                        pending.push({ ...data, orderId: doc.id });
-                    } else {
-                        confirmed.push({ ...data, orderId: doc.id });
-                    }
-                });
-                
-                state.pendingOrders = pending;
-                state.confirmedOrders = confirmed;
-                savePendingOrdersLocally();
-                saveConfirmedOrdersLocally();
-                
-                if (document.getElementById('adminTab').classList.contains('active')) {
-                    renderPendingOrders();
-                    renderOrderHistory();
-                }
-            });
-            
-            updateSyncStatus('Live sync active', 'success');
-        }
-
-        // ============================================
-        // SYNC ALL DATA
-        // ============================================
-        async function syncAllData() {
-            if (!state.firebaseInitialized || !window.db) {
-                showMessage('Firebase not available. Working offline.', 'error');
-                return;
-            }
-            
-            updateSyncStatus('Syncing all data...', 'syncing');
-            
-            try {
-                await syncProductsToFirebase();
-                await syncOrdersToFirebase();
-                updateSyncStatus('All data synced!', 'success');
-                showMessage('All data synchronized to cloud! ✅', 'success');
-            } catch (error) {
-                console.error('Sync error:', error);
-                updateSyncStatus('Sync failed', 'error');
-                showMessage('Sync failed. Please try again.', 'error');
-            }
-        }
-
-        async function syncProductsToFirebase() {
-            if (!state.firebaseInitialized || !window.db) return;
-            
-            const batch = window.db.batch();
-            const productsRef = window.db.collection('stores').doc(state.storeId).collection('products');
-            
-            state.products.forEach(product => {
-                const docRef = productsRef.doc(product.id);
-                batch.set(docRef, {
-                    id: product.id,
-                    name: product.name,
-                    price: product.price,
-                    stock: product.stock,
-                    category: product.category,
-                    images: product.images || [],
-                    sizes: product.sizes || [],
-                    active: true,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true });
-            });
-            
-            await batch.commit();
-            console.log('✅ Products synced to Firebase');
-        }
-
-        async function syncOrdersToFirebase() {
-            if (!state.firebaseInitialized || !window.db) return;
-            
-            const ordersRef = window.db.collection('stores').doc(state.storeId).collection('orders');
-            
-            // Sync pending orders
-            for (const order of state.pendingOrders) {
-                await ordersRef.doc(order.orderId).set({
-                    ...order,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true });
-            }
-            
-            // Sync confirmed orders
-            for (const order of state.confirmedOrders) {
-                await ordersRef.doc(order.orderId).set({
-                    ...order,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true });
-            }
-            
-            console.log('✅ Orders synced to Firebase');
-        }
-
-        // ============================================
-        // LOCAL STORAGE HELPERS
-        // ============================================
-        function loadLocalData() {
-            loadLocalProducts();
-            loadLocalOrders();
-        }
-
-        function loadLocalProducts() {
-            const saved = localStorage.getItem('goatProducts');
-            if (saved) {
-                state.products = JSON.parse(saved);
-                if (state.products.length > 0) renderProducts();
-            }
-        }
-
-        function loadLocalOrders() {
-            state.pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
-            state.confirmedOrders = JSON.parse(localStorage.getItem('confirmedOrders') || '[]');
-        }
-
-        function saveProductsLocally() {
-            localStorage.setItem('goatProducts', JSON.stringify(state.products));
-        }
-
-        function savePendingOrdersLocally() {
-            localStorage.setItem('pendingOrders', JSON.stringify(state.pendingOrders));
-        }
-
-        function saveConfirmedOrdersLocally() {
-            localStorage.setItem('confirmedOrders', JSON.stringify(state.confirmedOrders.slice(-50)));
-        }
-
-        // ============================================
-        // REST OF THE FUNCTIONS (Same as before)
-        // ============================================
-        // ... (Include all functions from previous version: showTab, renderProducts, 
-        //      addToCart, renderCart, sendOrderToMessenger, confirmOrder, rejectOrder,
-        //      CSV exports, etc.)
-        // Note: Due to character limit, please copy the remaining functions from the 
-        // previous working version. The key change is the Firebase sync functions above.
-        //
-        // KEY CHANGE: When saving orders or products, save BOTH locally AND to Firebase:
-        //
-        // function saveProducts() { 
-        //     saveProductsLocally(); 
-        //     if (state.isOnline) syncProductToFirebase(product); 
-        // }
-        //
-        // function savePendingOrders() { 
-        //     savePendingOrdersLocally(); 
-        //     if (state.isOnline) syncOrdersToFirebase(); 
-        // }
-
-        function showMessage(text, type = 'info') {
-            const colors = { success: 'var(--success)', error: 'var(--danger)', warning: 'var(--warning)', info: 'var(--primary)' };
-            const icons = { success: 'check-circle', error: 'exclamation-circle', warning: 'exclamation-triangle', info: 'info-circle' };
-            const msg = document.createElement('div');
-            msg.className = 'message';
-            msg.innerHTML = `<div style="position:fixed;top:20px;right:20px;padding:1rem 2rem;border-radius:var(--radius);background:${colors[type]};color:white;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);z-index:9999;display:flex;align-items:center;gap:0.75rem;font-size:1rem;"><i class="fas fa-${icons[type]}"></i><span>${text}</span></div>`;
-            document.body.appendChild(msg);
-            setTimeout(() => { msg.style.opacity = '0'; msg.style.transform = 'translateY(-20px)'; setTimeout(() => msg.remove(), 300); }, 3000);
-        }
-
-        function showTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(t => { t.classList.add('hidden'); t.classList.remove('active'); });
-            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-            const tab = document.getElementById(tabName + 'Tab');
-            if (tab) {
-                tab.classList.remove('hidden'); tab.classList.add('active');
-                const nav = document.querySelector(`.nav-link[onclick*="${tabName}"]`);
-                if (nav) nav.classList.add('active');
-                if (tabName === 'store') renderProducts();
-                else if (tabName === 'cart') { renderCart(); updatePaywayTotal(); }
-                else if (tabName === 'admin') { refreshInventory(); resetProductForm(); renderPendingOrders(); renderOrderHistory(); }
-            }
-            document.getElementById('mobileNav')?.classList.remove('active');
-        }
-
-        function updateCartCount() { document.getElementById('floatingCartCount').textContent = state.cart.reduce((t, i) => t + i.quantity, 0); }
-
-        // Include remaining functions from the previous version here...
-        // (renderProducts, addToCart, renderCart, sendOrderToMessenger, 
-        //  confirmOrder, rejectOrder, CSV exports, etc.)
-
-        console.log('✅ GOAT KIDS initialized');
-        console.log('📡 Firebase:', state.firebaseInitialized ? 'Available' : 'Not available');
-        console.log('🆔 Store ID:', state.storeId);
-    </script>
+// ============ UTILS ============
+function selectPaymentMethod(m) { S.payment = m; }
+function openAdminLoginModal() { document.getElementById('adminLoginModal').classList.add('active'); document.getElementById('adminLoginModal').classList.remove('hidden'); }
+function closeAdminLoginModal() { document.getElementById('adminLoginModal').classList.remove('active'); document.getElementById('adminLoginModal').classList.add('hidden'); }
+function adminLogin() {
+    if (document.getElementById('adminPassword').value === 'N1255550') {
+        S.isAdmin = true; localStorage.setItem('goatAdmin','true');
+        document.getElementById('adminBadge').classList.remove('hidden');
+        document.getElementById('adminNavLink').classList.remove('hidden');
+        document.getElementById('adminNavLinkMobile').classList.remove('hidden');
+        showTab('admin'); closeAdminLoginModal(); msg('Admin login!','success');
+    } else { msg('Wrong password','error'); }
+}
+function adminLogout() { S.isAdmin = false; localStorage.removeItem('goatAdmin'); showTab('store'); msg('Logged out','info'); }
+function copyStoreId() { navigator.clipboard.writeText(S.storeId); msg('Copied!','success'); }
+function msg(t, type) {
+    const colors = {success:'var(--success)',error:'var(--danger)',warning:'var(--warning)',info:'var(--primary)'};
+    const icons = {success:'check-circle',error:'exclamation-circle',warning:'exclamation-triangle',info:'info-circle'};
+    const el = document.createElement('div');
+    el.innerHTML = `<div style="position:fixed;top:20px;right:20px;padding:1rem 2rem;border-radius:8px;background:${colors[type]};color:#fff;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);z-index:9999;display:flex;align-items:center;gap:0.75rem;font-size:1rem"><i class="fas fa-${icons[type]}"></i><span>${t}</span></div>`;
+    document.body.appendChild(el);
+    setTimeout(() => { el.style.opacity='0'; el.style.transform='translateY(-20px)'; setTimeout(() => el.remove(),300); }, 3000);
+}
+</script>
 </body>
 </html>
