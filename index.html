@@ -111,6 +111,8 @@
         .btn-large { padding: 0.875rem 1.75rem; font-size: 1.125rem; }
         .btn-success { background: var(--success); color: white; }
         .btn-danger { background: var(--danger); color: white; }
+        .btn-warning { background: var(--warning); color: var(--dark); }
+        .btn-info { background: var(--info); color: white; }
 
         .payway-btn, .messenger-btn {
             display: flex; align-items: center; justify-content: center; gap: var(--space-sm);
@@ -259,8 +261,9 @@
         .order-summary-preview pre { white-space: pre-wrap; font-family: monospace; font-size: 0.9rem; line-height: 1.6; background: white; padding: 1rem; border-radius: var(--radius); max-height: 300px; overflow-y: auto; }
 
         .admin-container { background: white; border-radius: var(--radius-lg); padding: var(--space-xl); box-shadow: var(--shadow); margin-bottom: var(--space-xl); }
-        .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-xl); padding-bottom: var(--space-lg); border-bottom: 1px solid var(--gray-light); }
+        .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-xl); padding-bottom: var(--space-lg); border-bottom: 1px solid var(--gray-light); flex-wrap: wrap; gap: var(--space-md); }
         .section-title { display: flex; align-items: center; gap: var(--space-sm); margin: var(--space-2xl) 0 var(--space-lg); padding-bottom: var(--space-sm); border-bottom: 2px solid var(--gray-light); font-size: 1.75rem; }
+        .section-title-with-actions { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-md); }
 
         .store-id-section { background: var(--light); border-radius: var(--radius); padding: var(--space-xl); margin-bottom: var(--space-xl); }
         .store-id-display { display: flex; justify-content: space-between; align-items: center; background: white; padding: var(--space-xl); border-radius: var(--radius); margin-bottom: var(--space-lg); }
@@ -299,6 +302,8 @@
         .order-card.confirmed { border-color: var(--success); }
         .order-card.rejected { border-color: var(--danger); opacity: 0.7; }
 
+        .export-section { background: var(--light); border-radius: var(--radius); padding: var(--space-lg); margin-bottom: var(--space-lg); border: 2px dashed var(--primary-light); }
+
         footer { background: var(--dark); color: white; padding: var(--space-2xl) 0; margin-top: var(--space-2xl); }
         .footer-container { max-width: 1400px; margin: 0 auto; padding: 0 var(--space-lg); display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-2xl); }
         .copyright { text-align: center; padding-top: var(--space-xl); margin-top: var(--space-xl); border-top: 1px solid rgba(255,255,255,0.1); }
@@ -316,6 +321,7 @@
             .payment-options { flex-direction: column; }
             .admin-header { flex-direction: column; gap: var(--space-lg); }
             .footer-container { grid-template-columns: 1fr; text-align: center; }
+            .section-title-with-actions { flex-direction: column; align-items: flex-start; }
         }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -476,11 +482,35 @@
                     </div>
                 </div>
 
-                <!-- PENDING ORDERS SECTION (NEW) -->
-                <div class="section-title">
-                    <i class="fas fa-clock"></i>Pending Orders 
-                    (<span id="pendingOrderCount">0</span>)
+                <!-- PENDING ORDERS SECTION WITH EXPORT -->
+                <div class="section-title-with-actions">
+                    <div class="section-title" style="margin:0;padding:0;border:none;">
+                        <i class="fas fa-clock"></i>Pending Orders 
+                        (<span id="pendingOrderCount">0</span>)
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="btn btn-info btn-large" onclick="exportPendingOrdersCSV()" id="exportPendingBtn">
+                            <i class="fas fa-file-csv"></i> Export CSV
+                        </button>
+                        <button class="btn btn-success btn-large" onclick="confirmAllOrders()" id="confirmAllBtn">
+                            <i class="fas fa-check-double"></i> Confirm All
+                        </button>
+                    </div>
                 </div>
+                
+                <!-- Export Summary -->
+                <div class="export-section" id="exportSummary" style="display:none;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <strong><i class="fas fa-info-circle"></i> CSV Export Ready</strong>
+                            <p style="margin-top:0.25rem;color:var(--gray);">File contains all pending orders with customer details and items</p>
+                        </div>
+                        <button class="btn btn-outline btn-small" onclick="document.getElementById('exportSummary').style.display='none'">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                
                 <div id="pendingOrdersContainer">
                     <div style="text-align:center;padding:2rem;color:var(--gray);">
                         <i class="fas fa-check-circle" style="font-size:3rem;margin-bottom:1rem;"></i>
@@ -488,10 +518,15 @@
                     </div>
                 </div>
 
-                <!-- ORDER HISTORY SECTION (NEW) -->
-                <div class="section-title">
-                    <i class="fas fa-history"></i>Order History 
-                    (<span id="confirmedOrderCount">0</span>)
+                <!-- ORDER HISTORY SECTION WITH EXPORT -->
+                <div class="section-title-with-actions">
+                    <div class="section-title" style="margin:0;padding:0;border:none;">
+                        <i class="fas fa-history"></i>Order History 
+                        (<span id="confirmedOrderCount">0</span>)
+                    </div>
+                    <button class="btn btn-info btn-large" onclick="exportOrderHistoryCSV()" id="exportHistoryBtn">
+                        <i class="fas fa-file-csv"></i> Export CSV
+                    </button>
                 </div>
                 <div id="orderHistoryContainer">
                     <div style="text-align:center;padding:2rem;color:var(--gray);">
@@ -544,7 +579,14 @@
                     </div>
                 </div>
 
-                <div class="section-title"><i class="fas fa-boxes"></i>Inventory (<span id="productCount">0</span> products)</div>
+                <div class="section-title-with-actions">
+                    <div class="section-title" style="margin:0;padding:0;border:none;">
+                        <i class="fas fa-boxes"></i>Inventory (<span id="productCount">0</span> products)
+                    </div>
+                    <button class="btn btn-info btn-large" onclick="exportInventoryCSV()">
+                        <i class="fas fa-file-csv"></i> Export Inventory CSV
+                    </button>
+                </div>
                 <div style="overflow-x:auto;">
                     <table class="inventory-table">
                         <thead><tr><th>Product</th><th>Category</th><th>Sizes</th><th>Price</th><th>Stock</th><th>Actions</th></tr></thead>
@@ -701,6 +743,221 @@
         }
 
         // ============================================
+        // CSV EXPORT FUNCTIONS (NEW)
+        // ============================================
+        
+        /**
+         * Escape CSV field (handle commas, quotes, newlines)
+         */
+        function escapeCSV(field) {
+            if (field === null || field === undefined) return '""';
+            const str = String(field);
+            if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+                return '"' + str.replace(/"/g, '""') + '"';
+            }
+            return str;
+        }
+
+        /**
+         * Download CSV file
+         */
+        function downloadCSV(csvContent, filename) {
+            // Add BOM for Excel UTF-8 compatibility
+            const BOM = '\uFEFF';
+            const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        /**
+         * Export Pending Orders to CSV
+         */
+        function exportPendingOrdersCSV() {
+            if (state.pendingOrders.length === 0) {
+                showMessage('No pending orders to export', 'warning');
+                return;
+            }
+
+            // CSV Header
+            let csv = 'Order ID,Order Date,Status,Customer Name,Phone,Address,Payment Method,';
+            csv += 'Item Name,Size,Quantity,Price,Item Subtotal,';
+            csv += 'Order Subtotal,Shipping,Total,Notes\n';
+
+            // Add each order (one row per item)
+            state.pendingOrders.forEach(order => {
+                order.cart.forEach((item, itemIndex) => {
+                    csv += escapeCSV(order.orderId) + ',';
+                    csv += escapeCSV(order.orderDate) + ',';
+                    csv += escapeCSV(order.status) + ',';
+                    csv += escapeCSV(order.customerName) + ',';
+                    csv += escapeCSV(order.customerPhone) + ',';
+                    csv += escapeCSV(order.customerAddress) + ',';
+                    csv += escapeCSV(order.paymentMethod === 'payway' ? 'ABA PayWay' : 'Cash on Delivery') + ',';
+                    csv += escapeCSV(item.name) + ',';
+                    csv += escapeCSV(item.size) + ',';
+                    csv += item.quantity + ',';
+                    csv += item.price.toFixed(2) + ',';
+                    csv += item.subtotal.toFixed(2) + ',';
+                    
+                    // Order totals (only on first item row)
+                    if (itemIndex === 0) {
+                        csv += order.subtotal.toFixed(2) + ',';
+                        csv += order.shipping.toFixed(2) + ',';
+                        csv += order.total.toFixed(2) + ',';
+                        csv += escapeCSV(order.customerNotes || '');
+                    } else {
+                        csv += ',,,'; // Empty for subtotal, shipping, total, notes
+                    }
+                    csv += '\n';
+                });
+            });
+
+            const date = new Date().toISOString().split('T')[0];
+            const filename = `GOAT_KIDS_Pending_Orders_${date}.csv`;
+            
+            downloadCSV(csv, filename);
+            showMessage(`Pending orders exported successfully! (${state.pendingOrders.length} orders)`, 'success');
+            
+            // Show export summary
+            document.getElementById('exportSummary').style.display = 'block';
+        }
+
+        /**
+         * Export Order History to CSV
+         */
+        function exportOrderHistoryCSV() {
+            const allOrders = state.confirmedOrders;
+            if (allOrders.length === 0) {
+                showMessage('No order history to export', 'warning');
+                return;
+            }
+
+            // CSV Header
+            let csv = 'Order ID,Order Date,Status,Confirmation/Rejection Date,Rejection Reason,Customer Name,Phone,Address,Payment Method,';
+            csv += 'Item Name,Size,Quantity,Price,Item Subtotal,';
+            csv += 'Order Subtotal,Shipping,Total,Notes\n';
+
+            // Add each order
+            allOrders.forEach(order => {
+                order.cart.forEach((item, itemIndex) => {
+                    csv += escapeCSV(order.orderId) + ',';
+                    csv += escapeCSV(order.orderDate) + ',';
+                    csv += escapeCSV(order.status) + ',';
+                    csv += escapeCSV(order.confirmedAt || order.rejectedAt || '') + ',';
+                    csv += escapeCSV(order.rejectionReason || '') + ',';
+                    csv += escapeCSV(order.customerName) + ',';
+                    csv += escapeCSV(order.customerPhone) + ',';
+                    csv += escapeCSV(order.customerAddress) + ',';
+                    csv += escapeCSV(order.paymentMethod === 'payway' ? 'ABA PayWay' : 'Cash on Delivery') + ',';
+                    csv += escapeCSV(item.name) + ',';
+                    csv += escapeCSV(item.size) + ',';
+                    csv += item.quantity + ',';
+                    csv += item.price.toFixed(2) + ',';
+                    csv += item.subtotal.toFixed(2) + ',';
+                    
+                    if (itemIndex === 0) {
+                        csv += order.subtotal.toFixed(2) + ',';
+                        csv += order.shipping.toFixed(2) + ',';
+                        csv += order.total.toFixed(2) + ',';
+                        csv += escapeCSV(order.customerNotes || '');
+                    } else {
+                        csv += ',,,';
+                    }
+                    csv += '\n';
+                });
+            });
+
+            const date = new Date().toISOString().split('T')[0];
+            const filename = `GOAT_KIDS_Order_History_${date}.csv`;
+            
+            downloadCSV(csv, filename);
+            showMessage(`Order history exported successfully! (${allOrders.length} orders)`, 'success');
+        }
+
+        /**
+         * Export Inventory to CSV
+         */
+        function exportInventoryCSV() {
+            if (state.products.length === 0) {
+                showMessage('No products to export', 'warning');
+                return;
+            }
+
+            let csv = 'Product Name,Category,Sizes,Price,Stock,Status,Total Value\n';
+            
+            state.products.forEach(product => {
+                csv += escapeCSV(product.name) + ',';
+                csv += escapeCSV(product.category) + ',';
+                csv += escapeCSV((product.sizes || []).join('; ')) + ',';
+                csv += product.price.toFixed(2) + ',';
+                csv += product.stock + ',';
+                csv += escapeCSV(product.stock > 10 ? 'In Stock' : product.stock > 0 ? 'Low Stock' : 'Out of Stock') + ',';
+                csv += (product.price * product.stock).toFixed(2) + '\n';
+            });
+
+            const date = new Date().toISOString().split('T')[0];
+            const filename = `GOAT_KIDS_Inventory_${date}.csv`;
+            
+            downloadCSV(csv, filename);
+            showMessage(`Inventory exported successfully! (${state.products.length} products)`, 'success');
+        }
+
+        /**
+         * Confirm all pending orders at once
+         */
+        function confirmAllOrders() {
+            if (state.pendingOrders.length === 0) {
+                showMessage('No pending orders to confirm', 'warning');
+                return;
+            }
+
+            const count = state.pendingOrders.length;
+            if (!confirm(`Are you sure you want to confirm ALL ${count} pending orders?\n\nThis will reduce stock for all items.`)) {
+                return;
+            }
+
+            // Check stock for all orders first
+            const stockIssues = [];
+            state.pendingOrders.forEach(order => {
+                const stockCheck = validateStockAvailability(order.cart);
+                if (!stockCheck.valid) {
+                    stockIssues.push(`Order ${order.orderId}: ${stockCheck.productName}`);
+                }
+            });
+
+            if (stockIssues.length > 0) {
+                showMessage(`Cannot confirm all orders:\n${stockIssues.join('\n')}`, 'error');
+                return;
+            }
+
+            // Confirm all orders
+            const ordersToConfirm = [...state.pendingOrders];
+            ordersToConfirm.forEach(order => {
+                reduceStockForConfirmedOrder(order.cart);
+                order.status = 'confirmed';
+                order.confirmedAt = new Date().toLocaleString();
+                state.confirmedOrders.push(order);
+            });
+
+            state.pendingOrders = [];
+            savePendingOrders();
+            saveConfirmedOrders();
+            renderPendingOrders();
+            renderOrderHistory();
+            
+            if (document.getElementById('storeTab').classList.contains('active')) renderProducts();
+            if (document.getElementById('adminTab').classList.contains('active')) refreshInventory();
+            
+            showMessage(`${count} orders confirmed! Stock reduced.`, 'success');
+        }
+
+        // ============================================
         // STOCK MANAGEMENT
         // ============================================
         function validateStockAvailability(items) {
@@ -725,20 +982,8 @@
             if (document.getElementById('adminTab').classList.contains('active')) refreshInventory();
         }
 
-        function restoreStockForCancelledOrder(orderItems) {
-            orderItems.forEach(item => {
-                const product = state.products.find(p => p.id === item.productId);
-                if (product) {
-                    product.stock += item.quantity;
-                    if (state.firebaseInitialized && window.db) syncProductToFirebase(product);
-                }
-            });
-            saveProducts();
-            if (document.getElementById('storeTab').classList.contains('active')) renderProducts();
-        }
-
         // ============================================
-        // ORDER MANAGEMENT (CORE NEW FEATURE)
+        // ORDER MANAGEMENT
         // ============================================
         function createPendingOrder() {
             const orderId = 'ORD-' + Date.now();
@@ -770,7 +1015,6 @@
             const stockCheck = validateStockAvailability(order.cart);
             if (!stockCheck.valid) { showMessage(`Cannot confirm: ${stockCheck.productName}`, 'error'); return; }
             
-            // REDUCE STOCK HERE - ONLY ON SELLER CONFIRMATION
             reduceStockForConfirmedOrder(order.cart);
             
             order.status = 'confirmed';
@@ -783,7 +1027,6 @@
             renderOrderHistory();
             showMessage(`Order ${orderId} confirmed! Stock reduced.`, 'success');
             
-            // Ask to send confirmation to buyer
             const confirmMsg = `✅ *ORDER CONFIRMED!*\n\n🆔 ${order.orderId}\n📅 ${order.confirmedAt}\n💰 Total: $${order.total.toFixed(2)}\n\nThank you for shopping with GOAT KIDS! 🎉`;
             if (confirm('Send confirmation to buyer via Messenger?')) {
                 window.open(`https://m.me/${MESSENGER_PAGE_ID}?text=${encodeURIComponent(confirmMsg)}`, '_blank');
@@ -813,8 +1056,15 @@
         function renderPendingOrders() {
             const container = document.getElementById('pendingOrdersContainer');
             const countEl = document.getElementById('pendingOrderCount');
+            const exportBtn = document.getElementById('exportPendingBtn');
+            const confirmAllBtn = document.getElementById('confirmAllBtn');
+            
             if (!container) return;
             if (countEl) countEl.textContent = state.pendingOrders.length;
+            
+            // Disable buttons if no orders
+            if (exportBtn) exportBtn.disabled = state.pendingOrders.length === 0;
+            if (confirmAllBtn) confirmAllBtn.disabled = state.pendingOrders.length === 0;
             
             if (state.pendingOrders.length === 0) {
                 container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--gray);"><i class="fas fa-check-circle" style="font-size:3rem;"></i><p>No pending orders</p></div>';
@@ -858,8 +1108,11 @@
         function renderOrderHistory() {
             const container = document.getElementById('orderHistoryContainer');
             const countEl = document.getElementById('confirmedOrderCount');
+            const exportBtn = document.getElementById('exportHistoryBtn');
+            
             if (!container) return;
             if (countEl) countEl.textContent = state.confirmedOrders.length;
+            if (exportBtn) exportBtn.disabled = state.confirmedOrders.length === 0;
             
             if (state.confirmedOrders.length === 0) {
                 container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--gray);"><i class="fas fa-history" style="font-size:3rem;"></i><p>No order history</p></div>';
@@ -885,7 +1138,7 @@
         }
 
         // ============================================
-        // MESSENGER ORDER (NO STOCK REDUCTION)
+        // MESSENGER ORDER
         // ============================================
         function sendOrderToMessenger() {
             if (!validateCustomerInfo()) return false;
@@ -894,17 +1147,14 @@
             const stockCheck = validateStockAvailability();
             if (!stockCheck.valid) { showMessage(`Insufficient stock: ${stockCheck.productName}`, 'error'); return false; }
             
-            // Create pending order (NO stock reduction)
             const order = createPendingOrder();
             
-            // Generate summary
             const summary = generateOrderSummary(order);
             document.getElementById('orderSummaryContent').textContent = summary;
             document.getElementById('orderSummaryPreview').classList.remove('hidden');
             
             const messengerUrl = `https://m.me/${MESSENGER_PAGE_ID}?text=${encodeURIComponent(summary)}`;
             
-            // Clear cart
             state.cart = [];
             saveCart();
             renderCart();
