@@ -516,7 +516,7 @@
             border-color: var(--primary);
         }
 
-        /* Larger Photo Frames - Updated */
+        /* Product Grid */
         .product-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
@@ -2005,15 +2005,7 @@
             background: none;
             animation: none;
         }
-                .product-image-container img.loaded,
-        .product-thumbnail.loaded,
-        .lightbox-main-image.loaded,
-        .lightbox-thumbnail.loaded {
-            background: none;
-            animation: none;
-        }
 
-        /* Mobile responsive adjustments for larger images */
         @media (max-width: 768px) {
             .product-grid {
                 grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -2082,7 +2074,6 @@
                 height: 110px;
             }
         }
-    </style>
     </style>
 
     <!-- Icons -->
@@ -3102,7 +3093,73 @@
         }
 
         // ============================================
-        // MESSENGER ORDER FUNCTION
+        // STOCK MANAGEMENT FUNCTIONS (NEW)
+        // ============================================
+        
+        /**
+         * Validates that all items in the cart have sufficient stock
+         * @returns {Object} { valid: boolean, productName: string }
+         */
+        function validateStockAvailability() {
+            for (const cartItem of state.cart) {
+                const product = state.products.find(p => p.id === cartItem.productId);
+                if (!product) {
+                    return { valid: false, productName: cartItem.name };
+                }
+                if (product.stock < cartItem.quantity) {
+                    return { valid: false, productName: `${product.name} (only ${product.stock} available)` };
+                }
+            }
+            return { valid: true };
+        }
+
+        /**
+         * Reduces stock for all items in the cart after order placement
+         */
+        function reduceStockAfterOrder() {
+            state.cart.forEach(cartItem => {
+                const product = state.products.find(p => p.id === cartItem.productId);
+                if (product) {
+                    // Reduce stock by the ordered quantity, ensuring it doesn't go below 0
+                    product.stock = Math.max(0, product.stock - cartItem.quantity);
+                    console.log(`Reduced stock for "${product.name}" from ${product.stock + cartItem.quantity} to ${product.stock}`);
+                }
+            });
+            
+            // Save updated products to localStorage
+            saveProducts();
+            
+            // Sync updated stock to Firebase if available
+            if (state.firebaseInitialized && window.db) {
+                state.products.forEach(product => {
+                    syncProductToFirebase(product);
+                });
+            }
+        }
+
+        /**
+         * Restores stock if an order is cancelled or fails
+         * @param {Array} orderCart - The cart items from the order
+         */
+        function restoreStockAfterCancellation(orderCart) {
+            orderCart.forEach(orderItem => {
+                const product = state.products.find(p => p.id === orderItem.productId);
+                if (product) {
+                    product.stock += orderItem.quantity;
+                }
+            });
+            
+            saveProducts();
+            
+            if (state.firebaseInitialized && window.db) {
+                state.products.forEach(product => {
+                    syncProductToFirebase(product);
+                });
+            }
+        }
+
+        // ============================================
+        // MESSENGER ORDER FUNCTION (UPDATED)
         // ============================================
         function sendOrderToMessenger() {
             // Validate customer info
@@ -3113,6 +3170,13 @@
             
             if (state.cart.length === 0) {
                 showMessage('Your cart is empty!', 'error');
+                return false;
+            }
+            
+            // Check if all items have sufficient stock
+            const stockCheck = validateStockAvailability();
+            if (!stockCheck.valid) {
+                showMessage(`Insufficient stock for: ${stockCheck.productName}`, 'error');
                 return false;
             }
             
@@ -3134,8 +3198,22 @@
             
             // Ask user to confirm and open Messenger
             if (confirm('📱 Ready to place your order?\n\nClick OK to open Messenger with your complete order details.')) {
+                // REDUCE STOCK HERE
+                reduceStockAfterOrder();
+                
+                // Clear the cart after successful order
+                state.cart = [];
+                saveCart();
+                renderCart();
+                updatePaywayTotal();
+                
+                // Re-render products to show updated stock
+                if (document.getElementById('storeTab').classList.contains('active')) {
+                    renderProducts();
+                }
+                
                 window.open(messengerUrl, '_blank');
-                showMessage('Order sent to Messenger!', 'success');
+                showMessage('Order sent to Messenger! Stock updated.', 'success');
             }
             
             return true;
@@ -3287,7 +3365,7 @@
         }
 
         // ============================================
-        // PAYMENT FUNCTIONS
+        // PAYMENT FUNCTIONS (UPDATED)
         // ============================================
         function preparePaywayPayment(event) {
             if (!validateCustomerInfo()) {
@@ -3302,12 +3380,36 @@
                 return false;
             }
             
+            // Check stock availability
+            const stockCheck = validateStockAvailability();
+            if (!stockCheck.valid) {
+                event.preventDefault();
+                showMessage(`Insufficient stock for: ${stockCheck.productName}`, 'error');
+                return false;
+            }
+            
             saveOrderData();
             
-            const orderSummary = generateOrderSummary();
+            const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const total = subtotal + SHIPPING_COST;
+            const orderSummary = `Order Summary:\nItems: ${state.cart.length}\nTotal: $${total.toFixed(2)}`;
             
             if (confirm(`Your Order Summary:\n\n${orderSummary}\n\nProceed to ABA PayWay payment?`)) {
-                showMessage('Redirecting to ABA PayWay payment gateway...', 'info');
+                // REDUCE STOCK HERE
+                reduceStockAfterOrder();
+                
+                // Clear the cart
+                state.cart = [];
+                saveCart();
+                renderCart();
+                updatePaywayTotal();
+                
+                // Re-render products
+                if (document.getElementById('storeTab').classList.contains('active')) {
+                    renderProducts();
+                }
+                
+                showMessage('Redirecting to ABA PayWay payment gateway... Stock reserved.', 'info');
                 return true;
             } else {
                 event.preventDefault();
@@ -3767,7 +3869,7 @@
         }
 
         // ============================================
-        // FIREBASE SYNC FUNCTIONS - FIXED
+        // FIREBASE SYNC FUNCTIONS
         // ============================================
         async function syncToFirebase() {
             // Check if Firebase is initialized
@@ -3811,7 +3913,7 @@
                             images: product.images || [],
                             sizes: product.sizes || [],
                             active: true,
-                            updatedAt: new Date().toISOString(), // Use ISO string instead of serverTimestamp
+                            updatedAt: new Date().toISOString(),
                             storeId: state.storeId
                         };
                         
@@ -3857,7 +3959,7 @@
                     images: product.images || [],
                     sizes: product.sizes || [],
                     active: true,
-                    updatedAt: new Date().toISOString(), // Use ISO string instead of serverTimestamp
+                    updatedAt: new Date().toISOString(),
                     storeId: state.storeId
                 };
                 
@@ -3879,7 +3981,7 @@
                 const productRef = window.db.collection('stores').doc(state.storeId).collection('products').doc(productId.toString());
                 await productRef.update({
                     active: false,
-                    updatedAt: new Date().toISOString() // Use ISO string instead of serverTimestamp
+                    updatedAt: new Date().toISOString()
                 });
                 
                 console.log('Product marked as inactive in Firebase:', productId);
@@ -4177,7 +4279,7 @@
         }
 
         // ============================================
-        // CART MANAGEMENT
+        // CART MANAGEMENT (UPDATED)
         // ============================================
         function loadCart() {
             const saved = localStorage.getItem('goatCart');
@@ -4202,7 +4304,14 @@
                 return;
             }
             
-            if (product.stock <= 0) {
+            // Check actual available stock (subtracting what's already in cart)
+            const cartQuantity = state.cart
+                .filter(item => item.productId === productId)
+                .reduce((sum, item) => sum + item.quantity, 0);
+            
+            const availableStock = product.stock - cartQuantity;
+            
+            if (availableStock <= 0) {
                 showMessage('This product is out of stock', 'error');
                 return;
             }
@@ -4219,10 +4328,10 @@
             );
             
             if (existingItem) {
-                if (existingItem.quantity < product.stock) {
+                if (existingItem.quantity < availableStock) {
                     existingItem.quantity++;
                 } else {
-                    showMessage('Cannot add more items. Stock limit reached.', 'error');
+                    showMessage(`Cannot add more items. Only ${availableStock} available.`, 'error');
                     return;
                 }
             } else {
