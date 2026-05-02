@@ -392,55 +392,123 @@ function printReceipt(orderId) {
     }
     if (!order) { showToast('Order not found', 'error'); return; }
     
-    var w = window.open('', '_blank', 'width=800,height=600');
+    var w = window.open('', '_blank', 'width=350,height=600');
     var pmt = order.paymentMethod === 'payway' ? 'ABA PayWay' : 'Cash on Delivery';
     
     var items = '';
     for (var j = 0; j < order.cart.length; j++) {
         var it = order.cart[j];
-        items += '<tr><td>' + (j + 1) + '</td><td>' + it.name + '</td><td style="text-align:center">' + it.size + '</td><td style="text-align:center">' + it.quantity + '</td><td style="text-align:right">$' + it.price.toFixed(2) + '</td><td style="text-align:right">$' + it.subtotal.toFixed(2) + '</td></tr>';
+        items += '<div class="item-row"><span class="item-name">' + it.name + ' (' + it.size + ')</span><span class="item-qty">x' + it.quantity + '</span></div>';
+        items += '<div class="item-price">$' + it.price.toFixed(2) + ' each = <strong>$' + it.subtotal.toFixed(2) + '</strong></div>';
     }
     
     var html = '<!DOCTYPE html><html><head><title>Receipt - ' + orderId + '</title>';
+    html += '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
     html += '<style>';
     html += '*{margin:0;padding:0;box-sizing:border-box}';
-    html += 'body{font-family:"Courier New",monospace;background:#f5f5f5;padding:20px}';
-    html += '.rc{max-width:800px;margin:0 auto;background:#fff;padding:40px;box-shadow:0 0 10px rgba(0,0,0,0.1)}';
-    html += '.rh{text-align:center;border-bottom:2px dashed #333;padding-bottom:20px;margin-bottom:20px}';
-    html += '.rh h1{font-size:28px;color:#667eea}';
-    html += '.rt{text-align:center;font-size:18px;font-weight:bold;margin:15px 0;padding:10px;background:#f0f0f0}';
-    html += '.ri{display:flex;justify-content:space-between;margin-bottom:20px;font-size:13px;gap:20px}';
-    html += '.ib{flex:1}.ib strong{display:block;color:#667eea}';
-    html += 'table{width:100%;border-collapse:collapse;margin:20px 0;font-size:13px}';
-    html += 'th{background:#667eea;color:#fff;padding:10px;text-align:left}';
-    html += 'td{padding:10px;border-bottom:1px solid #ddd}';
-    html += '.tt{margin-top:20px;border-top:2px solid #333;padding-top:15px}';
-    html += '.tr{display:flex;justify-content:space-between;padding:5px 0;font-size:13px}';
-    html += '.gt{font-size:18px;font-weight:bold;border-top:1px solid #333;margin-top:10px;padding-top:10px}';
-    html += '.rf{text-align:center;margin-top:30px;padding-top:20px;border-top:2px dashed #333;font-size:12px;color:#666}';
-    html += '.stamp{text-align:center;margin-top:20px}';
-    html += '.stamp span{font-size:24px;font-weight:bold;color:#48bb78;border:3px solid #48bb78;display:inline-block;padding:10px 20px}';
-    html += '.bc{text-align:center;margin-top:20px;font-size:18px;letter-spacing:3px}';
-    html += '.np{margin-top:30px;text-align:center}';
-    html += '.btnp{background:#667eea;color:#fff;border:none;padding:12px 30px;font-size:16px;cursor:pointer;border-radius:5px}';
-    html += '@media print{body{background:#fff;padding:0}.rc{box-shadow:none;padding:20px}.np{display:none!important}}';
+    html += 'body{font-family:"Courier New",monospace;background:#fff;padding:0;margin:0}';
+    html += '.rc{width:300px;margin:0 auto;background:#fff;padding:15px 10px;font-size:11px}';
+    html += '.rh{text-align:center;border-bottom:1px dashed #000;padding-bottom:10px;margin-bottom:10px}';
+    html += '.rh h1{font-size:16px;color:#000;margin-bottom:3px}';
+    html += '.rh p{font-size:10px;color:#333;margin:2px 0}';
+    html += '.rt{text-align:center;font-size:14px;font-weight:bold;margin:10px 0;padding:5px;background:#f0f0f0;border-top:1px dashed #000;border-bottom:1px dashed #000}';
+    html += '.ri{margin-bottom:10px;font-size:10px;line-height:1.4}';
+    html += '.ri div{margin-bottom:3px}';
+    html += '.ri strong{display:inline;margin-right:5px}';
+    html += '.divider{border-top:1px dashed #000;margin:8px 0}';
+    html += '.item-row{display:flex;justify-content:space-between;font-size:11px;margin-top:5px}';
+    html += '.item-name{flex:1;font-weight:bold}';
+    html += '.item-qty{text-align:right}';
+    html += '.item-price{font-size:10px;color:#333;margin-bottom:5px;padding-left:10px}';
+    html += '.tt{margin-top:8px;border-top:1px solid #000;padding-top:8px}';
+    html += '.tr{display:flex;justify-content:space-between;padding:2px 0;font-size:11px}';
+    html += '.gt{font-size:14px;font-weight:bold;border-top:1px solid #000;margin-top:5px;padding-top:5px}';
+    html += '.rf{text-align:center;margin-top:15px;padding-top:10px;border-top:1px dashed #000;font-size:9px;color:#333}';
+    html += '.stamp{text-align:center;margin:10px 0}';
+    html += '.stamp span{font-size:14px;font-weight:bold;color:#000;border:2px solid #000;display:inline-block;padding:5px 10px}';
+    html += '.bc{text-align:center;margin-top:10px;font-size:11px;letter-spacing:2px}';
+    html += '.np{margin-top:15px;text-align:center}';
+    html += '.btnp{background:#000;color:#fff;border:none;padding:8px 20px;font-size:12px;cursor:pointer;border-radius:3px;margin:3px}';
+    html += '.btnp2{background:#fff;color:#000;border:1px solid #000;padding:8px 20px;font-size:12px;cursor:pointer;border-radius:3px;margin:3px}';
+    html += '@media print{';
+    html += 'body{width:300px;margin:0;padding:0}';
+    html += '.rc{width:300px;padding:10px 5px;box-shadow:none}';
+    html += '.np{display:none!important}';
+    html += '@page{margin:0;size:80mm auto}';
+    html += '}';
     html += '</style></head><body>';
+    
     html += '<div class="rc">';
-    html += '<div class="rh"><h1>GOAT KIDS</h1><p>Premium Children\'s Clothing Store</p><p>Store ID: ' + STATE.storeId + '</p></div>';
+    
+    // Header
+    html += '<div class="rh">';
+    html += '<h1>GOAT KIDS</h1>';
+    html += '<p>Premium Children\'s Clothing</p>';
+    html += '<p>Store: ' + STATE.storeId + '</p>';
+    html += '<p>Tel: Goatkids (Messenger)</p>';
+    html += '</div>';
+    
+    // Receipt title
     html += '<div class="rt">ORDER RECEIPT</div>';
+    
+    // Order info
     html += '<div class="ri">';
-    html += '<div class="ib"><strong>Order Info:</strong><p>ID: ' + order.orderId + '</p><p>Date: ' + order.orderDate + '</p><p>Status: CONFIRMED</p><p>Confirmed: ' + (order.confirmedAt || 'N/A') + '</p></div>';
-    html += '<div class="ib"><strong>Customer:</strong><p>Name: ' + order.customerName + '</p><p>Phone: ' + order.customerPhone + '</p><p>Address: ' + order.customerAddress + '</p>' + (order.customerCity ? '<p>City: ' + order.customerCity + '</p>' : '') + (order.customerDistrict ? '<p>District: ' + order.customerDistrict + '</p>' : '') + '</div>';
-    html += '<div class="ib"><strong>Payment:</strong><p>Method: ' + pmt + '</p><p>Store: ' + STATE.storeId + '</p>' + (order.customerNotes ? '<p>Notes: ' + order.customerNotes + '</p>' : '') + '</div>';
+    html += '<div><strong>Order:</strong> ' + order.orderId + '</div>';
+    html += '<div><strong>Date:</strong> ' + order.orderDate + '</div>';
+    html += '<div><strong>Status:</strong> CONFIRMED</div>';
+    html += '<div><strong>Payment:</strong> ' + pmt + '</div>';
     html += '</div>';
-    html += '<table><thead><tr><th>#</th><th>Item</th><th style="text-align:center">Size</th><th style="text-align:center">Qty</th><th style="text-align:right">Price</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>' + items + '</tbody></table>';
-    html += '<div class="tt"><div class="tr"><span>Subtotal:</span><span>$' + order.subtotal.toFixed(2) + '</span></div><div class="tr"><span>Shipping:</span><span>$' + order.shipping.toFixed(2) + '</span></div><div class="tr gt"><span>TOTAL:</span><span>$' + order.total.toFixed(2) + '</span></div></div>';
-    html += '<div class="stamp"><span>PAID / CONFIRMED</span></div>';
+    
+    html += '<div class="divider"></div>';
+    
+    // Customer info
+    html += '<div class="ri">';
+    html += '<div><strong>Customer:</strong> ' + order.customerName + '</div>';
+    html += '<div><strong>Phone:</strong> ' + order.customerPhone + '</div>';
+    html += '<div><strong>Address:</strong> ' + order.customerAddress + '</div>';
+    if (order.customerCity) html += '<div><strong>City:</strong> ' + order.customerCity + '</div>';
+    if (order.customerDistrict) html += '<div><strong>District:</strong> ' + order.customerDistrict + '</div>';
+    if (order.customerNotes) html += '<div><strong>Notes:</strong> ' + order.customerNotes + '</div>';
+    html += '</div>';
+    
+    html += '<div class="divider"></div>';
+    
+    // Items
+    html += '<div class="ri"><strong>ITEMS:</strong></div>';
+    html += items;
+    
+    html += '<div class="divider"></div>';
+    
+    // Totals
+    html += '<div class="tt">';
+    html += '<div class="tr"><span>Subtotal:</span><span>$' + order.subtotal.toFixed(2) + '</span></div>';
+    html += '<div class="tr"><span>Shipping:</span><span>$' + order.shipping.toFixed(2) + '</span></div>';
+    html += '<div class="tr gt"><span>TOTAL:</span><span>$' + order.total.toFixed(2) + '</span></div>';
+    html += '</div>';
+    
+    // Stamp
+    html += '<div class="stamp"><span>PAID</span></div>';
+    
+    // Barcode
     html += '<div class="bc">* ' + order.orderId + ' *</div>';
-    html += '<div class="rf"><p>Thank you for shopping with GOAT KIDS!</p><p>Premium Children\'s Clothing - Shop with Love</p><p style="margin-top:10px;">Contact: Facebook Messenger - Goatkids</p><p style="margin-top:5px;">Printed: ' + new Date().toLocaleString() + '</p></div>';
+    
+    // Footer
+    html += '<div class="rf">';
+    html += '<p>Thank you for shopping!</p>';
+    html += '<p>GOAT KIDS - Shop with Love</p>';
+    html += '<p>Printed: ' + new Date().toLocaleString() + '</p>';
     html += '</div>';
-    html += '<div class="np"><button class="btnp" onclick="window.print()">Print Receipt</button><p style="margin-top:10px;color:#666;">Click to print or save as PDF</p></div>';
-    html += '<script>setTimeout(function(){window.print();},500);<\/script>';
+    
+    html += '</div>';
+    
+    // Print buttons
+    html += '<div class="np">';
+    html += '<button class="btnp" onclick="window.print()">🖨️ Print</button>';
+    html += '<button class="btnp2" onclick="window.close()">✕ Close</button>';
+    html += '<p style="font-size:10px;color:#666;margin-top:8px;">Width: 300px (Thermal Printer)</p>';
+    html += '</div>';
+    
+    html += '<script>setTimeout(function(){window.print();},800);<\/script>';
     html += '</body></html>';
     
     w.document.write(html);
