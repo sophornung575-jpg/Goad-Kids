@@ -54,6 +54,8 @@
         .btn-danger{background:var(--danger);color:#fff}
         .btn-info{background:var(--info);color:#fff}
         .btn-warning{background:var(--warning);color:var(--dark)}
+        .btn-receipt{background:#805ad5;color:#fff}
+        .btn-receipt:hover{background:#6b46c1}
         .btn:disabled{opacity:0.5;cursor:not-allowed}
         
         .status-bar{position:fixed;top:0;left:0;right:0;z-index:1000;padding:0.6rem 1rem;display:flex;align-items:center;justify-content:center;gap:0.5rem;font-size:0.85rem;transform:translateY(-100%);transition:transform 0.3s}
@@ -186,6 +188,122 @@
         .category-girl{background:#fbb6ce;color:#c2185b}
         .category-boy{background:#90caf9;color:#1565c0}
         
+        /* Receipt Print Styles */
+        @media print {
+            body * { visibility: hidden; }
+            .receipt-print-area, .receipt-print-area * { visibility: visible; }
+            .receipt-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
+            .no-print { display: none !important; }
+        }
+        
+        .receipt-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 40px;
+            font-family: 'Courier New', monospace;
+        }
+        .receipt-header {
+            text-align: center;
+            border-bottom: 2px dashed #333;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+        .receipt-header h1 {
+            font-size: 28px;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        .receipt-header .store-info {
+            font-size: 12px;
+            color: #666;
+        }
+        .receipt-title {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 15px 0;
+            padding: 10px;
+            background: #f0f0f0;
+            letter-spacing: 2px;
+        }
+        .receipt-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+        .receipt-info .info-block {
+            flex: 1;
+        }
+        .receipt-info .info-block strong {
+            display: block;
+            margin-bottom: 3px;
+        }
+        .receipt-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 13px;
+        }
+        .receipt-table th {
+            background: #667eea;
+            color: #fff;
+            padding: 10px;
+            text-align: left;
+        }
+        .receipt-table td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .receipt-table .text-right { text-align: right; }
+        .receipt-table .text-center { text-align: center; }
+        .receipt-totals {
+            margin-top: 20px;
+            border-top: 2px solid #333;
+            padding-top: 15px;
+        }
+        .receipt-total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 13px;
+        }
+        .receipt-total-row.grand-total {
+            font-size: 18px;
+            font-weight: bold;
+            border-top: 1px solid #333;
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+        .receipt-footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px dashed #333;
+            font-size: 12px;
+            color: #666;
+        }
+        .receipt-stamp {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #48bb78;
+            border: 3px solid #48bb78;
+            display: inline-block;
+            padding: 10px 20px;
+            transform: rotate(-5deg);
+            opacity: 0.7;
+        }
+        .receipt-barcode {
+            text-align: center;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            letter-spacing: 3px;
+        }
+        
         @media(max-width:768px){
             .header-container{padding:0.75rem 1rem}
             h1{font-size:1.7rem}.mobile-menu-btn{display:block}.desktop-nav{display:none}
@@ -194,6 +312,10 @@
             .admin-header{flex-direction:column}.section-title-with-actions{flex-direction:column;align-items:flex-start}
             .floating-cart{width:50px;height:50px;bottom:1rem;right:1rem}
             .size-edit-grid{grid-template-columns:1fr 1fr}
+            .receipt-container { padding: 20px; }
+            .receipt-info { flex-direction: column; gap: 15px; }
+            .receipt-table { font-size: 11px; }
+            .receipt-table th, .receipt-table td { padding: 6px; }
         }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -204,7 +326,7 @@
     
     <header>
         <div class="header-container">
-            <div class="logo" onclick="showTab('store')"><span>GOAT KIDS</span><span id="adminBadge" class="admin-badge hidden">ADMIN</span></div>
+            <div class="logo" onclick="showTab('store')"><span>🐐 GOAT KIDS</span><span id="adminBadge" class="admin-badge hidden">ADMIN</span></div>
             <button class="mobile-menu-btn" id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
             <nav class="desktop-nav">
                 <a href="#" class="nav-link active" onclick="showTab('store');return false"><i class="fas fa-store"></i>Store</a>
@@ -222,14 +344,14 @@
     <main class="container">
         <!-- ========== STORE TAB ========== -->
         <div id="storeTab" class="tab-content active">
-            <div class="store-header"><h1>GOAT KIDS</h1><p>Premium Children's Clothing Shop with Love Shop with Care</p><small>Store ID: <span id="currentStoreIdDisplay">...</span></small></div>
+            <div class="store-header"><h1>🐐 GOAT KIDS</h1><p>Premium Children's Clothing 👧👦 Shop with Love ❤️ Shop with Care</p><small>Store ID: <span id="currentStoreIdDisplay">...</span></small></div>
             <div class="search-container">
                 <div class="search-box"><i class="fas fa-search search-icon"></i><input type="text" id="searchInput" class="search-input" placeholder="Search products..." oninput="filterAndRender()"></div>
                 <div class="filter-group">
                     <select id="categoryFilter" class="filter-select" onchange="filterAndRender()">
                         <option value="all">All Categories</option>
-                        <option value="Girl Clothes">Girl Clothes</option>
-                        <option value="Boy Clothes">Boy Clothes</option>
+                        <option value="Girl Clothes">👗 Girl Clothes</option>
+                        <option value="Boy Clothes">👦 Boy Clothes</option>
                         <option value="tshirts">T-Shirts</option>
                         <option value="Dresses">Dresses</option>
                         <option value="Baby Jeans">Baby Jeans</option>
@@ -247,7 +369,7 @@
                 <h2 style="margin-bottom:1rem"><i class="fas fa-shopping-cart"></i> Shopping Cart</h2>
                 <div id="cartItems"><div class="cart-empty" id="emptyCart"><div class="cart-empty-icon"><i class="fas fa-shopping-cart"></i></div><h3>Your cart is empty</h3><button class="btn btn-primary btn-large mt-4" onclick="showTab('store')">Browse Store</button></div><div class="hidden" id="cartItemsList"></div></div>
                 <div class="cart-summary hidden" id="cartSummary">
-                    <div class="cart-totals"><div class="cart-total-row"><span>Subtotal</span><span id="cartSubtotal">$0.00</span></div><div class="cart-total-row"><span>Shipping</span><span>$0.00</span></div><div class="cart-total-row"><span>Total</span><span id="cartTotal">$0.00</span></div></div>
+                    <div class="cart-totals"><div class="cart-total-row"><span>Subtotal</span><span id="cartSubtotal">$0.00</span></div><div class="cart-total-row"><span>Shipping</span><span>$2.00</span></div><div class="cart-total-row"><span>Total</span><span id="cartTotal">$0.00</span></div></div>
                     <h3 style="margin-top:1rem">Payment Method</h3>
                     <div class="payment-options">
                         <div class="payment-option selected" id="payOption" onclick="selectPayment('payway')"><div class="payment-icon"><i class="fas fa-university"></i></div><div><strong>ABA Payment</strong><br><small>Pay online with ABA</small></div></div>
@@ -275,11 +397,11 @@
                 <div class="admin-header"><h2><i class="fas fa-cog"></i> Admin Panel</h2><div class="flex gap-2"><button class="btn btn-outline" onclick="showTab('store')">Store</button><button class="btn btn-secondary" onclick="adminLogout()">Logout</button></div></div>
 
                 <!-- PENDING ORDERS -->
-                <div class="section-title-with-actions"><div class="section-title" style="margin:0;padding:0;border:none"><i class="fas fa-clock"></i> Pending Orders (<span id="pendingCount">0</span>)</div><div class="flex gap-2"><button class="btn btn-info btn-small" onclick="exportPendingCSV()"><i class="fas fa-file-csv"></i> Export CSV (with Images)</button><button class="btn btn-success btn-small" onclick="confirmAll()"><i class="fas fa-check-double"></i> Confirm All</button></div></div>
+                <div class="section-title-with-actions"><div class="section-title" style="margin:0;padding:0;border:none"><i class="fas fa-clock"></i> Pending Orders (<span id="pendingCount">0</span>)</div><div class="flex gap-2"><button class="btn btn-info btn-small" onclick="exportPendingCSV()"><i class="fas fa-file-csv"></i> Export CSV</button><button class="btn btn-success btn-small" onclick="confirmAll()"><i class="fas fa-check-double"></i> Confirm All</button></div></div>
                 <div id="pendingContainer"><p style="text-align:center;padding:2rem;color:var(--gray)">No pending orders</p></div>
 
                 <!-- ORDER HISTORY -->
-                <div class="section-title-with-actions" style="margin-top:1.5rem"><div class="section-title" style="margin:0;padding:0;border:none"><i class="fas fa-history"></i> Order History (<span id="historyCount">0</span>)</div><button class="btn btn-info btn-small" onclick="exportHistoryCSV()"><i class="fas fa-file-csv"></i> Export CSV (with Images)</button></div>
+                <div class="section-title-with-actions" style="margin-top:1.5rem"><div class="section-title" style="margin:0;padding:0;border:none"><i class="fas fa-history"></i> Order History (<span id="historyCount">0</span>)</div><button class="btn btn-info btn-small" onclick="exportHistoryCSV()"><i class="fas fa-file-csv"></i> Export CSV</button></div>
                 <div id="historyContainer"><p style="text-align:center;padding:2rem;color:var(--gray)">No history</p></div>
 
                 <!-- STORE INFO -->
@@ -294,24 +416,22 @@
                     <div class="form-group">
                         <select id="productCategory" class="form-control">
                             <option value="">Select Category</option>
-                            <option value="Girl Clothes">Girl Clothes</option>
-                            <option value="Boy Clothes">Boy Clothes</option>
+                            <option value="Girl Clothes">👗 Girl Clothes</option>
+                            <option value="Boy Clothes">👦 Boy Clothes</option>
                             <option value="tshirts">T-Shirts</option>
                             <option value="Dresses">Dresses</option>
                             <option value="Baby Jeans">Baby Jeans</option>
                         </select>
                     </div>
                     
-                    <!-- IMAGE UPLOAD -->
                     <div class="form-group">
                         <label style="font-weight:600;margin-bottom:0.5rem;display:block">Product Images:</label>
                         <div class="image-upload-area" onclick="document.getElementById('imageFileInput').click()"><i class="fas fa-cloud-upload-alt"></i><p>Click to upload images or paste URL below</p><small style="color:var(--gray)">Max 5 images per product</small></div>
                         <input type="file" id="imageFileInput" accept="image/*" multiple style="display:none" onchange="handleImageUpload(event)">
                         <div class="image-preview-container" id="imagePreviewContainer"></div>
-                        <div class="flex gap-2 mt-4"><input type="text" id="imageUrlInput" class="form-control" placeholder="Or paste image URL (ImgBB, etc.)"><button class="btn btn-outline btn-small" onclick="addImageUrl()">Add URL</button></div>
+                        <div class="flex gap-2 mt-4"><input type="text" id="imageUrlInput" class="form-control" placeholder="Or paste image URL"><button class="btn btn-outline btn-small" onclick="addImageUrl()">Add URL</button></div>
                     </div>
                     
-                    <!-- SIZE MANAGEMENT -->
                     <div class="form-group">
                         <label style="font-weight:600;margin-bottom:0.5rem;display:block">Sizes & Stock:</label>
                         <div class="flex gap-2 mb-4"><input type="text" id="newSizeName" class="form-control" placeholder="Size (e.g., S, M, L)" style="flex:1"><input type="number" id="newSizeQty" class="form-control" placeholder="Qty" style="width:80px" min="0" value="0"><button class="btn btn-primary" onclick="addSizeToNewProduct()">Add</button></div>
@@ -322,7 +442,7 @@
                 </div>
 
                 <!-- INVENTORY -->
-                <div class="section-title-with-actions"><div class="section-title" style="margin:0;padding:0;border:none"><i class="fas fa-boxes"></i> Inventory (<span id="productCount">0</span>)</div><button class="btn btn-info btn-small" onclick="exportInventoryCSV()"><i class="fas fa-file-csv"></i> Export Inventory CSV (with Images)</button></div>
+                <div class="section-title-with-actions"><div class="section-title" style="margin:0;padding:0;border:none"><i class="fas fa-boxes"></i> Inventory (<span id="productCount">0</span>)</div><button class="btn btn-info btn-small" onclick="exportInventoryCSV()"><i class="fas fa-file-csv"></i> Export Inventory CSV</button></div>
                 <div style="overflow-x:auto"><table class="inventory-table"><thead><tr><th>Image</th><th>Product</th><th>Category</th><th>Price</th><th>Size Breakdown</th><th>Total</th><th>Actions</th></tr></thead><tbody id="inventoryBody"></tbody></table></div>
             </div>
         </div>
@@ -338,8 +458,8 @@
         <div class="form-group">
             <label style="font-weight:600">Category</label>
             <select id="editProductCategory" class="form-control">
-                <option value="Girl Clothes">Girl Clothes</option>
-                <option value="Boy Clothes">Boy Clothes</option>
+                <option value="Girl Clothes">👗 Girl Clothes</option>
+                <option value="Boy Clothes">👦 Boy Clothes</option>
                 <option value="tshirts">T-Shirts</option>
                 <option value="Dresses">Dresses</option>
                 <option value="Baby Jeans">Baby Jeans</option>
@@ -386,6 +506,156 @@ document.addEventListener('DOMContentLoaded', async function() {
     await loadData();
     showTab('store');
 });
+
+// ==================== RECEIPT FUNCTIONS ====================
+function printReceipt(orderId) {
+    const order = STATE.confirmedOrders.find(o => o.orderId === orderId);
+    if (!order) { showToast('Order not found','error'); return; }
+    
+    const receiptWindow = window.open('', '_blank', 'width=800,height=600');
+    const paymentMethodText = order.paymentMethod === 'payway' ? 'ABA PayWay' : 'Cash on Delivery';
+    
+    let itemsHtml = order.cart.map((it, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td>${it.name}</td>
+            <td class="text-center">${it.size}</td>
+            <td class="text-center">${it.quantity}</td>
+            <td class="text-right">$${it.price.toFixed(2)}</td>
+            <td class="text-right">$${it.subtotal.toFixed(2)}</td>
+        </tr>
+    `).join('');
+    
+    receiptWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Receipt - ${orderId}</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: 'Courier New', monospace; background: #f5f5f5; padding: 20px; }
+                .receipt-container {
+                    max-width: 800px;
+                    margin: 0 auto;
+                    background: #fff;
+                    padding: 40px;
+                    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                }
+                .receipt-header { text-align: center; border-bottom: 2px dashed #333; padding-bottom: 20px; margin-bottom: 20px; }
+                .receipt-header h1 { font-size: 28px; color: #667eea; margin-bottom: 5px; }
+                .receipt-header .store-info { font-size: 12px; color: #666; }
+                .receipt-title { text-align: center; font-size: 18px; font-weight: bold; margin: 15px 0; padding: 10px; background: #f0f0f0; letter-spacing: 2px; }
+                .receipt-info { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 13px; gap: 20px; }
+                .receipt-info .info-block { flex: 1; }
+                .receipt-info .info-block strong { display: block; margin-bottom: 5px; color: #667eea; }
+                .receipt-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
+                .receipt-table th { background: #667eea; color: #fff; padding: 10px; text-align: left; }
+                .receipt-table td { padding: 10px; border-bottom: 1px solid #ddd; }
+                .text-right { text-align: right; } .text-center { text-align: center; }
+                .receipt-totals { margin-top: 20px; border-top: 2px solid #333; padding-top: 15px; }
+                .receipt-total-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+                .receipt-total-row.grand-total { font-size: 18px; font-weight: bold; border-top: 1px solid #333; margin-top: 10px; padding-top: 10px; }
+                .receipt-footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 2px dashed #333; font-size: 12px; color: #666; }
+                .receipt-stamp { text-align: center; margin-top: 20px; }
+                .receipt-stamp span { font-size: 24px; font-weight: bold; color: #48bb78; border: 3px solid #48bb78; display: inline-block; padding: 10px 20px; transform: rotate(-5deg); opacity: 0.8; }
+                .receipt-barcode { text-align: center; margin-top: 20px; font-size: 18px; letter-spacing: 3px; }
+                .no-print { margin-top: 30px; text-align: center; }
+                .btn-print { background: #667eea; color: #fff; border: none; padding: 12px 30px; font-size: 16px; cursor: pointer; border-radius: 5px; }
+                .btn-print:hover { background: #5a67d8; }
+                @media print {
+                    body { background: #fff; padding: 0; }
+                    .receipt-container { box-shadow: none; padding: 20px; }
+                    .no-print { display: none !important; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="receipt-container" id="receiptContent">
+                <div class="receipt-header">
+                    <h1>🐐 GOAT KIDS</h1>
+                    <div class="store-info">
+                        <p>Premium Children's Clothing Store</p>
+                        <p>Store ID: ${STATE.storeId}</p>
+                        <p>Contact: Goatkids (Facebook Messenger)</p>
+                    </div>
+                </div>
+                
+                <div class="receipt-title">📄 ORDER RECEIPT</div>
+                
+                <div class="receipt-info">
+                    <div class="info-block">
+                        <strong>Order Information:</strong>
+                        <p>Order ID: ${order.orderId}</p>
+                        <p>Date: ${order.orderDate}</p>
+                        <p>Status: ✅ CONFIRMED</p>
+                        <p>Confirmed: ${order.confirmedAt || 'N/A'}</p>
+                    </div>
+                    <div class="info-block">
+                        <strong>Customer Details:</strong>
+                        <p>Name: ${order.customerName}</p>
+                        <p>Phone: ${order.customerPhone}</p>
+                        <p>Address: ${order.customerAddress}</p>
+                        ${order.customerCity ? `<p>City: ${order.customerCity}</p>` : ''}
+                        ${order.customerDistrict ? `<p>District: ${order.customerDistrict}</p>` : ''}
+                    </div>
+                    <div class="info-block">
+                        <strong>Payment Info:</strong>
+                        <p>Method: ${paymentMethodText}</p>
+                        <p>Store: ${STATE.storeId}</p>
+                        ${order.customerNotes ? `<p>Notes: ${order.customerNotes}</p>` : ''}
+                    </div>
+                </div>
+                
+                <table class="receipt-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Item</th>
+                            <th class="text-center">Size</th>
+                            <th class="text-center">Qty</th>
+                            <th class="text-right">Price</th>
+                            <th class="text-right">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml}
+                    </tbody>
+                </table>
+                
+                <div class="receipt-totals">
+                    <div class="receipt-total-row"><span>Subtotal:</span><span>$${order.subtotal.toFixed(2)}</span></div>
+                    <div class="receipt-total-row"><span>Shipping:</span><span>$${order.shipping.toFixed(2)}</span></div>
+                    <div class="receipt-total-row grand-total"><span>TOTAL:</span><span>$${order.total.toFixed(2)}</span></div>
+                </div>
+                
+                <div class="receipt-stamp"><span>✅ PAID / CONFIRMED</span></div>
+                
+                <div class="receipt-barcode">* ${order.orderId} *</div>
+                
+                <div class="receipt-footer">
+                    <p>Thank you for shopping with GOAT KIDS!</p>
+                    <p>🐐 Premium Children's Clothing - Shop with Love ❤️</p>
+                    <p style="margin-top:10px;">For any inquiries, please contact us via Facebook Messenger: Goatkids</p>
+                    <p style="margin-top:5px;">Printed on: ${new Date().toLocaleString()}</p>
+                </div>
+            </div>
+            
+            <div class="no-print">
+                <button class="btn-print" onclick="window.print()">🖨️ Print Receipt</button>
+                <p style="margin-top:10px;color:#666;">Click the button above to print or save as PDF</p>
+            </div>
+            
+            <script>
+                // Auto-trigger print dialog after a short delay
+                setTimeout(function() {
+                    window.print();
+                }, 500);
+            </script>
+        </body>
+        </html>
+    `);
+    receiptWindow.document.close();
+}
 
 // ==================== IMAGE FUNCTIONS ====================
 function handleImageUpload(event) {
@@ -542,7 +812,6 @@ function saveEditProduct() {
 }
 function deleteProduct(id) { if(!confirm('Are you sure you want to delete this product?')) return; STATE.products=STATE.products.filter(p=>p.id!==id); saveProducts(); if(STATE.firebaseOnline) db.collection('stores').doc(STATE.storeId).collection('products').doc(id).update({active:false}); renderProducts(); renderInventory(); showToast('Product deleted','success'); }
 
-// Category display helper
 function getCategoryDisplay(cat) {
     if(cat === 'Girl Clothes') return 'category-girl';
     if(cat === 'Boy Clothes') return 'category-boy';
@@ -564,8 +833,8 @@ function renderProducts() {
         const [badge,text,sClass,sText]=total>10?['badge-new','NEW','in-stock','In Stock']:total>0?['badge-low','LOW STOCK','low-stock','Low Stock']:['badge-sale','SOLD OUT','out-of-stock','Out of Stock'];
         const catClass = getCategoryDisplay(p.category);
         let catIcon = '';
-        if(p.category === 'Girl Clothes') catIcon = ' ';
-        else if(p.category === 'Boy Clothes') catIcon = ' ';
+        if(p.category === 'Girl Clothes') catIcon = '👗 ';
+        else if(p.category === 'Boy Clothes') catIcon = '👦 ';
         let sz='';
         if(p.sizes&&p.sizes.length) sz=`<div class="size-selector"><label class="size-label">Select Size:</label><div class="size-options">${p.sizes.map(s=>{const a=s.qty>0;return`<div class="size-option ${!a?'disabled':''}" onclick="${a?`selectSize(this,'${p.id}','${s.name}')`:''}" title="${s.name}: ${s.qty} in stock">${s.name}<span class="size-stock-badge">${s.qty}</span></div>`;}).join('')}</div></div>`;
         return `<div class="product-card"><div class="product-image-container"><img src="${img}" class="product-main-image" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'"><div class="product-badge ${badge}">${text}</div></div><div class="product-info"><span class="product-category ${catClass}">${catIcon}${p.category}</span><h3 class="product-title">${p.name}</h3><div class="product-price">$${p.price.toFixed(2)}</div><div class="product-stock ${sClass}"><i class="fas ${total>0?'fa-check-circle':'fa-times-circle'}"></i> ${sText} (${total} available)</div>${sz}<div class="product-actions"><button class="btn btn-primary btn-add-to-cart" onclick="addToCart('${p.id}')" ${!hasStock(p)?'disabled':''}><i class="fas fa-cart-plus"></i> Add to Cart</button>${STATE.isAdmin?`<button class="btn btn-outline btn-small" onclick="showTab('admin');openEditModal('${p.id}')"><i class="fas fa-edit"></i></button>`:''}</div></div></div>`;
@@ -582,8 +851,8 @@ function renderInventory() {
         const img=(p.images&&p.images[0])||'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60';
         const catClass = getCategoryDisplay(p.category);
         let catIcon = '';
-        if(p.category === 'Girl Clothes') catIcon = '';
-        else if(p.category === 'Boy Clothes') catIcon = ' ';
+        if(p.category === 'Girl Clothes') catIcon = '👗 ';
+        else if(p.category === 'Boy Clothes') catIcon = '👦 ';
         return `<tr><td><img src="${img}" style="width:50px;height:50px;object-fit:cover;border-radius:4px" onerror="this.src='https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60'"></td><td><strong>${p.name}</strong></td><td><span class="product-category ${catClass}">${catIcon}${p.category}</span></td><td>$${p.price.toFixed(2)}</td><td>${sb}</td><td><strong>${getTotalStock(p)}</strong></td><td><div class="flex gap-2"><button class="btn btn-warning btn-small" onclick="openEditModal('${p.id}')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct('${p.id}')"><i class="fas fa-trash"></i></button></div></td></tr>`;
     }).join('');
 }
@@ -606,11 +875,11 @@ function renderCart(){
     if(!STATE.cart.length){e.classList.remove('hidden');l.classList.add('hidden');s.classList.add('hidden');return;}
     e.classList.add('hidden');l.classList.remove('hidden');s.classList.remove('hidden');
     l.innerHTML=STATE.cart.map((it,i)=>{const t=it.price*it.quantity;return`<div class="cart-item"><img src="${it.image}" class="cart-item-image" onerror="this.src='https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100'"><div><div class="cart-item-name">${it.name}</div><div style="color:var(--gray);font-size:0.85rem">Size: ${it.size}</div><div class="cart-item-price">$${it.price.toFixed(2)} each</div><div class="cart-item-quantity"><button class="quantity-btn" onclick="updQty(${i},${it.quantity-1})">-</button><span>${it.quantity}</span><button class="quantity-btn" onclick="updQty(${i},${it.quantity+1})">+</button></div></div><div class="cart-item-total">$${t.toFixed(2)}</div><button class="remove-item" onclick="remCart(${i})"><i class="fas fa-trash"></i></button></div>`;}).join('');
-    const sub=STATE.cart.reduce((s,i)=>s+i.price*i.quantity,0); document.getElementById('cartSubtotal').textContent='$'+sub.toFixed(2); document.getElementById('cartTotal').textContent='$'+(sub+0).toFixed(2);
+    const sub=STATE.cart.reduce((s,i)=>s+i.price*i.quantity,0); document.getElementById('cartSubtotal').textContent='$'+sub.toFixed(2); document.getElementById('cartTotal').textContent='$'+(sub+2).toFixed(2);
 }
 function updQty(i,q){if(q<1){remCart(i);return;}STATE.cart[i].quantity=q;localStorage.setItem('goatCart',JSON.stringify(STATE.cart));updateCartBadge();renderCart();updatePayway();}
 function remCart(i){STATE.cart.splice(i,1);localStorage.setItem('goatCart',JSON.stringify(STATE.cart));updateCartBadge();renderCart();updatePayway();}
-function updatePayway(){document.getElementById('paywayTotal').textContent=(STATE.cart.reduce((s,i)=>s+i.price*i.quantity,0)+0).toFixed(2);}
+function updatePayway(){document.getElementById('paywayTotal').textContent=(STATE.cart.reduce((s,i)=>s+i.price*i.quantity,0)+2).toFixed(2);}
 function selectPayment(m){STATE.paymentMethod=m;document.getElementById('payOption').classList.toggle('selected',m==='payway');document.getElementById('codOption').classList.toggle('selected',m==='cod');}
 
 // ==================== ORDERS ====================
@@ -630,7 +899,7 @@ function placeOrder(){
         customerNotes:document.getElementById('customerNotes').value.trim(),
         paymentMethod:STATE.paymentMethod,storeId:STATE.storeId,
         cart:STATE.cart.map(i=>({productId:i.productId,name:i.name,size:i.size,quantity:i.quantity,price:i.price,subtotal:i.price*i.quantity,image:i.image||''})),
-        subtotal:sub,shipping:0,total:sub+0
+        subtotal:sub,shipping:2,total:sub+2
     };
     STATE.pendingOrders.push(order); saveOrders(); if(STATE.firebaseOnline) db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order);
     let msg=`🛍️ *GOAT KIDS ORDER*\n🆔 ${oid}\n\n👤 ${name}\n📞 ${phone}\n📍 ${address}`;
@@ -662,6 +931,13 @@ function confirmOrder(oid){
     if(STATE.firebaseOnline) syncToFirebase();
     renderPending(); renderHistory(); renderProducts(); renderInventory();
     showToast(`Order ${oid} confirmed! Stock updated.`,'success');
+    
+    // Auto-print receipt after confirmation
+    setTimeout(() => {
+        if(confirm(`Order ${oid} confirmed! Would you like to print the receipt?`)) {
+            printReceipt(oid);
+        }
+    }, 300);
 }
 function rejectOrder(oid){
     const idx=STATE.pendingOrders.findIndex(o=>o.orderId===oid); if(idx<0) return;
@@ -690,89 +966,35 @@ function renderPending(){
 function renderHistory(){
     const c=document.getElementById('historyContainer'); document.getElementById('historyCount').textContent=STATE.confirmedOrders.length;
     if(!c) return; if(!STATE.confirmedOrders.length){c.innerHTML='<p style="text-align:center;padding:2rem;color:var(--gray)">No order history</p>';return;}
-    c.innerHTML=[...STATE.confirmedOrders].reverse().map(o=>{const ok=o.status==='confirmed';return`<div class="order-card ${o.status}" style="border-color:${ok?'var(--success)':'var(--danger)'};opacity:${ok?'1':'0.7'};margin-bottom:0.5rem;padding:0.75rem"><div style="display:flex;justify-content:space-between"><div><strong style="color:${ok?'var(--success)':'var(--danger)'}">${ok?'✅':'❌'} ${o.status.toUpperCase()}</strong><br><small>🆔 ${o.orderId} | ${o.orderDate}</small></div><strong>$${o.total.toFixed(2)}</strong></div></div>`;}).join('');
+    c.innerHTML=[...STATE.confirmedOrders].reverse().map(o=>{const ok=o.status==='confirmed';return`<div class="order-card ${o.status}" style="border-color:${ok?'var(--success)':'var(--danger)'};opacity:${ok?'1':'0.7'};margin-bottom:0.5rem;padding:0.75rem"><div style="display:flex;justify-content:space-between"><div><strong style="color:${ok?'var(--success)':'var(--danger)'}">${ok?'✅':'❌'} ${o.status.toUpperCase()}</strong><br><small>🆔 ${o.orderId} | ${o.orderDate}</small></div><strong>$${o.total.toFixed(2)}</strong></div>${ok?`<button class="btn btn-receipt btn-small mt-4 w-full" onclick="printReceipt('${o.orderId}')"><i class="fas fa-print"></i> Print Receipt</button>`:''}</div>`;}).join('');
 }
 
-// ==================== CSV EXPORTS WITH IMAGES ====================
+// ==================== CSV EXPORTS ====================
 function escCSV(v){if(!v)return'';const s=String(v);return s.includes(',')||s.includes('"')?'"'+s.replace(/"/g,'""')+'"':s;}
-
-function dlCSV(csv,fn){
-    const b=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(b);
-    a.download=fn;
-    a.click();
-    URL.revokeObjectURL(a.href);
-}
+function dlCSV(csv,fn){const b=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=fn;a.click();URL.revokeObjectURL(a.href);}
 
 function exportPendingCSV(){
     if(!STATE.pendingOrders.length){showToast('No pending orders to export','warning');return;}
     let csv='Order ID,Date,Status,Customer Name,Phone,City,District,Address,Payment Method,Item Name,Size,Quantity,Unit Price,Subtotal,Image Link,Order Total,Notes\n';
-    STATE.pendingOrders.forEach(o=>{
-        o.cart.forEach((it,i)=>{
-            const product = STATE.products.find(p => p.id === it.productId);
-            const imageLink = (product && product.images && product.images.length > 0) ? product.images[0] : (it.image || '');
-            csv+=[
-                escCSV(o.orderId),escCSV(o.orderDate),escCSV(o.status),
-                escCSV(o.customerName),escCSV(o.customerPhone),
-                escCSV(o.customerCity||''),escCSV(o.customerDistrict||''),
-                escCSV(o.customerAddress),
-                escCSV(o.paymentMethod==='payway'?'ABA PayWay':'Cash on Delivery'),
-                escCSV(it.name),escCSV(it.size),it.quantity,
-                it.price.toFixed(2),it.subtotal.toFixed(2),
-                escCSV(imageLink),
-                (i===0?o.total.toFixed(2):''),
-                (i===0?escCSV(o.customerNotes||''):'')
-            ].join(',')+'\n';
-        });
-    });
+    STATE.pendingOrders.forEach(o=>{o.cart.forEach((it,i)=>{const product=STATE.products.find(p=>p.id===it.productId);const imageLink=(product&&product.images&&product.images.length>0)?product.images[0]:(it.image||'');csv+=[escCSV(o.orderId),escCSV(o.orderDate),escCSV(o.status),escCSV(o.customerName),escCSV(o.customerPhone),escCSV(o.customerCity||''),escCSV(o.customerDistrict||''),escCSV(o.customerAddress),escCSV(o.paymentMethod==='payway'?'ABA PayWay':'Cash on Delivery'),escCSV(it.name),escCSV(it.size),it.quantity,it.price.toFixed(2),it.subtotal.toFixed(2),escCSV(imageLink),(i===0?o.total.toFixed(2):''),(i===0?escCSV(o.customerNotes||''):'')].join(',')+'\n';});});
     dlCSV(csv,`GOAT_KIDS_Pending_Orders_${new Date().toISOString().split('T')[0]}.csv`);
-    showToast('Pending orders exported with image links!','success');
+    showToast('Pending orders exported!','success');
 }
 
 function exportHistoryCSV(){
     if(!STATE.confirmedOrders.length){showToast('No order history to export','warning');return;}
     let csv='Order ID,Date,Status,Confirmed/Rejected Date,Rejection Reason,Customer Name,Phone,City,District,Address,Payment Method,Item Name,Size,Quantity,Unit Price,Subtotal,Image Link,Order Total,Notes\n';
-    STATE.confirmedOrders.forEach(o=>{
-        o.cart.forEach((it,i)=>{
-            const product = STATE.products.find(p => p.id === it.productId);
-            const imageLink = (product && product.images && product.images.length > 0) ? product.images[0] : (it.image || '');
-            csv+=[
-                escCSV(o.orderId),escCSV(o.orderDate),escCSV(o.status),
-                escCSV(o.confirmedAt||o.rejectedAt||''),
-                escCSV(o.rejectionReason||''),
-                escCSV(o.customerName),escCSV(o.customerPhone),
-                escCSV(o.customerCity||''),escCSV(o.customerDistrict||''),
-                escCSV(o.customerAddress),
-                escCSV(o.paymentMethod==='payway'?'ABA PayWay':'Cash on Delivery'),
-                escCSV(it.name),escCSV(it.size),it.quantity,
-                it.price.toFixed(2),it.subtotal.toFixed(2),
-                escCSV(imageLink),
-                (i===0?o.total.toFixed(2):''),
-                (i===0?escCSV(o.customerNotes||''):'')
-            ].join(',')+'\n';
-        });
-    });
+    STATE.confirmedOrders.forEach(o=>{o.cart.forEach((it,i)=>{const product=STATE.products.find(p=>p.id===it.productId);const imageLink=(product&&product.images&&product.images.length>0)?product.images[0]:(it.image||'');csv+=[escCSV(o.orderId),escCSV(o.orderDate),escCSV(o.status),escCSV(o.confirmedAt||o.rejectedAt||''),escCSV(o.rejectionReason||''),escCSV(o.customerName),escCSV(o.customerPhone),escCSV(o.customerCity||''),escCSV(o.customerDistrict||''),escCSV(o.customerAddress),escCSV(o.paymentMethod==='payway'?'ABA PayWay':'Cash on Delivery'),escCSV(it.name),escCSV(it.size),it.quantity,it.price.toFixed(2),it.subtotal.toFixed(2),escCSV(imageLink),(i===0?o.total.toFixed(2):''),(i===0?escCSV(o.customerNotes||''):'')].join(',')+'\n';});});
     dlCSV(csv,`GOAT_KIDS_Order_History_${new Date().toISOString().split('T')[0]}.csv`);
-    showToast('Order history exported with image links!','success');
+    showToast('Order history exported!','success');
 }
 
 function exportInventoryCSV(){
-    if(!STATE.products.length){showToast('No products in inventory to export','warning');return;}
+    if(!STATE.products.length){showToast('No products to export','warning');return;}
     let csv='Product ID,Product Name,Category,Price,Total Stock,Size Name,Size Quantity,Image Link,All Images\n';
-    STATE.products.forEach(p=>{
-        const mainImage = (p.images && p.images.length > 0) ? p.images[0] : '';
-        const allImages = (p.images && p.images.length > 0) ? p.images.join(' | ') : '';
-        if(p.sizes && p.sizes.length > 0){
-            p.sizes.forEach(s=>{
-                csv+=[escCSV(p.id),escCSV(p.name),escCSV(p.category),p.price.toFixed(2),getTotalStock(p),escCSV(s.name),s.qty,escCSV(mainImage),escCSV(allImages)].join(',')+'\n';
-            });
-        } else {
-            csv+=[escCSV(p.id),escCSV(p.name),escCSV(p.category),p.price.toFixed(2),getTotalStock(p),'No sizes',0,escCSV(mainImage),escCSV(allImages)].join(',')+'\n';
-        }
-    });
+    STATE.products.forEach(p=>{const mainImage=(p.images&&p.images.length>0)?p.images[0]:'';const allImages=(p.images&&p.images.length>0)?p.images.join(' | '):'';if(p.sizes&&p.sizes.length>0){p.sizes.forEach(s=>{csv+=[escCSV(p.id),escCSV(p.name),escCSV(p.category),p.price.toFixed(2),getTotalStock(p),escCSV(s.name),s.qty,escCSV(mainImage),escCSV(allImages)].join(',')+'\n';});}else{csv+=[escCSV(p.id),escCSV(p.name),escCSV(p.category),p.price.toFixed(2),getTotalStock(p),'No sizes',0,escCSV(mainImage),escCSV(allImages)].join(',')+'\n';}});
     dlCSV(csv,`GOAT_KIDS_Inventory_${new Date().toISOString().split('T')[0]}.csv`);
-    showToast('Inventory exported with image links!','success');
+    showToast('Inventory exported!','success');
 }
 
 // ==================== UTILS ====================
