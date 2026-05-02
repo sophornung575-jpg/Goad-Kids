@@ -253,7 +253,7 @@
                 <h2 style="margin-bottom:1rem"><i class="fas fa-shopping-cart"></i> Shopping Cart</h2>
                 <div id="cartItems"><div class="cart-empty" id="emptyCart"><div class="cart-empty-icon"><i class="fas fa-shopping-cart"></i></div><h3>Your cart is empty</h3><button class="btn btn-primary btn-large mt-4" onclick="showTab('store')">Browse Store</button></div><div class="hidden" id="cartItemsList"></div></div>
                 <div class="cart-summary hidden" id="cartSummary">
-                    <div class="cart-totals"><div class="cart-total-row"><span>Subtotal</span><span id="cartSubtotal">$0.00</span></div><div class="cart-total-row"><span>Shipping</span><span>$2.00</span></div><div class="cart-total-row"><span>Total</span><span id="cartTotal">$0.00</span></div></div>
+                    <div class="cart-totals"><div class="cart-total-row"><span>Subtotal</span><span id="cartSubtotal">$0.00</span></div><div class="cart-total-row"><span>Shipping</span><span id="cartShipping">$0.00</span></div><div class="cart-total-row"><span>Total</span><span id="cartTotal">$0.00</span></div></div>
                     <h3 style="margin-top:1rem">Payment Method</h3>
                     <div class="payment-options">
                         <div class="payment-option selected" id="payOption" onclick="selectPayment('payway')"><div class="payment-icon"><i class="fas fa-university"></i></div><div><strong>ABA Payment</strong><br><small>Pay online with ABA</small></div></div>
@@ -262,6 +262,14 @@
                     <a href="https://link.payway.com.kh/08407860s" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:0.5rem;width:100%;padding:1rem;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;margin-top:1rem;text-decoration:none;color:#fff;background:linear-gradient(135deg,#006AFF,#00C6FF)" onclick="return handlePayway(event)"><i class="fas fa-lock"></i> Pay with ABA ($<span id="paywayTotal">0.00</span>)</a>
                     
                     <h3 style="margin-top:1.5rem"><i class="fas fa-map-marker-alt"></i> Delivery Information</h3>
+                    <div class="form-group">
+                        <select id="shippingLocation" class="form-control" onchange="updateShipping()" style="font-weight:600">
+                            <option value="">-- Select Delivery Location --</option>
+                            <option value="pickup">🏪 Pickup from Shop - FREE ($0.00)</option>
+                            <option value="phnompenh">🏙️ Phnom Penh - $1.50</option>
+                            <option value="province">🚚 Province - $2.00</option>
+                        </select>
+                    </div>
                     <div class="form-group"><input type="text" id="customerName" class="form-control" placeholder="Full Name *"></div>
                     <div class="form-group"><input type="tel" id="customerPhone" class="form-control" placeholder="Phone Number *"></div>
                     <div class="form-group"><input type="text" id="customerCity" class="form-control" placeholder="City / Province"></div>
@@ -344,6 +352,7 @@ var STATE = {
     cart: [],
     isAdmin: localStorage.getItem('goatAdmin') === 'true',
     paymentMethod: 'payway',
+    shippingFee: 0,
     filter: { category: 'all', stock: 'all', search: '' },
     storeId: null,
     firebaseOnline: false,
@@ -394,6 +403,7 @@ function printReceipt(orderId) {
     
     var w = window.open('', '_blank', 'width=350,height=600');
     var pmt = order.paymentMethod === 'payway' ? 'ABA PayWay' : 'Cash on Delivery';
+    var shippingMethodText = order.shippingMethod || 'N/A';
     
     var items = '';
     for (var j = 0; j < order.cart.length; j++) {
@@ -439,8 +449,6 @@ function printReceipt(orderId) {
     html += '</style></head><body>';
     
     html += '<div class="rc">';
-    
-    // Header
     html += '<div class="rh">';
     html += '<h1>GOAT KIDS</h1>';
     html += '<p>Premium Children\'s Clothing</p>';
@@ -448,19 +456,17 @@ function printReceipt(orderId) {
     html += '<p>Tel: 016 71 33 87</p>';
     html += '</div>';
     
-    // Receipt title
     html += '<div class="rt">ORDER RECEIPT</div>';
     
-    // Order info
     html += '<div class="ri">';
     html += '<div><strong>Order:</strong> ' + order.orderId + '</div>';
     html += '<div><strong>Date:</strong> ' + order.orderDate + '</div>';
     html += '<div><strong>Status:</strong> CONFIRMED</div>';
+    html += '<div><strong>Shipping:</strong> ' + shippingMethodText + '</div>';
     html += '</div>';
     
     html += '<div class="divider"></div>';
     
-    // Customer info
     html += '<div class="ri">';
     html += '<div><strong>Customer:</strong> ' + order.customerName + '</div>';
     html += '<div><strong>Phone:</strong> ' + order.customerPhone + '</div>';
@@ -472,21 +478,17 @@ function printReceipt(orderId) {
     
     html += '<div class="divider"></div>';
     
-    // Items
     html += '<div class="ri"><strong>ITEMS:</strong></div>';
     html += items;
     
     html += '<div class="divider"></div>';
     
-    // Totals
     html += '<div class="tt">';
     html += '<div class="tr"><span>Subtotal:</span><span>$' + order.subtotal.toFixed(2) + '</span></div>';
     html += '<div class="tr"><span>Shipping:</span><span>$' + order.shipping.toFixed(2) + '</span></div>';
     html += '<div class="tr gt"><span>TOTAL:</span><span>$' + order.total.toFixed(2) + '</span></div>';
     html += '</div>';
     
-    
-    // Footer
     html += '<div class="rf">';
     html += '<p>Thank you for shopping!</p>';
     html += '<p>GOAT KIDS - Shop with Love</p>';
@@ -495,11 +497,9 @@ function printReceipt(orderId) {
     
     html += '</div>';
     
-    // Print buttons
     html += '<div class="np">';
     html += '<button class="btnp" onclick="window.print()">🖨️ Print</button>';
     html += '<button class="btnp2" onclick="window.close()">✕ Close</button>';
-    html += '<p style="font-size:10px;color:#666;margin-top:8px;">Width: 300px (Thermal Printer)</p>';
     html += '</div>';
     
     html += '<script>setTimeout(function(){window.print();},800);<\/script>';
@@ -641,7 +641,7 @@ function showTab(name) {
     document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); t.classList.remove('active'); });
     document.querySelectorAll('.nav-link').forEach(function(l) { l.classList.remove('active'); });
     var tab = document.getElementById(name + 'Tab');
-    if (tab) { tab.classList.remove('hidden'); tab.classList.add('active'); if (name === 'store') renderProducts(); if (name === 'cart') { renderCart(); updatePayway(); } if (name === 'admin') { renderInventory(); renderPending(); renderHistory(); } }
+    if (tab) { tab.classList.remove('hidden'); tab.classList.add('active'); if (name === 'store') renderProducts(); if (name === 'cart') { renderCart(); updateShipping(); } if (name === 'admin') { renderInventory(); renderPending(); renderHistory(); } }
 }
 
 function updateCartBadge() { document.getElementById('floatingCartCount').textContent = STATE.cart.reduce(function(t, i) { return t + i.quantity; }, 0); }
@@ -872,6 +872,28 @@ function filterAndRender() {
     renderProducts();
 }
 
+// ==================== SHIPPING ====================
+function updateShipping() {
+    var loc = document.getElementById('shippingLocation');
+    var shipping = 0;
+    if (loc && loc.value === 'phnompenh') shipping = 1.50;
+    else if (loc && loc.value === 'province') shipping = 2.00;
+    else shipping = 0;
+    
+    STATE.shippingFee = shipping;
+    
+    var sub = 0;
+    for (var i = 0; i < STATE.cart.length; i++) { sub += STATE.cart[i].price * STATE.cart[i].quantity; }
+    
+    var shippingEl = document.getElementById('cartShipping');
+    var totalEl = document.getElementById('cartTotal');
+    var paywayEl = document.getElementById('paywayTotal');
+    
+    if (shippingEl) shippingEl.textContent = '$' + shipping.toFixed(2);
+    if (totalEl) totalEl.textContent = '$' + (sub + shipping).toFixed(2);
+    if (paywayEl) paywayEl.textContent = (sub + shipping).toFixed(2);
+}
+
 // ==================== CART ====================
 function addToCart(pid) {
     var p = null;
@@ -892,7 +914,7 @@ function addToCart(pid) {
     localStorage.setItem('goatCart', JSON.stringify(STATE.cart));
     updateCartBadge();
     renderCart();
-    updatePayway();
+    updateShipping();
     showToast(p.name + ' (' + size + ') added!', 'success');
 }
 
@@ -914,7 +936,7 @@ function renderCart() {
     var sub = 0;
     for (var j = 0; j < STATE.cart.length; j++) { sub += STATE.cart[j].price * STATE.cart[j].quantity; }
     document.getElementById('cartSubtotal').textContent = '$' + sub.toFixed(2);
-    document.getElementById('cartTotal').textContent = '$' + (sub + 2).toFixed(2);
+    updateShipping();
 }
 
 function updQty(i, q) {
@@ -923,15 +945,13 @@ function updQty(i, q) {
     localStorage.setItem('goatCart', JSON.stringify(STATE.cart));
     updateCartBadge();
     renderCart();
-    updatePayway();
+    updateShipping();
 }
 
-function remCart(i) { STATE.cart.splice(i, 1); localStorage.setItem('goatCart', JSON.stringify(STATE.cart)); updateCartBadge(); renderCart(); updatePayway(); }
+function remCart(i) { STATE.cart.splice(i, 1); localStorage.setItem('goatCart', JSON.stringify(STATE.cart)); updateCartBadge(); renderCart(); updateShipping(); }
 
 function updatePayway() {
-    var total = 0;
-    for (var i = 0; i < STATE.cart.length; i++) { total += STATE.cart[i].price * STATE.cart[i].quantity; }
-    document.getElementById('paywayTotal').textContent = (total + 2).toFixed(2);
+    updateShipping();
 }
 
 function selectPayment(m) {
@@ -951,9 +971,18 @@ function placeOrder() {
     var district = districtEl ? districtEl.value.trim() : '';
     if (!name || !phone || !address) { showToast('Fill Name, Phone & Address', 'error'); return; }
     if (!STATE.cart.length) { showToast('Cart empty', 'error'); return; }
+    
+    var shippingMethod = 'Pickup';
+    var shippingMethodText = 'Pickup from Shop';
+    var locEl = document.getElementById('shippingLocation');
+    if (locEl && locEl.value === 'phnompenh') { shippingMethod = 'Phnom Penh'; shippingMethodText = 'Phnom Penh ($1.50)'; }
+    else if (locEl && locEl.value === 'province') { shippingMethod = 'Province'; shippingMethodText = 'Province ($2.00)'; }
+    else { shippingMethodText = 'Pickup (FREE)'; }
+    
     var oid = 'ORD-' + Date.now();
     var sub = 0;
     for (var i = 0; i < STATE.cart.length; i++) { sub += STATE.cart[i].price * STATE.cart[i].quantity; }
+    var shipping = STATE.shippingFee || 0;
     var orderCart = [];
     for (var j = 0; j < STATE.cart.length; j++) {
         var ci = STATE.cart[j];
@@ -961,30 +990,35 @@ function placeOrder() {
     }
     var order = {
         orderId: oid, timestamp: Date.now(), orderDate: new Date().toLocaleString(), status: 'pending',
+        shippingMethod: shippingMethod,
         customerName: name, customerPhone: phone, customerAddress: address,
         customerCity: city, customerDistrict: district,
         customerNotes: document.getElementById('customerNotes').value.trim(),
         paymentMethod: STATE.paymentMethod, storeId: STATE.storeId,
-        cart: orderCart, subtotal: sub, shipping: 2, total: sub + 2
+        cart: orderCart, subtotal: sub, shipping: shipping, total: sub + shipping
     };
     STATE.pendingOrders.push(order);
     saveOrders();
     if (STATE.firebaseOnline) db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order);
     
-    var msg = 'GOAT KIDS ORDER\n' + oid + '\n\n' + name + '\n' + phone + '\n' + address;
+    var msg = 'GOAT KIDS ORDER\nOrder: ' + oid + '\n\nCustomer: ' + name + '\nPhone: ' + phone + '\nAddress: ' + address;
     if (city) msg += '\nCity: ' + city;
     if (district) msg += '\nDistrict: ' + district;
+    msg += '\nShipping: ' + shippingMethodText;
     msg += '\n\nITEMS:\n';
     for (var k = 0; k < order.cart.length; k++) {
-        msg += (k + 1) + '. ' + order.cart[k].name + ' (' + order.cart[k].size + ') x' + order.cart[k].quantity + '=$' + order.cart[k].subtotal.toFixed(2) + '\n';
+        msg += (k + 1) + '. ' + order.cart[k].name + ' (' + order.cart[k].size + ') x' + order.cart[k].quantity + ' = $' + order.cart[k].subtotal.toFixed(2) + '\n';
     }
-    msg += '\nTotal: $' + order.total.toFixed(2) + '\nPENDING';
+    msg += '\nSubtotal: $' + sub.toFixed(2);
+    msg += '\nShipping: $' + shipping.toFixed(2);
+    msg += '\nTotal: $' + order.total.toFixed(2);
+    msg += '\nStatus: PENDING';
     
     STATE.cart = [];
     localStorage.setItem('goatCart', '[]');
     updateCartBadge();
     renderCart();
-    updatePayway();
+    updateShipping();
     if (confirm('Order placed! Open Messenger?')) window.open('https://m.me/Goatkids?text=' + encodeURIComponent(msg), '_blank');
     if (STATE.isAdmin) renderPending();
     showToast('Order sent!', 'success');
@@ -1002,7 +1036,6 @@ function confirmOrder(oid) {
     if (idx < 0) return;
     var order = STATE.pendingOrders[idx];
     
-    // Check stock
     for (var j = 0; j < order.cart.length; j++) {
         var it = order.cart[j];
         var p = null;
@@ -1015,7 +1048,6 @@ function confirmOrder(oid) {
         } else if (p.stock < it.quantity) { showToast('Not enough: ' + it.name, 'error'); return; }
     }
     
-    // Reduce stock
     for (var m = 0; m < order.cart.length; m++) {
         var item = order.cart[m];
         var prod = null;
@@ -1112,7 +1144,7 @@ function renderPending() {
         for (var j = 0; j < o.cart.length; j++) {
             items += '<div style="display:flex;justify-content:space-between;font-size:0.85rem"><span>' + o.cart[j].quantity + 'x ' + o.cart[j].name + ' (' + o.cart[j].size + ')</span><span>$' + o.cart[j].subtotal.toFixed(2) + '</span></div>';
         }
-        html += '<div class="order-card"><div><strong style="color:var(--warning)">PENDING</strong><br><small>' + o.orderId + ' | ' + o.orderDate + '</small></div><div style="background:var(--light);padding:0.5rem;border-radius:var(--radius);margin:0.5rem 0;font-size:0.85rem">' + o.customerName + ' | ' + o.customerPhone + '<br>' + o.customerAddress + (o.customerCity ? ' | ' + o.customerCity : '') + (o.customerDistrict ? ' | ' + o.customerDistrict : '') + '</div>' + items + '<div style="font-weight:700;margin:0.5rem 0">Total: $' + o.total.toFixed(2) + '</div><div class="flex gap-2"><button class="btn btn-success btn-small" onclick="confirmOrder(\'' + o.orderId + '\')" style="flex:1">Confirm</button><button class="btn btn-danger btn-small" onclick="rejectOrder(\'' + o.orderId + '\')" style="flex:1">Reject</button></div></div>';
+        html += '<div class="order-card"><div><strong style="color:var(--warning)">PENDING</strong><br><small>' + o.orderId + ' | ' + o.orderDate + '</small></div><div style="background:var(--light);padding:0.5rem;border-radius:var(--radius);margin:0.5rem 0;font-size:0.85rem">' + o.customerName + ' | ' + o.customerPhone + '<br>' + o.customerAddress + (o.customerCity ? ' | ' + o.customerCity : '') + (o.customerDistrict ? ' | ' + o.customerDistrict : '') + '<br>Shipping: ' + (o.shippingMethod || 'N/A') + '</div>' + items + '<div style="font-weight:700;margin:0.5rem 0">Total: $' + o.total.toFixed(2) + '</div><div class="flex gap-2"><button class="btn btn-success btn-small" onclick="confirmOrder(\'' + o.orderId + '\')" style="flex:1">Confirm</button><button class="btn btn-danger btn-small" onclick="rejectOrder(\'' + o.orderId + '\')" style="flex:1">Reject</button></div></div>';
     }
     c.innerHTML = html;
 }
@@ -1146,7 +1178,7 @@ function dlCSV(csv, fn) {
 
 function exportPendingCSV() {
     if (!STATE.pendingOrders.length) { showToast('No pending', 'warning'); return; }
-    var csv = 'Order ID,Date,Status,Customer Name,Phone,City,District,Address,Payment,Item,Size,Quantity,Price,Subtotal,Image,Total,Notes\n';
+    var csv = 'Order ID,Date,Status,Shipping Method,Customer Name,Phone,City,District,Address,Payment,Item,Size,Quantity,Price,Subtotal,Image,Total,Notes\n';
     for (var i = 0; i < STATE.pendingOrders.length; i++) {
         var o = STATE.pendingOrders[i];
         for (var j = 0; j < o.cart.length; j++) {
@@ -1154,7 +1186,7 @@ function exportPendingCSV() {
             var p = null;
             for (var k = 0; k < STATE.products.length; k++) { if (STATE.products[k].id === it.productId) { p = STATE.products[k]; break; } }
             var img = (p && p.images && p.images.length > 0) ? p.images[0] : (it.image || '');
-            csv += [escCSV(o.orderId), escCSV(o.orderDate), escCSV(o.status), escCSV(o.customerName), escCSV(o.customerPhone), escCSV(o.customerCity || ''), escCSV(o.customerDistrict || ''), escCSV(o.customerAddress), escCSV(o.paymentMethod === 'payway' ? 'ABA' : 'COD'), escCSV(it.name), escCSV(it.size), it.quantity, it.price.toFixed(2), it.subtotal.toFixed(2), escCSV(img), (j === 0 ? o.total.toFixed(2) : ''), (j === 0 ? escCSV(o.customerNotes || '') : '')].join(',') + '\n';
+            csv += [escCSV(o.orderId), escCSV(o.orderDate), escCSV(o.status), escCSV(o.shippingMethod || 'N/A'), escCSV(o.customerName), escCSV(o.customerPhone), escCSV(o.customerCity || ''), escCSV(o.customerDistrict || ''), escCSV(o.customerAddress), escCSV(o.paymentMethod === 'payway' ? 'ABA' : 'COD'), escCSV(it.name), escCSV(it.size), it.quantity, it.price.toFixed(2), it.subtotal.toFixed(2), escCSV(img), (j === 0 ? o.total.toFixed(2) : ''), (j === 0 ? escCSV(o.customerNotes || '') : '')].join(',') + '\n';
         }
     }
     dlCSV(csv, 'GOAT_KIDS_Pending_' + new Date().toISOString().split('T')[0] + '.csv');
@@ -1163,7 +1195,7 @@ function exportPendingCSV() {
 
 function exportHistoryCSV() {
     if (!STATE.confirmedOrders.length) { showToast('No history', 'warning'); return; }
-    var csv = 'Order ID,Date,Status,Confirmed/Rejected,Reason,Customer Name,Phone,City,District,Address,Payment,Item,Size,Quantity,Price,Subtotal,Image,Total,Notes\n';
+    var csv = 'Order ID,Date,Status,Shipping Method,Confirmed/Rejected,Reason,Customer Name,Phone,City,District,Address,Payment,Item,Size,Quantity,Price,Subtotal,Image,Total,Notes\n';
     for (var i = 0; i < STATE.confirmedOrders.length; i++) {
         var o = STATE.confirmedOrders[i];
         for (var j = 0; j < o.cart.length; j++) {
@@ -1171,7 +1203,7 @@ function exportHistoryCSV() {
             var p = null;
             for (var k = 0; k < STATE.products.length; k++) { if (STATE.products[k].id === it.productId) { p = STATE.products[k]; break; } }
             var img = (p && p.images && p.images.length > 0) ? p.images[0] : (it.image || '');
-            csv += [escCSV(o.orderId), escCSV(o.orderDate), escCSV(o.status), escCSV(o.confirmedAt || o.rejectedAt || ''), escCSV(o.rejectionReason || ''), escCSV(o.customerName), escCSV(o.customerPhone), escCSV(o.customerCity || ''), escCSV(o.customerDistrict || ''), escCSV(o.customerAddress), escCSV(o.paymentMethod === 'payway' ? 'ABA' : 'COD'), escCSV(it.name), escCSV(it.size), it.quantity, it.price.toFixed(2), it.subtotal.toFixed(2), escCSV(img), (j === 0 ? o.total.toFixed(2) : ''), (j === 0 ? escCSV(o.customerNotes || '') : '')].join(',') + '\n';
+            csv += [escCSV(o.orderId), escCSV(o.orderDate), escCSV(o.status), escCSV(o.shippingMethod || 'N/A'), escCSV(o.confirmedAt || o.rejectedAt || ''), escCSV(o.rejectionReason || ''), escCSV(o.customerName), escCSV(o.customerPhone), escCSV(o.customerCity || ''), escCSV(o.customerDistrict || ''), escCSV(o.customerAddress), escCSV(o.paymentMethod === 'payway' ? 'ABA' : 'COD'), escCSV(it.name), escCSV(it.size), it.quantity, it.price.toFixed(2), it.subtotal.toFixed(2), escCSV(img), (j === 0 ? o.total.toFixed(2) : ''), (j === 0 ? escCSV(o.customerNotes || '') : '')].join(',') + '\n';
         }
     }
     dlCSV(csv, 'GOAT_KIDS_History_' + new Date().toISOString().split('T')[0] + '.csv');
