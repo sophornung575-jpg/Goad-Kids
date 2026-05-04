@@ -1073,22 +1073,56 @@ function escCSV(v) { if (!v) return ''; var s = String(v); return s.indexOf(',')
 function dlCSV(csv, fn) { var b = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }); var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = fn; a.click(); URL.revokeObjectURL(a.href); }
 function exportPendingCSV() {
     if (!STATE.pendingOrders.length) { showToast('No pending', 'warning'); return; }
-    var csv = 'Order ID,Date,Status,Shipping Method,Customer Name,Phone,City,Address,Payment,Item,Size,Quantity,Price,Subtotal,Image,Total,Notes\n';
-    for (var i = 0; i < STATE.pendingOrders.length; i++) { var o = STATE.pendingOrders[i]; for (var j = 0; j < o.cart.length; j++) { var it = o.cart[j], p = null; for (var k = 0; k < STATE.products.length; k++) { if (STATE.products[k].id === it.productId) { p = STATE.products[k]; break; } } var img = (p && p.images && p.images.length > 0) ? p.images[0] : (it.image || ''); csv += [escCSV(o.orderId), escCSV(o.orderDate), escCSV(o.status), escCSV(o.shippingMethod || 'N/A'), escCSV(o.customerName), escCSV(o.customerPhone), escCSV(o.customerCity || ''), escCSV(o.customerAddress), escCSV(o.paymentMethod === 'payway' ? 'ABA' : 'COD'), escCSV(it.name), escCSV(it.size), it.quantity, it.price.toFixed(2), it.subtotal.toFixed(2), escCSV(img), (j === 0 ? o.total.toFixed(2) : ''), (j === 0 ? escCSV(o.customerNotes || '') : '')].join(',') + '\n'; } }
+    var csv = 'Order ID,Date,Status,Shipping Method,Customer Name,Phone,City,Address,Payment,Item,Size,Quantity,Price,Subtotal,Image,Image Link,Total,Notes\n';
+    for (var i = 0; i < STATE.pendingOrders.length; i++) {
+        var o = STATE.pendingOrders[i];
+        for (var j = 0; j < o.cart.length; j++) {
+            var it = o.cart[j];
+            var p = null;
+            for (var k = 0; k < STATE.products.length; k++) { if (STATE.products[k].id === it.productId) { p = STATE.products[k]; break; } }
+            var img = (p && p.images && p.images.length > 0) ? p.images[0] : (it.image || '');
+            var imgFormula = img ? '=IMAGE("' + img + '")' : '';
+            csv += [escCSV(o.orderId), escCSV(o.orderDate), escCSV(o.status), escCSV(o.shippingMethod || 'N/A'), escCSV(o.customerName), escCSV(o.customerPhone), escCSV(o.customerCity || ''), escCSV(o.customerAddress), escCSV(o.paymentMethod === 'payway' ? 'ABA' : 'COD'), escCSV(it.name), escCSV(it.size), it.quantity, it.price.toFixed(2), it.subtotal.toFixed(2), escCSV(imgFormula), escCSV(img), (j === 0 ? o.total.toFixed(2) : ''), (j === 0 ? escCSV(o.customerNotes || '') : '')].join(',') + '\n';
+        }
+    }
     dlCSV(csv, 'GOAT_KIDS_Pending_' + new Date().toISOString().split('T')[0] + '.csv');
     showToast('Exported!', 'success');
 }
+
 function exportHistoryCSV() {
     if (!STATE.confirmedOrders.length) { showToast('No history', 'warning'); return; }
-    var csv = 'Order ID,Date,Status,Shipping Method,Confirmed/Rejected,Reason,Customer Name,Phone,City,Address,Payment,Item,Size,Quantity,Price,Subtotal,Image,Total,Notes\n';
-    for (var i = 0; i < STATE.confirmedOrders.length; i++) { var o = STATE.confirmedOrders[i]; for (var j = 0; j < o.cart.length; j++) { var it = o.cart[j], p = null; for (var k = 0; k < STATE.products.length; k++) { if (STATE.products[k].id === it.productId) { p = STATE.products[k]; break; } } var img = (p && p.images && p.images.length > 0) ? p.images[0] : (it.image || ''); csv += [escCSV(o.orderId), escCSV(o.orderDate), escCSV(o.status), escCSV(o.shippingMethod || 'N/A'), escCSV(o.confirmedAt || o.rejectedAt || ''), escCSV(o.rejectionReason || ''), escCSV(o.customerName), escCSV(o.customerPhone), escCSV(o.customerCity || ''), escCSV(o.customerAddress), escCSV(o.paymentMethod === 'payway' ? 'ABA' : 'COD'), escCSV(it.name), escCSV(it.size), it.quantity, it.price.toFixed(2), it.subtotal.toFixed(2), escCSV(img), (j === 0 ? o.total.toFixed(2) : ''), (j === 0 ? escCSV(o.customerNotes || '') : '')].join(',') + '\n'; } }
+    var csv = 'Order ID,Date,Status,Shipping Method,Confirmed/Rejected,Reason,Customer Name,Phone,City,Address,Payment,Item,Size,Quantity,Price,Subtotal,Image,Image Link,Total,Notes\n';
+    for (var i = 0; i < STATE.confirmedOrders.length; i++) {
+        var o = STATE.confirmedOrders[i];
+        for (var j = 0; j < o.cart.length; j++) {
+            var it = o.cart[j];
+            var p = null;
+            for (var k = 0; k < STATE.products.length; k++) { if (STATE.products[k].id === it.productId) { p = STATE.products[k]; break; } }
+            var img = (p && p.images && p.images.length > 0) ? p.images[0] : (it.image || '');
+            var imgFormula = img ? '=IMAGE("' + img + '")' : '';
+            csv += [escCSV(o.orderId), escCSV(o.orderDate), escCSV(o.status), escCSV(o.shippingMethod || 'N/A'), escCSV(o.confirmedAt || o.rejectedAt || ''), escCSV(o.rejectionReason || ''), escCSV(o.customerName), escCSV(o.customerPhone), escCSV(o.customerCity || ''), escCSV(o.customerAddress), escCSV(o.paymentMethod === 'payway' ? 'ABA' : 'COD'), escCSV(it.name), escCSV(it.size), it.quantity, it.price.toFixed(2), it.subtotal.toFixed(2), escCSV(imgFormula), escCSV(img), (j === 0 ? o.total.toFixed(2) : ''), (j === 0 ? escCSV(o.customerNotes || '') : '')].join(',') + '\n';
+        }
+    }
     dlCSV(csv, 'GOAT_KIDS_History_' + new Date().toISOString().split('T')[0] + '.csv');
     showToast('Exported!', 'success');
 }
+
 function exportInventoryCSV() {
     if (!STATE.products.length) { showToast('No products', 'warning'); return; }
-    var csv = 'Product ID,Name,Category,Price,Total Stock,Size,Size Qty,Image,All Images\n';
-    for (var i = 0; i < STATE.products.length; i++) { var p = STATE.products[i], img = (p.images && p.images.length > 0) ? p.images[0] : '', all = (p.images && p.images.length > 0) ? p.images.join(' | ') : ''; if (p.sizes && p.sizes.length > 0) { for (var j = 0; j < p.sizes.length; j++) { csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), getTotalStock(p), escCSV(p.sizes[j].name), p.sizes[j].qty, escCSV(img), escCSV(all)].join(',') + '\n'; } } else { csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), getTotalStock(p), 'No sizes', 0, escCSV(img), escCSV(all)].join(',') + '\n'; } }
+    var csv = 'Product ID,Name,Category,Price,Total Stock,Size,Size Qty,Image,Image Link,All Images\n';
+    for (var i = 0; i < STATE.products.length; i++) {
+        var p = STATE.products[i];
+        var img = (p.images && p.images.length > 0) ? p.images[0] : '';
+        var all = (p.images && p.images.length > 0) ? p.images.join(' | ') : '';
+        var imgFormula = img ? '=IMAGE("' + img + '")' : '';
+        if (p.sizes && p.sizes.length > 0) {
+            for (var j = 0; j < p.sizes.length; j++) {
+                csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), getTotalStock(p), escCSV(p.sizes[j].name), p.sizes[j].qty, escCSV(imgFormula), escCSV(img), escCSV(all)].join(',') + '\n';
+            }
+        } else {
+            csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), getTotalStock(p), 'No sizes', 0, escCSV(imgFormula), escCSV(img), escCSV(all)].join(',') + '\n';
+        }
+    }
     dlCSV(csv, 'GOAT_KIDS_Inventory_' + new Date().toISOString().split('T')[0] + '.csv');
     showToast('Exported!', 'success');
 }
