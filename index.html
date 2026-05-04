@@ -476,21 +476,60 @@
     <div class="modal-overlay hidden" id="adminModal"><div class="modal"><div class="modal-header"><h3>Admin Login</h3><button class="modal-close" onclick="closeAdminModal()">&times;</button></div><div class="form-group"><input type="password" id="adminPassword" class="form-control" placeholder="Enter admin password"></div><div class="flex gap-2"><button class="btn btn-primary" onclick="adminLogin()" style="flex:1">Login</button><button class="btn btn-outline" onclick="closeAdminModal()">Cancel</button></div></div></div>
 
     <!-- Edit Product Modal -->
-    <div class="modal-overlay hidden" id="editProductModal"><div class="modal"><div class="modal-header"><h3><i class="fas fa-edit"></i> Edit Product</h3><button class="modal-close" onclick="closeEditModal()">&times;</button></div>
-        <input type="hidden" id="editProductId">
-        <div class="form-group"><label style="font-weight:600">Product Name</label><input type="text" id="editProductName" class="form-control" readonly style="background:var(--light)"></div>
-        <div class="form-group"><label style="font-weight:600">Category</label><select id="editProductCategory" class="form-control"><option value="Girl Clothes">Girl Clothes</option><option value="Boy Clothes">Boy Clothes</option><option value="tshirts">T-Shirts</option><option value="Dresses">Dresses</option><option value="Baby Jeans">Baby Jeans</option></select></div>
-        <div class="form-group"><label style="font-weight:600">Price ($)</label><input type="number" id="editProductPrice" class="form-control" step="0.01"></div>
-        <div class="form-group"><label style="font-weight:600">Images</label><div class="image-preview-container" id="editImagePreviewContainer"></div><div class="flex gap-2 mt-4"><input type="text" id="editImageUrlInput" class="form-control" placeholder="Add image URL"><button class="btn btn-outline btn-small" onclick="addEditImageUrl()">Add</button></div></div>
-        <div class="form-group"><label style="font-weight:600">Size Inventory</label><div id="editSizeInventory" class="size-edit-grid"></div></div>
-        <button class="btn btn-primary w-full btn-large" onclick="saveEditProduct()"><i class="fas fa-save"></i> Save Changes</button>
-    </div></div>
+    <div class="modal-overlay hidden" id="adminModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3><i class="fas fa-user-shield"></i> Admin Login</h3>
+            <button class="modal-close" onclick="closeAdminModal()">&times;</button>
+        </div>
+        <div class="form-group">
+            <label style="font-weight:600;margin-bottom:0.3rem;display:block">Select Role</label>
+            <div class="role-selector" style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap">
+                <button class="role-btn active" onclick="selectRole('full',this)" style="flex:1;padding:0.6rem;border:2px solid var(--primary);background:rgba(102,126,234,0.1);border-radius:8px;cursor:pointer;font-weight:600;font-size:0.85rem">
+                    <i class="fas fa-crown"></i> Full
+                </button>
+                <button class="role-btn" onclick="selectRole('orders',this)" style="flex:1;padding:0.6rem;border:2px solid var(--gray-light);background:#fff;border-radius:8px;cursor:pointer;font-weight:600;font-size:0.85rem">
+                    <i class="fas fa-clipboard-list"></i> Orders
+                </button>
+                <button class="role-btn" onclick="selectRole('inventory',this)" style="flex:1;padding:0.6rem;border:2px solid var(--gray-light);background:#fff;border-radius:8px;cursor:pointer;font-weight:600;font-size:0.85rem">
+                    <i class="fas fa-boxes"></i> Inventory
+                </button>
+            </div>
+        </div>
+        <div class="form-group">
+            <input type="password" id="adminPassword" class="form-control" placeholder="Enter password" style="font-size:1.1rem;text-align:center">
+        </div>
+        <div class="flex gap-2">
+            <button class="btn btn-primary" onclick="adminLogin()" style="flex:1"><i class="fas fa-sign-in-alt"></i> Login</button>
+            <button class="btn btn-outline" onclick="closeAdminModal()">Cancel</button>
+        </div>
+        <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--gray-light)">
+            <p style="font-size:0.8rem;color:var(--gray);text-align:center;cursor:pointer" onclick="showLoginHistory()"><i class="fas fa-history"></i> View Login History</p>
+        </div>
+    </div>
+</div>
+
+<!-- Login History Modal -->
+<div class="modal-overlay hidden" id="loginHistoryModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3><i class="fas fa-history"></i> Login History</h3>
+            <button class="modal-close" onclick="closeLoginHistory()">&times;</button>
+        </div>
+        <div id="loginHistoryContent" style="max-height:300px;overflow-y:auto;font-size:0.85rem">
+            <p style="color:var(--gray);text-align:center">No records</p>
+        </div>
+        <button class="btn btn-danger btn-small w-full mt-4" onclick="clearLoginHistory()"><i class="fas fa-trash"></i> Clear History</button>
+    </div>
+</div>
 
 <script>
 var STATE = {
     products: [],
     cart: [],
     isAdmin: localStorage.getItem('goatAdmin') === 'true',
+    adminRole: localStorage.getItem('goatAdminRole') || '', // 'full', 'orders', 'inventory'
+    loginRecords: JSON.parse(localStorage.getItem('goatLoginRecords') || '[]'),
     paymentMethod: 'payway',
     shippingFee: 0,
     filter: { category: 'all', stock: 'all', search: '' },
@@ -510,10 +549,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         this.innerHTML = nav.classList.contains('active') ? '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
     });
     if (STATE.isAdmin) {
-        document.getElementById('adminBadge').classList.remove('hidden');
-        document.getElementById('adminNavLink').classList.remove('hidden');
-        document.getElementById('adminNavLinkMobile').classList.remove('hidden');
-    }
+    document.getElementById('adminBadge').classList.remove('hidden');
+    document.getElementById('adminBadge').textContent = STATE.adminRole === 'full' ? 'ADMIN' : (STATE.adminRole === 'orders' ? 'ORDERS' : 'STOCK');
+    document.getElementById('adminNavLink').classList.remove('hidden');
+    document.getElementById('adminNavLinkMobile').classList.remove('hidden');
+    document.getElementById('adminLoginBtn').classList.add('hidden');
+    document.getElementById('adminLoginBtnMobile').classList.add('hidden');
+}
     var sid = localStorage.getItem('goatStoreId');
     if (!sid) {
         var params = new URLSearchParams(window.location.search);
@@ -714,7 +756,17 @@ function showTab(name) {
     document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); t.classList.remove('active'); });
     document.querySelectorAll('.nav-link').forEach(function(l) { l.classList.remove('active'); });
     var tab = document.getElementById(name + 'Tab');
-    if (tab) { tab.classList.remove('hidden'); tab.classList.add('active'); if (name === 'store') renderProducts(); if (name === 'cart') { renderCart(); updateShipping(); } if (name === 'admin') { switchAdminTab('orders'); updateAdminBadges(); } }
+    if (tab) { tab.classList.remove('hidden'); tab.classList.add('active'); if (name === 'store') renderProducts(); if (name === 'cart') { renderCart(); updateShipping(); } if (name === 'admin') {
+    if (STATE.adminRole === 'inventory') {
+        switchAdminTab('inventory');
+        document.querySelectorAll('.admin-tab')[0].style.display = 'none';
+    } else if (STATE.adminRole === 'orders') {
+        switchAdminTab('orders');
+        document.querySelectorAll('.admin-tab')[1].style.display = 'none';
+    } else {
+        switchAdminTab('orders');
+    }
+    updateAdminBadges();
 }
 function updateCartBadge() { document.getElementById('floatingCartCount').textContent = STATE.cart.reduce(function(t, i) { return t + i.quantity; }, 0); }
 
@@ -1120,7 +1172,151 @@ function exportInventoryCSV() {
     dlCSV(csv, 'GOAT_KIDS_Inventory_' + new Date().toISOString().split('T')[0] + '.csv');
     showToast('Exported!', 'success');
 }
+// ==================== ADMIN ROLES & LOGIN RECORDS ====================
+var selectedRole = 'full';
 
+function selectRole(role, btn) {
+    selectedRole = role;
+    document.querySelectorAll('.role-btn').forEach(function(b) {
+        b.classList.remove('active');
+        b.style.borderColor = 'var(--gray-light)';
+        b.style.background = '#fff';
+    });
+    btn.classList.add('active');
+    btn.style.borderColor = 'var(--primary)';
+    btn.style.background = 'rgba(102,126,234,0.1)';
+}
+
+function adminLogin() {
+    var password = document.getElementById('adminPassword').value;
+    var role = selectedRole;
+    var validPassword = '';
+    var roleName = '';
+
+    // Check password based on role
+    if (role === 'full' && password === 'N1255550') {
+        validPassword = true;
+        roleName = 'Full Admin';
+    } else if (role === 'orders' && (password === 'ord2024' || password === 'N1255550')) {
+        validPassword = true;
+        roleName = 'Order Manager';
+        if (password === 'N1255550') role = 'full';
+        else role = 'orders';
+    } else if (role === 'inventory' && (password === 'inv2024' || password === 'N1255550')) {
+        validPassword = true;
+        roleName = 'Inventory Manager';
+        if (password === 'N1255550') role = 'full';
+        else role = 'inventory';
+    }
+
+    if (!validPassword) {
+        // Record failed attempt
+        addLoginRecord('Unknown', selectedRole, false);
+        showToast('Wrong password!', 'error');
+        return;
+    }
+
+    STATE.isAdmin = true;
+    STATE.adminRole = role;
+    localStorage.setItem('goatAdmin', 'true');
+    localStorage.setItem('goatAdminRole', role);
+    
+    // Record successful login
+    addLoginRecord(roleName, role, true);
+    
+    // Update UI
+    document.getElementById('adminBadge').classList.remove('hidden');
+    document.getElementById('adminBadge').textContent = role === 'full' ? 'ADMIN' : (role === 'orders' ? 'ORDERS' : 'STOCK');
+    document.getElementById('adminNavLink').classList.remove('hidden');
+    document.getElementById('adminNavLinkMobile').classList.remove('hidden');
+    document.getElementById('adminLoginBtn').classList.add('hidden');
+    document.getElementById('adminLoginBtnMobile').classList.add('hidden');
+    
+    closeAdminModal();
+    showTab('admin');
+    
+    // If limited role, set the appropriate tab
+    if (role === 'orders') {
+        switchAdminTab('orders');
+        // Hide inventory tab
+        document.querySelectorAll('.admin-tab')[1].style.display = 'none';
+    } else if (role === 'inventory') {
+        switchAdminTab('inventory');
+        // Hide orders tab
+        document.querySelectorAll('.admin-tab')[0].style.display = 'none';
+    } else {
+        // Full admin sees both
+        document.querySelectorAll('.admin-tab')[0].style.display = '';
+        document.querySelectorAll('.admin-tab')[1].style.display = '';
+    }
+    
+    document.getElementById('adminPassword').value = '';
+    showToast('Welcome ' + roleName + '!', 'success');
+}
+
+function adminLogout() {
+    STATE.isAdmin = false;
+    STATE.adminRole = '';
+    localStorage.removeItem('goatAdmin');
+    localStorage.removeItem('goatAdminRole');
+    document.getElementById('adminBadge').classList.add('hidden');
+    document.getElementById('adminNavLink').classList.add('hidden');
+    document.getElementById('adminNavLinkMobile').classList.add('hidden');
+    document.getElementById('adminLoginBtn').classList.remove('hidden');
+    document.getElementById('adminLoginBtnMobile').classList.remove('hidden');
+    // Reset tabs visibility
+    document.querySelectorAll('.admin-tab')[0].style.display = '';
+    document.querySelectorAll('.admin-tab')[1].style.display = '';
+    showTab('store');
+    showToast('Logged out', 'info');
+}
+
+function addLoginRecord(name, role, success) {
+    var record = {
+        name: name,
+        role: role,
+        success: success,
+        time: new Date().toLocaleString(),
+        timestamp: Date.now()
+    };
+    STATE.loginRecords.unshift(record);
+    // Keep only last 50 records
+    if (STATE.loginRecords.length > 50) STATE.loginRecords = STATE.loginRecords.slice(0, 50);
+    localStorage.setItem('goatLoginRecords', JSON.stringify(STATE.loginRecords));
+}
+
+function showLoginHistory() {
+    var content = document.getElementById('loginHistoryContent');
+    if (!STATE.loginRecords.length) {
+        content.innerHTML = '<p style="color:var(--gray);text-align:center;padding:2rem">No login records</p>';
+    } else {
+        var html = '<div style="display:flex;flex-direction:column;gap:0.5rem">';
+        for (var i = 0; i < STATE.loginRecords.length; i++) {
+            var r = STATE.loginRecords[i];
+            var icon = r.success ? '✅' : '❌';
+            var color = r.success ? 'var(--success)' : 'var(--danger)';
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;background:var(--light);border-radius:8px;border-left:3px solid ' + color + '"><div><strong>' + icon + ' ' + r.name + '</strong><br><small style="color:var(--gray)">' + r.role + '</small></div><small style="color:var(--gray)">' + r.time + '</small></div>';
+        }
+        html += '</div>';
+        content.innerHTML = html;
+    }
+    document.getElementById('loginHistoryModal').classList.add('active');
+    document.getElementById('loginHistoryModal').classList.remove('hidden');
+}
+
+function closeLoginHistory() {
+    document.getElementById('loginHistoryModal').classList.remove('active');
+    document.getElementById('loginHistoryModal').classList.add('hidden');
+}
+
+function clearLoginHistory() {
+    if (confirm('Clear all login history?')) {
+        STATE.loginRecords = [];
+        localStorage.removeItem('goatLoginRecords');
+        showLoginHistory();
+        showToast('History cleared', 'info');
+    }
+}
 // ==================== UTILS ====================
 function showStatus(t, type) { var b = document.getElementById('statusBar'); document.getElementById('statusText').textContent = t; b.className = 'status-bar show ' + type; }
 function showToast(m, type) {
