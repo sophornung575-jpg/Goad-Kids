@@ -93,7 +93,7 @@
         .product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.5rem;margin-top:1.5rem}
         .product-card{background:#fff;border-radius:var(--radius-xl);overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);transition:all 0.3s;border:1px solid var(--gray-light)}
         .product-card:hover{transform:translateY(-4px);box-shadow:var(--shadow-lg)}
-        .product-image-container{position:relative;height:240px;overflow:hidden;background:#f0f0f0}
+        .product-image-container{position:relative;height:240px;overflow:hidden;background:#f0f0f0;cursor:pointer}
         .product-main-image{width:100%;height:100%;object-fit:cover}
         .product-badge{position:absolute;top:0.75rem;right:0.75rem;padding:0.3rem 0.8rem;border-radius:2rem;font-size:0.75rem;font-weight:600;color:#fff}
         .badge-new{background:var(--success)}.badge-sale{background:var(--secondary)}.badge-low{background:var(--warning);color:var(--dark)}
@@ -203,6 +203,15 @@
         .category-boy{background:#90caf9;color:#1565c0}
         .role-btn.active{border-color:var(--primary)!important;background:rgba(102,126,234,0.1)!important}
 
+        /* Lightbox */
+        .lightbox-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);z-index:2000;display:flex;align-items:center;justify-content:center;opacity:0;visibility:hidden;transition:all 0.3s}
+        .lightbox-overlay.active{opacity:1;visibility:visible}
+        .lightbox-img{max-width:95%;max-height:95%;object-fit:contain;cursor:zoom-in;transition:transform 0.3s;border-radius:8px}
+        .lightbox-img.zoomed{transform:scale(2);cursor:zoom-out}
+        .lightbox-close{position:absolute;top:20px;right:20px;color:#fff;font-size:2rem;cursor:pointer;z-index:2001;background:rgba(0,0,0,0.5);width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:none}
+        .lightbox-close:hover{background:rgba(255,255,255,0.2)}
+        .lightbox-zoom-hint{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);color:#fff;font-size:0.85rem;background:rgba(0,0,0,0.5);padding:0.5rem 1rem;border-radius:20px;opacity:0.8;pointer-events:none}
+
         @media print{
             body *{visibility:hidden}
             .receipt-print-area,.receipt-print-area *{visibility:visible}
@@ -222,6 +231,7 @@
             .admin-tab{font-size:0.85rem;padding:0.7rem 1rem}
             .inventory-table{font-size:0.75rem}
             .inventory-table th,.inventory-table td{padding:0.4rem 0.3rem}
+            .lightbox-close{top:10px;right:10px;width:40px;height:40px;font-size:1.5rem}
         }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -352,6 +362,13 @@
         </div>
     </main>
 
+    <!-- Lightbox -->
+    <div class="lightbox-overlay" id="lightbox" onclick="closeLightbox(event)">
+        <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+        <img class="lightbox-img" id="lightboxImg" src="" alt="Product Image" onclick="toggleZoom(event)">
+        <div class="lightbox-zoom-hint" id="zoomHint">🔍 Click image to zoom</div>
+    </div>
+
     <!-- Admin Login Modal -->
     <div class="modal-overlay hidden" id="adminModal">
         <div class="modal">
@@ -444,6 +461,28 @@ document.addEventListener('DOMContentLoaded', async function() {
     showTab('store');
 });
 
+// ==================== LIGHTBOX ====================
+function openLightbox(src) {
+    document.getElementById('lightboxImg').src = src;
+    document.getElementById('lightboxImg').classList.remove('zoomed');
+    document.getElementById('zoomHint').style.display = 'block';
+    document.getElementById('lightbox').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+function closeLightbox(e) {
+    if (e && e.target !== document.getElementById('lightbox') && e.target !== document.getElementById('lightboxImg')) return;
+    document.getElementById('lightbox').classList.remove('active');
+    document.body.style.overflow = '';
+}
+function toggleZoom(e) {
+    e.stopPropagation();
+    var img = document.getElementById('lightboxImg');
+    var hint = document.getElementById('zoomHint');
+    img.classList.toggle('zoomed');
+    hint.textContent = img.classList.contains('zoomed') ? '🔍 Click to zoom out' : '🔍 Click image to zoom';
+}
+
+// ==================== ADMIN TABS & ROLES ====================
 function switchAdminTab(tab) {
     document.querySelectorAll('.admin-tab').forEach(function(t) { t.classList.remove('active'); });
     document.querySelectorAll('.admin-tab-content').forEach(function(c) { c.classList.remove('active'); });
@@ -457,12 +496,10 @@ function switchAdminTab(tab) {
         renderInventory();
     }
 }
-
 function updateAdminBadges() {
     document.getElementById('ordersBadge').textContent = STATE.pendingOrders.length + STATE.confirmedOrders.length;
     document.getElementById('inventoryBadge').textContent = STATE.products.length;
 }
-
 function selectRole(role, btn) {
     selectedRole = role;
     document.querySelectorAll('.role-btn').forEach(function(b) {
@@ -474,36 +511,30 @@ function selectRole(role, btn) {
     btn.style.borderColor = 'var(--primary)';
     btn.style.background = 'rgba(102,126,234,0.1)';
 }
-
 function adminLogin() {
-    var password = document.getElementById('adminPassword').value;
+    var pw = document.getElementById('adminPassword').value;
     var role = selectedRole;
-    var valid = false;
-    var roleName = '';
-    if (role === 'full' && password === 'N1255550') { valid = true; roleName = 'Full Admin'; }
-    else if (role === 'orders' && (password === 'ord2024' || password === 'N1255550')) { valid = true; roleName = 'Order Manager'; if (password === 'N1255550') role = 'full'; }
-    else if (role === 'inventory' && (password === 'inv2024' || password === 'N1255550')) { valid = true; roleName = 'Inventory Manager'; if (password === 'N1255550') role = 'full'; }
+    var valid = false, name = '';
+    if (role === 'full' && pw === 'N1255550') { valid = true; name = 'Full Admin'; }
+    else if (role === 'orders' && (pw === 'ord2024' || pw === 'N1255550')) { valid = true; name = 'Order Manager'; if (pw === 'N1255550') role = 'full'; }
+    else if (role === 'inventory' && (pw === 'inv2024' || pw === 'N1255550')) { valid = true; name = 'Inventory Manager'; if (pw === 'N1255550') role = 'full'; }
     if (!valid) { addLoginRecord('Unknown', selectedRole, false); showToast('Wrong password!', 'error'); return; }
-    STATE.isAdmin = true;
-    STATE.adminRole = role;
-    localStorage.setItem('goatAdmin', 'true');
-    localStorage.setItem('goatAdminRole', role);
-    addLoginRecord(roleName, role, true);
+    STATE.isAdmin = true; STATE.adminRole = role;
+    localStorage.setItem('goatAdmin', 'true'); localStorage.setItem('goatAdminRole', role);
+    addLoginRecord(name, role, true);
     document.getElementById('adminBadge').classList.remove('hidden');
     document.getElementById('adminBadge').textContent = role === 'full' ? 'ADMIN' : (role === 'orders' ? 'ORDERS' : 'STOCK');
     document.getElementById('adminNavLink').classList.remove('hidden');
     document.getElementById('adminNavLinkMobile').classList.remove('hidden');
     document.getElementById('adminLoginBtn').classList.add('hidden');
     document.getElementById('adminLoginBtnMobile').classList.add('hidden');
-    closeAdminModal();
-    showTab('admin');
+    closeAdminModal(); showTab('admin');
     if (role === 'orders') { switchAdminTab('orders'); document.querySelectorAll('.admin-tab')[1].style.display = 'none'; }
     else if (role === 'inventory') { switchAdminTab('inventory'); document.querySelectorAll('.admin-tab')[0].style.display = 'none'; }
     else { document.querySelectorAll('.admin-tab')[0].style.display = ''; document.querySelectorAll('.admin-tab')[1].style.display = ''; }
     document.getElementById('adminPassword').value = '';
-    showToast('Welcome ' + roleName + '!', 'success');
+    showToast('Welcome ' + name + '!', 'success');
 }
-
 function adminLogout() {
     STATE.isAdmin = false; STATE.adminRole = '';
     localStorage.removeItem('goatAdmin'); localStorage.removeItem('goatAdminRole');
@@ -516,41 +547,35 @@ function adminLogout() {
     document.querySelectorAll('.admin-tab')[1].style.display = '';
     showTab('store'); showToast('Logged out', 'info');
 }
-
-function addLoginRecord(name, role, success) {
-    var record = { name: name, role: role, success: success, time: new Date().toLocaleString(), timestamp: Date.now() };
-    STATE.loginRecords.unshift(record);
+function addLoginRecord(n, r, s) {
+    var rec = { name: n, role: r, success: s, time: new Date().toLocaleString(), timestamp: Date.now() };
+    STATE.loginRecords.unshift(rec);
     if (STATE.loginRecords.length > 50) STATE.loginRecords = STATE.loginRecords.slice(0, 50);
     localStorage.setItem('goatLoginRecords', JSON.stringify(STATE.loginRecords));
 }
-
 function showLoginHistory() {
-    var content = document.getElementById('loginHistoryContent');
-    if (!STATE.loginRecords.length) { content.innerHTML = '<p style="color:var(--gray);text-align:center;padding:2rem">No login records</p>'; }
+    var c = document.getElementById('loginHistoryContent');
+    if (!STATE.loginRecords.length) { c.innerHTML = '<p style="color:var(--gray);text-align:center;padding:2rem">No login records</p>'; }
     else {
-        var html = '<div style="display:flex;flex-direction:column;gap:0.5rem">';
+        var h = '<div style="display:flex;flex-direction:column;gap:0.5rem">';
         for (var i = 0; i < STATE.loginRecords.length; i++) {
             var r = STATE.loginRecords[i];
-            html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;background:var(--light);border-radius:8px;border-left:3px solid ' + (r.success ? 'var(--success)' : 'var(--danger)') + '"><div><strong>' + (r.success ? '✅' : '❌') + ' ' + r.name + '</strong><br><small style="color:var(--gray)">' + r.role + '</small></div><small style="color:var(--gray)">' + r.time + '</small></div>';
+            h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;background:var(--light);border-radius:8px;border-left:3px solid ' + (r.success ? 'var(--success)' : 'var(--danger)') + '"><div><strong>' + (r.success ? '✅' : '❌') + ' ' + r.name + '</strong><br><small>' + r.role + '</small></div><small>' + r.time + '</small></div>';
         }
-        html += '</div>';
-        content.innerHTML = html;
+        h += '</div>'; c.innerHTML = h;
     }
     document.getElementById('loginHistoryModal').classList.add('active');
     document.getElementById('loginHistoryModal').classList.remove('hidden');
 }
-
 function closeLoginHistory() { document.getElementById('loginHistoryModal').classList.remove('active'); document.getElementById('loginHistoryModal').classList.add('hidden'); }
-
-function clearLoginHistory() { if (confirm('Clear all login history?')) { STATE.loginRecords = []; localStorage.removeItem('goatLoginRecords'); showLoginHistory(); showToast('History cleared', 'info'); } }
+function clearLoginHistory() { if (confirm('Clear all?')) { STATE.loginRecords = []; localStorage.removeItem('goatLoginRecords'); showLoginHistory(); showToast('Cleared', 'info'); } }
 
 // ==================== RECEIPT ====================
-function printReceipt(orderId) {
+function printReceipt(oid) {
     var order = null;
-    for (var i = 0; i < STATE.confirmedOrders.length; i++) { if (STATE.confirmedOrders[i].orderId === orderId) { order = STATE.confirmedOrders[i]; break; } }
-    if (!order) { showToast('Order not found', 'error'); return; }
-    var shippingMethodText = order.shippingMethod || 'N/A';
-    var items = '';
+    for (var i = 0; i < STATE.confirmedOrders.length; i++) { if (STATE.confirmedOrders[i].orderId === oid) { order = STATE.confirmedOrders[i]; break; } }
+    if (!order) { showToast('Not found', 'error'); return; }
+    var smt = order.shippingMethod || 'N/A', items = '';
     for (var j = 0; j < order.cart.length; j++) {
         var it = order.cart[j];
         items += '<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;font-size:12px"><span style="font-weight:bold">' + it.name + ' (' + it.size + ')</span><span>x' + it.quantity + '</span></div>';
@@ -559,7 +584,7 @@ function printReceipt(orderId) {
     var html = '<!DOCTYPE html><html><head><title>Receipt</title><meta name="viewport" content="width=58mm,initial-scale=1,maximum-scale=1"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:monospace;background:#fff;color:#000;display:flex;justify-content:center}.receipt{width:58mm;padding:10px 5px;font-size:12px}.center{text-align:center}.dash{border-top:1px dashed #000;margin:8px 0}.solid{border-top:1px solid #000;margin:8px 0}.bold{font-weight:bold}.flex{display:flex;justify-content:space-between}.big{font-size:14px}.small{font-size:10px}.btns{position:fixed;bottom:0;left:0;right:0;display:flex;gap:8px;padding:12px;background:#fff;border-top:1px solid #ddd;justify-content:center}.btns button{padding:12px 24px;border:none;border-radius:8px;font-size:14px;cursor:pointer}.btn-print{background:#000;color:#fff}.btn-close{background:#ddd;color:#000}@media print{.btns{display:none!important}body{width:58mm}@page{margin:0;size:58mm auto}}</style></head><body><div style="padding-bottom:80px"><div class="receipt">';
     html += '<div class="center" style="margin-bottom:10px"><h2 style="font-size:16px;margin-bottom:4px">GOAT KIDS</h2><p class="small">Premium Children\'s Clothing</p><p class="small">' + STATE.storeId + ' | 016 71 33 87</p></div>';
     html += '<div class="dash"></div><div class="center bold big" style="margin:8px 0">ORDER RECEIPT</div><div class="dash"></div>';
-    html += '<div style="margin:8px 0"><p class="small" style="margin-bottom:4px"><b>Order:</b> ' + order.orderId + '</p><p class="small" style="margin-bottom:4px"><b>Date:</b> ' + order.orderDate + '</p><p class="small" style="margin-bottom:4px"><b>Ship:</b> ' + shippingMethodText + '</p></div>';
+    html += '<div style="margin:8px 0"><p class="small" style="margin-bottom:4px"><b>Order:</b> ' + order.orderId + '</p><p class="small" style="margin-bottom:4px"><b>Date:</b> ' + order.orderDate + '</p><p class="small" style="margin-bottom:4px"><b>Ship:</b> ' + smt + '</p></div>';
     html += '<div class="dash"></div><div style="margin:8px 0"><p class="small" style="margin-bottom:4px"><b>Name:</b> ' + order.customerName + '</p><p class="small" style="margin-bottom:4px"><b>Phone:</b> ' + order.customerPhone + '</p>';
     if (order.customerCity) html += '<p class="small" style="margin-bottom:4px"><b>City:</b> ' + order.customerCity + '</p>';
     html += '</div><div class="dash"></div><div style="margin:8px 0">' + items + '</div><div class="dash"></div>';
@@ -699,7 +724,7 @@ function renderProducts(){
         var p=f[j],t=getTotalStock(p),img=(p.images&&p.images[0])||'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400';
         var bd,bt,sc,st;if(t>10){bd='badge-new';bt='NEW';sc='in-stock';st='In Stock'}else if(t>0){bd='badge-low';bt='LOW';sc='low-stock';st='Low Stock'}else{bd='badge-sale';bt='SOLD';sc='out-of-stock';st='Out of Stock'}
         var sz='';if(p.sizes&&p.sizes.length){sz='<div class="size-selector"><label class="size-label">Size:</label><div class="size-options">';for(var k=0;k<p.sizes.length;k++){var s=p.sizes[k],av=s.qty>0;sz+='<div class="size-option '+(av?'':'disabled')+'" onclick="'+(av?'selectSize(this,\''+p.id+'\',\''+s.name+'\')':'')+'" title="'+s.name+': '+s.qty+'">'+s.name+'<span class="size-stock-badge">'+s.qty+'</span></div>'}sz+='</div></div>'}
-        h+='<div class="product-card"><div class="product-image-container"><img src="'+img+'" class="product-main-image" loading="lazy" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400\'"><div class="product-badge '+bd+'">'+bt+'</div></div><div class="product-info"><span class="product-category '+getCategoryDisplay(p.category)+'">'+p.category+'</span><h3 class="product-title">'+p.name+'</h3><div class="product-price">$'+p.price.toFixed(2)+'</div><div class="product-stock '+sc+'"><i class="fas '+(t>0?'fa-check-circle':'fa-times-circle')+'"></i> '+st+' ('+t+')</div>'+sz+'<div class="product-actions"><button class="btn btn-primary btn-add-to-cart" onclick="addToCart(\''+p.id+'\')" '+(!hasStock(p)?'disabled':'')+'><i class="fas fa-cart-plus"></i> Add</button>'+(STATE.isAdmin?'<button class="btn btn-outline btn-small" onclick="showTab(\'admin\');openEditModal(\''+p.id+'\')"><i class="fas fa-edit"></i></button>':'')+'</div></div></div>'
+        h+='<div class="product-card"><div class="product-image-container" onclick="openLightbox(\''+img+'\')"><img src="'+img+'" class="product-main-image" loading="lazy" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400\'"><div class="product-badge '+bd+'">'+bt+'</div></div><div class="product-info"><span class="product-category '+getCategoryDisplay(p.category)+'">'+p.category+'</span><h3 class="product-title">'+p.name+'</h3><div class="product-price">$'+p.price.toFixed(2)+'</div><div class="product-stock '+sc+'"><i class="fas '+(t>0?'fa-check-circle':'fa-times-circle')+'"></i> '+st+' ('+t+')</div>'+sz+'<div class="product-actions"><button class="btn btn-primary btn-add-to-cart" onclick="addToCart(\''+p.id+'\')" '+(!hasStock(p)?'disabled':'')+'><i class="fas fa-cart-plus"></i> Add</button>'+(STATE.isAdmin?'<button class="btn btn-outline btn-small" onclick="showTab(\'admin\');openEditModal(\''+p.id+'\')"><i class="fas fa-edit"></i></button>':'')+'</div></div></div>'
     }
     g.innerHTML=h;
     if(STATE._selSizes){var keys=Object.keys(STATE._selSizes);for(var m=0;m<keys.length;m++){var pid=keys[m],opts=document.querySelectorAll('.size-option[onclick*="'+pid+'"]');for(var n=0;n<opts.length;n++){if(opts[n].textContent.trim().indexOf(STATE._selSizes[pid])===0)opts[n].classList.add('selected')}}}
@@ -711,7 +736,7 @@ function renderInventory(){
         var p=STATE.products[i],sb='';
         if(p.sizes&&p.sizes.length){sb='<div class="size-inventory-grid">';for(var j=0;j<p.sizes.length;j++){var s=p.sizes[j],c=s.qty===0?'out':(s.qty<=3?'low':'');sb+='<div class="size-inventory-item '+c+'"><div class="size-name">'+s.name+'</div><div class="size-qty">'+s.qty+'</div></div>'}sb+='</div>'}else{sb='<span style="color:var(--gray)">-</span>'}
         var img=(p.images&&p.images[0])||'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60';
-        h+='<tr><td><img src="'+img+'" style="width:45px;height:45px;object-fit:cover;border-radius:4px" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60\'"></td><td><strong>'+p.name+'</strong></td><td><span class="product-category '+getCategoryDisplay(p.category)+'">'+p.category+'</span></td><td>$'+p.price.toFixed(2)+'</td><td>'+sb+'</td><td><strong>'+getTotalStock(p)+'</strong></td><td><div class="flex gap-2"><button class="btn btn-warning btn-small" onclick="openEditModal(\''+p.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct(\''+p.id+'\')"><i class="fas fa-trash"></i></button></div></td></tr>'
+        h+='<tr><td><img src="'+img+'" style="width:45px;height:45px;object-fit:cover;border-radius:4px;cursor:pointer" onclick="openLightbox(\''+img+'\')" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60\'"></td><td><strong>'+p.name+'</strong></td><td><span class="product-category '+getCategoryDisplay(p.category)+'">'+p.category+'</span></td><td>$'+p.price.toFixed(2)+'</td><td>'+sb+'</td><td><strong>'+getTotalStock(p)+'</strong></td><td><div class="flex gap-2"><button class="btn btn-warning btn-small" onclick="openEditModal(\''+p.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct(\''+p.id+'\')"><i class="fas fa-trash"></i></button></div></td></tr>'
     }
     tb.innerHTML=h
 }
