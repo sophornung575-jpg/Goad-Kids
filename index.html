@@ -104,9 +104,10 @@
         .size-input-primary input{padding-left:2.5rem;border:2px solid var(--primary-light);font-weight:600;background:rgba(102,126,234,0.05)}
 
         .product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;margin-top:1rem}
-        .product-card{background:#fff;border-radius:var(--radius-xl);overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);transition:all 0.3s;border:1px solid var(--gray-light)}
+        .product-card{background:#fff;border-radius:var(--radius-xl);overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);transition:all 0.3s;border:2px solid transparent;cursor:pointer}
         .product-card:hover{transform:translateY(-4px);box-shadow:var(--shadow-lg)}
-        .product-image-container{position:relative;height:300px;overflow:hidden;background:#f0f0f0;cursor:pointer}
+        .product-card.selected{border-color:var(--primary);box-shadow:0 0 0 3px rgba(102,126,234,0.2)}
+        .product-image-container{position:relative;height:300px;overflow:hidden;background:#f0f0f0}
         .product-main-image{width:100%;height:100%;object-fit:cover;transition:opacity 0.5s ease}
         .product-image-slide{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 0.5s ease}
         .product-image-container:hover .product-image-slide.active{opacity:1}
@@ -136,6 +137,19 @@
 
         .product-actions{display:flex;gap:0.4rem;margin-top:0.5rem}
         .btn-add-to-cart{flex:1;padding:0.5rem;font-size:0.85rem;font-weight:600}
+
+        /* Related Products Section */
+        .related-section{grid-column:1/-1;background:linear-gradient(135deg,rgba(102,126,234,0.05),rgba(237,100,166,0.05));border-radius:var(--radius-xl);padding:1.5rem;margin:0.5rem 0;border:2px dashed var(--primary-light);animation:slideDown 0.3s ease}
+        @keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+        .related-section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+        .related-section-header h3{font-size:1.1rem;color:var(--primary-dark)}
+        .related-grid-inline{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.75rem}
+        .related-card-inline{background:#fff;border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:all 0.3s;border:1px solid var(--gray-light)}
+        .related-card-inline:hover{transform:translateY(-3px);box-shadow:var(--shadow);border-color:var(--primary)}
+        .related-card-image{width:100%;height:150px;object-fit:cover}
+        .related-card-info{padding:0.5rem}
+        .related-card-name{font-size:0.8rem;font-weight:600;margin-bottom:0.2rem}
+        .related-card-price{font-size:0.85rem;color:var(--primary);font-weight:700}
 
         .image-upload-area{border:2px dashed var(--gray-light);border-radius:var(--radius);padding:1.5rem;text-align:center;cursor:pointer;transition:all 0.3s;margin-bottom:1rem;background:#fafafa}
         .image-upload-area:hover{border-color:var(--primary);background:var(--light)}
@@ -259,6 +273,7 @@
             .lightbox-close{top:10px;right:10px;width:40px;height:40px;font-size:1.5rem}
             .inventory-filters{flex-direction:column}
             .inventory-search-input,.size-input-primary{min-width:100%}
+            .related-grid-inline{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
         }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -372,142 +387,59 @@
                     <div class="admin-card">
                         <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-plus-circle" style="color:var(--success)"></i> Add New Product</div></div>
                         <div class="add-product-grid">
-                            <div class="form-group"><label style="font-weight:600;font-size:0.85rem;margin-bottom:0.3rem;display:block">Product Name</label><input type="text" id="productName" class="form-control" placeholder="Enter product name"></div>
-                            <div class="form-group"><label style="font-weight:600;font-size:0.85rem;margin-bottom:0.3rem;display:block">Price ($)</label><input type="number" id="productPrice" class="form-control" placeholder="0.00" step="0.01"></div>
-                            <div class="form-group"><label style="font-weight:600;font-size:0.85rem;margin-bottom:0.3rem;display:block">Category</label><select id="productCategory" class="form-control"><option value="">Select Category</option><option value="Girl Clothes">Girl Clothes</option><option value="Boy Clothes">Boy Clothes</option><option value="Baby Shirt">Baby Shirt</option><option value="Baby Accessories">Baby Accessories</option><option value="Dresses">Dresses</option></select></div>
-                            <div class="form-group"><label style="font-weight:600;font-size:0.85rem;margin-bottom:0.3rem;display:block">Sizes & Stock</label><div class="flex gap-2"><input type="text" id="newSizeName" class="form-control" placeholder="Size (90, 100, 110...)" style="flex:1"><input type="number" id="newSizeQty" class="form-control" placeholder="Qty" style="width:80px" min="0" value="0"><button class="btn btn-primary" onclick="addSizeToNewProduct()">Add</button></div><div id="newProductSizes" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.5rem"></div></div>
-                            <div class="form-group"><label style="font-weight:600;font-size:0.85rem;margin-bottom:0.3rem;display:block">Product Images</label><div class="image-upload-area" onclick="document.getElementById('imageFileInput').click()"><i class="fas fa-cloud-upload-alt"></i><p>Click to upload images</p><small>Max 5 images per product</small></div><input type="file" id="imageFileInput" accept="image/*" multiple style="display:none" onchange="handleImageUpload(event)"><div class="flex gap-2" style="margin-top:0.5rem"><input type="text" id="imageUrlInput" class="form-control" placeholder="Or paste image URL"><button class="btn btn-outline btn-small" onclick="addImageUrl()">Add</button></div><div class="image-preview-container" id="imagePreviewContainer"></div></div>
+                            <div class="form-group"><label>Product Name</label><input type="text" id="productName" class="form-control" placeholder="Enter product name"></div>
+                            <div class="form-group"><label>Price ($)</label><input type="number" id="productPrice" class="form-control" placeholder="0.00" step="0.01"></div>
+                            <div class="form-group"><label>Category</label><select id="productCategory" class="form-control"><option value="">Select</option><option value="Girl Clothes">Girl Clothes</option><option value="Boy Clothes">Boy Clothes</option><option value="Baby Shirt">Baby Shirt</option><option value="Baby Accessories">Baby Accessories</option><option value="Dresses">Dresses</option></select></div>
+                            <div class="form-group"><label>Sizes & Stock</label><div class="flex gap-2"><input type="text" id="newSizeName" class="form-control" placeholder="Size" style="flex:1"><input type="number" id="newSizeQty" class="form-control" placeholder="Qty" style="width:80px" min="0" value="0"><button class="btn btn-primary" onclick="addSizeToNewProduct()">Add</button></div><div id="newProductSizes" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.5rem"></div></div>
+                            <div class="form-group"><label>Product Images</label><div class="image-upload-area" onclick="document.getElementById('imageFileInput').click()"><i class="fas fa-cloud-upload-alt"></i><p>Click to upload</p><small>Max 5</small></div><input type="file" id="imageFileInput" accept="image/*" multiple style="display:none" onchange="handleImageUpload(event)"><div class="flex gap-2 mt-4"><input type="text" id="imageUrlInput" class="form-control" placeholder="Image URL"><button class="btn btn-outline btn-small" onclick="addImageUrl()">Add</button></div><div class="image-preview-container" id="imagePreviewContainer"></div></div>
                         </div>
-                        <div class="add-product-actions"><button class="btn btn-primary btn-large" onclick="addProduct()" style="flex:1"><i class="fas fa-plus"></i> Add Product</button><button class="btn btn-outline" onclick="loadSamples()"><i class="fas fa-box"></i> Load Samples</button></div>
+                        <div class="add-product-actions"><button class="btn btn-primary btn-large" onclick="addProduct()" style="flex:1"><i class="fas fa-plus"></i> Add</button><button class="btn btn-outline" onclick="loadSamples()"><i class="fas fa-box"></i> Samples</button></div>
                     </div>
                     <div class="admin-card">
-                        <div class="admin-card-header">
-                            <div class="admin-card-title"><i class="fas fa-boxes" style="color:var(--primary)"></i> Product Inventory<span class="admin-count" id="productCount">0</span></div>
-                            <button class="btn btn-outline btn-small" onclick="exportInventoryCSV()"><i class="fas fa-download"></i> Export CSV</button>
-                        </div>
+                        <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-boxes" style="color:var(--primary)"></i> Inventory<span class="admin-count" id="productCount">0</span></div><button class="btn btn-outline btn-small" onclick="exportInventoryCSV()"><i class="fas fa-download"></i> Export</button></div>
                         <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--gray-light);background:var(--light)">
                             <div class="inventory-filters">
-                                <div class="size-input-primary">
-                                    <i class="fas fa-tag"></i>
-                                    <input type="text" id="inventorySearchSize" class="form-control" placeholder="🔍 Filter by size (90, 100, 110...) *" oninput="filterInventory()" autofocus>
-                                </div>
-                                <div style="display:flex;gap:0.25rem;flex-wrap:wrap;align-items:center">
-                                    <button class="btn btn-quick-size btn-small" onclick="quickSizeFilter('90')">90</button>
-                                    <button class="btn btn-quick-size btn-small" onclick="quickSizeFilter('100')">100</button>
-                                    <button class="btn btn-quick-size btn-small" onclick="quickSizeFilter('110')">110</button>
-                                    <button class="btn btn-quick-size btn-small" onclick="quickSizeFilter('120')">120</button>
-                                    <button class="btn btn-quick-size btn-small" onclick="quickSizeFilter('130')">130</button>
-                                    <button class="btn btn-quick-size btn-small" onclick="quickSizeFilter('140')">140</button>
-                                    <button class="btn btn-quick-size btn-small" onclick="quickSizeFilter('150')">150</button>
+                                <div class="size-input-primary"><i class="fas fa-tag"></i><input type="text" id="inventorySearchSize" class="form-control" placeholder="🔍 Filter by size (90, 100, 110...) *" oninput="filterInventory()" autofocus></div>
+                                <div style="display:flex;gap:0.25rem;flex-wrap:wrap">
+                                    <button class="btn btn-quick-size btn-small" onclick="quickSizeFilter('90')">90</button><button class="btn btn-quick-size btn-small" onclick="quickSizeFilter('100')">100</button><button class="btn btn-quick-size btn-small" onclick="quickSizeFilter('110')">110</button><button class="btn btn-quick-size btn-small" onclick="quickSizeFilter('120')">120</button><button class="btn btn-quick-size btn-small" onclick="quickSizeFilter('130')">130</button><button class="btn btn-quick-size btn-small" onclick="quickSizeFilter('140')">140</button><button class="btn btn-quick-size btn-small" onclick="quickSizeFilter('150')">150</button>
                                 </div>
                             </div>
                             <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;margin-top:0.75rem">
-                                <div class="inventory-search-input" style="flex:1;min-width:200px">
-                                    <i class="fas fa-search"></i>
-                                    <input type="text" id="inventorySearchName" class="form-control" placeholder="Refine by name..." oninput="filterInventory()">
-                                </div>
-                                <select id="inventorySearchCategory" class="form-control" style="flex:1;min-width:150px" onchange="filterInventory()">
-                                    <option value="all">All Categories</option>
-                                    <option value="Dresses">Dresses</option>
-                                    <option value="Girl Clothes">Girl Clothes</option>
-                                    <option value="Boy Clothes">Boy Clothes</option>
-                                    <option value="Baby Shirt">Baby Shirt</option>
-                                    <option value="Baby Accessories">Baby Accessories</option>
-                                </select>
-                                <select id="inventorySearchStock" class="form-control" style="flex:1;min-width:140px" onchange="filterInventory()">
-                                    <option value="all">All Stock Status</option>
-                                    <option value="in-stock">✅ In Stock</option>
-                                    <option value="out-of-stock">❌ Out of Stock</option>
-                                    <option value="low-stock">⚠️ Low Stock (≤3)</option>
-                                </select>
-                                <button class="btn btn-outline btn-small" onclick="clearInventorySearch()" title="Clear all filters"><i class="fas fa-times"></i> Clear</button>
+                                <div class="inventory-search-input" style="flex:1;min-width:200px"><i class="fas fa-search"></i><input type="text" id="inventorySearchName" class="form-control" placeholder="Name..." oninput="filterInventory()"></div>
+                                <select id="inventorySearchCategory" class="form-control" style="flex:1;min-width:150px" onchange="filterInventory()"><option value="all">All Categories</option><option value="Dresses">Dresses</option><option value="Girl Clothes">Girl Clothes</option><option value="Boy Clothes">Boy Clothes</option><option value="Baby Shirt">Baby Shirt</option><option value="Baby Accessories">Baby Accessories</option></select>
+                                <select id="inventorySearchStock" class="form-control" style="flex:1;min-width:140px" onchange="filterInventory()"><option value="all">All Stock</option><option value="in-stock">✅ In Stock</option><option value="out-of-stock">❌ Out of Stock</option><option value="low-stock">⚠️ Low (≤3)</option></select>
+                                <button class="btn btn-outline btn-small" onclick="clearInventorySearch()"><i class="fas fa-times"></i> Clear</button>
                             </div>
                             <div id="activeSizeFilter" style="margin-top:0.5rem"></div>
                             <div id="inventorySearchResults" style="margin-top:0.25rem;font-size:0.85rem;color:var(--gray-dark)"></div>
                             <div id="availableSizesSummary" style="margin-top:0.5rem;font-size:0.85rem"></div>
                         </div>
-                        <div class="admin-card-body" style="overflow-x:auto;padding:0">
-                            <table class="inventory-table">
-                                <thead><tr><th>Image</th><th>Product</th><th>Category</th><th>Price</th><th id="sizeColumnHeader">Sizes</th><th>Total</th><th>Actions</th></tr></thead>
-                                <tbody id="inventoryBody"></tbody>
-                            </table>
-                        </div>
+                        <div class="admin-card-body" style="overflow-x:auto;padding:0"><table class="inventory-table"><thead><tr><th>Img</th><th>Product</th><th>Category</th><th>Price</th><th id="sizeColumnHeader">Sizes</th><th>Total</th><th>Actions</th></tr></thead><tbody id="inventoryBody"></tbody></table></div>
                     </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <div class="lightbox-overlay" id="lightbox" onclick="closeLightbox(event)">
-        <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
-        <img class="lightbox-img" id="lightboxImg" src="" alt="Product Image" onclick="toggleZoom(event)">
-        <div class="lightbox-zoom-hint" id="zoomHint">🔍 Click image to zoom</div>
-    </div>
-
-    <div class="modal-overlay hidden" id="adminModal">
-        <div class="modal">
-            <div class="modal-header"><h3><i class="fas fa-user-shield"></i> Admin Login</h3><button class="modal-close" onclick="closeAdminModal()">&times;</button></div>
-            <div class="form-group">
-                <label style="font-weight:600;margin-bottom:0.3rem;display:block">Select Role</label>
-                <div class="role-selector" style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap">
-                    <button class="role-btn active" onclick="selectRole('full',this)" style="flex:1;padding:0.6rem;border:2px solid var(--primary);background:rgba(102,126,234,0.1);border-radius:8px;cursor:pointer;font-weight:600;font-size:0.85rem"><i class="fas fa-crown"></i> Full</button>
-                    <button class="role-btn" onclick="selectRole('orders',this)" style="flex:1;padding:0.6rem;border:2px solid var(--gray-light);background:#fff;border-radius:8px;cursor:pointer;font-weight:600;font-size:0.85rem"><i class="fas fa-clipboard-list"></i> Orders</button>
-                    <button class="role-btn" onclick="selectRole('inventory',this)" style="flex:1;padding:0.6rem;border:2px solid var(--gray-light);background:#fff;border-radius:8px;cursor:pointer;font-weight:600;font-size:0.85rem"><i class="fas fa-boxes"></i> Inventory</button>
-                </div>
-            </div>
-            <div class="form-group"><input type="password" id="adminPassword" class="form-control" placeholder="Enter password" style="font-size:1.1rem;text-align:center"></div>
-            <div class="flex gap-2"><button class="btn btn-primary" onclick="adminLogin()" style="flex:1"><i class="fas fa-sign-in-alt"></i> Login</button><button class="btn btn-outline" onclick="closeAdminModal()">Cancel</button></div>
-            <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--gray-light)"><p style="font-size:0.8rem;color:var(--gray);text-align:center;cursor:pointer" onclick="showLoginHistory()"><i class="fas fa-history"></i> View Login History</p></div>
-        </div>
-    </div>
-
-    <div class="modal-overlay hidden" id="loginHistoryModal">
-        <div class="modal">
-            <div class="modal-header"><h3><i class="fas fa-history"></i> Login History</h3><button class="modal-close" onclick="closeLoginHistory()">&times;</button></div>
-            <div id="loginHistoryContent" style="max-height:300px;overflow-y:auto;font-size:0.85rem"><p style="color:var(--gray);text-align:center">No records</p></div>
-            <button class="btn btn-danger btn-small w-full mt-4" onclick="clearLoginHistory()"><i class="fas fa-trash"></i> Clear History</button>
-        </div>
-    </div>
-
-    <div class="modal-overlay hidden" id="editProductModal">
-        <div class="modal">
-            <div class="modal-header"><h3><i class="fas fa-edit"></i> Edit Product</h3><button class="modal-close" onclick="closeEditModal()">&times;</button></div>
-            <input type="hidden" id="editProductId">
-            <div class="form-group"><label style="font-weight:600">Product Name</label><input type="text" id="editProductName" class="form-control" readonly style="background:var(--light)"></div>
-            <div class="form-group"><label style="font-weight:600">Category</label><select id="editProductCategory" class="form-control"><option value="Girl Clothes">Girl Clothes</option><option value="Boy Clothes">Boy Clothes</option><option value="tshirts">Baby Shirts</option><option value="Dresses">Dresses</option><option value="Baby Accessories">Baby Accessories</option></select></div>
-            <div class="form-group"><label style="font-weight:600">Price ($)</label><input type="number" id="editProductPrice" class="form-control" step="0.01"></div>
-            <div class="form-group"><label style="font-weight:600">Images</label><div class="image-preview-container" id="editImagePreviewContainer"></div><div class="flex gap-2 mt-4"><input type="text" id="editImageUrlInput" class="form-control" placeholder="Add image URL"><button class="btn btn-outline btn-small" onclick="addEditImageUrl()">Add</button></div></div>
-            <div class="form-group"><label style="font-weight:600">Size Inventory</label><div id="editSizeInventory" class="size-edit-grid"></div></div>
-            <button class="btn btn-primary w-full btn-large" onclick="saveEditProduct()"><i class="fas fa-save"></i> Save Changes</button>
-        </div>
-    </div>
+    <!-- Lightbox / Modals (same as before) -->
+    <div class="lightbox-overlay" id="lightbox" onclick="closeLightbox(event)"><button class="lightbox-close" onclick="closeLightbox()">&times;</button><img class="lightbox-img" id="lightboxImg" src="" alt="Product Image" onclick="toggleZoom(event)"><div class="lightbox-zoom-hint" id="zoomHint">🔍 Click image to zoom</div></div>
+    <div class="modal-overlay hidden" id="adminModal"><div class="modal"><div class="modal-header"><h3><i class="fas fa-user-shield"></i> Admin Login</h3><button class="modal-close" onclick="closeAdminModal()">&times;</button></div><div class="form-group"><label>Select Role</label><div class="role-selector" style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap"><button class="role-btn active" onclick="selectRole('full',this)" style="flex:1;padding:0.6rem;border:2px solid var(--primary);background:rgba(102,126,234,0.1);border-radius:8px;cursor:pointer;font-weight:600;font-size:0.85rem"><i class="fas fa-crown"></i> Full</button><button class="role-btn" onclick="selectRole('orders',this)" style="flex:1;padding:0.6rem;border:2px solid var(--gray-light);background:#fff;border-radius:8px;cursor:pointer;font-weight:600;font-size:0.85rem"><i class="fas fa-clipboard-list"></i> Orders</button><button class="role-btn" onclick="selectRole('inventory',this)" style="flex:1;padding:0.6rem;border:2px solid var(--gray-light);background:#fff;border-radius:8px;cursor:pointer;font-weight:600;font-size:0.85rem"><i class="fas fa-boxes"></i> Inventory</button></div></div><div class="form-group"><input type="password" id="adminPassword" class="form-control" placeholder="Enter password" style="font-size:1.1rem;text-align:center"></div><div class="flex gap-2"><button class="btn btn-primary" onclick="adminLogin()" style="flex:1"><i class="fas fa-sign-in-alt"></i> Login</button><button class="btn btn-outline" onclick="closeAdminModal()">Cancel</button></div><div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--gray-light)"><p style="font-size:0.8rem;color:var(--gray);text-align:center;cursor:pointer" onclick="showLoginHistory()"><i class="fas fa-history"></i> View Login History</p></div></div></div>
+    <div class="modal-overlay hidden" id="loginHistoryModal"><div class="modal"><div class="modal-header"><h3><i class="fas fa-history"></i> Login History</h3><button class="modal-close" onclick="closeLoginHistory()">&times;</button></div><div id="loginHistoryContent" style="max-height:300px;overflow-y:auto;font-size:0.85rem"><p style="color:var(--gray);text-align:center">No records</p></div><button class="btn btn-danger btn-small w-full mt-4" onclick="clearLoginHistory()"><i class="fas fa-trash"></i> Clear History</button></div></div>
+    <div class="modal-overlay hidden" id="editProductModal"><div class="modal"><div class="modal-header"><h3><i class="fas fa-edit"></i> Edit Product</h3><button class="modal-close" onclick="closeEditModal()">&times;</button></div><input type="hidden" id="editProductId"><div class="form-group"><label>Product Name</label><input type="text" id="editProductName" class="form-control" readonly style="background:var(--light)"></div><div class="form-group"><label>Category</label><select id="editProductCategory" class="form-control"><option value="Girl Clothes">Girl Clothes</option><option value="Boy Clothes">Boy Clothes</option><option value="tshirts">Baby Shirts</option><option value="Dresses">Dresses</option><option value="Baby Accessories">Baby Accessories</option></select></div><div class="form-group"><label>Price ($)</label><input type="number" id="editProductPrice" class="form-control" step="0.01"></div><div class="form-group"><label>Images</label><div class="image-preview-container" id="editImagePreviewContainer"></div><div class="flex gap-2 mt-4"><input type="text" id="editImageUrlInput" class="form-control" placeholder="Add image URL"><button class="btn btn-outline btn-small" onclick="addEditImageUrl()">Add</button></div></div><div class="form-group"><label>Size Inventory</label><div id="editSizeInventory" class="size-edit-grid"></div></div><button class="btn btn-primary w-full btn-large" onclick="saveEditProduct()"><i class="fas fa-save"></i> Save Changes</button></div></div>
 
 <script>
 var STATE = {
-    products: [],
-    cart: [],
-    isAdmin: localStorage.getItem('goatAdmin') === 'true',
-    adminRole: localStorage.getItem('goatAdminRole') || '',
-    loginRecords: JSON.parse(localStorage.getItem('goatLoginRecords') || '[]'),
-    paymentMethod: 'payway',
-    shippingFee: 0,
-    filter: { category: 'all', stock: 'all', search: '' },
-    storeId: null,
-    firebaseOnline: false,
-    pendingOrders: [],
-    confirmedOrders: [],
-    newProductSizes: [],
-    newProductImages: [],
-    editProductImages: [],
-    _selSizes: {},
-    imageTimers: {}
+    products: [], cart: [], isAdmin: localStorage.getItem('goatAdmin') === 'true', adminRole: localStorage.getItem('goatAdminRole') || '',
+    loginRecords: JSON.parse(localStorage.getItem('goatLoginRecords') || '[]'), paymentMethod: 'payway', shippingFee: 0,
+    filter: { category: 'all', stock: 'all', search: '' }, storeId: null, firebaseOnline: false,
+    pendingOrders: [], confirmedOrders: [], newProductSizes: [], newProductImages: [], editProductImages: [],
+    _selSizes: {}, imageTimers: {}, selectedProduct: null
 };
 var selectedRole = 'full';
 
 document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('mobileMenuBtn').addEventListener('click', function() {
-        var nav = document.getElementById('mobileNav');
-        nav.classList.toggle('active');
+        var nav = document.getElementById('mobileNav'); nav.classList.toggle('active');
         this.innerHTML = nav.classList.contains('active') ? '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
     });
     if (STATE.isAdmin) {
@@ -519,11 +451,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         document.getElementById('adminLoginBtnMobile').classList.add('hidden');
     }
     var sid = localStorage.getItem('goatStoreId');
-    if (!sid) {
-        var params = new URLSearchParams(window.location.search);
-        sid = params.get('store') || ('GOAT-' + Math.floor(1000 + Math.random() * 9000));
-        localStorage.setItem('goatStoreId', sid);
-    }
+    if (!sid) { var params = new URLSearchParams(window.location.search); sid = params.get('store') || ('GOAT-' + Math.floor(1000 + Math.random() * 9000)); localStorage.setItem('goatStoreId', sid); }
     STATE.storeId = sid;
     document.getElementById('currentStoreIdDisplay').textContent = sid;
     document.getElementById('storeIdDisplay').textContent = sid;
@@ -534,14 +462,31 @@ document.addEventListener('DOMContentLoaded', async function() {
     showTab('store');
 });
 
+// Lightbox
 function openLightbox(src) { document.getElementById('lightboxImg').src=src;document.getElementById('lightboxImg').classList.remove('zoomed');document.getElementById('zoomHint').style.display='block';document.getElementById('lightbox').classList.add('active');document.body.style.overflow='hidden'; }
 function closeLightbox(e) { if(e&&e.target!==document.getElementById('lightbox')&&e.target!==document.getElementById('lightboxImg'))return;document.getElementById('lightbox').classList.remove('active');document.body.style.overflow=''; }
 function toggleZoom(e) { e.stopPropagation();var img=document.getElementById('lightboxImg');var hint=document.getElementById('zoomHint');img.classList.toggle('zoomed');hint.textContent=img.classList.contains('zoomed')?'🔍 Click to zoom out':'🔍 Click image to zoom'; }
 
+// Admin tabs
 function switchAdminTab(tab) { document.querySelectorAll('.admin-tab').forEach(function(t){t.classList.remove('active')});document.querySelectorAll('.admin-tab-content').forEach(function(c){c.classList.remove('active')});if(tab==='orders'){document.querySelectorAll('.admin-tab')[0].classList.add('active');document.getElementById('adminOrdersTab').classList.add('active');renderPending();renderHistory()}else{document.querySelectorAll('.admin-tab')[1].classList.add('active');document.getElementById('adminInventoryTab').classList.add('active');clearInventorySearch();renderInventory()} }
 function updateAdminBadges() { document.getElementById('ordersBadge').textContent=STATE.pendingOrders.length+STATE.confirmedOrders.length;document.getElementById('inventoryBadge').textContent=STATE.products.length; }
 function selectRole(role,btn) { selectedRole=role;document.querySelectorAll('.role-btn').forEach(function(b){b.classList.remove('active');b.style.borderColor='var(--gray-light)';b.style.background='#fff'});btn.classList.add('active');btn.style.borderColor='var(--primary)';btn.style.background='rgba(102,126,234,0.1)'; }
-function adminLogin() { var pw=document.getElementById('adminPassword').value;var role=selectedRole;var valid=false,name='';if(role==='full'&&pw==='N1255550'){valid=true;name='Full Admin'}else if(role==='orders'&&(pw==='ord2024'||pw==='N1255550')){valid=true;name='Order Manager';if(pw==='N1255550')role='full'}else if(role==='inventory'&&(pw==='inv2024'||pw==='N1255550')){valid=true;name='Inventory Manager';if(pw==='N1255550')role='full'}if(!valid){addLoginRecord('Unknown',selectedRole,false);showToast('Wrong password!','error');return}STATE.isAdmin=true;STATE.adminRole=role;localStorage.setItem('goatAdmin','true');localStorage.setItem('goatAdminRole',role);addLoginRecord(name,role,true);document.getElementById('adminBadge').classList.remove('hidden');document.getElementById('adminBadge').textContent=role==='full'?'ADMIN':(role==='orders'?'ORDERS':'STOCK');document.getElementById('adminNavLink').classList.remove('hidden');document.getElementById('adminNavLinkMobile').classList.remove('hidden');document.getElementById('adminLoginBtn').classList.add('hidden');document.getElementById('adminLoginBtnMobile').classList.add('hidden');closeAdminModal();showTab('admin');if(role==='orders'){switchAdminTab('orders');document.querySelectorAll('.admin-tab')[1].style.display='none'}else if(role==='inventory'){switchAdminTab('inventory');document.querySelectorAll('.admin-tab')[0].style.display='none'}else{document.querySelectorAll('.admin-tab')[0].style.display='';document.querySelectorAll('.admin-tab')[1].style.display=''}document.getElementById('adminPassword').value='';showToast('Welcome '+name+'!','success') }
+function adminLogin() {
+    var pw=document.getElementById('adminPassword').value;var role=selectedRole;var valid=false,name='';
+    if(role==='full'&&pw==='N1255550'){valid=true;name='Full Admin'}
+    else if(role==='orders'&&(pw==='ord2024'||pw==='N1255550')){valid=true;name='Order Manager';if(pw==='N1255550')role='full'}
+    else if(role==='inventory'&&(pw==='inv2024'||pw==='N1255550')){valid=true;name='Inventory Manager';if(pw==='N1255550')role='full'}
+    if(!valid){addLoginRecord('Unknown',selectedRole,false);showToast('Wrong password!','error');return}
+    STATE.isAdmin=true;STATE.adminRole=role;localStorage.setItem('goatAdmin','true');localStorage.setItem('goatAdminRole',role);addLoginRecord(name,role,true);
+    document.getElementById('adminBadge').classList.remove('hidden');document.getElementById('adminBadge').textContent=role==='full'?'ADMIN':(role==='orders'?'ORDERS':'STOCK');
+    document.getElementById('adminNavLink').classList.remove('hidden');document.getElementById('adminNavLinkMobile').classList.remove('hidden');
+    document.getElementById('adminLoginBtn').classList.add('hidden');document.getElementById('adminLoginBtnMobile').classList.add('hidden');
+    closeAdminModal();showTab('admin');
+    if(role==='orders'){switchAdminTab('orders');document.querySelectorAll('.admin-tab')[1].style.display='none'}
+    else if(role==='inventory'){switchAdminTab('inventory');document.querySelectorAll('.admin-tab')[0].style.display='none'}
+    else{document.querySelectorAll('.admin-tab')[0].style.display='';document.querySelectorAll('.admin-tab')[1].style.display=''}
+    document.getElementById('adminPassword').value='';showToast('Welcome '+name+'!','success');
+}
 function adminLogout() { STATE.isAdmin=false;STATE.adminRole='';localStorage.removeItem('goatAdmin');localStorage.removeItem('goatAdminRole');document.getElementById('adminBadge').classList.add('hidden');document.getElementById('adminNavLink').classList.add('hidden');document.getElementById('adminNavLinkMobile').classList.add('hidden');document.getElementById('adminLoginBtn').classList.remove('hidden');document.getElementById('adminLoginBtnMobile').classList.remove('hidden');document.querySelectorAll('.admin-tab')[0].style.display='';document.querySelectorAll('.admin-tab')[1].style.display='';showTab('store');showToast('Logged out','info') }
 function addLoginRecord(n,r,s) { var rec={name:n,role:r,success:s,time:new Date().toLocaleString(),timestamp:Date.now()};STATE.loginRecords.unshift(rec);if(STATE.loginRecords.length>50)STATE.loginRecords=STATE.loginRecords.slice(0,50);localStorage.setItem('goatLoginRecords',JSON.stringify(STATE.loginRecords)) }
 function showLoginHistory() { var c=document.getElementById('loginHistoryContent');if(!STATE.loginRecords.length){c.innerHTML='<p style="color:var(--gray);text-align:center;padding:2rem">No login records</p>'}else{var h='<div style="display:flex;flex-direction:column;gap:0.5rem">';for(var i=0;i<STATE.loginRecords.length;i++){var r=STATE.loginRecords[i];h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;background:var(--light);border-radius:8px;border-left:3px solid '+(r.success?'var(--success)':'var(--danger)')+'"><div><strong>'+(r.success?'✅':'❌')+' '+r.name+'</strong><br><small>'+r.role+'</small></div><small>'+r.time+'</small></div>'}h+='</div>';c.innerHTML=h}document.getElementById('loginHistoryModal').classList.add('active');document.getElementById('loginHistoryModal').classList.remove('hidden') }
@@ -569,22 +514,16 @@ function saveProducts(){localStorage.setItem('goatProducts',JSON.stringify(STATE
 function saveOrders(){localStorage.setItem('pendingOrders',JSON.stringify(STATE.pendingOrders));localStorage.setItem('confirmedOrders',JSON.stringify(STATE.confirmedOrders.slice(-50)))}
 async function syncToFirebase() { if(!STATE.firebaseOnline){showStatus('Offline','offline');document.getElementById('statusBar').classList.add('show');setTimeout(function(){document.getElementById('statusBar').classList.remove('show')},3000);return}showStatus('Syncing...','online');document.getElementById('statusBar').classList.add('show');try{for(var i=0;i<STATE.products.length;i++){var p=STATE.products[i];await db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({name:p.name,price:p.price,stock:p.stock,category:p.category,images:p.images||[],sizes:p.sizes||[],active:true,updatedAt:new Date().toISOString()},{merge:true})}var all=STATE.pendingOrders.concat(STATE.confirmedOrders);for(var j=0;j<all.length;j++){await db.collection('stores').doc(STATE.storeId).collection('orders').doc(all[j].orderId).set({...all[j],updatedAt:new Date().toISOString()},{merge:true})}showStatus('Synced!','online');showToast('Synced!','success')}catch(e){showStatus('Failed','error');showToast('Sync failed','error')}setTimeout(function(){document.getElementById('statusBar').classList.remove('show')},3000) }
 
-function showTab(name) { document.querySelectorAll('.tab-content').forEach(function(t){t.classList.add('hidden')});document.querySelectorAll('.nav-link').forEach(function(l){l.classList.remove('active')});var tab=document.getElementById(name+'Tab');if(tab){tab.classList.remove('hidden');if(name==='store')renderProducts();if(name==='cart'){renderCart();updateShipping()}if(name==='admin'){if(STATE.adminRole==='inventory'){switchAdminTab('inventory');document.querySelectorAll('.admin-tab')[0].style.display='none'}else if(STATE.adminRole==='orders'){switchAdminTab('orders');document.querySelectorAll('.admin-tab')[1].style.display='none'}else{switchAdminTab('orders')}updateAdminBadges()}} }
+function showTab(name) { document.querySelectorAll('.tab-content').forEach(function(t){t.classList.add('hidden')});document.querySelectorAll('.nav-link').forEach(function(l){l.classList.remove('active')});var tab=document.getElementById(name+'Tab');if(tab){tab.classList.remove('hidden');if(name==='store'){STATE.selectedProduct=null;renderProducts()}if(name==='cart'){renderCart();updateShipping()}if(name==='admin'){if(STATE.adminRole==='inventory'){switchAdminTab('inventory');document.querySelectorAll('.admin-tab')[0].style.display='none'}else if(STATE.adminRole==='orders'){switchAdminTab('orders');document.querySelectorAll('.admin-tab')[1].style.display='none'}else{switchAdminTab('orders')}updateAdminBadges()}} }
 function updateCartBadge(){document.getElementById('floatingCartCount').textContent=STATE.cart.reduce(function(t,i){return t+i.quantity},0)}
 
 function addSizeToNewProduct(){ var n=document.getElementById('newSizeName').value.trim().toUpperCase();var q=parseInt(document.getElementById('newSizeQty').value)||0;if(!n){showToast('Enter size name','error');return}var f=false;for(var i=0;i<STATE.newProductSizes.length;i++){if(STATE.newProductSizes[i].name===n){STATE.newProductSizes[i].qty=q;f=true;break}}if(!f)STATE.newProductSizes.push({name:n,qty:q});renderNewProductSizes();document.getElementById('newSizeName').value='';document.getElementById('newSizeQty').value='0' }
 function renderNewProductSizes(){ var h='';for(var i=0;i<STATE.newProductSizes.length;i++){var s=STATE.newProductSizes[i];h+='<div style="background:var(--primary-light);color:var(--primary-dark);padding:0.5rem 0.75rem;border-radius:var(--radius);display:flex;align-items:center;gap:0.5rem;font-size:0.9rem"><strong>'+s.name+'</strong>: '+s.qty+' pcs<button onclick="STATE.newProductSizes.splice('+i+',1);renderNewProductSizes()" style="background:none;border:none;color:var(--danger);cursor:pointer">&times;</button></div>'}document.getElementById('newProductSizes').innerHTML=h }
 
 function loadSamples(){
-    STATE.products=[
-        {id:'p1',name:'Kids Cotton Baby Shirt',price:12.99,stock:25,category:'tshirts',images:['https://images.unsplash.com/photo-1622290291468-2f3766aa2c47?w=400','https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400'],sizes:[{name:'90',qty:5},{name:'100',qty:10},{name:'110',qty:7},{name:'120',qty:3}]},
-        {id:'p2',name:"Children's Denim Jeans",price:24.99,stock:15,category:'Dresses',images:['https://images.unsplash.com/photo-1542272604-787c3835535d?w=400','https://images.unsplash.com/photo-1622290291468-2f3766aa2c47?w=400'],sizes:[{name:'90',qty:0},{name:'100',qty:4},{name:'110',qty:6},{name:'120',qty:5}]},
-        {id:'p3',name:'Kids Hoodie Sweater',price:29.99,stock:8,category:'Baby Accessories',images:['https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400'],sizes:[{name:'100',qty:2},{name:'110',qty:0},{name:'120',qty:4},{name:'130',qty:2}]},
-        {id:'p4',name:'Girls Princess Dress',price:22.99,stock:12,category:'Girl Clothes',images:['https://images.unsplash.com/photo-1518831959646-742c3a14ebf7?w=400','https://images.unsplash.com/photo-1542272604-787c3835535d?w=400'],sizes:[{name:'90',qty:3},{name:'100',qty:5},{name:'110',qty:0},{name:'120',qty:4}]},
-        {id:'p5',name:'Boys Cool Baby Shirt',price:14.99,stock:20,category:'Boy Clothes',images:['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400','https://images.unsplash.com/photo-1622290291468-2f3766aa2c47?w=400','https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400'],sizes:[{name:'110',qty:6},{name:'120',qty:8},{name:'130',qty:0},{name:'140',qty:6}]}
-    ];
+    STATE.products=[{id:'p1',name:'Kids Cotton Baby Shirt',price:12.99,stock:25,category:'Baby Shirts',images:['https://images.unsplash.com/photo-1622290291468-2f3766aa2c47?w=400','https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400'],sizes:[{name:'90',qty:5},{name:'100',qty:10},{name:'110',qty:7},{name:'120',qty:3}]},{id:'p2',name:"Children's Denim Jeans",price:24.99,stock:15,category:'Dresses',images:['https://images.unsplash.com/photo-1542272604-787c3835535d?w=400','https://images.unsplash.com/photo-1622290291468-2f3766aa2c47?w=400'],sizes:[{name:'90',qty:0},{name:'100',qty:4},{name:'110',qty:6},{name:'120',qty:5}]},{id:'p3',name:'Kids Hoodie Sweater',price:29.99,stock:8,category:'Baby Accessories',images:['https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400'],sizes:[{name:'100',qty:2},{name:'110',qty:0},{name:'120',qty:4},{name:'130',qty:2}]},{id:'p4',name:'Girls Princess Dress',price:22.99,stock:12,category:'Girl Clothes',images:['https://images.unsplash.com/photo-1518831959646-742c3a14ebf7?w=400','https://images.unsplash.com/photo-1542272604-787c3835535d?w=400'],sizes:[{name:'90',qty:3},{name:'100',qty:5},{name:'110',qty:0},{name:'120',qty:4}]},{id:'p5',name:'Boys Cool Baby Shirt',price:14.99,stock:20,category:'Boy Clothes',images:['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400','https://images.unsplash.com/photo-1622290291468-2f3766aa2c47?w=400','https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400'],sizes:[{name:'110',qty:6},{name:'120',qty:8},{name:'130',qty:0},{name:'140',qty:6}]},{id:'p6',name:'Elegant Party Dress',price:32.99,stock:10,category:'Dresses',images:['https://images.unsplash.com/photo-1518831959646-742c3a14ebf7?w=400','https://images.unsplash.com/photo-1542272604-787c3835535d?w=400'],sizes:[{name:'100',qty:3},{name:'110',qty:5},{name:'120',qty:2}]},{id:'p7',name:'Baby Boy Romper',price:18.99,stock:18,category:'Boy Clothes',images:['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400'],sizes:[{name:'90',qty:6},{name:'100',qty:8},{name:'110',qty:4}]},{id:'p8',name:'Floral Baby Accessories Set',price:15.99,stock:22,category:'Baby Accessories',images:['https://images.unsplash.com/photo-1622290291468-2f3766aa2c47?w=400','https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400'],sizes:[{name:'90',qty:7},{name:'100',qty:9},{name:'110',qty:6}]}];
     for(var i=0;i<STATE.products.length;i++){STATE.products[i].stock=getTotalStock(STATE.products[i])}
-    saveProducts();if(STATE.firebaseOnline)syncToFirebase();renderProducts();renderInventory();updateAdminBadges();showToast('Samples loaded with rotating images!','success')
+    saveProducts();if(STATE.firebaseOnline)syncToFirebase();renderProducts();renderInventory();updateAdminBadges();showToast('Samples loaded!','success')
 }
 
 function addProduct(){ var n=document.getElementById('productName').value.trim();var pr=parseFloat(document.getElementById('productPrice').value);var c=document.getElementById('productCategory').value;if(!n||isNaN(pr)||pr<=0||!c){showToast('Fill all fields','error');return}if(!STATE.newProductSizes.length){showToast('Add at least one size','error');return}var imgs=STATE.newProductImages.length?STATE.newProductImages.slice():['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'];var t=0;for(var i=0;i<STATE.newProductSizes.length;i++){t+=STATE.newProductSizes[i].qty}STATE.products.push({id:'p'+Date.now(),name:n,price:pr,stock:t,category:c,images:imgs,sizes:STATE.newProductSizes.slice()});saveProducts();if(STATE.firebaseOnline)syncToFirebase();document.getElementById('productName').value='';document.getElementById('productPrice').value='';document.getElementById('productCategory').value='';STATE.newProductSizes=[];STATE.newProductImages=[];renderNewProductSizes();renderImagePreviews();renderProducts();renderInventory();updateAdminBadges();showToast('"'+n+'" added!','success') }
@@ -594,64 +533,100 @@ function saveEditProduct(){ var pid=document.getElementById('editProductId').val
 function deleteProduct(id){ if(!confirm('Delete?'))return;var np=[];for(var i=0;i<STATE.products.length;i++){if(STATE.products[i].id!==id)np.push(STATE.products[i])}STATE.products=np;saveProducts();if(STATE.firebaseOnline)db.collection('stores').doc(STATE.storeId).collection('products').doc(id).update({active:false});renderProducts();renderInventory();updateAdminBadges();showToast('Deleted','success') }
 function getCategoryDisplay(c){if(c==='Girl Clothes')return'category-girl';if(c==='Boy Clothes')return'category-boy';return''}
 
-// ==================== PRODUCT IMAGE ROTATION ====================
-function startImageRotation(container) {
-    var slides = container.querySelectorAll('.product-image-slide');
-    var dots = container.querySelectorAll('.image-dot');
-    var mainImg = container.querySelector('.product-main-image');
-    if (slides.length <= 1) return;
-    
-    var pid = container.getAttribute('data-pid') || 'default';
-    if (mainImg) mainImg.style.opacity = '0';
-    
-    var currentIndex = 0;
-    for (var i = 0; i < slides.length; i++) {
-        if (slides[i].classList.contains('active')) { currentIndex = i; break; }
+// Image rotation
+function startImageRotation(container) { var slides=container.querySelectorAll('.product-image-slide');var dots=container.querySelectorAll('.image-dot');var mainImg=container.querySelector('.product-main-image');if(slides.length<=1)return;var pid=container.getAttribute('data-pid')||'default';if(mainImg)mainImg.style.opacity='0';var currentIndex=0;for(var i=0;i<slides.length;i++){if(slides[i].classList.contains('active')){currentIndex=i;break}}if(STATE.imageTimers[pid])clearInterval(STATE.imageTimers[pid]);STATE.imageTimers[pid]=setInterval(function(){slides[currentIndex].classList.remove('active');if(dots[currentIndex])dots[currentIndex].classList.remove('active');currentIndex=(currentIndex+1)%slides.length;slides[currentIndex].classList.add('active');if(dots[currentIndex])dots[currentIndex].classList.add('active')},1500) }
+function stopImageRotation(container) { var slides=container.querySelectorAll('.product-image-slide');var dots=container.querySelectorAll('.image-dot');var mainImg=container.querySelector('.product-main-image');var pid=container.getAttribute('data-pid')||'default';if(STATE.imageTimers[pid]){clearInterval(STATE.imageTimers[pid]);delete STATE.imageTimers[pid]}for(var i=0;i<slides.length;i++){slides[i].classList.remove('active');if(dots[i])dots[i].classList.remove('active')}if(slides.length>0){slides[0].classList.add('active');if(dots[0])dots[0].classList.add('active')}if(mainImg)mainImg.style.opacity='1' }
+function setProductImage(dot,pid,index) { var container=dot.closest('.product-image-container');if(!container)return;var slides=container.querySelectorAll('.product-image-slide');var dots=container.querySelectorAll('.image-dot');var mainImg=container.querySelector('.product-main-image');if(mainImg)mainImg.style.opacity='0';for(var i=0;i<slides.length;i++){slides[i].classList.remove('active');if(dots[i])dots[i].classList.remove('active')}if(slides[index])slides[index].classList.add('active');if(dots[index])dots[index].classList.add('active');stopImageRotation(container);startImageRotation(container) }
+
+// ==================== INLINE RELATED PRODUCTS ====================
+function toggleRelatedProducts(pid) {
+    if (STATE.selectedProduct === pid) {
+        STATE.selectedProduct = null;
+    } else {
+        STATE.selectedProduct = pid;
     }
-    
-    if (STATE.imageTimers[pid]) clearInterval(STATE.imageTimers[pid]);
-    
-    STATE.imageTimers[pid] = setInterval(function() {
-        slides[currentIndex].classList.remove('active');
-        if (dots[currentIndex]) dots[currentIndex].classList.remove('active');
-        currentIndex = (currentIndex + 1) % slides.length;
-        slides[currentIndex].classList.add('active');
-        if (dots[currentIndex]) dots[currentIndex].classList.add('active');
-    }, 1500);
+    renderProducts();
+    // Scroll to the selected product
+    setTimeout(function() {
+        var el = document.querySelector('.product-card.selected');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
 }
 
-function stopImageRotation(container) {
-    var slides = container.querySelectorAll('.product-image-slide');
-    var dots = container.querySelectorAll('.image-dot');
-    var mainImg = container.querySelector('.product-main-image');
-    var pid = container.getAttribute('data-pid') || 'default';
-    
-    if (STATE.imageTimers[pid]) { clearInterval(STATE.imageTimers[pid]); delete STATE.imageTimers[pid]; }
-    
-    for (var i = 0; i < slides.length; i++) { slides[i].classList.remove('active'); if (dots[i]) dots[i].classList.remove('active'); }
-    if (slides.length > 0) { slides[0].classList.add('active'); if (dots[0]) dots[0].classList.add('active'); }
-    if (mainImg) mainImg.style.opacity = '1';
+function getRelatedProducts(currentProduct, maxCount) {
+    maxCount = maxCount || 4;
+    var related = [];
+    // First, find same category products
+    for (var i = 0; i < STATE.products.length; i++) {
+        var p = STATE.products[i];
+        if (p.id !== currentProduct.id && p.category === currentProduct.category) {
+            related.push(p);
+        }
+    }
+    // If not enough, add other products
+    if (related.length < maxCount) {
+        for (var j = 0; j < STATE.products.length; j++) {
+            var pp = STATE.products[j];
+            if (pp.id !== currentProduct.id && pp.category !== currentProduct.category) {
+                var alreadyAdded = false;
+                for (var r = 0; r < related.length; r++) { if (related[r].id === pp.id) { alreadyAdded = true; break; } }
+                if (!alreadyAdded) related.push(pp);
+                if (related.length >= maxCount) break;
+            }
+        }
+    }
+    return related.slice(0, maxCount);
 }
 
-function setProductImage(dot, pid, index) {
-    var container = dot.closest('.product-image-container');
-    if (!container) return;
-    var slides = container.querySelectorAll('.product-image-slide');
-    var dots = container.querySelectorAll('.image-dot');
-    var mainImg = container.querySelector('.product-main-image');
-    if (mainImg) mainImg.style.opacity = '0';
-    for (var i = 0; i < slides.length; i++) { slides[i].classList.remove('active'); if (dots[i]) dots[i].classList.remove('active'); }
-    if (slides[index]) slides[index].classList.add('active');
-    if (dots[index]) dots[index].classList.add('active');
-    stopImageRotation(container);
-    startImageRotation(container);
+function buildProductCard(p) {
+    var t=getTotalStock(p),allImages=p.images&&p.images.length>0?p.images:['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'];
+    var bd,bt,sc,st;if(t>10){bd='badge-new';bt='NEW';sc='in-stock';st='In Stock'}else if(t>0){bd='badge-low';bt='LOW';sc='low-stock';st='Low Stock'}else{bd='badge-sale';bt='SOLD';sc='out-of-stock';st='Out of Stock'}
+    var sz='';if(p.sizes&&p.sizes.length){sz='<div class="size-selector"><label class="size-label">Size:</label><div class="size-options">';for(var k=0;k<p.sizes.length;k++){var s=p.sizes[k],av=s.qty>0;sz+='<div class="size-option '+(av?'':'disabled')+'" onclick="event.stopPropagation();selectSize(this,\''+p.id+'\',\''+s.name+'\')" title="'+s.name+': '+s.qty+'">'+s.name+'<span class="size-stock-badge">'+s.qty+'</span></div>'}sz+='</div></div>'}
+    var imgSlides='';for(var im=0;im<allImages.length;im++){imgSlides+='<img src="'+allImages[im]+'" class="product-image-slide'+(im===0?' active':'')+'" loading="lazy" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400\'" data-index="'+im+'">'}
+    var dots='';if(allImages.length>1){dots='<div class="image-dots">';for(var d=0;d<allImages.length;d++){dots+='<span class="image-dot'+(d===0?' active':'')+'" data-dot="'+d+'" onclick="event.stopPropagation();setProductImage(this,\''+p.id+'\','+d+')"></span>'}dots+='</div>'}
+    var isSelected = STATE.selectedProduct === p.id;
+    var card = '<div class="product-card'+(isSelected?' selected':'')+'" onclick="toggleRelatedProducts(\''+p.id+'\')">';
+    card+='<div class="product-image-container" data-pid="'+p.id+'" onclick="event.stopPropagation();openLightbox(\''+allImages[0]+'\')" onmouseenter="startImageRotation(this)" onmouseleave="stopImageRotation(this)"><img src="'+allImages[0]+'" class="product-main-image" loading="lazy" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400\'">'+imgSlides+dots+'<div class="product-badge '+bd+'">'+bt+'</div></div>';
+    card+='<div class="product-info"><span class="product-category '+getCategoryDisplay(p.category)+'">'+p.category+'</span><h3 class="product-title">'+p.name+'</h3><div class="product-price">$'+p.price.toFixed(2)+'</div><div class="product-stock '+sc+'"><i class="fas '+(t>0?'fa-check-circle':'fa-times-circle')+'"></i> '+st+' ('+t+')</div>'+sz+'<div class="product-actions"><button class="btn btn-primary btn-add-to-cart" onclick="event.stopPropagation();addToCart(\''+p.id+'\')" '+(!hasStock(p)?'disabled':'')+'><i class="fas fa-cart-plus"></i> Add</button>'+(STATE.isAdmin?'<button class="btn btn-outline btn-small" onclick="event.stopPropagation();showTab(\'admin\');openEditModal(\''+p.id+'\')"><i class="fas fa-edit"></i></button>':'')+'</div></div></div>';
+    return card;
 }
 
-// ==================== RENDER PRODUCTS WITH ROTATING IMAGES ====================
-function renderProducts(){ var g=document.getElementById('productGrid');if(!g)return;var f=[];for(var i=0;i<STATE.products.length;i++){var p=STATE.products[i];if(STATE.filter.search&&p.name.toLowerCase().indexOf(STATE.filter.search)===-1)continue;if(STATE.filter.category!=='all'&&p.category!==STATE.filter.category)continue;if(STATE.filter.stock==='in-stock'&&!hasStock(p))continue;if(STATE.filter.stock==='out-of-stock'&&hasStock(p))continue;f.push(p)}if(!f.length){g.innerHTML='<div style="text-align:center;padding:3rem;grid-column:1/-1"><h3>No products</h3></div>';return}var h='';for(var j=0;j<f.length;j++){var p=f[j],t=getTotalStock(p),allImages=p.images&&p.images.length>0?p.images:['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'];var bd,bt,sc,st;if(t>10){bd='badge-new';bt='NEW';sc='in-stock';st='In Stock'}else if(t>0){bd='badge-low';bt='LOW';sc='low-stock';st='Low Stock'}else{bd='badge-sale';bt='SOLD';sc='out-of-stock';st='Out of Stock'}var sz='';if(p.sizes&&p.sizes.length){sz='<div class="size-selector"><label class="size-label">Size:</label><div class="size-options">';for(var k=0;k<p.sizes.length;k++){var s=p.sizes[k],av=s.qty>0;sz+='<div class="size-option '+(av?'':'disabled')+'" onclick="'+(av?'selectSize(this,\''+p.id+'\',\''+s.name+'\')':'')+'" title="'+s.name+': '+s.qty+'">'+s.name+'<span class="size-stock-badge">'+s.qty+'</span></div>'}sz+='</div></div>'}var imgSlides='';for(var im=0;im<allImages.length;im++){imgSlides+='<img src="'+allImages[im]+'" class="product-image-slide'+(im===0?' active':'')+'" loading="lazy" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400\'" data-index="'+im+'">'}var dots='';if(allImages.length>1){dots='<div class="image-dots">';for(var d=0;d<allImages.length;d++){dots+='<span class="image-dot'+(d===0?' active':'')+'" data-dot="'+d+'" onclick="event.stopPropagation();setProductImage(this,\''+p.id+'\','+d+')"></span>'}dots+='</div>'}h+='<div class="product-card"><div class="product-image-container" data-pid="'+p.id+'" onclick="openLightbox(\''+allImages[0]+'\')" onmouseenter="startImageRotation(this)" onmouseleave="stopImageRotation(this)"><img src="'+allImages[0]+'" class="product-main-image" loading="lazy" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400\'">'+imgSlides+dots+'<div class="product-badge '+bd+'">'+bt+'</div></div><div class="product-info"><span class="product-category '+getCategoryDisplay(p.category)+'">'+p.category+'</span><h3 class="product-title">'+p.name+'</h3><div class="product-price">$'+p.price.toFixed(2)+'</div><div class="product-stock '+sc+'"><i class="fas '+(t>0?'fa-check-circle':'fa-times-circle')+'"></i> '+st+' ('+t+')</div>'+sz+'<div class="product-actions"><button class="btn btn-primary btn-add-to-cart" onclick="addToCart(\''+p.id+'\')" '+(!hasStock(p)?'disabled':'')+'><i class="fas fa-cart-plus"></i> Add</button>'+(STATE.isAdmin?'<button class="btn btn-outline btn-small" onclick="showTab(\'admin\');openEditModal(\''+p.id+'\')"><i class="fas fa-edit"></i></button>':'')+'</div></div></div>'}g.innerHTML=h;if(STATE._selSizes){var keys=Object.keys(STATE._selSizes);for(var m=0;m<keys.length;m++){var pid=keys[m],opts=document.querySelectorAll('.size-option[onclick*="'+pid+'"]');for(var n=0;n<opts.length;n++){if(opts[n].textContent.trim().indexOf(STATE._selSizes[pid])===0)opts[n].classList.add('selected')}}} }
+function buildRelatedSection(currentProduct) {
+    var related = getRelatedProducts(currentProduct, 4);
+    if (related.length === 0) return '';
+    var section = '<div class="related-section" onclick="event.stopPropagation()">';
+    section += '<div class="related-section-header"><h3><i class="fas fa-star" style="color:var(--warning)"></i> Similar Products</h3><button class="btn btn-outline btn-small" onclick="event.stopPropagation();STATE.selectedProduct=null;renderProducts()"><i class="fas fa-times"></i> Hide</button></div>';
+    section += '<div class="related-grid-inline">';
+    for (var i = 0; i < related.length; i++) {
+        var rp = related[i];
+        var img = (rp.images && rp.images[0]) || 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=200';
+        section += '<div class="related-card-inline" onclick="event.stopPropagation();toggleRelatedProducts(\''+rp.id+'\')"><img src="'+img+'" class="related-card-image" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=200\'"><div class="related-card-info"><div class="related-card-name">'+rp.name+'</div><div class="related-card-price">$'+rp.price.toFixed(2)+'</div></div></div>';
+    }
+    section += '</div></div>';
+    return section;
+}
+
+// ==================== RENDER PRODUCTS WITH INLINE RELATED ====================
+function renderProducts(){
+    var g=document.getElementById('productGrid');if(!g)return;
+    var f=[];for(var i=0;i<STATE.products.length;i++){var p=STATE.products[i];if(STATE.filter.search&&p.name.toLowerCase().indexOf(STATE.filter.search)===-1)continue;if(STATE.filter.category!=='all'&&p.category!==STATE.filter.category)continue;if(STATE.filter.stock==='in-stock'&&!hasStock(p))continue;if(STATE.filter.stock==='out-of-stock'&&hasStock(p))continue;f.push(p)}
+    if(!f.length){g.innerHTML='<div style="text-align:center;padding:3rem;grid-column:1/-1"><h3>No products</h3></div>';return}
+    var h='';
+    for(var j=0;j<f.length;j++){
+        var p=f[j];
+        h += buildProductCard(p);
+        // Insert related section right after the selected product
+        if (STATE.selectedProduct === p.id) {
+            h += buildRelatedSection(p);
+        }
+    }
+    g.innerHTML=h;
+    // Restore selected sizes
+    if(STATE._selSizes){var keys=Object.keys(STATE._selSizes);for(var m=0;m<keys.length;m++){var pid=keys[m],opts=document.querySelectorAll('.size-option[onclick*="'+pid+'"]');for(var n=0;n<opts.length;n++){if(opts[n].textContent.trim().indexOf(STATE._selSizes[pid])===0)opts[n].classList.add('selected')}}}
+}
 function selectSize(el,pid,size){var c=el.closest('.product-card'),o=c.querySelectorAll('.size-option');for(var i=0;i<o.length;i++){o[i].classList.remove('selected')}el.classList.add('selected');if(!STATE._selSizes)STATE._selSizes={};STATE._selSizes[pid]=size}
 
-// ==================== SIZE-FOCUSED INVENTORY ====================
+// ==================== INVENTORY (SAME AS BEFORE) ====================
 function quickSizeFilter(size) { var sizeInput=document.getElementById('inventorySearchSize');sizeInput.value=size;highlightQuickButton(size);filterInventory() }
 function highlightQuickButton(size) { document.querySelectorAll('.btn-quick-size').forEach(function(btn){btn.classList.remove('active-size');if(btn.textContent.trim()===size){btn.classList.add('active-size')}}) }
 function getAvailableSizesFromProducts(products) { var availableSizes=new Map();products.forEach(function(product){if(product.sizes&&product.sizes.length>0){product.sizes.forEach(function(size){if(size.qty>0){var current=availableSizes.get(size.name)||0;availableSizes.set(size.name,current+size.qty)}})}});return availableSizes }
@@ -660,47 +635,26 @@ function clearSizeFilter() { document.getElementById('inventorySearchSize').valu
 function showAvailableSizesSummary(filteredProducts,searchSize) { var summaryDiv=document.getElementById('availableSizesSummary');if(!summaryDiv)return;var availableSizes=getAvailableSizesFromProducts(filteredProducts);if(availableSizes.size===0){summaryDiv.innerHTML='';return}if(searchSize){summaryDiv.innerHTML='';return}var html='<div style="display:flex;gap:0.25rem;flex-wrap:wrap;align-items:center">';html+='<span style="font-weight:600;margin-right:0.25rem;font-size:0.8rem"><i class="fas fa-check-circle" style="color:var(--success)"></i> Available:</span>';var sortedSizes=Array.from(availableSizes.keys()).sort(function(a,b){var aNum=parseInt(a),bNum=parseInt(b);if(!isNaN(aNum)&&!isNaN(bNum))return aNum-bNum;return a.localeCompare(b)});sortedSizes.forEach(function(size){var qty=availableSizes.get(size);var bgColor=qty>10?'var(--success)':(qty>3?'var(--warning)':'var(--danger)');html+='<span class="available-sizes-badge" style="background:'+bgColor+'" onclick="quickSizeFilter(\''+size+'\')" title="Click: '+size+' ('+qty+')">'+size+' <span style="opacity:0.8">('+qty+')</span></span>'});html+='</div>';summaryDiv.innerHTML=html }
 
 function filterInventory() {
-    var searchName=document.getElementById('inventorySearchName').value.toLowerCase().trim();
-    var searchCategory=document.getElementById('inventorySearchCategory').value;
-    var searchStock=document.getElementById('inventorySearchStock').value;
-    var searchSize=document.getElementById('inventorySearchSize').value.toUpperCase().trim();
-    highlightQuickButton(searchSize);showActiveSizeFilter(searchSize);
-    var sizeHeader=document.getElementById('sizeColumnHeader');if(sizeHeader){sizeHeader.textContent=searchSize?'Size: '+searchSize+' (In Stock Only)':'Sizes'}
-    var filteredProducts=STATE.products.filter(function(product){
-        if(searchSize){if(product.sizes&&product.sizes.length>0){var hasMatchingSizeWithStock=product.sizes.some(function(size){return size.name.toUpperCase().includes(searchSize)&&size.qty>0});if(!hasMatchingSizeWithStock)return false}else{return false}}
-        if(searchName&&!product.name.toLowerCase().includes(searchName))return false;
-        if(searchCategory!=='all'&&product.category!==searchCategory)return false;
-        if(searchStock==='in-stock'&&!hasStock(product))return false;
-        if(searchStock==='out-of-stock'&&hasStock(product))return false;
-        if(searchStock==='low-stock'&&!isLowStock(product))return false;
-        return true;
-    });
-    renderFilteredInventory(filteredProducts,searchSize);
-    updateSearchResults(filteredProducts.length,searchSize);
-    showAvailableSizesSummary(filteredProducts,searchSize);
+    var searchName=document.getElementById('inventorySearchName').value.toLowerCase().trim();var searchCategory=document.getElementById('inventorySearchCategory').value;var searchStock=document.getElementById('inventorySearchStock').value;var searchSize=document.getElementById('inventorySearchSize').value.toUpperCase().trim();
+    highlightQuickButton(searchSize);showActiveSizeFilter(searchSize);var sizeHeader=document.getElementById('sizeColumnHeader');if(sizeHeader){sizeHeader.textContent=searchSize?'Size: '+searchSize+' (In Stock Only)':'Sizes'}
+    var filteredProducts=STATE.products.filter(function(product){if(searchSize){if(product.sizes&&product.sizes.length>0){var hasMatchingSizeWithStock=product.sizes.some(function(size){return size.name.toUpperCase().includes(searchSize)&&size.qty>0});if(!hasMatchingSizeWithStock)return false}else{return false}}if(searchName&&!product.name.toLowerCase().includes(searchName))return false;if(searchCategory!=='all'&&product.category!==searchCategory)return false;if(searchStock==='in-stock'&&!hasStock(product))return false;if(searchStock==='out-of-stock'&&hasStock(product))return false;if(searchStock==='low-stock'&&!isLowStock(product))return false;return true});
+    renderFilteredInventory(filteredProducts,searchSize);updateSearchResults(filteredProducts.length,searchSize);showAvailableSizesSummary(filteredProducts,searchSize);
 }
-
 function clearInventorySearch() { document.getElementById('inventorySearchName').value='';document.getElementById('inventorySearchCategory').value='all';document.getElementById('inventorySearchStock').value='all';document.getElementById('inventorySearchSize').value='';document.querySelectorAll('.btn-quick-size').forEach(function(btn){btn.classList.remove('active-size')});showActiveSizeFilter('');var sizeHeader=document.getElementById('sizeColumnHeader');if(sizeHeader)sizeHeader.textContent='Sizes';filterInventory() }
 function updateSearchResults(count,searchSize) { var resultsDiv=document.getElementById('inventorySearchResults');var totalProducts=STATE.products.length;if(resultsDiv){if(searchSize){if(count===0){resultsDiv.innerHTML='<i class="fas fa-exclamation-circle" style="color:var(--warning)"></i> No products with size <strong>'+searchSize+'</strong> in stock'}else{resultsDiv.innerHTML='<i class="fas fa-check-circle" style="color:var(--success)"></i> Found <strong>'+count+'</strong> product'+(count!==1?'s':'')+' with size <strong>'+searchSize+'</strong> in stock'}}else if(count===0){resultsDiv.innerHTML='<i class="fas fa-exclamation-circle" style="color:var(--warning)"></i> No products found'}else if(count===totalProducts){resultsDiv.innerHTML='<i class="fas fa-check-circle" style="color:var(--success)"></i> Showing all '+count+' products'}else{resultsDiv.innerHTML='<i class="fas fa-filter" style="color:var(--info)"></i> Showing '+count+' of '+totalProducts+' products'}} }
-
-function renderFilteredInventory(filteredProducts,searchSize) {
-    var tb=document.getElementById('inventoryBody');if(!tb)return;
-    document.getElementById('productCount').textContent=filteredProducts.length;
-    var h='';if(filteredProducts.length===0){h='<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--gray)"><i class="fas fa-search" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>';h+=searchSize?'No products with size <strong>'+searchSize+'</strong> in stock':'No products match your search';h+='</td></tr>'}else{for(var i=0;i<filteredProducts.length;i++){var p=filteredProducts[i];var totalStock=getTotalStock(p);var sb='';if(searchSize){if(p.sizes&&p.sizes.length>0){var matchingSizes=[];for(var j=0;j<p.sizes.length;j++){if(p.sizes[j].name.toUpperCase().indexOf(searchSize)!==-1){matchingSizes.push(p.sizes[j])}}if(matchingSizes.length>0){sb='<div class="size-inventory-grid">';for(var m=0;m<matchingSizes.length;m++){var ms=matchingSizes[m];var sc=ms.qty<=3?'low':'';sb+='<div class="size-inventory-item filtered-single '+sc+'"><div class="size-name">✅ '+ms.name+'</div><div class="size-qty">'+ms.qty+' pcs</div></div>'}sb+='</div>'}else{sb='<span style="color:var(--gray)">-</span>'}}else{sb='<span style="color:var(--gray)">-</span>'}}else{if(p.sizes&&p.sizes.length>0){sb='<div class="size-inventory-grid">';for(var k=0;k<p.sizes.length;k++){var s=p.sizes[k];var c=s.qty===0?'out':(s.qty<=3?'low':'');sb+='<div class="size-inventory-item '+c+'"><div class="size-name">'+s.name+'</div><div class="size-qty">'+s.qty+'</div></div>'}sb+='</div>'}else{sb='<span style="color:var(--gray)">-</span>'}}var stockStatusColor=totalStock>10?'var(--success)':(totalStock>0?'var(--warning)':'var(--danger)');var stockStatusIcon=totalStock>10?'fa-check-circle':(totalStock>0?'fa-exclamation-triangle':'fa-times-circle');var img=(p.images&&p.images[0])||'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60';h+='<tr><td><img src="'+img+'" style="width:45px;height:45px;object-fit:cover;border-radius:4px;cursor:pointer" onclick="openLightbox(\''+img+'\')" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60\'"></td>';h+='<td><strong>'+p.name+'</strong></td>';h+='<td><span class="product-category '+getCategoryDisplay(p.category)+'">'+p.category+'</span></td>';h+='<td>$'+p.price.toFixed(2)+'</td><td>'+sb+'</td>';h+='<td><strong style="color:'+stockStatusColor+'"><i class="fas '+stockStatusIcon+'" style="font-size:0.7rem;margin-right:2px"></i>'+totalStock+'</strong></td>';h+='<td><div class="flex gap-2"><button class="btn btn-warning btn-small" onclick="openEditModal(\''+p.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct(\''+p.id+'\')"><i class="fas fa-trash"></i></button></div></td></tr>'}}tb.innerHTML=h}
-
+function renderFilteredInventory(filteredProducts,searchSize) { var tb=document.getElementById('inventoryBody');if(!tb)return;document.getElementById('productCount').textContent=filteredProducts.length;var h='';if(filteredProducts.length===0){h='<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--gray)"><i class="fas fa-search" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>';h+=searchSize?'No products with size <strong>'+searchSize+'</strong> in stock':'No products match your search';h+='</td></tr>'}else{for(var i=0;i<filteredProducts.length;i++){var p=filteredProducts[i];var totalStock=getTotalStock(p);var sb='';if(searchSize){if(p.sizes&&p.sizes.length>0){var matchingSizes=[];for(var j=0;j<p.sizes.length;j++){if(p.sizes[j].name.toUpperCase().indexOf(searchSize)!==-1){matchingSizes.push(p.sizes[j])}}if(matchingSizes.length>0){sb='<div class="size-inventory-grid">';for(var m=0;m<matchingSizes.length;m++){var ms=matchingSizes[m];var sc=ms.qty<=3?'low':'';sb+='<div class="size-inventory-item filtered-single '+sc+'"><div class="size-name">✅ '+ms.name+'</div><div class="size-qty">'+ms.qty+' pcs</div></div>'}sb+='</div>'}else{sb='<span style="color:var(--gray)">-</span>'}}else{sb='<span style="color:var(--gray)">-</span>'}}else{if(p.sizes&&p.sizes.length>0){sb='<div class="size-inventory-grid">';for(var k=0;k<p.sizes.length;k++){var s=p.sizes[k];var c=s.qty===0?'out':(s.qty<=3?'low':'');sb+='<div class="size-inventory-item '+c+'"><div class="size-name">'+s.name+'</div><div class="size-qty">'+s.qty+'</div></div>'}sb+='</div>'}else{sb='<span style="color:var(--gray)">-</span>'}}var stockStatusColor=totalStock>10?'var(--success)':(totalStock>0?'var(--warning)':'var(--danger)');var stockStatusIcon=totalStock>10?'fa-check-circle':(totalStock>0?'fa-exclamation-triangle':'fa-times-circle');var img=(p.images&&p.images[0])||'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60';h+='<tr><td><img src="'+img+'" style="width:45px;height:45px;object-fit:cover;border-radius:4px;cursor:pointer" onclick="openLightbox(\''+img+'\')" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60\'"></td>';h+='<td><strong>'+p.name+'</strong></td>';h+='<td><span class="product-category '+getCategoryDisplay(p.category)+'">'+p.category+'</span></td>';h+='<td>$'+p.price.toFixed(2)+'</td><td>'+sb+'</td>';h+='<td><strong style="color:'+stockStatusColor+'"><i class="fas '+stockStatusIcon+'" style="font-size:0.7rem;margin-right:2px"></i>'+totalStock+'</strong></td>';h+='<td><div class="flex gap-2"><button class="btn btn-warning btn-small" onclick="openEditModal(\''+p.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct(\''+p.id+'\')"><i class="fas fa-trash"></i></button></div></td></tr>'}}tb.innerHTML=h}
 function renderInventory() { var allProducts=STATE.products.filter(function(p){return p});var searchSize=document.getElementById('inventorySearchSize').value.toUpperCase().trim();renderFilteredInventory(allProducts,searchSize);updateSearchResults(allProducts.length,searchSize);showAvailableSizesSummary(allProducts,searchSize) }
-function filterAndRender(){ STATE.filter.search=document.getElementById('searchInput').value.toLowerCase();STATE.filter.category=document.getElementById('categoryFilter').value;STATE.filter.stock=document.getElementById('stockFilter').value;renderProducts() }
+function filterAndRender(){ STATE.filter.search=document.getElementById('searchInput').value.toLowerCase();STATE.filter.category=document.getElementById('categoryFilter').value;STATE.filter.stock=document.getElementById('stockFilter').value;STATE.selectedProduct=null;renderProducts() }
 
+// Shipping / Cart / Orders (same as before - minified for brevity)
 function updateShipping(){ var loc=document.getElementById('shippingLocation'),sh=0;if(loc&&loc.value==='phnompenh')sh=1.50;else if(loc&&loc.value==='province')sh=2.00;STATE.shippingFee=sh;var sub=0;for(var i=0;i<STATE.cart.length;i++){sub+=STATE.cart[i].price*STATE.cart[i].quantity}var se=document.getElementById('cartShipping'),te=document.getElementById('cartTotal'),pe=document.getElementById('paywayTotal');if(se)se.textContent='$'+sh.toFixed(2);if(te)te.textContent='$'+(sub+sh).toFixed(2);if(pe)pe.textContent=(sub+sh).toFixed(2) }
 function addToCart(pid){ var p=null;for(var i=0;i<STATE.products.length;i++){if(STATE.products[i].id===pid){p=STATE.products[i];break}}if(!p||!hasStock(p)){showToast('Out of stock','error');return}var sel=(STATE._selSizes&&STATE._selSizes[pid])||null;if(p.sizes&&p.sizes.length&&!sel){showToast('Select a size','error');return}var size=sel||'One Size';if(p.sizes&&p.sizes.length){var so=null;for(var j=0;j<p.sizes.length;j++){if(p.sizes[j].name===size){so=p.sizes[j];break}}if(!so||so.qty<=0){showToast('Size '+size+' out','error');return}}var ex=null;for(var k=0;k<STATE.cart.length;k++){if(STATE.cart[k].productId===pid&&STATE.cart[k].size===size){ex=STATE.cart[k];break}}if(ex)ex.quantity++;else STATE.cart.push({productId:pid,name:p.name,price:p.price,size:size,quantity:1,image:(p.images&&p.images[0])||''});localStorage.setItem('goatCart',JSON.stringify(STATE.cart));updateCartBadge();renderCart();updateShipping();showToast(p.name+' ('+size+') added!','success') }
 function renderCart(){ var e=document.getElementById('emptyCart'),l=document.getElementById('cartItemsList'),s=document.getElementById('cartSummary');if(!STATE.cart.length){e.classList.remove('hidden');l.classList.add('hidden');s.classList.add('hidden');return}e.classList.add('hidden');l.classList.remove('hidden');s.classList.remove('hidden');var h='';for(var i=0;i<STATE.cart.length;i++){var it=STATE.cart[i],t=it.price*it.quantity;h+='<div class="cart-item"><img src="'+it.image+'" class="cart-item-image" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100\'"><div><div class="cart-item-name">'+it.name+'</div><div style="color:var(--gray);font-size:0.85rem">Size: '+it.size+'</div><div class="cart-item-price">$'+it.price.toFixed(2)+' each</div><div class="cart-item-quantity"><button class="quantity-btn" onclick="updQty('+i+','+(it.quantity-1)+')">-</button><span>'+it.quantity+'</span><button class="quantity-btn" onclick="updQty('+i+','+(it.quantity+1)+')">+</button></div></div><div class="cart-item-total">$'+t.toFixed(2)+'</div><button class="remove-item" onclick="remCart('+i+')"><i class="fas fa-trash"></i></button></div>'}l.innerHTML=h;var sub=0;for(var j=0;j<STATE.cart.length;j++){sub+=STATE.cart[j].price*STATE.cart[j].quantity}document.getElementById('cartSubtotal').textContent='$'+sub.toFixed(2);updateShipping() }
 function updQty(i,q){if(q<1){remCart(i);return}STATE.cart[i].quantity=q;localStorage.setItem('goatCart',JSON.stringify(STATE.cart));updateCartBadge();renderCart();updateShipping()}
 function remCart(i){STATE.cart.splice(i,1);localStorage.setItem('goatCart',JSON.stringify(STATE.cart));updateCartBadge();renderCart();updateShipping()}
 function selectPayment(m){STATE.paymentMethod=m;document.getElementById('payOption').classList.toggle('selected',m==='payway');document.getElementById('codOption').classList.toggle('selected',m==='cod')}
-
 function placeOrder(){ var n=document.getElementById('customerName').value.trim(),ph=document.getElementById('customerPhone').value.trim(),ad=document.getElementById('customerAddress').value.trim(),ci=document.getElementById('customerCity').value.trim();if(!n||!ph||!ad){showToast('Fill Name, Phone & Address','error');return}if(!STATE.cart.length){showToast('Cart empty','error');return}var sm='Pickup',smt='Pickup from Shop';var le=document.getElementById('shippingLocation');if(le&&le.value==='phnompenh'){sm='Phnom Penh';smt='Phnom Penh ($1.50)'}else if(le&&le.value==='province'){sm='Province';smt='Province ($2.00)'}else{smt='Pickup (FREE)'}var oid='ORD-'+Date.now(),sub=0;for(var i=0;i<STATE.cart.length;i++){sub+=STATE.cart[i].price*STATE.cart[i].quantity}var sh=STATE.shippingFee||0,oc=[];for(var j=0;j<STATE.cart.length;j++){var ci2=STATE.cart[j];oc.push({productId:ci2.productId,name:ci2.name,size:ci2.size,quantity:ci2.quantity,price:ci2.price,subtotal:ci2.price*ci2.quantity,image:ci2.image||''})}var order={orderId:oid,timestamp:Date.now(),orderDate:new Date().toLocaleString(),status:'pending',shippingMethod:sm,customerName:n,customerPhone:ph,customerAddress:ad,customerCity:ci,customerNotes:document.getElementById('customerNotes').value.trim(),paymentMethod:STATE.paymentMethod,storeId:STATE.storeId,cart:oc,subtotal:sub,shipping:sh,total:sub+sh};STATE.pendingOrders.push(order);saveOrders();if(STATE.firebaseOnline)db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order);var msg='GOAT KIDS ORDER\nOrder: '+oid+'\n\nCustomer: '+n+'\nPhone: '+ph+'\nAddress: '+ad;if(ci)msg+='\nCity: '+ci;msg+='\nShipping: '+smt+'\n\nITEMS:\n';for(var k=0;k<order.cart.length;k++){msg+=(k+1)+'. '+order.cart[k].name+' ('+order.cart[k].size+') x'+order.cart[k].quantity+' = $'+order.cart[k].subtotal.toFixed(2)+'\n'}msg+='\nSubtotal: $'+sub.toFixed(2)+'\nShipping: $'+sh.toFixed(2)+'\nTotal: $'+order.total.toFixed(2)+'\nStatus: PENDING';STATE.cart=[];localStorage.setItem('goatCart','[]');updateCartBadge();renderCart();updateShipping();if(confirm('Order placed! Open Messenger?'))window.open('https://m.me/Goatkids?text='+encodeURIComponent(msg),'_blank');if(STATE.isAdmin){renderPending();updateAdminBadges()}showToast('Order sent!','success') }
 function handlePayway(e){if(!STATE.cart.length){e.preventDefault();showToast('Cart empty','error');return false}placeOrder();return true}
-
 function confirmOrder(oid){ var idx=-1;for(var i=0;i<STATE.pendingOrders.length;i++){if(STATE.pendingOrders[i].orderId===oid){idx=i;break}}if(idx<0)return;var order=STATE.pendingOrders[idx];for(var j=0;j<order.cart.length;j++){var it=order.cart[j],p=null;for(var k=0;k<STATE.products.length;k++){if(STATE.products[k].id===it.productId){p=STATE.products[k];break}}if(!p){showToast('Not found: '+it.name,'error');return}if(p.sizes&&p.sizes.length){var so=null;for(var l=0;l<p.sizes.length;l++){if(p.sizes[l].name===it.size){so=p.sizes[l];break}}if(!so||so.qty<it.quantity){showToast('Not enough: '+it.name+' ('+it.size+')','error');return}}else if(p.stock<it.quantity){showToast('Not enough: '+it.name,'error');return}}for(var m=0;m<order.cart.length;m++){var item=order.cart[m],pr=null;for(var n=0;n<STATE.products.length;n++){if(STATE.products[n].id===item.productId){pr=STATE.products[n];break}}if(pr){if(pr.sizes&&pr.sizes.length){var szo=null;for(var o=0;o<pr.sizes.length;o++){if(pr.sizes[o].name===item.size){szo=pr.sizes[o];break}}if(szo)szo.qty=Math.max(0,szo.qty-item.quantity)}pr.stock=Math.max(0,pr.stock-item.quantity)}}saveProducts();order.status='confirmed';order.confirmedAt=new Date().toLocaleString();STATE.confirmedOrders.push(order);STATE.pendingOrders.splice(idx,1);saveOrders();if(STATE.firebaseOnline)syncToFirebase();renderPending();renderHistory();renderProducts();renderInventory();updateAdminBadges();showToast('Order '+oid+' confirmed!','success');setTimeout(function(){if(confirm('Print receipt?'))printReceipt(oid)},300) }
 function rejectOrder(oid){ var idx=-1;for(var i=0;i<STATE.pendingOrders.length;i++){if(STATE.pendingOrders[i].orderId===oid){idx=i;break}}if(idx<0)return;var order=STATE.pendingOrders[idx];order.status='rejected';order.rejectedAt=new Date().toLocaleString();order.rejectionReason=prompt('Reason:')||'No reason';STATE.confirmedOrders.push(order);STATE.pendingOrders.splice(idx,1);saveOrders();if(STATE.firebaseOnline)syncToFirebase();renderPending();renderHistory();updateAdminBadges();showToast('Rejected','warning') }
 function confirmAll(){ if(!STATE.pendingOrders.length){showToast('No pending','warning');return}if(!confirm('Confirm ALL '+STATE.pendingOrders.length+' orders?'))return;var orders=STATE.pendingOrders.slice();for(var i=0;i<orders.length;i++){var o=orders[i];for(var j=0;j<o.cart.length;j++){var it=o.cart[j],p=null;for(var k=0;k<STATE.products.length;k++){if(STATE.products[k].id===it.productId){p=STATE.products[k];break}}if(p){if(p.sizes&&p.sizes.length){var so=null;for(var l=0;l<p.sizes.length;l++){if(p.sizes[l].name===it.size){so=p.sizes[l];break}}if(so)so.qty=Math.max(0,so.qty-it.quantity)}p.stock=Math.max(0,p.stock-it.quantity)}}o.status='confirmed';o.confirmedAt=new Date().toLocaleString();STATE.confirmedOrders.push(o)}STATE.pendingOrders=[];saveProducts();saveOrders();if(STATE.firebaseOnline)syncToFirebase();renderPending();renderHistory();renderProducts();renderInventory();updateAdminBadges();showToast(orders.length+' confirmed!','success') }
