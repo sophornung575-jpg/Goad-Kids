@@ -958,17 +958,20 @@ function renderFilteredInventory(filteredProducts, searchSize) {
             var p = filteredProducts[i];
             var totalStock = getTotalStock(p);
             
-                        var sb = '';
-            if (p.sizes && p.sizes.length) {
-                if (searchSize) {
-                    // SHOW ONLY THE MATCHING SIZE - don't show 0 stock sizes
+            var sb = '';
+            if (searchSize) {
+                // ===== SIZE FILTER ACTIVE - SHOW ONLY MATCHING SIZE =====
+                if (p.sizes && p.sizes.length > 0) {
+                    // Find ALL matching sizes
                     var matchingSizes = [];
                     for (var j = 0; j < p.sizes.length; j++) {
                         if (p.sizes[j].name.toUpperCase().indexOf(searchSize) !== -1) {
                             matchingSizes.push(p.sizes[j]);
                         }
                     }
+                    
                     if (matchingSizes.length > 0) {
+                        // Only show matching sizes, not all sizes
                         sb = '<div class="size-inventory-grid">';
                         for (var m = 0; m < matchingSizes.length; m++) {
                             var ms = matchingSizes[m];
@@ -983,17 +986,24 @@ function renderFilteredInventory(filteredProducts, searchSize) {
                         sb = '<span style="color:var(--gray)">-</span>';
                     }
                 } else {
-                    // Show all sizes
+                    sb = '<span style="color:var(--gray)">-</span>';
+                }
+            } else {
+                // ===== NO SIZE FILTER - SHOW ALL SIZES =====
+                if (p.sizes && p.sizes.length > 0) {
                     sb = '<div class="size-inventory-grid">';
                     for (var k = 0; k < p.sizes.length; k++) {
                         var s = p.sizes[k];
                         var c = s.qty === 0 ? 'out' : (s.qty <= 3 ? 'low' : '');
-                        sb += '<div class="size-inventory-item ' + c + '"><div class="size-name">' + s.name + '</div><div class="size-qty">' + s.qty + '</div></div>';
+                        sb += '<div class="size-inventory-item ' + c + '">';
+                        sb += '<div class="size-name">' + s.name + '</div>';
+                        sb += '<div class="size-qty">' + s.qty + '</div>';
+                        sb += '</div>';
                     }
                     sb += '</div>';
+                } else {
+                    sb = '<span style="color:var(--gray)">-</span>';
                 }
-            } else {
-                sb = '<span style="color:var(--gray)">-</span>';
             }
             
             var stockStatusColor = totalStock > 10 ? 'var(--success)' : (totalStock > 0 ? 'var(--warning)' : 'var(--danger)');
