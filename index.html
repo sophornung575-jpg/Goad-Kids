@@ -107,8 +107,14 @@
         .product-card{background:#fff;border-radius:var(--radius-xl);overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);transition:all 0.3s;border:1px solid var(--gray-light)}
         .product-card:hover{transform:translateY(-4px);box-shadow:var(--shadow-lg)}
         .product-image-container{position:relative;height:300px;overflow:hidden;background:#f0f0f0;cursor:pointer}
-        .product-main-image{width:100%;height:100%;object-fit:cover}
-        .product-badge{position:absolute;top:0.75rem;right:0.75rem;padding:0.3rem 0.8rem;border-radius:2rem;font-size:0.75rem;font-weight:600;color:#fff}
+        .product-main-image{width:100%;height:100%;object-fit:cover;transition:opacity 0.5s ease}
+        .product-image-slide{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 0.5s ease}
+        .product-image-container:hover .product-image-slide.active{opacity:1}
+        .image-dots{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:5px;z-index:2;opacity:0;transition:opacity 0.3s}
+        .product-image-container:hover .image-dots{opacity:1}
+        .image-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.5);cursor:pointer;transition:all 0.3s}
+        .image-dot.active{background:#fff;transform:scale(1.3)}
+        .product-badge{position:absolute;top:0.75rem;right:0.75rem;padding:0.3rem 0.8rem;border-radius:2rem;font-size:0.75rem;font-weight:600;color:#fff;z-index:3}
         .badge-new{background:var(--success)}.badge-sale{background:var(--secondary)}.badge-low{background:var(--warning);color:var(--dark)}
         .product-info{padding:0.75rem}
         .product-category{display:inline-block;background:var(--primary-light);color:var(--primary-dark);padding:0.15rem 0.5rem;border-radius:2rem;font-size:0.7rem;margin-bottom:0.3rem}
@@ -493,7 +499,8 @@ var STATE = {
     newProductSizes: [],
     newProductImages: [],
     editProductImages: [],
-    _selSizes: {}
+    _selSizes: {},
+    imageTimers: {}
 };
 var selectedRole = 'full';
 
@@ -568,17 +575,16 @@ function updateCartBadge(){document.getElementById('floatingCartCount').textCont
 function addSizeToNewProduct(){ var n=document.getElementById('newSizeName').value.trim().toUpperCase();var q=parseInt(document.getElementById('newSizeQty').value)||0;if(!n){showToast('Enter size name','error');return}var f=false;for(var i=0;i<STATE.newProductSizes.length;i++){if(STATE.newProductSizes[i].name===n){STATE.newProductSizes[i].qty=q;f=true;break}}if(!f)STATE.newProductSizes.push({name:n,qty:q});renderNewProductSizes();document.getElementById('newSizeName').value='';document.getElementById('newSizeQty').value='0' }
 function renderNewProductSizes(){ var h='';for(var i=0;i<STATE.newProductSizes.length;i++){var s=STATE.newProductSizes[i];h+='<div style="background:var(--primary-light);color:var(--primary-dark);padding:0.5rem 0.75rem;border-radius:var(--radius);display:flex;align-items:center;gap:0.5rem;font-size:0.9rem"><strong>'+s.name+'</strong>: '+s.qty+' pcs<button onclick="STATE.newProductSizes.splice('+i+',1);renderNewProductSizes()" style="background:none;border:none;color:var(--danger);cursor:pointer">&times;</button></div>'}document.getElementById('newProductSizes').innerHTML=h }
 
-// ==================== LOAD SAMPLES ====================
 function loadSamples(){
     STATE.products=[
-        {id:'p1',name:'Kids Cotton Baby Shirt',price:12.99,stock:25,category:'tshirts',images:['https://images.unsplash.com/photo-1622290291468-2f3766aa2c47?w=400'],sizes:[{name:'90',qty:5},{name:'100',qty:10},{name:'110',qty:7},{name:'120',qty:3}]},
-        {id:'p2',name:"Children's Denim Jeans",price:24.99,stock:15,category:'Dresses',images:['https://images.unsplash.com/photo-1542272604-787c3835535d?w=400'],sizes:[{name:'90',qty:0},{name:'100',qty:4},{name:'110',qty:6},{name:'120',qty:5}]},
+        {id:'p1',name:'Kids Cotton Baby Shirt',price:12.99,stock:25,category:'tshirts',images:['https://images.unsplash.com/photo-1622290291468-2f3766aa2c47?w=400','https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400'],sizes:[{name:'90',qty:5},{name:'100',qty:10},{name:'110',qty:7},{name:'120',qty:3}]},
+        {id:'p2',name:"Children's Denim Jeans",price:24.99,stock:15,category:'Dresses',images:['https://images.unsplash.com/photo-1542272604-787c3835535d?w=400','https://images.unsplash.com/photo-1622290291468-2f3766aa2c47?w=400'],sizes:[{name:'90',qty:0},{name:'100',qty:4},{name:'110',qty:6},{name:'120',qty:5}]},
         {id:'p3',name:'Kids Hoodie Sweater',price:29.99,stock:8,category:'Baby Accessories',images:['https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400'],sizes:[{name:'100',qty:2},{name:'110',qty:0},{name:'120',qty:4},{name:'130',qty:2}]},
-        {id:'p4',name:'Girls Princess Dress',price:22.99,stock:12,category:'Girl Clothes',images:['https://images.unsplash.com/photo-1518831959646-742c3a14ebf7?w=400'],sizes:[{name:'90',qty:3},{name:'100',qty:5},{name:'110',qty:0},{name:'120',qty:4}]},
-        {id:'p5',name:'Boys Cool Baby Shirt',price:14.99,stock:20,category:'Boy Clothes',images:['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400'],sizes:[{name:'110',qty:6},{name:'120',qty:8},{name:'130',qty:0},{name:'140',qty:6}]}
+        {id:'p4',name:'Girls Princess Dress',price:22.99,stock:12,category:'Girl Clothes',images:['https://images.unsplash.com/photo-1518831959646-742c3a14ebf7?w=400','https://images.unsplash.com/photo-1542272604-787c3835535d?w=400'],sizes:[{name:'90',qty:3},{name:'100',qty:5},{name:'110',qty:0},{name:'120',qty:4}]},
+        {id:'p5',name:'Boys Cool Baby Shirt',price:14.99,stock:20,category:'Boy Clothes',images:['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400','https://images.unsplash.com/photo-1622290291468-2f3766aa2c47?w=400','https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400'],sizes:[{name:'110',qty:6},{name:'120',qty:8},{name:'130',qty:0},{name:'140',qty:6}]}
     ];
     for(var i=0;i<STATE.products.length;i++){STATE.products[i].stock=getTotalStock(STATE.products[i])}
-    saveProducts();if(STATE.firebaseOnline)syncToFirebase();renderProducts();renderInventory();updateAdminBadges();showToast('Samples loaded!','success')
+    saveProducts();if(STATE.firebaseOnline)syncToFirebase();renderProducts();renderInventory();updateAdminBadges();showToast('Samples loaded with rotating images!','success')
 }
 
 function addProduct(){ var n=document.getElementById('productName').value.trim();var pr=parseFloat(document.getElementById('productPrice').value);var c=document.getElementById('productCategory').value;if(!n||isNaN(pr)||pr<=0||!c){showToast('Fill all fields','error');return}if(!STATE.newProductSizes.length){showToast('Add at least one size','error');return}var imgs=STATE.newProductImages.length?STATE.newProductImages.slice():['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'];var t=0;for(var i=0;i<STATE.newProductSizes.length;i++){t+=STATE.newProductSizes[i].qty}STATE.products.push({id:'p'+Date.now(),name:n,price:pr,stock:t,category:c,images:imgs,sizes:STATE.newProductSizes.slice()});saveProducts();if(STATE.firebaseOnline)syncToFirebase();document.getElementById('productName').value='';document.getElementById('productPrice').value='';document.getElementById('productCategory').value='';STATE.newProductSizes=[];STATE.newProductImages=[];renderNewProductSizes();renderImagePreviews();renderProducts();renderInventory();updateAdminBadges();showToast('"'+n+'" added!','success') }
@@ -588,10 +594,64 @@ function saveEditProduct(){ var pid=document.getElementById('editProductId').val
 function deleteProduct(id){ if(!confirm('Delete?'))return;var np=[];for(var i=0;i<STATE.products.length;i++){if(STATE.products[i].id!==id)np.push(STATE.products[i])}STATE.products=np;saveProducts();if(STATE.firebaseOnline)db.collection('stores').doc(STATE.storeId).collection('products').doc(id).update({active:false});renderProducts();renderInventory();updateAdminBadges();showToast('Deleted','success') }
 function getCategoryDisplay(c){if(c==='Girl Clothes')return'category-girl';if(c==='Boy Clothes')return'category-boy';return''}
 
-function renderProducts(){ var g=document.getElementById('productGrid');if(!g)return;var f=[];for(var i=0;i<STATE.products.length;i++){var p=STATE.products[i];if(STATE.filter.search&&p.name.toLowerCase().indexOf(STATE.filter.search)===-1)continue;if(STATE.filter.category!=='all'&&p.category!==STATE.filter.category)continue;if(STATE.filter.stock==='in-stock'&&!hasStock(p))continue;if(STATE.filter.stock==='out-of-stock'&&hasStock(p))continue;f.push(p)}if(!f.length){g.innerHTML='<div style="text-align:center;padding:3rem;grid-column:1/-1"><h3>No products</h3></div>';return}var h='';for(var j=0;j<f.length;j++){var p=f[j],t=getTotalStock(p),img=(p.images&&p.images[0])||'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400';var bd,bt,sc,st;if(t>10){bd='badge-new';bt='NEW';sc='in-stock';st='In Stock'}else if(t>0){bd='badge-low';bt='LOW';sc='low-stock';st='Low Stock'}else{bd='badge-sale';bt='SOLD';sc='out-of-stock';st='Out of Stock'}var sz='';if(p.sizes&&p.sizes.length){sz='<div class="size-selector"><label class="size-label">Size:</label><div class="size-options">';for(var k=0;k<p.sizes.length;k++){var s=p.sizes[k],av=s.qty>0;sz+='<div class="size-option '+(av?'':'disabled')+'" onclick="'+(av?'selectSize(this,\''+p.id+'\',\''+s.name+'\')':'')+'" title="'+s.name+': '+s.qty+'">'+s.name+'<span class="size-stock-badge">'+s.qty+'</span></div>'}sz+='</div></div>'}h+='<div class="product-card"><div class="product-image-container" onclick="openLightbox(\''+img+'\')"><img src="'+img+'" class="product-main-image" loading="lazy" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400\'"><div class="product-badge '+bd+'">'+bt+'</div></div><div class="product-info"><span class="product-category '+getCategoryDisplay(p.category)+'">'+p.category+'</span><h3 class="product-title">'+p.name+'</h3><div class="product-price">$'+p.price.toFixed(2)+'</div><div class="product-stock '+sc+'"><i class="fas '+(t>0?'fa-check-circle':'fa-times-circle')+'"></i> '+st+' ('+t+')</div>'+sz+'<div class="product-actions"><button class="btn btn-primary btn-add-to-cart" onclick="addToCart(\''+p.id+'\')" '+(!hasStock(p)?'disabled':'')+'><i class="fas fa-cart-plus"></i> Add</button>'+(STATE.isAdmin?'<button class="btn btn-outline btn-small" onclick="showTab(\'admin\');openEditModal(\''+p.id+'\')"><i class="fas fa-edit"></i></button>':'')+'</div></div></div>'}g.innerHTML=h;if(STATE._selSizes){var keys=Object.keys(STATE._selSizes);for(var m=0;m<keys.length;m++){var pid=keys[m],opts=document.querySelectorAll('.size-option[onclick*="'+pid+'"]');for(var n=0;n<opts.length;n++){if(opts[n].textContent.trim().indexOf(STATE._selSizes[pid])===0)opts[n].classList.add('selected')}}} }
+// ==================== PRODUCT IMAGE ROTATION ====================
+function startImageRotation(container) {
+    var slides = container.querySelectorAll('.product-image-slide');
+    var dots = container.querySelectorAll('.image-dot');
+    var mainImg = container.querySelector('.product-main-image');
+    if (slides.length <= 1) return;
+    
+    var pid = container.getAttribute('data-pid') || 'default';
+    if (mainImg) mainImg.style.opacity = '0';
+    
+    var currentIndex = 0;
+    for (var i = 0; i < slides.length; i++) {
+        if (slides[i].classList.contains('active')) { currentIndex = i; break; }
+    }
+    
+    if (STATE.imageTimers[pid]) clearInterval(STATE.imageTimers[pid]);
+    
+    STATE.imageTimers[pid] = setInterval(function() {
+        slides[currentIndex].classList.remove('active');
+        if (dots[currentIndex]) dots[currentIndex].classList.remove('active');
+        currentIndex = (currentIndex + 1) % slides.length;
+        slides[currentIndex].classList.add('active');
+        if (dots[currentIndex]) dots[currentIndex].classList.add('active');
+    }, 1500);
+}
+
+function stopImageRotation(container) {
+    var slides = container.querySelectorAll('.product-image-slide');
+    var dots = container.querySelectorAll('.image-dot');
+    var mainImg = container.querySelector('.product-main-image');
+    var pid = container.getAttribute('data-pid') || 'default';
+    
+    if (STATE.imageTimers[pid]) { clearInterval(STATE.imageTimers[pid]); delete STATE.imageTimers[pid]; }
+    
+    for (var i = 0; i < slides.length; i++) { slides[i].classList.remove('active'); if (dots[i]) dots[i].classList.remove('active'); }
+    if (slides.length > 0) { slides[0].classList.add('active'); if (dots[0]) dots[0].classList.add('active'); }
+    if (mainImg) mainImg.style.opacity = '1';
+}
+
+function setProductImage(dot, pid, index) {
+    var container = dot.closest('.product-image-container');
+    if (!container) return;
+    var slides = container.querySelectorAll('.product-image-slide');
+    var dots = container.querySelectorAll('.image-dot');
+    var mainImg = container.querySelector('.product-main-image');
+    if (mainImg) mainImg.style.opacity = '0';
+    for (var i = 0; i < slides.length; i++) { slides[i].classList.remove('active'); if (dots[i]) dots[i].classList.remove('active'); }
+    if (slides[index]) slides[index].classList.add('active');
+    if (dots[index]) dots[index].classList.add('active');
+    stopImageRotation(container);
+    startImageRotation(container);
+}
+
+// ==================== RENDER PRODUCTS WITH ROTATING IMAGES ====================
+function renderProducts(){ var g=document.getElementById('productGrid');if(!g)return;var f=[];for(var i=0;i<STATE.products.length;i++){var p=STATE.products[i];if(STATE.filter.search&&p.name.toLowerCase().indexOf(STATE.filter.search)===-1)continue;if(STATE.filter.category!=='all'&&p.category!==STATE.filter.category)continue;if(STATE.filter.stock==='in-stock'&&!hasStock(p))continue;if(STATE.filter.stock==='out-of-stock'&&hasStock(p))continue;f.push(p)}if(!f.length){g.innerHTML='<div style="text-align:center;padding:3rem;grid-column:1/-1"><h3>No products</h3></div>';return}var h='';for(var j=0;j<f.length;j++){var p=f[j],t=getTotalStock(p),allImages=p.images&&p.images.length>0?p.images:['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'];var bd,bt,sc,st;if(t>10){bd='badge-new';bt='NEW';sc='in-stock';st='In Stock'}else if(t>0){bd='badge-low';bt='LOW';sc='low-stock';st='Low Stock'}else{bd='badge-sale';bt='SOLD';sc='out-of-stock';st='Out of Stock'}var sz='';if(p.sizes&&p.sizes.length){sz='<div class="size-selector"><label class="size-label">Size:</label><div class="size-options">';for(var k=0;k<p.sizes.length;k++){var s=p.sizes[k],av=s.qty>0;sz+='<div class="size-option '+(av?'':'disabled')+'" onclick="'+(av?'selectSize(this,\''+p.id+'\',\''+s.name+'\')':'')+'" title="'+s.name+': '+s.qty+'">'+s.name+'<span class="size-stock-badge">'+s.qty+'</span></div>'}sz+='</div></div>'}var imgSlides='';for(var im=0;im<allImages.length;im++){imgSlides+='<img src="'+allImages[im]+'" class="product-image-slide'+(im===0?' active':'')+'" loading="lazy" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400\'" data-index="'+im+'">'}var dots='';if(allImages.length>1){dots='<div class="image-dots">';for(var d=0;d<allImages.length;d++){dots+='<span class="image-dot'+(d===0?' active':'')+'" data-dot="'+d+'" onclick="event.stopPropagation();setProductImage(this,\''+p.id+'\','+d+')"></span>'}dots+='</div>'}h+='<div class="product-card"><div class="product-image-container" data-pid="'+p.id+'" onclick="openLightbox(\''+allImages[0]+'\')" onmouseenter="startImageRotation(this)" onmouseleave="stopImageRotation(this)"><img src="'+allImages[0]+'" class="product-main-image" loading="lazy" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400\'">'+imgSlides+dots+'<div class="product-badge '+bd+'">'+bt+'</div></div><div class="product-info"><span class="product-category '+getCategoryDisplay(p.category)+'">'+p.category+'</span><h3 class="product-title">'+p.name+'</h3><div class="product-price">$'+p.price.toFixed(2)+'</div><div class="product-stock '+sc+'"><i class="fas '+(t>0?'fa-check-circle':'fa-times-circle')+'"></i> '+st+' ('+t+')</div>'+sz+'<div class="product-actions"><button class="btn btn-primary btn-add-to-cart" onclick="addToCart(\''+p.id+'\')" '+(!hasStock(p)?'disabled':'')+'><i class="fas fa-cart-plus"></i> Add</button>'+(STATE.isAdmin?'<button class="btn btn-outline btn-small" onclick="showTab(\'admin\');openEditModal(\''+p.id+'\')"><i class="fas fa-edit"></i></button>':'')+'</div></div></div>'}g.innerHTML=h;if(STATE._selSizes){var keys=Object.keys(STATE._selSizes);for(var m=0;m<keys.length;m++){var pid=keys[m],opts=document.querySelectorAll('.size-option[onclick*="'+pid+'"]');for(var n=0;n<opts.length;n++){if(opts[n].textContent.trim().indexOf(STATE._selSizes[pid])===0)opts[n].classList.add('selected')}}} }
 function selectSize(el,pid,size){var c=el.closest('.product-card'),o=c.querySelectorAll('.size-option');for(var i=0;i<o.length;i++){o[i].classList.remove('selected')}el.classList.add('selected');if(!STATE._selSizes)STATE._selSizes={};STATE._selSizes[pid]=size}
 
-// ==================== SIZE-FOCUSED INVENTORY (ONLY SHOWS AVAILABLE STOCK) ====================
+// ==================== SIZE-FOCUSED INVENTORY ====================
 function quickSizeFilter(size) { var sizeInput=document.getElementById('inventorySearchSize');sizeInput.value=size;highlightQuickButton(size);filterInventory() }
 function highlightQuickButton(size) { document.querySelectorAll('.btn-quick-size').forEach(function(btn){btn.classList.remove('active-size');if(btn.textContent.trim()===size){btn.classList.add('active-size')}}) }
 function getAvailableSizesFromProducts(products) { var availableSizes=new Map();products.forEach(function(product){if(product.sizes&&product.sizes.length>0){product.sizes.forEach(function(size){if(size.qty>0){var current=availableSizes.get(size.name)||0;availableSizes.set(size.name,current+size.qty)}})}});return availableSizes }
@@ -599,7 +659,6 @@ function showActiveSizeFilter(searchSize) { var div=document.getElementById('act
 function clearSizeFilter() { document.getElementById('inventorySearchSize').value='';document.querySelectorAll('.btn-quick-size').forEach(function(btn){btn.classList.remove('active-size')});filterInventory() }
 function showAvailableSizesSummary(filteredProducts,searchSize) { var summaryDiv=document.getElementById('availableSizesSummary');if(!summaryDiv)return;var availableSizes=getAvailableSizesFromProducts(filteredProducts);if(availableSizes.size===0){summaryDiv.innerHTML='';return}if(searchSize){summaryDiv.innerHTML='';return}var html='<div style="display:flex;gap:0.25rem;flex-wrap:wrap;align-items:center">';html+='<span style="font-weight:600;margin-right:0.25rem;font-size:0.8rem"><i class="fas fa-check-circle" style="color:var(--success)"></i> Available:</span>';var sortedSizes=Array.from(availableSizes.keys()).sort(function(a,b){var aNum=parseInt(a),bNum=parseInt(b);if(!isNaN(aNum)&&!isNaN(bNum))return aNum-bNum;return a.localeCompare(b)});sortedSizes.forEach(function(size){var qty=availableSizes.get(size);var bgColor=qty>10?'var(--success)':(qty>3?'var(--warning)':'var(--danger)');html+='<span class="available-sizes-badge" style="background:'+bgColor+'" onclick="quickSizeFilter(\''+size+'\')" title="Click: '+size+' ('+qty+')">'+size+' <span style="opacity:0.8">('+qty+')</span></span>'});html+='</div>';summaryDiv.innerHTML=html }
 
-// ==================== FILTER INVENTORY - ONLY SHOWS PRODUCTS WITH AVAILABLE STOCK FOR THE SIZE ====================
 function filterInventory() {
     var searchName=document.getElementById('inventorySearchName').value.toLowerCase().trim();
     var searchCategory=document.getElementById('inventorySearchCategory').value;
@@ -608,15 +667,7 @@ function filterInventory() {
     highlightQuickButton(searchSize);showActiveSizeFilter(searchSize);
     var sizeHeader=document.getElementById('sizeColumnHeader');if(sizeHeader){sizeHeader.textContent=searchSize?'Size: '+searchSize+' (In Stock Only)':'Sizes'}
     var filteredProducts=STATE.products.filter(function(product){
-        if(searchSize){
-            if(product.sizes&&product.sizes.length>0){
-                // ONLY include product if it has the matching size WITH STOCK AVAILABLE (qty > 0)
-                var hasMatchingSizeWithStock=product.sizes.some(function(size){
-                    return size.name.toUpperCase().includes(searchSize) && size.qty>0;
-                });
-                if(!hasMatchingSizeWithStock)return false;
-            }else{return false}
-        }
+        if(searchSize){if(product.sizes&&product.sizes.length>0){var hasMatchingSizeWithStock=product.sizes.some(function(size){return size.name.toUpperCase().includes(searchSize)&&size.qty>0});if(!hasMatchingSizeWithStock)return false}else{return false}}
         if(searchName&&!product.name.toLowerCase().includes(searchName))return false;
         if(searchCategory!=='all'&&product.category!==searchCategory)return false;
         if(searchStock==='in-stock'&&!hasStock(product))return false;
@@ -632,65 +683,10 @@ function filterInventory() {
 function clearInventorySearch() { document.getElementById('inventorySearchName').value='';document.getElementById('inventorySearchCategory').value='all';document.getElementById('inventorySearchStock').value='all';document.getElementById('inventorySearchSize').value='';document.querySelectorAll('.btn-quick-size').forEach(function(btn){btn.classList.remove('active-size')});showActiveSizeFilter('');var sizeHeader=document.getElementById('sizeColumnHeader');if(sizeHeader)sizeHeader.textContent='Sizes';filterInventory() }
 function updateSearchResults(count,searchSize) { var resultsDiv=document.getElementById('inventorySearchResults');var totalProducts=STATE.products.length;if(resultsDiv){if(searchSize){if(count===0){resultsDiv.innerHTML='<i class="fas fa-exclamation-circle" style="color:var(--warning)"></i> No products with size <strong>'+searchSize+'</strong> in stock'}else{resultsDiv.innerHTML='<i class="fas fa-check-circle" style="color:var(--success)"></i> Found <strong>'+count+'</strong> product'+(count!==1?'s':'')+' with size <strong>'+searchSize+'</strong> in stock'}}else if(count===0){resultsDiv.innerHTML='<i class="fas fa-exclamation-circle" style="color:var(--warning)"></i> No products found'}else if(count===totalProducts){resultsDiv.innerHTML='<i class="fas fa-check-circle" style="color:var(--success)"></i> Showing all '+count+' products'}else{resultsDiv.innerHTML='<i class="fas fa-filter" style="color:var(--info)"></i> Showing '+count+' of '+totalProducts+' products'}} }
 
-// ==================== RENDER FILTERED INVENTORY ====================
 function renderFilteredInventory(filteredProducts,searchSize) {
-    var tb=document.getElementById('inventoryBody');
-    if(!tb)return;
+    var tb=document.getElementById('inventoryBody');if(!tb)return;
     document.getElementById('productCount').textContent=filteredProducts.length;
-    var h='';
-    if(filteredProducts.length===0){
-        h='<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--gray)"><i class="fas fa-search" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>';
-        h+=searchSize?'No products with size <strong>'+searchSize+'</strong> in stock':'No products match your search';
-        h+='</td></tr>';
-    }else{
-        for(var i=0;i<filteredProducts.length;i++){
-            var p=filteredProducts[i];
-            var totalStock=getTotalStock(p);
-            var sb='';
-            if(searchSize){
-                // SIZE FILTER ACTIVE - SHOW ONLY MATCHING SIZE(S) - all have stock > 0
-                if(p.sizes&&p.sizes.length>0){
-                    var matchingSizes=[];
-                    for(var j=0;j<p.sizes.length;j++){
-                        if(p.sizes[j].name.toUpperCase().indexOf(searchSize)!==-1){
-                            matchingSizes.push(p.sizes[j]);
-                        }
-                    }
-                    if(matchingSizes.length>0){
-                        sb='<div class="size-inventory-grid">';
-                        for(var m=0;m<matchingSizes.length;m++){
-                            var ms=matchingSizes[m];
-                            var sc=ms.qty<=3?'low':'';
-                            sb+='<div class="size-inventory-item filtered-single '+sc+'"><div class="size-name">✅ '+ms.name+'</div><div class="size-qty">'+ms.qty+' pcs</div></div>';
-                        }
-                        sb+='</div>';
-                    }else{sb='<span style="color:var(--gray)">-</span>'}
-                }else{sb='<span style="color:var(--gray)">-</span>'}
-            }else{
-                // NO SIZE FILTER - SHOW ALL SIZES
-                if(p.sizes&&p.sizes.length>0){
-                    sb='<div class="size-inventory-grid">';
-                    for(var k=0;k<p.sizes.length;k++){
-                        var s=p.sizes[k];
-                        var c=s.qty===0?'out':(s.qty<=3?'low':'');
-                        sb+='<div class="size-inventory-item '+c+'"><div class="size-name">'+s.name+'</div><div class="size-qty">'+s.qty+'</div></div>';
-                    }
-                    sb+='</div>';
-                }else{sb='<span style="color:var(--gray)">-</span>'}
-            }
-            var stockStatusColor=totalStock>10?'var(--success)':(totalStock>0?'var(--warning)':'var(--danger)');
-            var stockStatusIcon=totalStock>10?'fa-check-circle':(totalStock>0?'fa-exclamation-triangle':'fa-times-circle');
-            var img=(p.images&&p.images[0])||'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60';
-            h+='<tr><td><img src="'+img+'" style="width:45px;height:45px;object-fit:cover;border-radius:4px;cursor:pointer" onclick="openLightbox(\''+img+'\')" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60\'"></td>';
-            h+='<td><strong>'+p.name+'</strong></td>';
-            h+='<td><span class="product-category '+getCategoryDisplay(p.category)+'">'+p.category+'</span></td>';
-            h+='<td>$'+p.price.toFixed(2)+'</td><td>'+sb+'</td>';
-            h+='<td><strong style="color:'+stockStatusColor+'"><i class="fas '+stockStatusIcon+'" style="font-size:0.7rem;margin-right:2px"></i>'+totalStock+'</strong></td>';
-            h+='<td><div class="flex gap-2"><button class="btn btn-warning btn-small" onclick="openEditModal(\''+p.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct(\''+p.id+'\')"><i class="fas fa-trash"></i></button></div></td></tr>';
-        }
-    }
-    tb.innerHTML=h;
-}
+    var h='';if(filteredProducts.length===0){h='<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--gray)"><i class="fas fa-search" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>';h+=searchSize?'No products with size <strong>'+searchSize+'</strong> in stock':'No products match your search';h+='</td></tr>'}else{for(var i=0;i<filteredProducts.length;i++){var p=filteredProducts[i];var totalStock=getTotalStock(p);var sb='';if(searchSize){if(p.sizes&&p.sizes.length>0){var matchingSizes=[];for(var j=0;j<p.sizes.length;j++){if(p.sizes[j].name.toUpperCase().indexOf(searchSize)!==-1){matchingSizes.push(p.sizes[j])}}if(matchingSizes.length>0){sb='<div class="size-inventory-grid">';for(var m=0;m<matchingSizes.length;m++){var ms=matchingSizes[m];var sc=ms.qty<=3?'low':'';sb+='<div class="size-inventory-item filtered-single '+sc+'"><div class="size-name">✅ '+ms.name+'</div><div class="size-qty">'+ms.qty+' pcs</div></div>'}sb+='</div>'}else{sb='<span style="color:var(--gray)">-</span>'}}else{sb='<span style="color:var(--gray)">-</span>'}}else{if(p.sizes&&p.sizes.length>0){sb='<div class="size-inventory-grid">';for(var k=0;k<p.sizes.length;k++){var s=p.sizes[k];var c=s.qty===0?'out':(s.qty<=3?'low':'');sb+='<div class="size-inventory-item '+c+'"><div class="size-name">'+s.name+'</div><div class="size-qty">'+s.qty+'</div></div>'}sb+='</div>'}else{sb='<span style="color:var(--gray)">-</span>'}}var stockStatusColor=totalStock>10?'var(--success)':(totalStock>0?'var(--warning)':'var(--danger)');var stockStatusIcon=totalStock>10?'fa-check-circle':(totalStock>0?'fa-exclamation-triangle':'fa-times-circle');var img=(p.images&&p.images[0])||'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60';h+='<tr><td><img src="'+img+'" style="width:45px;height:45px;object-fit:cover;border-radius:4px;cursor:pointer" onclick="openLightbox(\''+img+'\')" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60\'"></td>';h+='<td><strong>'+p.name+'</strong></td>';h+='<td><span class="product-category '+getCategoryDisplay(p.category)+'">'+p.category+'</span></td>';h+='<td>$'+p.price.toFixed(2)+'</td><td>'+sb+'</td>';h+='<td><strong style="color:'+stockStatusColor+'"><i class="fas '+stockStatusIcon+'" style="font-size:0.7rem;margin-right:2px"></i>'+totalStock+'</strong></td>';h+='<td><div class="flex gap-2"><button class="btn btn-warning btn-small" onclick="openEditModal(\''+p.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct(\''+p.id+'\')"><i class="fas fa-trash"></i></button></div></td></tr>'}}tb.innerHTML=h}
 
 function renderInventory() { var allProducts=STATE.products.filter(function(p){return p});var searchSize=document.getElementById('inventorySearchSize').value.toUpperCase().trim();renderFilteredInventory(allProducts,searchSize);updateSearchResults(allProducts.length,searchSize);showAvailableSizesSummary(allProducts,searchSize) }
 function filterAndRender(){ STATE.filter.search=document.getElementById('searchInput').value.toLowerCase();STATE.filter.category=document.getElementById('categoryFilter').value;STATE.filter.stock=document.getElementById('stockFilter').value;renderProducts() }
