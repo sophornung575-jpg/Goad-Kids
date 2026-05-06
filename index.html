@@ -91,10 +91,11 @@
         .filter-group{display:flex;gap:0.75rem;flex-wrap:wrap}
         .filter-select{flex:1;min-width:140px;padding:0.7rem;border:2px solid var(--gray-light);border-radius:var(--radius);background:#fff;font-size:0.9rem;cursor:pointer}
 
-        .inventory-search{display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center}
+        .inventory-filters{display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center}
         .inventory-search-input{flex:1;min-width:200px;position:relative}
-        .inventory-search-input i{position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);color:var(--gray);font-size:0.9rem}
-        .inventory-search-input input{padding-left:2.5rem}
+        .inventory-search-input i{position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);color:var(--gray);font-size:0.9rem;z-index:1}
+        .inventory-search-input input,
+        .inventory-search-input select{padding-left:2.5rem}
 
         .product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem;margin-top:1rem}
         .product-card{background:#fff;border-radius:var(--radius-xl);overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.1);transition:all 0.3s;border:1px solid var(--gray-light)}
@@ -240,7 +241,7 @@
             .inventory-table{font-size:0.75rem}
             .inventory-table th,.inventory-table td{padding:0.4rem 0.3rem}
             .lightbox-close{top:10px;right:10px;width:40px;height:40px;font-size:1.5rem}
-            .inventory-search{flex-direction:column}
+            .inventory-filters{flex-direction:column}
             .inventory-search-input{min-width:100%}
         }
     </style>
@@ -371,9 +372,9 @@
                             <div class="admin-card-title"><i class="fas fa-boxes" style="color:var(--primary)"></i> Product Inventory<span class="admin-count" id="productCount">0</span></div>
                             <button class="btn btn-outline btn-small" onclick="exportInventoryCSV()"><i class="fas fa-download"></i> Export CSV</button>
                         </div>
-                        <!-- Inventory Search Bar -->
+                        <!-- Inventory Search Bar with Stock Filter -->
                         <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--gray-light);background:var(--light)">
-                            <div class="inventory-search">
+                            <div class="inventory-filters">
                                 <div class="inventory-search-input">
                                     <i class="fas fa-search"></i>
                                     <input type="text" id="inventorySearchName" class="form-control" placeholder="Search by name..." oninput="filterInventory()">
@@ -385,6 +386,12 @@
                                     <option value="tshirts">T-Shirts</option>
                                     <option value="Dresses">Dresses</option>
                                     <option value="Baby Jeans">Baby Jeans</option>
+                                </select>
+                                <select id="inventorySearchStock" class="form-control" style="flex:1;min-width:140px" onchange="filterInventory()">
+                                    <option value="all">All Stock Status</option>
+                                    <option value="in-stock">In Stock</option>
+                                    <option value="out-of-stock">Out of Stock</option>
+                                    <option value="low-stock">Low Stock (≤3)</option>
                                 </select>
                                 <div class="inventory-search-input">
                                     <i class="fas fa-tag"></i>
@@ -479,12 +486,14 @@ var selectedRole = 'full';
 
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', async function() {
+    // Mobile menu toggle
     document.getElementById('mobileMenuBtn').addEventListener('click', function() {
         var nav = document.getElementById('mobileNav');
         nav.classList.toggle('active');
         this.innerHTML = nav.classList.contains('active') ? '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
     });
     
+    // Check admin status
     if (STATE.isAdmin) {
         document.getElementById('adminBadge').classList.remove('hidden');
         document.getElementById('adminBadge').textContent = STATE.adminRole === 'full' ? 'ADMIN' : (STATE.adminRole === 'orders' ? 'ORDERS' : 'STOCK');
@@ -494,6 +503,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         document.getElementById('adminLoginBtnMobile').classList.add('hidden');
     }
     
+    // Initialize store ID
     var sid = localStorage.getItem('goatStoreId');
     if (!sid) {
         var params = new URLSearchParams(window.location.search);
@@ -504,8 +514,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('currentStoreIdDisplay').textContent = sid;
     document.getElementById('storeIdDisplay').textContent = sid;
     
+    // Load cart
     STATE.cart = JSON.parse(localStorage.getItem('goatCart') || '[]');
     updateCartBadge();
+    
+    // Initialize Firebase and load data
     await checkFirebase();
     await loadData();
     showTab('store');
@@ -547,6 +560,7 @@ function switchAdminTab(tab) {
     } else {
         document.querySelectorAll('.admin-tab')[1].classList.add('active');
         document.getElementById('adminInventoryTab').classList.add('active');
+        // Clear inventory search when switching to inventory tab
         clearInventorySearch();
         renderInventory();
     }
@@ -774,6 +788,11 @@ function getTotalStock(p) {
 }
 
 function hasStock(p) { return getTotalStock(p) > 0; }
+
+function isLowStock(p) { 
+    var t = getTotalStock(p);
+    return t > 0 && t <= 3;
+}
 
 // ==================== FIREBASE ====================
 async function checkFirebase() {
@@ -1133,11 +1152,22 @@ function selectSize(el,pid,size){
 function filterInventory() {
     const searchName = document.getElementById('inventorySearchName').value.toLowerCase().trim();
     const searchCategory = document.getElementById('inventorySearchCategory').value;
+    const searchStock = document.getElementById('inventorySearchStock').value;
     const searchSize = document.getElementById('inventorySearchSize').value.toUpperCase().trim();
     
     const filteredProducts = STATE.products.filter(product => {
+        // Filter by name
         if (searchName && !product.name.toLowerCase().includes(searchName)) return false;
+        
+        // Filter by category
         if (searchCategory !== 'all' && product.category !== searchCategory) return false;
+        
+        // Filter by stock status
+        if (searchStock === 'in-stock' && !hasStock(product)) return false;
+        if (searchStock === 'out-of-stock' && hasStock(product)) return false;
+        if (searchStock === 'low-stock' && !isLowStock(product)) return false;
+        
+        // Filter by size
         if (searchSize) {
             if (product.sizes && product.sizes.length > 0) {
                 const hasMatchingSize = product.sizes.some(size => size.name.toUpperCase().includes(searchSize));
@@ -1146,6 +1176,7 @@ function filterInventory() {
                 return false;
             }
         }
+        
         return true;
     });
     
@@ -1156,17 +1187,22 @@ function filterInventory() {
 function clearInventorySearch() {
     document.getElementById('inventorySearchName').value = '';
     document.getElementById('inventorySearchCategory').value = 'all';
+    document.getElementById('inventorySearchStock').value = 'all';
     document.getElementById('inventorySearchSize').value = '';
     filterInventory();
 }
 
 function updateSearchResults(count) {
     const resultsDiv = document.getElementById('inventorySearchResults');
+    const totalProducts = STATE.products.length;
+    
     if (resultsDiv) {
         if (count === 0) {
             resultsDiv.innerHTML = '<i class="fas fa-exclamation-circle" style="color: var(--warning);"></i> No products found matching your search';
+        } else if (count === totalProducts) {
+            resultsDiv.innerHTML = '<i class="fas fa-check-circle" style="color: var(--success);"></i> Showing all ' + count + ' products';
         } else {
-            resultsDiv.innerHTML = '<i class="fas fa-check-circle" style="color: var(--success);"></i> Showing ' + count + ' product' + (count !== 1 ? 's' : '');
+            resultsDiv.innerHTML = '<i class="fas fa-filter" style="color: var(--info);"></i> Showing ' + count + ' of ' + totalProducts + ' product' + (totalProducts !== 1 ? 's' : '');
         }
     }
 }
@@ -1184,6 +1220,7 @@ function renderFilteredInventory(filteredProducts) {
     } else {
         for (let i = 0; i < filteredProducts.length; i++) {
             const p = filteredProducts[i];
+            const totalStock = getTotalStock(p);
             
             let sb = '';
             if (p.sizes && p.sizes.length) {
@@ -1198,6 +1235,10 @@ function renderFilteredInventory(filteredProducts) {
                 sb = '<span style="color:var(--gray)">-</span>';
             }
             
+            // Stock status indicator for total column
+            let stockStatusColor = totalStock > 10 ? 'var(--success)' : (totalStock > 0 ? 'var(--warning)' : 'var(--danger)');
+            let stockStatusIcon = totalStock > 10 ? 'fa-check-circle' : (totalStock > 0 ? 'fa-exclamation-triangle' : 'fa-times-circle');
+            
             const img = (p.images && p.images[0]) || 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60';
             
             h += '<tr>';
@@ -1206,7 +1247,7 @@ function renderFilteredInventory(filteredProducts) {
             h += '<td><span class="product-category ' + getCategoryDisplay(p.category) + '">' + p.category + '</span></td>';
             h += '<td>$' + p.price.toFixed(2) + '</td>';
             h += '<td>' + sb + '</td>';
-            h += '<td><strong>' + getTotalStock(p) + '</strong></td>';
+            h += '<td><strong style="color:' + stockStatusColor + '"><i class="fas ' + stockStatusIcon + '" style="font-size:0.7rem;margin-right:2px"></i>' + totalStock + '</strong></td>';
             h += '<td><div class="flex gap-2"><button class="btn btn-warning btn-small" onclick="openEditModal(\'' + p.id + '\')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct(\'' + p.id + '\')"><i class="fas fa-trash"></i></button></div></td>';
             h += '</tr>';
         }
