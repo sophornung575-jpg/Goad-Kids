@@ -652,7 +652,28 @@ function filterInventory() {
     highlightQuickButton(searchSize); showActiveSizeFilter(searchSize);
     var sizeHeader = document.getElementById('sizeColumnHeader'); if (sizeHeader) { sizeHeader.textContent = searchSize ? 'Size: ' + searchSize : 'Sizes'; }
     var filteredProducts = STATE.products.filter(function(product) {
-        if (searchSize) { if (product.sizes && product.sizes.length > 0) { var hasMatchingSize = product.sizes.some(function(size) { return size.name.toUpperCase().includes(searchSize); }); if (!hasMatchingSize) return false; } else { return false; } }
+        if (searchSize) {
+            if (product.sizes && product.sizes.length > 0) {
+                // Check if product has matching size WITH STOCK AVAILABLE
+                var matchingSize = product.sizes.find(function(size) {
+                    return size.name.toUpperCase().includes(searchSize) && size.qty > 0;
+                });
+                if (!matchingSize) return false; // No matching size with stock
+            } else {
+                return false;
+            }
+        }
+        if (searchName && !product.name.toLowerCase().includes(searchName)) return false;
+        if (searchCategory !== 'all' && product.category !== searchCategory) return false;
+        if (searchStock === 'in-stock' && !hasStock(product)) return false;
+        if (searchStock === 'out-of-stock' && hasStock(product)) return false;
+        if (searchStock === 'low-stock' && !isLowStock(product)) return false;
+        return true;
+    });
+    renderFilteredInventory(filteredProducts, searchSize);
+    updateSearchResults(filteredProducts.length, searchSize);
+    showAvailableSizesSummary(filteredProducts, searchSize);
+}
         if (searchName && !product.name.toLowerCase().includes(searchName)) return false;
         if (searchCategory !== 'all' && product.category !== searchCategory) return false;
         if (searchStock === 'in-stock' && !hasStock(product)) return false;
@@ -676,7 +697,7 @@ function renderFilteredInventory(filteredProducts, searchSize) {
     var h = '';
     if (filteredProducts.length === 0) {
         h = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--gray)"><i class="fas fa-search" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>';
-        h += searchSize ? 'No products with size <strong>' + searchSize + '</strong>' : 'No products match your search';
+        h += searchSize ? 'No products with size <strong>' + searchSize + '</strong> in stock' : 'No products match your search';
         h += '</td></tr>';
     } else {
         for (var i = 0; i < filteredProducts.length; i++) {
@@ -684,7 +705,7 @@ function renderFilteredInventory(filteredProducts, searchSize) {
             var totalStock = getTotalStock(p);
             var sb = '';
             if (searchSize) {
-                // SIZE FILTER ACTIVE - SHOW ONLY MATCHING SIZES
+                // SIZE FILTER ACTIVE - SHOW ONLY MATCHING SIZES WITH STOCK
                 if (p.sizes && p.sizes.length > 0) {
                     var matchingSizes = [];
                     for (var j = 0; j < p.sizes.length; j++) {
@@ -697,7 +718,7 @@ function renderFilteredInventory(filteredProducts, searchSize) {
                         for (var m = 0; m < matchingSizes.length; m++) {
                             var ms = matchingSizes[m];
                             var sc = ms.qty === 0 ? 'out' : (ms.qty <= 3 ? 'low' : '');
-                            sb += '<div class="size-inventory-item filtered-single ' + sc + '"><div class="size-name">' + ms.name + '</div><div class="size-qty">' + ms.qty + ' pcs</div></div>';
+                            sb += '<div class="size-inventory-item filtered-single ' + sc + '"><div class="size-name">' + (ms.qty > 0 ? '✅ ' : '') + ms.name + '</div><div class="size-qty">' + ms.qty + ' pcs</div></div>';
                         }
                         sb += '</div>';
                     } else { sb = '<span style="color:var(--gray)">-</span>'; }
