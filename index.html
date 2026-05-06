@@ -958,20 +958,27 @@ function renderFilteredInventory(filteredProducts, searchSize) {
             var p = filteredProducts[i];
             var totalStock = getTotalStock(p);
             
-            var sb = '';
+                        var sb = '';
             if (p.sizes && p.sizes.length) {
                 if (searchSize) {
-                    // SHOW ONLY THE MATCHING SIZE
-                    var matchingSize = null;
+                    // SHOW ONLY THE MATCHING SIZE - don't show 0 stock sizes
+                    var matchingSizes = [];
                     for (var j = 0; j < p.sizes.length; j++) {
-                        if (p.sizes[j].name.toUpperCase().includes(searchSize)) {
-                            matchingSize = p.sizes[j];
-                            break;
+                        if (p.sizes[j].name.toUpperCase().indexOf(searchSize) !== -1) {
+                            matchingSizes.push(p.sizes[j]);
                         }
-                    } 
-                    if (matchingSize) {
-                        var sc = matchingSize.qty === 0 ? 'out' : (matchingSize.qty <= 3 ? 'low' : '');
-                        sb = '<div class="size-inventory-grid"><div class="size-inventory-item filtered-single ' + sc + '"><div class="size-name">' + matchingSize.name + '</div><div class="size-qty">' + matchingSize.qty + ' pcs</div></div></div>';
+                    }
+                    if (matchingSizes.length > 0) {
+                        sb = '<div class="size-inventory-grid">';
+                        for (var m = 0; m < matchingSizes.length; m++) {
+                            var ms = matchingSizes[m];
+                            var sc = ms.qty === 0 ? 'out' : (ms.qty <= 3 ? 'low' : '');
+                            sb += '<div class="size-inventory-item filtered-single ' + sc + '">';
+                            sb += '<div class="size-name">' + ms.name + '</div>';
+                            sb += '<div class="size-qty">' + ms.qty + ' pcs</div>';
+                            sb += '</div>';
+                        }
+                        sb += '</div>';
                     } else {
                         sb = '<span style="color:var(--gray)">-</span>';
                     }
