@@ -488,7 +488,22 @@ function closeAdminModal(){document.getElementById('adminModal').classList.remov
 function copyStoreId(){navigator.clipboard.writeText(STATE.storeId).then(function(){showToast('Copied!','success')}).catch(function(){showToast('Failed','error')})}
 
 // ==================== FIREBASE ====================
-async function checkFirebase(){showStatus('Checking...','offline');try{await db.collection('_test_').doc('c').set({t:Date.now()});await db.collection('_test_').doc('c').delete();STATE.firebaseOnline=true;showStatus('Connected','online');document.getElementById('syncBtn').disabled=false}catch(e){STATE.firebaseOnline=false;showStatus('Offline','offline');document.getElementById('syncBtn').disabled=true}setTimeout(function(){document.getElementById('statusBar').classList.remove('show')},2000)}
+async function checkFirebase() { 
+    showStatus('Checking...','offline');
+    try {
+        var testDoc = await db.collection('stores').doc('_test_connection_').get();
+        STATE.firebaseOnline = true;
+        showStatus('Connected','online');
+        document.getElementById('syncBtn').disabled = false;
+    } catch(e) {
+        STATE.firebaseOnline = false;
+        showStatus('Offline - using local storage','offline');
+        document.getElementById('syncBtn').disabled = true;
+    }
+    setTimeout(function() {
+        document.getElementById('statusBar').classList.remove('show');
+    }, 2000);
+}
 async function loadData(){if(STATE.firebaseOnline){try{var s=await db.collection('stores').doc(STATE.storeId).collection('products').where('active','==',true).get();var p=[];s.forEach(function(d){var dt=d.data();p.push({id:d.id,name:dt.name||'',price:dt.price||0,stock:dt.stock||0,category:dt.category||'',images:dt.images||[],sizes:dt.sizes||[]})});if(p.length){STATE.products=p;saveProducts()}else loadProductsLocal();var os=await db.collection('stores').doc(STATE.storeId).collection('orders').get();STATE.pendingOrders=[];STATE.confirmedOrders=[];os.forEach(function(d){var dt=d.data();if(dt.status==='pending')STATE.pendingOrders.push({...dt,orderId:d.id});else STATE.confirmedOrders.push({...dt,orderId:d.id})});saveOrders()}catch(e){loadLocal()}}else{loadLocal()}}
 function loadLocal(){loadProductsLocal();STATE.pendingOrders=JSON.parse(localStorage.getItem('pendingOrders')||'[]');STATE.confirmedOrders=JSON.parse(localStorage.getItem('confirmedOrders')||'[]')}
 function loadProductsLocal(){var s=localStorage.getItem('goatProducts');STATE.products=s?JSON.parse(s):[];if(!STATE.products.length)loadSamples()}
