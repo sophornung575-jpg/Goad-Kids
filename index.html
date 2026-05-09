@@ -553,8 +553,107 @@ function remCart(i){STATE.cart.splice(i,1);localStorage.setItem('goatCart',JSON.
 function selectPayment(m){STATE.paymentMethod=m;document.getElementById('payOption').classList.toggle('selected',m==='payway');document.getElementById('codOption').classList.toggle('selected',m==='cod')}
 function applyPromo(){var code=document.getElementById('promoCode').value.trim().toUpperCase();var msgEl=document.getElementById('promoMessage');if(!code){msgEl.innerHTML='<span style="color:var(--danger)">Please enter a code</span>';STATE.activePromo=null;updateShipping();return}var promo=STATE.promoCodes[code];if(!promo){msgEl.innerHTML='<span style="color:var(--danger)">Invalid promo code</span>';STATE.activePromo=null;updateShipping();return}STATE.activePromo={code:code,...promo};msgEl.innerHTML='<span style="color:var(--success)">✅ '+promo.description+' applied!</span>';updateShipping();showToast('Promo: '+promo.description,'success')}
 function updateShipping(){var loc=document.getElementById('shippingLocation'),sh=0;if(loc&&loc.value==='phnompenh')sh=1.50;else if(loc&&loc.value==='province')sh=2.00;STATE.shippingFee=sh;var sub=0;for(var i=0;i<STATE.cart.length;i++){sub+=STATE.cart[i].price*STATE.cart[i].quantity}var discount=0;if(STATE.activePromo){if(STATE.activePromo.type==='percent')discount=sub*STATE.activePromo.discount;else if(STATE.activePromo.type==='fixed')discount=STATE.activePromo.discount;else if(STATE.activePromo.type==='freeship')sh=0}var total=sub-discount+sh;document.getElementById('cartShipping').textContent='$'+sh.toFixed(2)+(discount>0?' (-$'+discount.toFixed(2)+')':'');document.getElementById('cartTotal').textContent='$'+total.toFixed(2);document.getElementById('paywayTotal').textContent=total.toFixed(2)}
-function placeOrder(){var n=document.getElementById('customerName').value.trim(),ph=document.getElementById('customerPhone').value.trim(),ad=document.getElementById('customerAddress').value.trim(),ci=document.getElementById('customerCity').value.trim();if(!n||!ph||!ad){showToast('Fill Name, Phone & Address','error');return}if(!STATE.cart.length){showToast('Cart empty','error');return}var sm='Pickup',smt='Pickup from Shop';var le=document.getElementById('shippingLocation');if(le&&le.value==='phnompenh'){sm='Phnom Penh';smt='Phnom Penh ($1.50)'}else if(le&&le.value==='province'){sm='Province';smt='Province ($2.00)'}else{smt='Pickup (FREE)'}var oid='ORD-'+Date.now(),sub=0;for(var i=0;i<STATE.cart.length;i++){sub+=STATE.cart[i].price*STATE.cart[i].quantity}var sh=STATE.shippingFee||0;var discount=0;if(STATE.activePromo){if(STATE.activePromo.type==='percent')discount=sub*STATE.activePromo.discount;else if(STATE.activePromo.type==='fixed')discount=STATE.activePromo.discount;else if(STATE.activePromo.type==='freeship')sh=0}var oc=[];for(var j=0;j<STATE.cart.length;j++){var ci2=STATE.cart[j];oc.push({productId:ci2.productId,name:ci2.name,size:ci2.size,quantity:ci2.quantity,price:ci2.price,subtotal:ci2.price*ci2.quantity,image:ci2.image||''})}var order={orderId:oid,timestamp:Date.now(),orderDate:new Date().toLocaleString(),status:'pending',shippingMethod:sm,customerName:n,customerPhone:ph,customerAddress:ad,customerCity:ci,customerNotes:document.getElementById('customerNotes').value.trim(),paymentMethod:STATE.paymentMethod,storeId:STATE.storeId,cart:oc,subtotal:sub,shipping:sh,discount:discount,total:sub-discount+sh,promoCode:STATE.activePromo?STATE.activePromo.code:null};STATE.pendingOrders.push(order);saveOrders();logActivity('New Order',oid+' - $'+order.total.toFixed(2));if(STATE.firebaseOnline)db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order);STATE.cart=[];STATE.activePromo=null;localStorage.setItem('goatCart','[]');document.getElementById('promoCode').value='';document.getElementById('promoMessage').innerHTML='';updateCartBadge();renderCart();updateShipping();showToast('Order placed!','success')}
-function handlePayway(e){if(!STATE.cart.length){e.preventDefault();showToast('Cart empty','error');return false}placeOrder();return true}
+function placeOrder() { 
+    var n = document.getElementById('customerName').value.trim();
+    var ph = document.getElementById('customerPhone').value.trim();
+    var ad = document.getElementById('customerAddress').value.trim();
+    var ci = document.getElementById('customerCity').value.trim();
+    
+    // Validate customer info first
+    if (!n || !ph || !ad) {
+        showToast('Fill Name, Phone & Address', 'error');
+        return;
+    }
+    
+    // Check cart has items BEFORE doing anything else
+    if (!STATE.cart || STATE.cart.length === 0) {
+        showToast('Cart is empty!', 'error');
+        return;
+    }
+    
+    // Store cart items in a local variable BEFORE clearing
+    var cartItems = [];
+    for (var i = 0; i < STATE.cart.length; i++) {
+        cartItems.push({
+            productId: STATE.cart[i].productId,
+            name: STATE.cart[i].name,
+            size: STATE.cart[i].size,
+            quantity: STATE.cart[i].quantity,
+            price: STATE.cart[i].price,
+            image: STATE.cart[i].image || ''
+        });
+    }
+    
+    // Calculate shipping
+    var sm = 'Pickup', smt = 'Pickup from Shop';
+    var le = document.getElementById('shippingLocation');
+    if (le && le.value === 'phnompenh') { sm = 'Phnom Penh'; smt = 'Phnom Penh ($1.50)'; }
+    else if (le && le.value === 'province') { sm = 'Province'; smt = 'Province ($2.00)'; }
+    else { smt = 'Pickup (FREE)'; }
+    
+    // Calculate totals
+    var sub = 0;
+    for (var j = 0; j < cartItems.length; j++) {
+        sub += cartItems[j].price * cartItems[j].quantity;
+    }
+    var sh = STATE.shippingFee || 0;
+    var total = sub + sh;
+    
+    // Create order object
+    var oid = 'ORD-' + Date.now();
+    var order = {
+        orderId: oid,
+        timestamp: Date.now(),
+        orderDate: new Date().toLocaleString(),
+        status: 'pending',
+        shippingMethod: sm,
+        customerName: n,
+        customerPhone: ph,
+        customerAddress: ad,
+        customerCity: ci,
+        customerNotes: document.getElementById('customerNotes').value.trim(),
+        paymentMethod: STATE.paymentMethod,
+        storeId: STATE.storeId,
+        cart: cartItems,
+        subtotal: sub,
+        shipping: sh,
+        total: total
+    };
+    
+    // Save order
+    STATE.pendingOrders.push(order);
+    saveOrders();
+    logActivity('New Order', oid + ' - $' + total.toFixed(2));
+    
+    // Sync to Firebase if online
+    if (STATE.firebaseOnline) {
+        db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order);
+    }
+    
+    // NOW clear the cart (after order is saved)
+    STATE.cart = [];
+    localStorage.setItem('goatCart', '[]');
+    updateCartBadge();
+    renderCart();
+    updateShipping();
+    
+    showToast('Order placed! ' + oid, 'success');
+    
+    // Update admin view if admin is logged in
+    if (STATE.isAdmin) {
+        renderPending();
+        updateAdminBadges();
+    }
+}
+function handlePayway(e) { 
+    if (!STATE.cart || STATE.cart.length === 0) { 
+        e.preventDefault(); 
+        showToast('Cart empty', 'error'); 
+        return false; 
+    } 
+    placeOrder(); 
+    return true; 
+}
 function confirmOrder(oid){var idx=-1;for(var i=0;i<STATE.pendingOrders.length;i++){if(STATE.pendingOrders[i].orderId===oid){idx=i;break}}if(idx<0)return;var order=STATE.pendingOrders[idx];var orderCopy=JSON.parse(JSON.stringify(order));for(var j=0;j<order.cart.length;j++){var it=order.cart[j],p=null;for(var k=0;k<STATE.products.length;k++){if(STATE.products[k].id===it.productId){p=STATE.products[k];break}}if(!p){showToast('Not found: '+it.name,'error');return}if(p.sizes&&p.sizes.length){var so=null;for(var l=0;l<p.sizes.length;l++){if(p.sizes[l].name===it.size){so=p.sizes[l];break}}if(!so||so.qty<it.quantity){showToast('Not enough: '+it.name+' ('+it.size+')','error');return}}else if(p.stock<it.quantity){showToast('Not enough: '+it.name,'error');return}}for(var m=0;m<order.cart.length;m++){var item=order.cart[m],pr=null;for(var n=0;n<STATE.products.length;n++){if(STATE.products[n].id===item.productId){pr=STATE.products[n];break}}if(pr){if(pr.sizes&&pr.sizes.length){var szo=null;for(var o=0;o<pr.sizes.length;o++){if(pr.sizes[o].name===item.size){szo=pr.sizes[o];break}}if(szo)szo.qty=Math.max(0,szo.qty-item.quantity)}pr.stock=Math.max(0,pr.stock-item.quantity)}}saveProducts();order.status='confirmed';order.confirmedAt=new Date().toLocaleString();STATE.confirmedOrders.push(order);STATE.pendingOrders.splice(idx,1);saveOrders();logActivity('Confirm Order',oid+' - $'+order.total.toFixed(2));if(STATE.firebaseOnline)syncToFirebase();renderPending();renderHistory();renderProducts();renderInventory();updateAdminBadges();checkLowStockAlerts();showToast('Order '+oid+' confirmed!','success');setTimeout(function(){if(confirm('Print receipt?'))printReceipt(oid)},300)}
 function rejectOrder(oid){var idx=-1;for(var i=0;i<STATE.pendingOrders.length;i++){if(STATE.pendingOrders[i].orderId===oid){idx=i;break}}if(idx<0)return;var order=STATE.pendingOrders[idx];order.status='rejected';order.rejectedAt=new Date().toLocaleString();order.rejectionReason=prompt('Reason:')||'No reason';STATE.confirmedOrders.push(order);STATE.pendingOrders.splice(idx,1);saveOrders();logActivity('Reject Order',oid);if(STATE.firebaseOnline)syncToFirebase();renderPending();renderHistory();updateAdminBadges();showToast('Rejected','warning')}
 function confirmAll(){if(!STATE.pendingOrders.length){showToast('No pending','warning');return}if(!confirm('Confirm ALL '+STATE.pendingOrders.length+' orders?'))return;var orders=STATE.pendingOrders.slice();for(var i=0;i<orders.length;i++){var o=orders[i];for(var j=0;j<o.cart.length;j++){var it=o.cart[j],p=null;for(var k=0;k<STATE.products.length;k++){if(STATE.products[k].id===it.productId){p=STATE.products[k];break}}if(p){if(p.sizes&&p.sizes.length){var so=null;for(var l=0;l<p.sizes.length;l++){if(p.sizes[l].name===it.size){so=p.sizes[l];break}}if(so)so.qty=Math.max(0,so.qty-it.quantity)}p.stock=Math.max(0,p.stock-it.quantity)}}o.status='confirmed';o.confirmedAt=new Date().toLocaleString();STATE.confirmedOrders.push(o)}STATE.pendingOrders=[];saveProducts();saveOrders();logActivity('Confirm All',orders.length+' orders');if(STATE.firebaseOnline)syncToFirebase();renderPending();renderHistory();renderProducts();renderInventory();updateAdminBadges();checkLowStockAlerts();showToast(orders.length+' confirmed!','success')}
