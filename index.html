@@ -446,7 +446,67 @@ function renderTopItemsList(){var list=document.getElementById('topItemsList');i
 function openLightbox(src){document.getElementById('lightboxImg').src=src;document.getElementById('lightboxImg').classList.remove('zoomed');document.getElementById('zoomHint').style.display='block';document.getElementById('lightbox').classList.add('active');document.body.style.overflow='hidden'}
 function closeLightbox(e){if(e&&e.target!==document.getElementById('lightbox')&&e.target!==document.getElementById('lightboxImg'))return;document.getElementById('lightbox').classList.remove('active');document.body.style.overflow=''}
 function toggleZoom(e){e.stopPropagation();var img=document.getElementById('lightboxImg');var hint=document.getElementById('zoomHint');img.classList.toggle('zoomed');hint.textContent=img.classList.contains('zoomed')?'🔍 Click to zoom out':'🔍 Click image to zoom'}
-function printReceipt(oid){var order=null;for(var i=0;i<STATE.confirmedOrders.length;i++){if(STATE.confirmedOrders[i].orderId===oid){order=STATE.confirmedOrders[i];break}}if(!order){showToast('Not found','error');return}var smt=order.shippingMethod||'N/A',items='';for(var j=0;j<order.cart.length;j++){var it=order.cart[j];items+='<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;font-size:14px"><span style="font-weight:bold">'+it.name+' ('+it.size+')</span><span>x'+it.quantity+'</span></div>';items+='<div style="font-size:14px;padding-left:8px;margin-bottom:3px">$'+it.price.toFixed(2)+' each = $'+it.subtotal.toFixed(2)+'</div></div>'}var html='<!DOCTYPE html><html><head><title>Receipt</title><meta name="viewport" content="width=58mm"><style>*{margin:0;padding:0}body{font-family:monospace;background:#fff;display:flex;justify-content:center}.receipt{width:58mm;padding:10px 6px;font-size:14px}.center{text-align:center}.dash{border-top:1px dashed #000;margin:10px 0}.solid{border-top:1px solid #000;margin:10px 0}.bold{font-weight:bold}.flex{display:flex;justify-content:space-between}.big{font-size:16px}.small{font-size:14px}.btns{position:fixed;bottom:0;left:0;right:0;display:flex;gap:8px;padding:12px;background:#fff;border-top:1px solid #ddd;justify-content:center}.btns button{padding:12px 24px;border:none;border-radius:8px;font-size:14px;cursor:pointer}.btn-print{background:#000;color:#fff}.btn-close{background:#ddd;color:#000}@media print{.btns{display:none!important}}</style></head><body><div style="padding-bottom:80px"><div class="receipt">';html+='<div class="center"><h2>GOAT KIDS</h2><p class="small">'+STATE.storeId+'</p></div><div class="dash"></div><div class="center bold big">ORDER RECEIPT</div><div class="dash"></div>';html+='<p class="small"><b>Order:</b> '+order.orderId+'</p><p class="small"><b>Date:</b> '+order.orderDate+'</p><p class="small"><b>Ship:</b> '+smt+'</p><div class="dash"></div>';html+='<p class="small"><b>Name:</b> '+order.customerName+'</p><p class="small"><b>Phone:</b> '+order.customerPhone+'</p>';if(order.customerCity)html+='<p class="small"><b>City:</b> '+order.customerCity+'</p>';if(order.customerAddress)html+='<p class="small"><b>Address:</b> '+order.customerAddress+'</p><div class="dash"></div>'+items+'<div class="dash"></div>';html+='<div class="flex small"><span>Subtotal:</span><span>$'+order.subtotal.toFixed(2)+'</span></div><div class="flex small"><span>Shipping:</span><span>$'+order.shipping.toFixed(2)+'</span></div><div class="solid"></div><div class="flex bold big"><span>TOTAL:</span><span>$'+order.total.toFixed(2)+'</span></div><div class="dash"></div><div class="center small"><p>Thank you! GOAT KIDS</p></div>';html+='</div></div><div class="btns"><button class="btn-print" onclick="window.print()">🖨️ Print</button><button class="btn-close" onclick="window.close()">✕ Close</button></div></body></html>';var w=window.open('','_blank');w.document.write(html);w.document.close()}
+function printReceipt(oid){
+    var order = null;
+    for(var i = 0; i < STATE.confirmedOrders.length; i++){
+        if(STATE.confirmedOrders[i].orderId === oid){ order = STATE.confirmedOrders[i]; break; }
+    }
+    if(!order){ showToast('Not found', 'error'); return; }
+    
+    var smt = order.shippingMethod || 'N/A';
+    var items = '';
+    for(var j = 0; j < order.cart.length; j++){
+        var it = order.cart[j];
+        items += '<div style="margin-top:3px;font-size:11px">';
+        items += '<b>' + it.name + ' (' + (it.size || '') + ')</b><br>';
+        items += it.quantity + ' x $' + it.price.toFixed(2) + ' = $' + ((it.price * it.quantity) || 0).toFixed(2);
+        items += '</div>';
+    }
+    
+    var html = '<!DOCTYPE html><html><head><title>Receipt ' + oid + '</title>';
+    html += '<meta name="viewport" content="width=300,initial-scale=1">';
+    html += '<style>*{margin:0;padding:0;box-sizing:border-box}';
+    html += 'body{font-family:Arial,sans-serif;background:#fff;display:flex;justify-content:center;padding:10px}';
+    html += '.receipt{width:280px;padding:8px;font-size:11px;border:1px solid #ddd}';
+    html += '.center{text-align:center}.dash{border-top:1px dashed #000;margin:6px 0}';
+    html += '.bold{font-weight:bold}h2{font-size:14px;margin:3px 0}';
+    html += '.total-row{display:flex;justify-content:space-between;font-size:11px;padding:1px 0}';
+    html += '.grand-total{font-size:13px;font-weight:bold;border-top:1px solid #000;padding-top:4px;margin-top:4px}';
+    html += '@media print{body{width:280px}@page{margin:0;size:80mm auto}}';
+    html += '</style></head><body><div class="receipt">';
+    
+    html += '<div class="center">';
+    html += '<img src="https://sophornung575-jpg.github.io/Goad-Kids/Goat_Kids_QR.jpg" style="width:60px;height:60px;object-fit:contain;margin-bottom:3px" onerror="this.style.display=\'none\'">';
+    html += '<p style="font-size:9px">' + STATE.storeId + ' | 016 71 33 87</p></div>';
+    html += '<div class="dash"></div>';
+    html += '<div class="center bold" style="font-size:12px">ORDER RECEIPT</div>';
+    html += '<div class="dash"></div>';
+    
+    html += '<p style="font-size:10px"><b>Order:</b> ' + order.orderId + '</p>';
+    html += '<p style="font-size:10px"><b>Date:</b> ' + (order.orderDate || '') + '</p>';
+    html += '<p style="font-size:10px"><b>Ship:</b> ' + smt + '</p>';
+    html += '<div class="dash"></div>';
+    
+    html += '<p style="font-size:10px"><b>Name:</b> ' + (order.customerName || '') + '</p>';
+    html += '<p style="font-size:10px"><b>Phone:</b> ' + (order.customerPhone || '') + '</p>';
+    if(order.customerCity) html += '<p style="font-size:10px"><b>City:</b> ' + order.customerCity + '</p>';
+    html += '<div class="dash"></div>';
+    
+    html += items;
+    html += '<div class="dash"></div>';
+    
+    html += '<div class="total-row"><span>Subtotal:</span><span>$' + (order.subtotal || 0).toFixed(2) + '</span></div>';
+    html += '<div class="total-row"><span>Shipping:</span><span>$' + (order.shipping || 0).toFixed(2) + '</span></div>';
+    html += '<div class="total-row grand-total"><span>TOTAL:</span><span>$' + (order.total || 0).toFixed(2) + '</span></div>';
+    
+    html += '<div class="dash"></div>';
+    html += '<div class="center" style="font-size:9px"><p>Thank you!</p></div>';
+    html += '</div></body></html>';
+    
+    var w = window.open('', '_blank', 'width=320,height=600');
+    w.document.write(html);
+    w.document.close();
+}
 function escCSV(v){if(!v)return'';var s=String(v);return s.indexOf(',')>-1||s.indexOf('"')>-1?'"'+s.replace(/"/g,'""')+'"':s}
 function dlCSV(csv,fn){var b=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=fn;a.click();URL.revokeObjectURL(a.href)}
 function exportPendingCSV(){if(!STATE.pendingOrders.length){showToast('No pending','warning');return}var csv='Order ID,Date,Status,Shipping,Customer,Phone,City,Address,Payment,Item,Size,Qty,Price,Subtotal,Total\n';for(var i=0;i<STATE.pendingOrders.length;i++){var o=STATE.pendingOrders[i];for(var j=0;j<o.cart.length;j++){var it=o.cart[j];csv+=[escCSV(o.orderId),escCSV(o.orderDate),escCSV(o.status),escCSV(o.shippingMethod||''),escCSV(o.customerName),escCSV(o.customerPhone),escCSV(o.customerCity||''),escCSV(o.customerAddress),escCSV(o.paymentMethod),escCSV(it.name),escCSV(it.size),it.quantity,it.price.toFixed(2),it.subtotal.toFixed(2),(j===0?o.total.toFixed(2):'')].join(',')+'\n'}}dlCSV(csv,'GOAT_KIDS_Pending.csv');showToast('Exported!','success')}
