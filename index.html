@@ -293,15 +293,25 @@
 
 <script>
 // =============================================
-// MESSENGER CONFIGURATION - UPDATED WITH YOUR PAGE
+// MESSENGER CONFIGURATION - TEST THESE ONE BY ONE
 // =============================================
 const MESSENGER_CONFIG = {
-    facebookPageId: 'Goatkids', // Your Facebook Page username
-    telegramBotToken: '',       // Optional: Add Telegram bot token
-    telegramChatId: '',         // Optional: Add Telegram chat ID
-    whatsappNumber: ''          // Optional: e.g., '85516713387'
+    // OPTION 1: Try the ID from your share link first
+    facebookPageId: '18r7LCACbL',
+    
+    // OPTION 2: If that doesn't work, try username
+    // facebookPageId: 'Goatkids',
+    
+    // OPTION 3: If you find your numeric ID, use that
+    // facebookPageId: 'YOUR_NUMERIC_PAGE_ID',
+    
+    // WhatsApp backup (add your number)
+    whatsappNumber: '',
+    
+    // Telegram backup
+    telegramBotToken: '',
+    telegramChatId: ''
 };
-
 // =============================================
 // STATE & TRANSLATIONS
 // =============================================
@@ -404,7 +414,7 @@ function applyTranslations(){
 }
 
 // =============================================
-// MESSENGER / NOTIFICATION FUNCTIONS
+// FIXED: sendOrderToMessenger - Direct Facebook Message
 // =============================================
 function sendOrderToMessenger(order){
     var itemsText = '';
@@ -417,40 +427,149 @@ function sendOrderToMessenger(order){
     }
     
     var message = 
-        '🛍️ *NEW ORDER: ' + order.orderId + '*\n\n' +
-        '👤 *Customer:* ' + (order.customerName || 'N/A') + '\n' +
-        '📞 *Phone:* ' + (order.customerPhone || 'N/A') + '\n' +
-        '📍 *Address:* ' + (order.customerAddress || '') + 
+        '🛍️ NEW ORDER: ' + order.orderId + '\n\n' +
+        '👤 Customer: ' + (order.customerName || 'N/A') + '\n' +
+        '📞 Phone: ' + (order.customerPhone || 'N/A') + '\n' +
+        '📍 Address: ' + (order.customerAddress || '') + 
         (order.customerCity ? ', ' + order.customerCity : '') + '\n' +
-        '🚚 *Shipping:* ' + (order.shippingMethod || 'N/A') + '\n' +
-        '💳 *Payment:* ' + (order.paymentMethod === 'payway' ? 'ABA' : 'COD') + '\n\n' +
-        '*ITEMS:*\n' + itemsText + '\n' +
-        '💰 *Subtotal:* $' + (order.subtotal || 0).toFixed(2) + '\n' +
-        '🚚 *Shipping Fee:* $' + (order.shipping || 0).toFixed(2) + '\n' +
-        '💵 *TOTAL:* $' + (order.total || 0).toFixed(2);
+        '🚚 Shipping: ' + (order.shippingMethod || 'N/A') + '\n' +
+        '💳 Payment: ' + (order.paymentMethod === 'payway' ? 'ABA' : 'COD') + '\n\n' +
+        'ITEMS:\n' + itemsText + '\n' +
+        '💰 Subtotal: $' + (order.subtotal || 0).toFixed(2) + '\n' +
+        '🚚 Shipping Fee: $' + (order.shipping || 0).toFixed(2) + '\n' +
+        '💵 TOTAL: $' + (order.total || 0).toFixed(2);
     
-    // Try Telegram first (if configured)
-    if(MESSENGER_CONFIG.telegramBotToken && MESSENGER_CONFIG.telegramChatId){
-        sendToTelegram(message);
-    }
+    var encodedMessage = encodeURIComponent(message);
     
-    // Try WhatsApp (if configured)
-    if(MESSENGER_CONFIG.whatsappNumber){
-        var waUrl = 'https://wa.me/' + MESSENGER_CONFIG.whatsappNumber + '?text=' + encodeURIComponent(message);
-        window.open(waUrl, '_blank');
-    }
+    // TRY BOTH URL FORMATS
+    var urls = [
+        'https://m.me/' + MESSENGER_CONFIG.facebookPageId,
+        'https://www.facebook.com/messages/t/' + MESSENGER_CONFIG.facebookPageId,
+        'https://facebook.com/messages/t/' + MESSENGER_CONFIG.facebookPageId
+    ];
     
-    // Open Facebook Messenger
-    if(MESSENGER_CONFIG.facebookPageId && MESSENGER_CONFIG.facebookPageId !== 'YOUR_FACEBOOK_PAGE_ID'){
-        var messengerUrl = 'https://m.me/' + MESSENGER_CONFIG.facebookPageId + '?text=' + encodeURIComponent(message);
-        window.open(messengerUrl, '_blank');
-    } else {
-        // Fallback: copy order to clipboard if no messenger configured
-        showToast('⚠️ Configure Facebook Page ID in MESSENGER_CONFIG', 'warning');
-        console.log('Order details (copy manually):\n' + message);
-    }
+    // Try the first URL
+    var url = urls[0];
+    console.log('Opening Messenger: ' + url);
+    console.log('Message preview:', message.substring(0, 100) + '...');
+    
+    // Show order details in a modal FIRST, then try to open Messenger
+    showOrderConfirmationModal(order, message, url);
     
     logActivity('Order Sent to Messenger', order.orderId);
+}
+
+// =============================================
+// NEW: Show order confirmation with manual send option
+// =============================================
+function showOrderConfirmationModal(order, message, messengerUrl) {
+    var itemsHtml = '';
+    if(order.cart && order.cart.length > 0){
+        for(var i = 0; i < order.cart.length; i++){
+            var it = order.cart[i];
+            var sub = it.subtotal || (it.price * it.quantity) || 0;
+            itemsHtml += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px">' +
+                '<span>' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ')</span>' +
+                '<span>$' + sub.toFixed(2) + '</span></div>';
+        }
+    }
+    
+    var shippingMethod = order.shippingMethod || 'N/A';
+    if (shippingMethod === 'Pickup') shippingMethod = 'Pickup from Shop (FREE)';
+    else if (shippingMethod === 'Phnom Penh') shippingMethod = 'Phnom Penh ($1.50)';
+    else if (shippingMethod === 'Province') shippingMethod = 'Province ($2.00)';
+    
+    var modalHtml = '<div class="modal-overlay active" id="orderConfirmModal" style="z-index:3000">' +
+        '<div class="modal" style="max-width:500px">' +
+        '<div class="modal-header">' +
+        '<h3><i class="fas fa-check-circle" style="color:var(--success)"></i> Order Placed!</h3>' +
+        '<button class="modal-close" onclick="document.getElementById(\'orderConfirmModal\').remove()">&times;</button>' +
+        '</div>' +
+        '<div style="background:var(--light);padding:12px;border-radius:8px;margin-bottom:12px">' +
+        '<strong>Order ID:</strong> ' + order.orderId + '<br>' +
+        '<strong>Customer:</strong> ' + (order.customerName || 'N/A') + '<br>' +
+        '<strong>Phone:</strong> ' + (order.customerPhone || 'N/A') + '<br>' +
+        '<strong>Address:</strong> ' + (order.customerAddress || '') + 
+        (order.customerCity ? ', ' + order.customerCity : '') + '<br>' +
+        '<strong>Shipping:</strong> ' + shippingMethod + '<br>' +
+        '<strong>Payment:</strong> ' + (order.paymentMethod === 'payway' ? 'ABA Payway' : 'Cash on Delivery') +
+        '</div>' +
+        '<div style="margin-bottom:12px">' +
+        '<strong>Items:</strong>' + itemsHtml +
+        '<div style="border-top:2px solid var(--dark);margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;font-weight:700;font-size:16px">' +
+        '<span>TOTAL:</span><span>$' + (order.total || 0).toFixed(2) + '</span></div>' +
+        '</div>' +
+        '<p style="font-size:13px;color:var(--gray);margin-bottom:12px;text-align:center">' +
+        '📩 Click below to send this order to your Facebook Page Messenger</p>' +
+        '<div style="display:flex;gap:8px;flex-direction:column">' +
+        '<a href="' + messengerUrl + '" target="_blank" class="btn btn-primary btn-large" style="background:linear-gradient(135deg,#0084FF,#006AFF);text-decoration:none;color:#fff">' +
+        '<i class="fab fa-facebook-messenger"></i> Open Messenger</a>' +
+        '<button class="btn btn-outline btn-large" onclick="copyOrderToClipboard(\'' + order.orderId + '\')">' +
+        '<i class="fas fa-copy"></i> Copy Order Details</button>' +
+        '<button class="btn btn-secondary btn-large" onclick="document.getElementById(\'orderConfirmModal\').remove()">' +
+        '<i class="fas fa-times"></i> Close</button>' +
+        '</div></div></div>';
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Auto-open Messenger
+    setTimeout(function() {
+        window.open(messengerUrl, '_blank');
+    }, 500);
+}
+
+// =============================================
+// NEW: Copy order to clipboard as fallback
+// =============================================
+function copyOrderToClipboard(orderId) {
+    var order = null;
+    // Find order in pending
+    for(var i = 0; i < STATE.pendingOrders.length; i++) {
+        if(STATE.pendingOrders[i].orderId === orderId) {
+            order = STATE.pendingOrders[i];
+            break;
+        }
+    }
+    // Find in confirmed if not in pending
+    if(!order) {
+        for(var j = 0; j < STATE.confirmedOrders.length; j++) {
+            if(STATE.confirmedOrders[j].orderId === orderId) {
+                order = STATE.confirmedOrders[j];
+                break;
+            }
+        }
+    }
+    
+    if(!order) {
+        showToast('Order not found', 'error');
+        return;
+    }
+    
+    var text = '🛍️ NEW ORDER: ' + order.orderId + '\n\n' +
+        '👤 Customer: ' + (order.customerName || 'N/A') + '\n' +
+        '📞 Phone: ' + (order.customerPhone || 'N/A') + '\n' +
+        '📍 Address: ' + (order.customerAddress || '') + 
+        (order.customerCity ? ', ' + order.customerCity : '') + '\n' +
+        '🚚 Shipping: ' + (order.shippingMethod || 'N/A') + '\n' +
+        '💳 Payment: ' + (order.paymentMethod === 'payway' ? 'ABA' : 'COD') + '\n\n' +
+        'ITEMS:\n';
+    
+    if(order.cart && order.cart.length > 0) {
+        for(var k = 0; k < order.cart.length; k++) {
+            var it = order.cart[k];
+            var sub = it.subtotal || (it.price * it.quantity) || 0;
+            text += '• ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ') - $' + sub.toFixed(2) + '\n';
+        }
+    }
+    
+    text += '\n💰 TOTAL: $' + (order.total || 0).toFixed(2);
+    
+    navigator.clipboard.writeText(text).then(function() {
+        showToast('✅ Order copied! Paste it in Messenger', 'success');
+    }).catch(function() {
+        showToast('❌ Copy failed. Check console (F12)', 'error');
+        console.log('Order to copy manually:\n' + text);
+    });
 }
 
 function sendToTelegram(message){
