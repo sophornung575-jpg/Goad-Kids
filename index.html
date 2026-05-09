@@ -559,48 +559,46 @@ function placeOrder() {
     var ad = document.getElementById('customerAddress').value.trim();
     var ci = document.getElementById('customerCity').value.trim();
     
-    // Validate customer info first
     if (!n || !ph || !ad) {
         showToast('Fill Name, Phone & Address', 'error');
         return;
     }
     
-    // Check cart has items BEFORE doing anything else
     if (!STATE.cart || STATE.cart.length === 0) {
         showToast('Cart is empty!', 'error');
         return;
     }
     
-    // Store cart items in a local variable BEFORE clearing
-    var cartItems = [];
+    // SAVE cart items BEFORE clearing
+    var savedCart = [];
     for (var i = 0; i < STATE.cart.length; i++) {
-        cartItems.push({
-            productId: STATE.cart[i].productId,
-            name: STATE.cart[i].name,
-            size: STATE.cart[i].size,
-            quantity: STATE.cart[i].quantity,
-            price: STATE.cart[i].price,
-            image: STATE.cart[i].image || ''
+        var item = STATE.cart[i];
+        savedCart.push({
+            productId: item.productId,
+            name: item.name,
+            size: item.size || 'One Size',
+            quantity: item.quantity,
+            price: item.price,
+            subtotal: item.price * item.quantity,
+            image: item.image || ''
         });
     }
     
-    // Calculate shipping
     var sm = 'Pickup', smt = 'Pickup from Shop';
     var le = document.getElementById('shippingLocation');
     if (le && le.value === 'phnompenh') { sm = 'Phnom Penh'; smt = 'Phnom Penh ($1.50)'; }
     else if (le && le.value === 'province') { sm = 'Province'; smt = 'Province ($2.00)'; }
     else { smt = 'Pickup (FREE)'; }
     
-    // Calculate totals
     var sub = 0;
-    for (var j = 0; j < cartItems.length; j++) {
-        sub += cartItems[j].price * cartItems[j].quantity;
+    for (var j = 0; j < savedCart.length; j++) {
+        sub += savedCart[j].price * savedCart[j].quantity;
     }
+    
     var sh = STATE.shippingFee || 0;
     var total = sub + sh;
-    
-    // Create order object
     var oid = 'ORD-' + Date.now();
+    
     var order = {
         orderId: oid,
         timestamp: Date.now(),
@@ -614,7 +612,7 @@ function placeOrder() {
         customerNotes: document.getElementById('customerNotes').value.trim(),
         paymentMethod: STATE.paymentMethod,
         storeId: STATE.storeId,
-        cart: cartItems,
+        cart: savedCart,
         subtotal: sub,
         shipping: sh,
         total: total
@@ -625,27 +623,26 @@ function placeOrder() {
     saveOrders();
     logActivity('New Order', oid + ' - $' + total.toFixed(2));
     
-    // Sync to Firebase if online
     if (STATE.firebaseOnline) {
         db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order);
     }
     
-    // NOW clear the cart (after order is saved)
+    // Clear cart AFTER saving
     STATE.cart = [];
     localStorage.setItem('goatCart', '[]');
     updateCartBadge();
     renderCart();
     updateShipping();
     
-    showToast('Order placed! ' + oid, 'success');
-    
-    // Update admin view if admin is logged in
+    // Refresh admin view
     if (STATE.isAdmin) {
         renderPending();
         updateAdminBadges();
     }
+    
+    showToast('Order placed! ' + oid, 'success');
 }
-function handlePayway(e) { 
+        function handlePayway(e) { 
     if (!STATE.cart || STATE.cart.length === 0) { 
         e.preventDefault(); 
         showToast('Cart empty', 'error'); 
