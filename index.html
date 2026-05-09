@@ -453,14 +453,19 @@ function printReceipt(oid){
     }
     if(!order){ showToast('Not found', 'error'); return; }
     
-    var smt = order.shippingMethod || 'N/A';
+    var smt = order.shippingMethod || order.shipping || 'N/A';
     var items = '';
-    for(var j = 0; j < order.cart.length; j++){
-        var it = order.cart[j];
-        items += '<div style="margin-top:8px;font-size:16px">';
-        items += '<b>' + it.name + ' (' + (it.size || '') + ')</b><br>';
-        items += it.quantity + ' x $' + it.price.toFixed(2) + ' = $' + ((it.price * it.quantity) || 0).toFixed(2);
-        items += '</div>';
+    if(order.cart && order.cart.length > 0){
+        for(var j = 0; j < order.cart.length; j++){
+            var it = order.cart[j];
+            var itemTotal = it.subtotal || (it.price * it.quantity) || 0;
+            items += '<div style="margin-top:8px;font-size:16px">';
+            items += '<b>' + (it.name || 'Item') + ' (' + (it.size || 'N/A') + ')</b><br>';
+            items += (it.quantity || 1) + ' x $' + (it.price || 0).toFixed(2) + ' = $' + itemTotal.toFixed(2);
+            items += '</div>';
+        }
+    } else {
+        items = '<div style="font-size:16px;color:#999">No items</div>';
     }
     
     var html = '<!DOCTYPE html><html><head><title>Receipt ' + oid + '</title>';
@@ -483,7 +488,7 @@ function printReceipt(oid){
     html += '<div class="receipt">';
     
     html += '<div class="center">';
-    html += '<img src="https://sophornung575-jpg.github.io/Goad-Kids/Goat%20Kids%20QR.jpg" style="width:100px;height:100px;object-fit:contain;margin-bottom:8px" onerror="this.style.display=\'none\'">';
+    html += '<img src="https://sophornung575-jpg.github.io/Goad-Kids/Goat%20Kids%20QR.jpg" style="width:120px;height:120px;object-fit:contain;margin-bottom:10px" onerror="this.style.display=\'none\'">';
     html += '<p style="font-size:13px">' + STATE.storeId + ' | 016 71 33 87</p></div>';
     html += '<div class="dash"></div>';
     html += '<div class="center bold" style="font-size:17px">ORDER RECEIPT</div>';
@@ -492,11 +497,14 @@ function printReceipt(oid){
     html += '<p style="font-size:15px;margin-bottom:4px"><b>Order:</b> ' + order.orderId + '</p>';
     html += '<p style="font-size:15px;margin-bottom:4px"><b>Date:</b> ' + (order.orderDate || '') + '</p>';
     html += '<p style="font-size:15px;margin-bottom:4px"><b>Ship:</b> ' + smt + '</p>';
+    html += '<p style="font-size:15px;margin-bottom:4px"><b>Payment:</b> ' + (order.paymentMethod === 'payway' ? 'ABA' : 'COD') + '</p>';
     html += '<div class="dash"></div>';
     
-    html += '<p style="font-size:15px;margin-bottom:4px"><b>Name:</b> ' + (order.customerName || '') + '</p>';
-    html += '<p style="font-size:15px;margin-bottom:4px"><b>Phone:</b> ' + (order.customerPhone || '') + '</p>';
+    html += '<p style="font-size:15px;margin-bottom:4px"><b>Name:</b> ' + (order.customerName || 'N/A') + '</p>';
+    html += '<p style="font-size:15px;margin-bottom:4px"><b>Phone:</b> ' + (order.customerPhone || 'N/A') + '</p>';
     if(order.customerCity) html += '<p style="font-size:15px;margin-bottom:4px"><b>City:</b> ' + order.customerCity + '</p>';
+    if(order.customerAddress) html += '<p style="font-size:15px;margin-bottom:4px"><b>Address:</b> ' + order.customerAddress + '</p>';
+    if(order.customerNotes) html += '<p style="font-size:15px;margin-bottom:4px"><b>Notes:</b> ' + order.customerNotes + '</p>';
     html += '<div class="dash"></div>';
     
     html += items;
