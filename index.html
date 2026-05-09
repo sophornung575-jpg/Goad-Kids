@@ -1816,53 +1816,171 @@ function updateSearchResults(count,searchSize){
     }
 }
 
-function renderFilteredInventory(filteredProducts,searchSize){
-    var tb=document.getElementById('inventoryBody');if(!tb)return;
-    document.getElementById('productCount').textContent=filteredProducts.length;
-    var h='';
-    if(filteredProducts.length===0){
-        h='<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--gray)"><i class="fas fa-search" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>';
-        h+=searchSize?'No products with size <strong>'+searchSize+'</strong> in stock':'No products match your search';
-        h+='</td></tr>'
-    }else{
-        for(var i=0;i<filteredProducts.length;i++){
-            var p=filteredProducts[i];
-            var totalStock=getTotalStock(p);
-            var sb='';
-            if(searchSize){
-                if(p.sizes&&p.sizes.length>0){
-                    var matchingSizes=[];
-                    for(var j=0;j<p.sizes.length;j++){if(p.sizes[j].name.toUpperCase().indexOf(searchSize)!==-1)matchingSizes.push(p.sizes[j])}
-                    if(matchingSizes.length>0){
-                        sb='<div class="size-inventory-grid">';
-                        for(var m=0;m<matchingSizes.length;m++){
-                            var ms=matchingSizes[m],sc=ms.qty<=3?'low':'';
-                            sb+='<div class="size-inventory-item filtered-single '+sc+'"><div class="size-name">✅ '+ms.name+'</div><div class="size-qty">'+ms.qty+' pcs</div></div>'
-                        }
-                        sb+='</div>'
-                    }else{sb='<span style="color:var(--gray)">-</span>'}
-                }else{sb='<span style="color:var(--gray)">-</span>'}
-            }else{
-                if(p.sizes&&p.sizes.length>0){
-                    sb='<div class="size-inventory-grid">';
-                    for(var k=0;k<p.sizes.length;k++){
-                        var s=p.sizes[k],c=s.qty===0?'out':(s.qty<=3?'low':'');
-                        sb+='<div class="size-inventory-item '+c+'"><div class="size-name">'+s.name+'</div><div class="size-qty">'+s.qty+'</div></div>'
-                    }
-                    sb+='</div>'
-                }else{sb='<span style="color:var(--gray)">-</span>'}
+// =============================================
+// FINAL: renderFilteredInventory - UPDATE ALL BUT PRESERVE IMAGES
+// =============================================
+function renderFilteredInventory(filteredProducts, searchSize) {
+    var tb = document.getElementById('inventoryBody');
+    if (!tb) return;
+    document.getElementById('productCount').textContent = filteredProducts.length;
+
+    if (filteredProducts.length === 0) {
+        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--gray)"><i class="fas fa-search" style="font-size:2rem;display:block;margin-bottom:0.5rem"></i>' +
+            (searchSize ? 'No products with size <strong>' + searchSize + '</strong> in stock' : 'No products match your search') +
+            '</td></tr>';
+        return;
+    }
+
+    // Build a map of existing rows to preserve images
+    var existingRows = tb.querySelectorAll('tr[data-product-id]');
+    var existingDataMap = {};
+    for (var r = 0; r < existingRows.length; r++) {
+        var row = existingRows[r];
+        var pid = row.getAttribute('data-product-id');
+        var imgEl = row.querySelector('img');
+        existingDataMap[pid] = {
+            row: row,
+            imageSrc: imgEl ? imgEl.src : '',
+            oldSizeHtml: row.querySelectorAll('td')[4] ? row.querySelectorAll('td')[4].innerHTML : '',
+            oldStockHtml: row.querySelectorAll('td')[5] ? row.querySelectorAll('td')[5].innerHTML : ''
+        };
+    }
+
+    // Check if structure changed (different products or different order)
+    var structureChanged = false;
+    if (Object.keys(existingDataMap).length !== filteredProducts.length) {
+        structureChanged = true;
+    } else {
+        for (var i = 0; i < filteredProducts.length; i++) {
+            if (!existingDataMap[filteredProducts[i].id]) {
+                structureChanged = true;
+                break;
             }
-            var stockStatusColor=totalStock>10?'var(--success)':(totalStock>0?'var(--warning)':'var(--danger)');
-            var img=(p.images&&p.images[0])||'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60';
-            h+='<tr><td><img src="'+img+'" style="width:45px;height:45px;object-fit:cover;border-radius:4px" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60\'"></td>';
-            h+='<td><strong>'+p.name+'</strong></td>';
-            h+='<td><span class="product-category '+getCategoryDisplay(p.category)+'">'+p.category+'</span></td>';
-            h+='<td>$'+p.price.toFixed(2)+'</td><td>'+sb+'</td>';
-            h+='<td><strong style="color:'+stockStatusColor+'"><i class="fas fa-box"></i> '+totalStock+'</strong></td>';
-            h+='<td><div class="flex gap-2"><button class="btn btn-warning btn-small" onclick="openEditModal(\''+p.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct(\''+p.id+'\')"><i class="fas fa-trash"></i></button></div></td></tr>'
         }
     }
-    tb.innerHTML=h
+
+    // If structure changed, do full re-render
+    if (structureChanged) {
+        var fullHtml = '';
+        for (var j = 0; j < filteredProducts.length; j++) {
+            fullHtml += buildProductRow(filteredProducts[j], searchSize);
+        }
+        tb.innerHTML = fullHtml;
+        return;
+    }
+
+    // Structure is same - update only changed content, preserve images
+    for (var k = 0; k < filteredProducts.length; k++) {
+        var product = filteredProducts[k];
+        var existing = existingDataMap[product.id];
+        if (!existing || !existing.row) continue;
+
+        var row = existing.row;
+        var cells = row.querySelectorAll('td');
+        if (cells.length < 7) continue;
+
+        var totalStock = getTotalStock(product);
+        var newImageSrc = (product.images && product.images[0]) || 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60';
+
+        // Update image ONLY if it changed
+        var imgEl = cells[0].querySelector('img');
+        if (imgEl && imgEl.src !== newImageSrc) {
+            imgEl.src = newImageSrc;
+            imgEl.setAttribute('data-image', newImageSrc);
+        }
+
+        // Update name (cell 1)
+        var nameHtml = '<strong>' + product.name + '</strong>';
+        if (cells[1].innerHTML !== nameHtml) {
+            cells[1].innerHTML = nameHtml;
+        }
+
+        // Update category (cell 2)
+        var catHtml = '<span class="product-category ' + getCategoryDisplay(product.category) + '">' + product.category + '</span>';
+        if (cells[2].innerHTML !== catHtml) {
+            cells[2].innerHTML = catHtml;
+        }
+
+        // Update price (cell 3)
+        var priceHtml = '$' + product.price.toFixed(2);
+        if (cells[3].textContent.trim() !== priceHtml) {
+            cells[3].textContent = priceHtml;
+        }
+
+        // Update sizes (cell 4)
+        var newSizeHtml = buildSizeHtml(product, searchSize);
+        if (existing.oldSizeHtml !== newSizeHtml) {
+            cells[4].innerHTML = newSizeHtml;
+        }
+
+        // Update total stock (cell 5)
+        var stockColor = totalStock > 10 ? 'var(--success)' : (totalStock > 0 ? 'var(--warning)' : 'var(--danger)');
+        var stockHtml = '<strong style="color:' + stockColor + '"><i class="fas fa-box"></i> ' + totalStock + '</strong>';
+        if (existing.oldStockHtml !== stockHtml) {
+            cells[5].innerHTML = stockHtml;
+        }
+
+        // Update actions (cell 6) - only if product ID changed (shouldn't happen)
+        var actionsHtml = '<div class="flex gap-2"><button class="btn btn-warning btn-small" onclick="openEditModal(\'' + product.id + '\')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct(\'' + product.id + '\')"><i class="fas fa-trash"></i></button></div>';
+        if (cells[6].innerHTML !== actionsHtml) {
+            cells[6].innerHTML = actionsHtml;
+        }
+    }
+}
+
+// Helper: Build product row HTML (used for full render)
+function buildProductRow(p, searchSize) {
+    var totalStock = getTotalStock(p);
+    var img = (p.images && p.images[0]) || 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60';
+    var stockColor = totalStock > 10 ? 'var(--success)' : (totalStock > 0 ? 'var(--warning)' : 'var(--danger)');
+    var sizeHtml = buildSizeHtml(p, searchSize);
+
+    return '<tr data-product-id="' + p.id + '">' +
+        '<td><img src="' + img + '" style="width:45px;height:45px;object-fit:cover;border-radius:4px" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60\'"></td>' +
+        '<td><strong>' + p.name + '</strong></td>' +
+        '<td><span class="product-category ' + getCategoryDisplay(p.category) + '">' + p.category + '</span></td>' +
+        '<td>$' + p.price.toFixed(2) + '</td>' +
+        '<td>' + sizeHtml + '</td>' +
+        '<td><strong style="color:' + stockColor + '"><i class="fas fa-box"></i> ' + totalStock + '</strong></td>' +
+        '<td><div class="flex gap-2"><button class="btn btn-warning btn-small" onclick="openEditModal(\'' + p.id + '\')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct(\'' + p.id + '\')"><i class="fas fa-trash"></i></button></div></td>' +
+        '</tr>';
+}
+
+// Helper: Build size HTML
+function buildSizeHtml(p, searchSize) {
+    var html = '';
+    if (searchSize) {
+        if (p.sizes && p.sizes.length > 0) {
+            var matchingSizes = [];
+            for (var j = 0; j < p.sizes.length; j++) {
+                if (p.sizes[j].name.toUpperCase().indexOf(searchSize) !== -1) matchingSizes.push(p.sizes[j]);
+            }
+            if (matchingSizes.length > 0) {
+                html = '<div class="size-inventory-grid">';
+                for (var m = 0; m < matchingSizes.length; m++) {
+                    var ms = matchingSizes[m], sc = ms.qty <= 3 ? 'low' : '';
+                    html += '<div class="size-inventory-item filtered-single ' + sc + '"><div class="size-name">✅ ' + ms.name + '</div><div class="size-qty">' + ms.qty + ' pcs</div></div>';
+                }
+                html += '</div>';
+            } else {
+                html = '<span style="color:var(--gray)">-</span>';
+            }
+        } else {
+            html = '<span style="color:var(--gray)">-</span>';
+        }
+    } else {
+        if (p.sizes && p.sizes.length > 0) {
+            html = '<div class="size-inventory-grid">';
+            for (var k = 0; k < p.sizes.length; k++) {
+                var s = p.sizes[k], c = s.qty === 0 ? 'out' : (s.qty <= 3 ? 'low' : '');
+                html += '<div class="size-inventory-item ' + c + '"><div class="size-name">' + s.name + '</div><div class="size-qty">' + s.qty + '</div></div>';
+            }
+            html += '</div>';
+        } else {
+            html = '<span style="color:var(--gray)">-</span>';
+        }
+    }
+    return html;
 }
 
 function renderInventory(){
