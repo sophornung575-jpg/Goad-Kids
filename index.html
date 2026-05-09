@@ -349,8 +349,78 @@ function handlePayway(e){if(!STATE.cart||STATE.cart.length===0){e.preventDefault
 function confirmOrder(oid){var idx=-1;for(var i=0;i<STATE.pendingOrders.length;i++){if(STATE.pendingOrders[i].orderId===oid){idx=i;break}}if(idx<0)return;var order=STATE.pendingOrders[idx];for(var j=0;j<order.cart.length;j++){var it=order.cart[j],p=null;for(var k=0;k<STATE.products.length;k++){if(STATE.products[k].id===it.productId){p=STATE.products[k];break}}if(!p){showToast('Not found: '+it.name,'error');return}if(p.sizes&&p.sizes.length){var so=null;for(var l=0;l<p.sizes.length;l++){if(p.sizes[l].name===it.size){so=p.sizes[l];break}}if(!so||so.qty<it.quantity){showToast('Not enough: '+it.name+' ('+it.size+')','error');return}}else if(p.stock<it.quantity){showToast('Not enough: '+it.name,'error');return}}for(var m=0;m<order.cart.length;m++){var item=order.cart[m],pr=null;for(var n=0;n<STATE.products.length;n++){if(STATE.products[n].id===item.productId){pr=STATE.products[n];break}}if(pr){if(pr.sizes&&pr.sizes.length){var szo=null;for(var o=0;o<pr.sizes.length;o++){if(pr.sizes[o].name===item.size){szo=pr.sizes[o];break}}if(szo)szo.qty=Math.max(0,szo.qty-item.quantity)}pr.stock=Math.max(0,pr.stock-item.quantity)}}saveProducts();order.status='confirmed';order.confirmedAt=new Date().toLocaleString();STATE.confirmedOrders.push(order);STATE.pendingOrders.splice(idx,1);saveOrders();logActivity('Confirm Order',oid+' - $'+order.total.toFixed(2));if(STATE.firebaseOnline)syncToFirebase();renderPending();renderHistory();renderProducts();renderInventory();updateAdminBadges();showToast('Order '+oid+' confirmed!','success');setTimeout(function(){if(confirm('Print receipt?'))printReceipt(oid)},300)}
 function rejectOrder(oid){var idx=-1;for(var i=0;i<STATE.pendingOrders.length;i++){if(STATE.pendingOrders[i].orderId===oid){idx=i;break}}if(idx<0)return;var order=STATE.pendingOrders[idx];order.status='rejected';order.rejectedAt=new Date().toLocaleString();order.rejectionReason=prompt('Reason:')||'No reason';STATE.confirmedOrders.push(order);STATE.pendingOrders.splice(idx,1);saveOrders();logActivity('Reject Order',oid);if(STATE.firebaseOnline)syncToFirebase();renderPending();renderHistory();updateAdminBadges();showToast('Rejected','warning')}
 function confirmAll(){if(!STATE.pendingOrders.length){showToast('No pending','warning');return}if(!confirm('Confirm ALL '+STATE.pendingOrders.length+' orders?'))return;var orders=STATE.pendingOrders.slice();for(var i=0;i<orders.length;i++){var o=orders[i];for(var j=0;j<o.cart.length;j++){var it=o.cart[j],p=null;for(var k=0;k<STATE.products.length;k++){if(STATE.products[k].id===it.productId){p=STATE.products[k];break}}if(p){if(p.sizes&&p.sizes.length){var so=null;for(var l=0;l<p.sizes.length;l++){if(p.sizes[l].name===it.size){so=p.sizes[l];break}}if(so)so.qty=Math.max(0,so.qty-it.quantity)}p.stock=Math.max(0,p.stock-it.quantity)}}o.status='confirmed';o.confirmedAt=new Date().toLocaleString();STATE.confirmedOrders.push(o)}STATE.pendingOrders=[];saveProducts();saveOrders();logActivity('Confirm All',orders.length+' orders');if(STATE.firebaseOnline)syncToFirebase();renderPending();renderHistory();renderProducts();renderInventory();updateAdminBadges();showToast(orders.length+' confirmed!','success')}
-function renderPending(){var c=document.getElementById('pendingContainer');document.getElementById('pendingCount').textContent=STATE.pendingOrders.length;if(!c)return;if(!STATE.pendingOrders.length){c.innerHTML='<div class="admin-empty"><i class="fas fa-inbox"></i><p>No pending orders</p></div>';return}var h='';for(var i=0;i<STATE.pendingOrders.length;i++){var o=STATE.pendingOrders[i],items='';for(var j=0;j<o.cart.length;j++){items+='<div style="display:flex;justify-content:space-between;font-size:0.85rem"><span>'+o.cart[j].quantity+'x '+o.cart[j].name+' ('+o.cart[j].size+')</span><span>$'+o.cart[j].subtotal.toFixed(2)+'</span></div>'}h+='<div class="order-card"><div><strong style="color:var(--warning)">⏳ PENDING</strong><br><small>'+o.orderId+' | '+o.orderDate+'</small></div><div style="background:var(--light);padding:0.5rem;border-radius:var(--radius);margin:0.5rem 0;font-size:0.85rem">👤 '+o.customerName+' | 📞 '+o.customerPhone+'<br>📍 '+o.customerAddress+(o.customerCity?' | '+o.customerCity:'')+'<br>🚚 '+(o.shippingMethod||'N/A')+'</div>'+items+'<div style="font-weight:700;margin:0.5rem 0;font-size:1.1rem">Total: $'+o.total.toFixed(2)+'</div><div class="flex gap-2"><button class="btn btn-success btn-small" onclick="confirmOrder(\''+o.orderId+'\')" style="flex:1"><i class="fas fa-check"></i> Confirm</button><button class="btn btn-danger btn-small" onclick="rejectOrder(\''+o.orderId+'\')" style="flex:1"><i class="fas fa-times"></i> Reject</button></div></div>'}c.innerHTML=h}
-function renderHistory(){var c=document.getElementById('historyContainer');document.getElementById('historyCount').textContent=STATE.confirmedOrders.length;if(!c)return;if(!STATE.confirmedOrders.length){c.innerHTML='<div class="admin-empty"><i class="fas fa-archive"></i><p>No history</p></div>';return}var rev=STATE.confirmedOrders.slice().reverse(),h='';for(var i=0;i<rev.length;i++){var o=rev[i],ok=o.status==='confirmed';h+='<div class="order-card '+o.status+'" style="border-left-color:'+(ok?'var(--success)':'var(--danger)')+';opacity:'+(ok?'1':'0.7')+';margin-bottom:0.5rem;padding:0.75rem"><div style="display:flex;justify-content:space-between;align-items:center"><div><strong style="color:'+(ok?'var(--success)':'var(--danger)')+'">'+(ok?'✅ CONFIRMED':'❌ REJECTED')+'</strong><br><small>'+o.orderId+' | '+o.orderDate+'</small></div><strong style="font-size:1.1rem">$'+o.total.toFixed(2)+'</strong></div>'+(ok?'<button class="btn btn-receipt btn-small mt-4 w-full" onclick="printReceipt(\''+o.orderId+'\')"><i class="fas fa-print"></i> Print Receipt</button>':'')+'</div>'}c.innerHTML=h}
+function renderPending(){
+    var c = document.getElementById('pendingContainer');
+    document.getElementById('pendingCount').textContent = STATE.pendingOrders.length;
+    if(!c) return;
+    if(!STATE.pendingOrders.length){
+        c.innerHTML = '<div class="admin-empty"><i class="fas fa-inbox"></i><p>No pending orders</p></div>';
+        return;
+    }
+    var h = '';
+    for(var i = 0; i < STATE.pendingOrders.length; i++){
+        var o = STATE.pendingOrders[i];
+        var items = '';
+        if(o.cart && o.cart.length > 0){
+            for(var j = 0; j < o.cart.length; j++){
+                var it = o.cart[j];
+                var sub = it.subtotal || (it.price * it.quantity) || 0;
+                items += '<div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:0.25rem 0">';
+                items += '<span>🛍️ ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ')</span>';
+                items += '<span>$' + sub.toFixed(2) + '</span>';
+                items += '</div>';
+            }
+        }
+        h += '<div class="order-card">';
+        h += '<div><strong style="color:var(--warning)">⏳ PENDING</strong><br><small>' + o.orderId + ' | ' + (o.orderDate || '') + '</small></div>';
+        h += '<div style="background:var(--light);padding:0.5rem;border-radius:var(--radius);margin:0.5rem 0;font-size:0.85rem">';
+        h += '👤 ' + (o.customerName || 'N/A') + ' | 📞 ' + (o.customerPhone || 'N/A') + '<br>';
+        h += '📍 ' + (o.customerAddress || '') + (o.customerCity ? ' | ' + o.customerCity : '') + '<br>';
+        h += '🚚 ' + (o.shippingMethod || 'N/A') + ' | 💳 ' + (o.paymentMethod === 'payway' ? 'ABA' : 'COD') + '</div>';
+        h += items;
+        h += '<div style="font-weight:700;margin:0.5rem 0;font-size:1.1rem">Total: $' + (o.total || 0).toFixed(2) + '</div>';
+        h += '<div class="flex gap-2">';
+        h += '<button class="btn btn-success btn-small" onclick="confirmOrder(\'' + o.orderId + '\')" style="flex:1"><i class="fas fa-check"></i> Confirm</button>';
+        h += '<button class="btn btn-danger btn-small" onclick="rejectOrder(\'' + o.orderId + '\')" style="flex:1"><i class="fas fa-times"></i> Reject</button>';
+        h += '</div></div>';
+    }
+    c.innerHTML = h;
+}
+function renderHistory(){
+    var c = document.getElementById('historyContainer');
+    document.getElementById('historyCount').textContent = STATE.confirmedOrders.length;
+    if(!c) return;
+    if(!STATE.confirmedOrders.length){
+        c.innerHTML = '<div class="admin-empty"><i class="fas fa-archive"></i><p>No order history</p></div>';
+        return;
+    }
+    var rev = STATE.confirmedOrders.slice().reverse();
+    var h = '';
+    for(var i = 0; i < rev.length; i++){
+        var o = rev[i];
+        var ok = o.status === 'confirmed';
+        var items = '';
+        if(o.cart && o.cart.length > 0){
+            for(var j = 0; j < o.cart.length; j++){
+                var it = o.cart[j];
+                var sub = it.subtotal || (it.price * it.quantity) || 0;
+                items += '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:0.15rem 0">';
+                items += '<span>🛍️ ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ')</span>';
+                items += '<span>$' + sub.toFixed(2) + '</span>';
+                items += '</div>';
+            }
+        }
+        h += '<div class="order-card ' + (o.status || '') + '" style="border-left-color:' + (ok ? 'var(--success)' : 'var(--danger)') + ';opacity:' + (ok ? '1' : '0.7') + ';margin-bottom:0.5rem;padding:0.75rem">';
+        h += '<div style="display:flex;justify-content:space-between;align-items:center"><div>';
+        h += '<strong style="color:' + (ok ? 'var(--success)' : 'var(--danger)') + '">' + (ok ? '✅ CONFIRMED' : '❌ REJECTED') + '</strong><br>';
+        h += '<small>' + o.orderId + ' | ' + (o.orderDate || '') + '</small></div>';
+        h += '<strong style="font-size:1.1rem">$' + (o.total || 0).toFixed(2) + '</strong></div>';
+        h += items;
+        h += (ok ? '<button class="btn btn-receipt btn-small mt-4 w-full" onclick="printReceipt(\'' + o.orderId + '\')"><i class="fas fa-print"></i> Print Receipt</button>' : '');
+        h += '</div>';
+    }
+    c.innerHTML = h;
+}
 function quickSizeFilter(size){var sizeInput=document.getElementById('inventorySearchSize');sizeInput.value=size;highlightQuickButton(size);filterInventory()}
 function highlightQuickButton(size){document.querySelectorAll('.btn-quick-size').forEach(function(btn){btn.classList.remove('active-size');if(btn.textContent.trim()===size){btn.classList.add('active-size')}})}
 function clearInventorySearch(){document.getElementById('inventorySearchName').value='';document.getElementById('inventorySearchCategory').value='all';document.getElementById('inventorySearchStock').value='all';document.getElementById('inventorySearchSize').value='';document.querySelectorAll('.btn-quick-size').forEach(function(btn){btn.classList.remove('active-size')});showActiveSizeFilter('');var sizeHeader=document.getElementById('sizeColumnHeader');if(sizeHeader)sizeHeader.textContent='Sizes';filterInventory()}
