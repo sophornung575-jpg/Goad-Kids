@@ -297,7 +297,7 @@
 // =============================================
 const MESSENGER_CONFIG = {
     // OPTION 1: Try the ID from your share link first
-    facebookPageId: '18r7LCACbL',
+    facebookPageUrl: 'https://www.facebook.com/share/18r7LCACbL/?mibextid=wwXIfr',
     
     // OPTION 2: If that doesn't work, try username
     // facebookPageId: 'Goatkids',
@@ -414,7 +414,7 @@ function applyTranslations(){
 }
 
 // =============================================
-// FIXED: sendOrderToMessenger - Direct Facebook Message
+// FIXED: sendOrderToMessenger - Using Full Page Link
 // =============================================
 function sendOrderToMessenger(order){
     var itemsText = '';
@@ -439,30 +439,23 @@ function sendOrderToMessenger(order){
         '🚚 Shipping Fee: $' + (order.shipping || 0).toFixed(2) + '\n' +
         '💵 TOTAL: $' + (order.total || 0).toFixed(2);
     
-    var encodedMessage = encodeURIComponent(message);
+    // Copy order details to clipboard automatically
+    navigator.clipboard.writeText(message).then(function() {
+        console.log('✅ Order copied to clipboard');
+    }).catch(function() {
+        console.log('⚠️ Could not copy to clipboard');
+    });
     
-    // TRY BOTH URL FORMATS
-    var urls = [
-        'https://m.me/' + MESSENGER_CONFIG.facebookPageId,
-        'https://www.facebook.com/messages/t/' + MESSENGER_CONFIG.facebookPageId,
-        'https://facebook.com/messages/t/' + MESSENGER_CONFIG.facebookPageId
-    ];
-    
-    // Try the first URL
-    var url = urls[0];
-    console.log('Opening Messenger: ' + url);
-    console.log('Message preview:', message.substring(0, 100) + '...');
-    
-    // Show order details in a modal FIRST, then try to open Messenger
-    showOrderConfirmationModal(order, message, url);
+    // Show confirmation modal with order details
+    showOrderConfirmationModal(order, message);
     
     logActivity('Order Sent to Messenger', order.orderId);
 }
 
 // =============================================
-// NEW: Show order confirmation with manual send option
+// Order Confirmation Modal with Messenger Link
 // =============================================
-function showOrderConfirmationModal(order, message, messengerUrl) {
+function showOrderConfirmationModal(order, message) {
     var itemsHtml = '';
     if(order.cart && order.cart.length > 0){
         for(var i = 0; i < order.cart.length; i++){
@@ -482,8 +475,12 @@ function showOrderConfirmationModal(order, message, messengerUrl) {
     var modalHtml = '<div class="modal-overlay active" id="orderConfirmModal" style="z-index:3000">' +
         '<div class="modal" style="max-width:500px">' +
         '<div class="modal-header">' +
-        '<h3><i class="fas fa-check-circle" style="color:var(--success)"></i> Order Placed!</h3>' +
+        '<h3><i class="fas fa-check-circle" style="color:var(--success)"></i> Order Placed Successfully!</h3>' +
         '<button class="modal-close" onclick="document.getElementById(\'orderConfirmModal\').remove()">&times;</button>' +
+        '</div>' +
+        '<div style="background:#fff3cd;padding:10px;border-radius:8px;margin-bottom:12px;border:1px solid #ffc107;font-size:13px">' +
+        '📋 <strong>Order details copied to clipboard!</strong><br>' +
+        'Click the button below to open your Facebook Page, then <strong>Paste (Ctrl+V)</strong> the order in Messenger.' +
         '</div>' +
         '<div style="background:var(--light);padding:12px;border-radius:8px;margin-bottom:12px">' +
         '<strong>Order ID:</strong> ' + order.orderId + '<br>' +
@@ -499,38 +496,35 @@ function showOrderConfirmationModal(order, message, messengerUrl) {
         '<div style="border-top:2px solid var(--dark);margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;font-weight:700;font-size:16px">' +
         '<span>TOTAL:</span><span>$' + (order.total || 0).toFixed(2) + '</span></div>' +
         '</div>' +
-        '<p style="font-size:13px;color:var(--gray);margin-bottom:12px;text-align:center">' +
-        '📩 Click below to send this order to your Facebook Page Messenger</p>' +
         '<div style="display:flex;gap:8px;flex-direction:column">' +
-        '<a href="' + messengerUrl + '" target="_blank" class="btn btn-primary btn-large" style="background:linear-gradient(135deg,#0084FF,#006AFF);text-decoration:none;color:#fff">' +
-        '<i class="fab fa-facebook-messenger"></i> Open Messenger</a>' +
-        '<button class="btn btn-outline btn-large" onclick="copyOrderToClipboard(\'' + order.orderId + '\')">' +
-        '<i class="fas fa-copy"></i> Copy Order Details</button>' +
+        '<a href="' + MESSENGER_CONFIG.facebookPageUrl + '" target="_blank" class="btn btn-primary btn-large" style="background:linear-gradient(135deg,#0084FF,#006AFF);text-decoration:none;color:#fff;text-align:center">' +
+        '<i class="fab fa-facebook-messenger"></i> Open Your Facebook Page</a>' +
+        '<p style="text-align:center;font-size:12px;color:var(--gray)">Then press <strong>Ctrl+V</strong> to paste the order</p>' +
+        '<button class="btn btn-outline btn-large" onclick="copyOrderAgain(\'' + order.orderId + '\')">' +
+        '<i class="fas fa-copy"></i> Copy Order Again</button>' +
         '<button class="btn btn-secondary btn-large" onclick="document.getElementById(\'orderConfirmModal\').remove()">' +
         '<i class="fas fa-times"></i> Close</button>' +
         '</div></div></div>';
     
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     
-    // Auto-open Messenger
+    // Auto-open Facebook page
     setTimeout(function() {
-        window.open(messengerUrl, '_blank');
-    }, 500);
+        window.open(MESSENGER_CONFIG.facebookPageUrl, '_blank');
+    }, 1000);
 }
 
 // =============================================
-// NEW: Copy order to clipboard as fallback
+// Copy order again function
 // =============================================
-function copyOrderToClipboard(orderId) {
+function copyOrderAgain(orderId) {
     var order = null;
-    // Find order in pending
     for(var i = 0; i < STATE.pendingOrders.length; i++) {
         if(STATE.pendingOrders[i].orderId === orderId) {
             order = STATE.pendingOrders[i];
             break;
         }
     }
-    // Find in confirmed if not in pending
     if(!order) {
         for(var j = 0; j < STATE.confirmedOrders.length; j++) {
             if(STATE.confirmedOrders[j].orderId === orderId) {
@@ -545,7 +539,7 @@ function copyOrderToClipboard(orderId) {
         return;
     }
     
-    var text = '🛍️ NEW ORDER: ' + order.orderId + '\n\n' +
+    var message = '🛍️ NEW ORDER: ' + order.orderId + '\n\n' +
         '👤 Customer: ' + (order.customerName || 'N/A') + '\n' +
         '📞 Phone: ' + (order.customerPhone || 'N/A') + '\n' +
         '📍 Address: ' + (order.customerAddress || '') + 
@@ -558,20 +552,18 @@ function copyOrderToClipboard(orderId) {
         for(var k = 0; k < order.cart.length; k++) {
             var it = order.cart[k];
             var sub = it.subtotal || (it.price * it.quantity) || 0;
-            text += '• ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ') - $' + sub.toFixed(2) + '\n';
+            message += '• ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ') - $' + sub.toFixed(2) + '\n';
         }
     }
     
-    text += '\n💰 TOTAL: $' + (order.total || 0).toFixed(2);
+    message += '\n💰 TOTAL: $' + (order.total || 0).toFixed(2);
     
-    navigator.clipboard.writeText(text).then(function() {
-        showToast('✅ Order copied! Paste it in Messenger', 'success');
+    navigator.clipboard.writeText(message).then(function() {
+        showToast('✅ Order copied again! Paste in Messenger', 'success');
     }).catch(function() {
-        showToast('❌ Copy failed. Check console (F12)', 'error');
-        console.log('Order to copy manually:\n' + text);
+        showToast('❌ Copy failed', 'error');
     });
 }
-
 function sendToTelegram(message){
     var url = 'https://api.telegram.org/bot' + MESSENGER_CONFIG.telegramBotToken + '/sendMessage';
     fetch(url, {
