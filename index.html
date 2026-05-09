@@ -475,9 +475,8 @@ function sendToTelegram(message){
         console.log('❌ Telegram error:', err);
     });
 }
-
 // =============================================
-// FIRESTORE REAL-TIME LISTENERS
+// OPTIMIZED FIRESTORE REAL-TIME LISTENERS (NO FLASH)
 // =============================================
 function setupFirestoreListeners(){
     if(!STATE.firebaseOnline) return;
@@ -494,6 +493,20 @@ function setupFirestoreListeners(){
         .where('active', '==', true)
         .onSnapshot(function(snapshot){
             var products = [];
+            var hasChanges = false;
+            
+            snapshot.docChanges().forEach(function(change) {
+                if (change.type === 'added' || change.type === 'modified' || change.type === 'removed') {
+                    hasChanges = true;
+                }
+            });
+            
+            // Only process if there are actual changes
+            if (!hasChanges && STATE.products.length > 0) {
+                console.log('🔄 No changes detected, skipping re-render');
+                return;
+            }
+            
             snapshot.forEach(function(doc){
                 var data = doc.data();
                 products.push({
@@ -508,18 +521,35 @@ function setupFirestoreListeners(){
             });
             
             if(products.length > 0){
-                STATE.products = products;
-                saveProducts();
-                // Re-render current views
-                if(document.getElementById('storeTab') && !document.getElementById('storeTab').classList.contains('hidden')){
-                    renderProducts();
+                // Check if product data actually changed before updating
+                var dataChanged = false;
+                if (products.length !== STATE.products.length) {
+                    dataChanged = true;
+                } else {
+                    for (var i = 0; i < products.length; i++) {
+                        var oldP = STATE.products[i];
+                        var newP = products[i];
+                        if (!oldP || oldP.stock !== newP.stock || 
+                            JSON.stringify(oldP.sizes) !== JSON.stringify(newP.sizes)) {
+                            dataChanged = true;
+                            break;
+                        }
+                    }
                 }
-                var invTab = document.getElementById('adminInventoryTab');
-                if(invTab && invTab.classList.contains('active')){
-                    renderInventory();
+                
+                if (dataChanged || STATE.products.length === 0) {
+                    STATE.products = products;
+                    saveProducts();
+                    
+                    // Only re-render if the inventory tab is visible
+                    var invTab = document.getElementById('adminInventoryTab');
+                    if(invTab && invTab.classList.contains('active')){
+                        renderInventory();
+                    }
+                    
+                    updateAdminBadges();
+                    console.log('🔄 Products updated from Firestore (' + products.length + ' items)');
                 }
-                updateAdminBadges();
-                console.log('🔄 Products auto-updated from Firestore (' + products.length + ' items)');
             }
         }, function(error){
             console.log('Firestore products listener error:', error);
@@ -529,28 +559,45 @@ function setupFirestoreListeners(){
     // Listen for order changes in real-time
     var unsub2 = db.collection('stores').doc(STATE.storeId).collection('orders')
         .onSnapshot(function(snapshot){
-            STATE.pendingOrders = [];
-            STATE.confirmedOrders = [];
+            var hasChanges = false;
+            
+            snapshot.docChanges().forEach(function(change) {
+                if (change.type === 'added' || change.type === 'modified' || change.type === 'removed') {
+                    hasChanges = true;
+                }
+            });
+            
+            if (!hasChanges) return;
+            
+            var newPending = [];
+            var newConfirmed = [];
             
             snapshot.forEach(function(doc){
                 var data = doc.data();
                 if(data.status === 'pending'){
-                    STATE.pendingOrders.push({...data, orderId: doc.id});
+                    newPending.push({...data, orderId: doc.id});
                 } else {
-                    STATE.confirmedOrders.push({...data, orderId: doc.id});
+                    newConfirmed.push({...data, orderId: doc.id});
                 }
             });
             
-            saveOrders();
-            
-            // Re-render admin if visible
-            var ordersTab = document.getElementById('adminOrdersTab');
-            if(ordersTab && ordersTab.classList.contains('active')){
-                renderPending();
-                renderHistory();
+            // Check if orders actually changed
+            if (newPending.length !== STATE.pendingOrders.length || 
+                newConfirmed.length !== STATE.confirmedOrders.length) {
+                
+                STATE.pendingOrders = newPending;
+                STATE.confirmedOrders = newConfirmed;
+                saveOrders();
+                
+                // Only re-render if admin orders tab is visible
+                var ordersTab = document.getElementById('adminOrdersTab');
+                if(ordersTab && ordersTab.classList.contains('active')){
+                    renderPending();
+                    renderHistory();
+                }
+                updateAdminBadges();
+                console.log('🔄 Orders updated (pending: ' + STATE.pendingOrders.length + ', confirmed: ' + STATE.confirmedOrders.length + ')');
             }
-            updateAdminBadges();
-            console.log('🔄 Orders auto-updated from Firestore (pending: ' + STATE.pendingOrders.length + ', confirmed: ' + STATE.confirmedOrders.length + ')');
         }, function(error){
             console.log('Firestore orders listener error:', error);
         });
@@ -563,7 +610,7 @@ function setupFirestoreListeners(){
         }
     };
     
-    console.log('🔥 Real-time Firestore listeners activated');
+    console.log('🔥 Real-time Firestore listeners activated (optimized)');
 }
 
 // =============================================
@@ -939,15 +986,27 @@ function saveOrders(){
     localStorage.setItem('confirmedOrders',JSON.stringify(STATE.confirmedOrders.slice(-50)))
 }
 
+// =============================================
+// OPTIMIZED syncToFirebase() - NO FLASH
+// =============================================
 async function syncToFirebase(){
     if(!STATE.firebaseOnline){
         showStatus('Offline','offline');
         document.getElementById('statusBar').classList.add('show');
         setTimeout(function(){document.getElementById('statusBar').classList.remove('show')},3000);
-        return
+        return;
     }
+    
+    // Pause the real-time listener temporarily to prevent flash
+    var wasListening = false;
+    if(STATE.firestoreUnsubscribe){
+        STATE.firestoreUnsubscribe();
+        wasListening = true;
+    }
+    
     showStatus('Syncing...','online');
     document.getElementById('statusBar').classList.add('show');
+    
     try{
         for(var i=0;i<STATE.products.length;i++){
             var p=STATE.products[i];
@@ -955,21 +1014,33 @@ async function syncToFirebase(){
                 name:p.name,price:p.price,stock:p.stock,category:p.category,
                 images:p.images||[],sizes:p.sizes||[],active:true,
                 updatedAt:new Date().toISOString()
-            },{merge:true})
+            },{merge:true});
         }
+        
         var all=STATE.pendingOrders.concat(STATE.confirmedOrders);
         for(var j=0;j<all.length;j++){
             await db.collection('stores').doc(STATE.storeId).collection('orders').doc(all[j].orderId).set({
                 ...all[j],updatedAt:new Date().toISOString()
-            },{merge:true})
+            },{merge:true});
         }
-        showStatus('Synced!','online');showToast('Synced!','success')
+        
+        showStatus('Synced!','online');
+        showToast('Synced successfully!','success');
+        
     }catch(e){
-        showStatus('Failed','error');showToast('Sync failed','error')
+        showStatus('Failed','error');
+        showToast('Sync failed','error');
     }
-    setTimeout(function(){document.getElementById('statusBar').classList.remove('show')},3000)
+    
+    // Restart the real-time listener
+    if(wasListening){
+        setupFirestoreListeners();
+    }
+    
+    setTimeout(function(){
+        document.getElementById('statusBar').classList.remove('show');
+    },3000);
 }
-
 // =============================================
 // ACTIVITY LOG & UNDO
 // =============================================
