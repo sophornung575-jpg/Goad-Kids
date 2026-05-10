@@ -1444,14 +1444,13 @@ function openTelegramWeb() {
 
     function updQty(i, q) {
         if (q < 1) { remCart(i); return; }
-        // FIX #5: Prevent increasing qty beyond available stock
+        // FIX #5 (improved): max = stock available to others + what this item already holds
         var item = STATE.cart[i];
         var p = null;
         for (var k = 0; k < STATE.products.length; k++) { if (STATE.products[k].id === item.productId) { p = STATE.products[k]; break; } }
         if (p) {
-            var sizeObj = null;
-            if (p.sizes && p.sizes.length) { for (var l = 0; l < p.sizes.length; l++) { if (p.sizes[l].name === item.size) { sizeObj = p.sizes[l]; break; } } }
-            var maxQty = sizeObj ? sizeObj.qty : (p.stock || 0);
+            // getAvailableSizeQty subtracts ALL cart items for this size; add back this item's qty to get the true max
+            var maxQty = getAvailableSizeQty(p, item.size) + item.quantity;
             if (q > maxQty) { showToast('Only ' + maxQty + ' in stock for size ' + item.size, 'warning'); return; }
         }
         STATE.cart[i].quantity = q;
@@ -1598,8 +1597,8 @@ function openTelegramWeb() {
                     items += '<div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:0.25rem 0"><span>🛍️ ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ')</span><span>$' + sub.toFixed(2) + '</span></div>';
                 }
             }
-            h += '<div class="order-card"><div><strong style="color:var(--warning)">⏳ PENDING</strong><br><small>' + o.orderId + ' | ' + (o.orderDate || '') + '</small></div>';
-            h += '<div style="background:var(--light);padding:0.5rem;border-radius:var(--radius);margin:0.5rem 0;font-size:0.85rem">👤 ' + (o.customerName || 'N/A') + ' | 📞 ' + (o.customerPhone || 'N/A') + '<br>📍 ' + (o.customerAddress || '') + (o.customerCity ? ' | ' + o.customerCity : '') + '<br>🚚 ' + (o.shippingMethod || 'N/A') + ' | 💳 COD</div>';
+            h += '<div class="order-card"><div><strong style="color:var(--warning)">⏳ PENDING</strong><br><small>' + escHtml(o.orderId) + ' | ' + escHtml(o.orderDate || '') + '</small></div>';
+            h += '<div style="background:var(--light);padding:0.5rem;border-radius:var(--radius);margin:0.5rem 0;font-size:0.85rem">👤 ' + escHtml(o.customerName || 'N/A') + ' | 📞 ' + escHtml(o.customerPhone || 'N/A') + '<br>📍 ' + escHtml(o.customerAddress || '') + (o.customerCity ? ' | ' + escHtml(o.customerCity) : '') + '<br>🚚 ' + escHtml(o.shippingMethod || 'N/A') + ' | 💳 COD</div>';
             h += items;
             h += '<div style="font-weight:700;margin:0.5rem 0;font-size:1.1rem">Total: $' + (o.total || 0).toFixed(2) + '</div>';
             h += '<div class="flex gap-2"><button class="btn btn-success btn-small" onclick="confirmOrder(\'' + o.orderId + '\')" style="flex:1"><i class="fas fa-check"></i> Confirm</button><button class="btn btn-danger btn-small" onclick="rejectOrder(\'' + o.orderId + '\')" style="flex:1"><i class="fas fa-times"></i> Reject</button></div></div>';
@@ -1629,7 +1628,7 @@ function openTelegramWeb() {
             }
             h += '<div class="order-card ' + (o.status || '') + '" style="border-left-color:' + (ok ? 'var(--success)' : 'var(--danger)') + ';opacity:' + (ok ? '1' : '0.7') + ';margin-bottom:0.5rem;padding:0.75rem">' +
                 '<div style="display:flex;justify-content:space-between;align-items:center">' +
-                '<div><strong style="color:' + (ok ? 'var(--success)' : 'var(--danger)') + '">' + (ok ? '✅ CONFIRMED' : '❌ REJECTED') + '</strong><br><small>' + o.orderId + ' | ' + (o.orderDate || '') + '</small></div>' +
+                '<div><strong style="color:' + (ok ? 'var(--success)' : 'var(--danger)') + '">' + (ok ? '✅ CONFIRMED' : '❌ REJECTED') + '</strong><br><small>' + escHtml(o.orderId) + ' | ' + escHtml(o.orderDate || '') + '</small></div>' +
                 '<strong style="font-size:1.1rem">$' + (o.total || 0).toFixed(2) + '</strong></div>' + items;
             if (ok) { h += '<div style="display:flex;gap:0.5rem;margin-top:0.5rem"><button class="btn btn-receipt btn-small" onclick="printReceipt(\'' + o.orderId + '\')" style="flex:1"><i class="fas fa-print"></i> Print</button><button class="btn btn-danger btn-small" onclick="refundOrder(\'' + o.orderId + '\')" style="flex:1"><i class="fas fa-undo"></i> Refund</button></div>'; }
             h += '</div>';
@@ -2047,6 +2046,62 @@ function openTelegramWeb() {
     }
 
     // =============================================
+    // FIX #A: TAB NAVIGATION — was missing entirely, caused ReferenceError on every nav click
+    // =============================================
+    function showTab(tab) {
+        // Hide all tab panels
+        document.querySelectorAll('.tab-content').forEach(function(el) { el.classList.add('hidden'); });
+        // Clear active nav states
+        document.querySelectorAll('.nav-link').forEach(function(el) { el.classList.remove('active'); });
+        // Show the requested tab
+        var panel = document.getElementById(tab + 'Tab');
+        if (panel) panel.classList.remove('hidden');
+        // Highlight matching nav links
+        document.querySelectorAll('.nav-link').forEach(function(el) {
+            var oc = el.getAttribute('onclick') || '';
+            if (oc.indexOf("'" + tab + "'") !== -1) el.classList.add('active');
+        });
+        // FIX #12: hide floating cart button on admin tab
+        var fc = document.getElementById('floatingCartBtn');
+        if (fc) fc.style.display = (tab === 'admin') ? 'none' : 'flex';
+        // Tab-specific actions
+        if (tab === 'cart') {
+            // Always reset to cart form view (not success screen)
+            document.getElementById('orderSuccessScreen').classList.add('hidden');
+            document.getElementById('cartMainContent').classList.remove('hidden');
+            renderCart();
+            updateShipping();
+        } else if (tab === 'admin') {
+            if (STATE.isAdmin) {
+                renderPending(); renderHistory(); renderRefunds();
+                renderInventory(); updateAdminBadges();
+            }
+        } else if (tab === 'store') {
+            renderProducts();
+        }
+        window.scrollTo(0, 0);
+    }
+
+    // FIX #B: closeMobileMenu — was missing, caused ReferenceError on every mobile nav tap
+    function closeMobileMenu() {
+        var nav = document.getElementById('mobileNav');
+        if (nav) nav.classList.remove('active');
+        var btn = document.getElementById('mobileMenuBtn');
+        if (btn) btn.innerHTML = '<i class="fas fa-bars"></i>';
+    }
+
+    // FIX #C: escHtml — XSS protection for customer data rendered into innerHTML
+    function escHtml(str) {
+        if (str == null) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#x27;');
+    }
+
+    // =============================================
     // INITIALIZATION
     // =============================================
     document.addEventListener('DOMContentLoaded', async function() {
@@ -2102,7 +2157,7 @@ function openTelegramWeb() {
         applyTranslations();
     });
 
-    console.log('✅ GOAT KIDS Store Ready (Fixed)');
+    console.log('✅ GOAT KIDS Store Ready — v2 FIXED (showTab, closeMobileMenu, escHtml, updQty)');
     </script>
 </body>
 </html>
