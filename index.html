@@ -745,94 +745,100 @@
     // FIX #7 + #13: PLACE ORDER - with cooldown, success screen, cart cleared AFTER send
     // =============================================
     function placeOrder() {
-        var n = document.getElementById('customerName').value.trim();
-        var ph = document.getElementById('customerPhone').value.trim();
-        var ad = document.getElementById('customerAddress').value.trim();
-        var ci = document.getElementById('customerCity').value.trim();
-        if (!n || !ph || !ad) { showToast('Fill Name, Phone & Address', 'error'); return; }
-        if (!STATE.cart || STATE.cart.length === 0) { showToast('Cart is empty!', 'error'); return; }
+    var n = document.getElementById('customerName').value.trim();
+    var ph = document.getElementById('customerPhone').value.trim();
+    var ad = document.getElementById('customerAddress').value.trim();
+    var ci = document.getElementById('customerCity').value.trim();
+    if (!n || !ph || !ad) { showToast('Fill Name, Phone & Address', 'error'); return; }
+    if (!STATE.cart || STATE.cart.length === 0) { showToast('Cart is empty!', 'error'); return; }
 
-        // FIX #7: Rate limit - 30 second cooldown between orders
-        var now = Date.now();
-        var elapsed = (now - STATE.lastOrderTime) / 1000;
-        if (STATE.lastOrderTime > 0 && elapsed < STATE.orderCooldownSeconds) {
-            var remaining = Math.ceil(STATE.orderCooldownSeconds - elapsed);
-            var cooldownEl = document.getElementById('orderCooldownMsg');
-            cooldownEl.textContent = '⏳ Please wait ' + remaining + ' seconds before placing another order.';
-            cooldownEl.classList.remove('hidden');
-            setTimeout(function() { cooldownEl.classList.add('hidden'); }, remaining * 1000);
-            return;
-        }
+    // Rate limit check
+    var now = Date.now();
+    var elapsed = (now - STATE.lastOrderTime) / 1000;
+    if (STATE.lastOrderTime > 0 && elapsed < STATE.orderCooldownSeconds) {
+        var remaining = Math.ceil(STATE.orderCooldownSeconds - elapsed);
+        var cooldownEl = document.getElementById('orderCooldownMsg');
+        cooldownEl.textContent = '⏳ Please wait ' + remaining + ' seconds before placing another order.';
+        cooldownEl.classList.remove('hidden');
+        setTimeout(function() { cooldownEl.classList.add('hidden'); }, remaining * 1000);
+        return;
+    }
 
-        var placeBtn = document.getElementById('placeOrderBtn');
-        placeBtn.disabled = true;
-        placeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    var placeBtn = document.getElementById('placeOrderBtn');
+    placeBtn.disabled = true;
+    placeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
 
-        var savedCart = [];
-        for (var i = 0; i < STATE.cart.length; i++) {
-            var item = STATE.cart[i];
-            savedCart.push({
-                productId: item.productId,
-                name: item.name,
-                size: item.size || 'One Size',
-                quantity: item.quantity,
-                price: item.price,
-                subtotal: item.price * item.quantity,
-                image: item.image || ''
-            });
-        }
-        var sm = 'Pickup';
-        var le = document.getElementById('shippingLocation');
-        if (le && le.value === 'phnompenh') sm = 'Phnom Penh';
-        else if (le && le.value === 'province') sm = 'Province';
-        var sub = 0;
-        for (var j = 0; j < savedCart.length; j++) sub += savedCart[j].price * savedCart[j].quantity;
-        var sh = STATE.shippingFee || 0;
-        var total = sub + sh;
-        var oid = 'ORD-' + Date.now();
-        var order = {
-            orderId: oid, timestamp: Date.now(), orderDate: new Date().toLocaleString(),
-            status: 'pending', shippingMethod: sm, customerName: n,
-            customerPhone: ph, customerAddress: ad, customerCity: ci,
-            customerNotes: document.getElementById('customerNotes').value.trim(),
-            paymentMethod: 'cod', storeId: STATE.storeId,
-            cart: savedCart, subtotal: sub, shipping: sh, total: total
-        };
-
-        // FIX #7: Only clear cart AFTER Telegram send attempt, not before
-        sendToTelegram(order, function(success) {
-            // Save order regardless of Telegram result
-            STATE.pendingOrders.push(order);
-            saveOrders();
-            logActivity('New Order', oid + ' - $' + total.toFixed(2));
-            if (STATE.firebaseOnline) {
-                db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order);
-            }
-
-            // Now clear cart
-            STATE.cart = [];
-            localStorage.setItem('goatCart', '[]');
-            updateCartBadge();
-
-            // Update rate limit timestamp
-            STATE.lastOrderTime = Date.now();
-            localStorage.setItem('goatLastOrderTime', STATE.lastOrderTime);
-
-            if (STATE.isAdmin) { renderPending(); updateAdminBadges(); }
-
-            placeBtn.disabled = false;
-            placeBtn.innerHTML = '<i class="fab fa-telegram-plane"></i> <span data-translate="placeOrder">Send Order via Telegram</span>';
-
-            // FIX #13: Show success screen instead of just a toast
-            document.getElementById('cartMainContent').classList.add('hidden');
-            document.getElementById('orderSuccessScreen').classList.remove('hidden');
-            document.getElementById('successOrderId').textContent = '📦 ' + oid;
-
-            if (!success) {
-                showToast('Order saved! (Telegram may have failed - seller was notified via app)', 'warning');
-            }
+    var savedCart = [];
+    for (var i = 0; i < STATE.cart.length; i++) {
+        var item = STATE.cart[i];
+        savedCart.push({
+            productId: item.productId,
+            name: item.name,
+            size: item.size || 'One Size',
+            quantity: item.quantity,
+            price: item.price,
+            subtotal: item.price * item.quantity,
+            image: item.image || ''
         });
     }
+    
+    var sm = 'Pickup';
+    var le = document.getElementById('shippingLocation');
+    if (le && le.value === 'phnompenh') sm = 'Phnom Penh';
+    else if (le && le.value === 'province') sm = 'Province';
+    
+    var sub = 0;
+    for (var j = 0; j < savedCart.length; j++) sub += savedCart[j].price * savedCart[j].quantity;
+    var sh = STATE.shippingFee || 0;
+    var total = sub + sh;
+    var oid = 'ORD-' + Date.now();
+    
+    var order = {
+        orderId: oid, timestamp: Date.now(), orderDate: new Date().toLocaleString(),
+        status: 'pending', shippingMethod: sm, customerName: n,
+        customerPhone: ph, customerAddress: ad, customerCity: ci,
+        customerNotes: document.getElementById('customerNotes').value.trim(),
+        paymentMethod: 'cod', storeId: STATE.storeId,
+        cart: savedCart, subtotal: sub, shipping: sh, total: total
+    };
+
+    // Send to Telegram first, then save
+    sendToTelegram(order, function(success) {
+        // Always save the order
+        STATE.pendingOrders.push(order);
+        saveOrders();
+        logActivity('New Order', oid + ' - $' + total.toFixed(2));
+        
+        if (STATE.firebaseOnline) {
+            db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order);
+        }
+
+        // Clear cart
+        STATE.cart = [];
+        localStorage.setItem('goatCart', '[]');
+        updateCartBadge();
+
+        // Update rate limit
+        STATE.lastOrderTime = Date.now();
+        localStorage.setItem('goatLastOrderTime', STATE.lastOrderTime);
+
+        if (STATE.isAdmin) { renderPending(); updateAdminBadges(); }
+
+        placeBtn.disabled = false;
+        placeBtn.innerHTML = '<i class="fab fa-telegram-plane"></i> <span data-translate="placeOrder">Send Order via Telegram</span>';
+
+        // Show success screen
+        document.getElementById('cartMainContent').classList.add('hidden');
+        document.getElementById('orderSuccessScreen').classList.remove('hidden');
+        document.getElementById('successOrderId').textContent = '📦 ' + oid;
+
+        if (success) {
+            showToast('Order sent to Telegram!', 'success');
+        } else {
+            showToast('Order saved! But Telegram notification failed', 'warning');
+        }
+    });
+}
 
     // REPLACE the existing sendToTelegram and placeOrder functions with this improved version:
 
@@ -844,125 +850,45 @@ function sendToTelegram(order, callback) {
         itemsText += '• ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ') - $' + sub.toFixed(2) + '\n';
     }
     
-    var message = '🛍️ *NEW ORDER: ' + order.orderId + '*\n\n' +
-        '👤 *Customer:* ' + (order.customerName || 'N/A') + '\n' +
-        '📞 *Phone:* ' + (order.customerPhone || 'N/A') + '\n' +
-        '📍 *Address:* ' + (order.customerAddress || '') + (order.customerCity ? ', ' + order.customerCity : '') + '\n' +
-        '🚚 *Shipping:* ' + (order.shippingMethod || 'N/A') + '\n' +
-        '💳 *Payment:* Cash on Delivery\n\n' +
-        '*ITEMS:*\n' + itemsText + '\n' +
-        '💰 *Subtotal:* $' + (order.subtotal || 0).toFixed(2) + '\n' +
-        '🚚 *Shipping Fee:* $' + (order.shipping || 0).toFixed(2) + '\n' +
-        '💵 *TOTAL:* $' + (order.total || 0).toFixed(2) + '\n\n' +
-        '📝 *Notes:* ' + (order.customerNotes || 'None');
+    // Use plain text (no markdown) for reliability
+    var message = '🛍️ NEW ORDER: ' + order.orderId + '\n\n' +
+        '👤 Customer: ' + (order.customerName || 'N/A') + '\n' +
+        '📞 Phone: ' + (order.customerPhone || 'N/A') + '\n' +
+        '📍 Address: ' + (order.customerAddress || '') + (order.customerCity ? ', ' + order.customerCity : '') + '\n' +
+        '🚚 Shipping: ' + (order.shippingMethod || 'N/A') + '\n' +
+        '💳 Payment: Cash on Delivery\n\n' +
+        'ITEMS:\n' + itemsText + '\n' +
+        '💰 Subtotal: $' + (order.subtotal || 0).toFixed(2) + '\n' +
+        '🚚 Shipping Fee: $' + (order.shipping || 0).toFixed(2) + '\n' +
+        '💵 TOTAL: $' + (order.total || 0).toFixed(2) + '\n\n' +
+        '📝 Notes: ' + (order.customerNotes || 'None');
     
     var url = 'https://api.telegram.org/bot' + TELEGRAM_CONFIG.botToken + '/sendMessage';
     
-    // Try with HTML parse mode instead of Markdown (more reliable)
     fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             chat_id: TELEGRAM_CONFIG.chatId, 
-            text: message.replace(/\*/g, ''), // Remove markdown
-            parse_mode: 'HTML',
-            disable_web_page_preview: true
+            text: message
         })
     })
     .then(function(response) {
-        return response.json().then(function(data) {
-            console.log('📱 Telegram API Response:', data);
-            
-            if (data.ok) {
-                console.log('✅ Message sent successfully!');
-                callback(true);
-            } else {
-                console.error('❌ Telegram API Error:', data.description);
-                
-                // Show detailed error
-                var errorMsg = 'Telegram Error: ' + (data.description || 'Unknown error');
-                if (data.error_code === 400) {
-                    errorMsg = '❌ Bad Request - Check chat ID and message format';
-                } else if (data.error_code === 401) {
-                    errorMsg = '❌ Unauthorized - Bot token is invalid';
-                } else if (data.error_code === 403) {
-                    errorMsg = '❌ Forbidden - Bot blocked or not started by user';
-                }
-                
-                showToast(errorMsg + ' (Check console)', 'error');
-                callback(false);
-            }
-        });
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.ok) {
+            console.log('✅ Order sent to Telegram successfully');
+            callback(true);
+        } else {
+            console.error('Telegram error:', data.description);
+            callback(false);
+        }
     })
     .catch(function(error) {
-        console.error('❌ Network Error:', error);
-        showToast('Network error - Check console for details', 'error');
+        console.error('Network error:', error);
         callback(false);
     });
-}
-
-// Alternative method: Open Telegram Web link (works even if API fails)
-function sendViaTelegramWeb(order, message, callback) {
-    var encodedMessage = encodeURIComponent(message);
-    var telegramUrl = 'https://t.me/share/url?url=' + encodedMessage + '&text=' + encodedMessage;
-    
-    // Try to open Telegram Web
-    var win = window.open(telegramUrl, '_blank', 'width=600,height=500');
-    
-    if (win) {
-        showToast('📱 Telegram opened - please send the pre-filled message', 'info');
-        callback(true); // Consider it "sent" since user can manually send
-    } else {
-        // Popup blocked - show manual instructions
-        showManualInstructions(message);
-        callback(true); // Still save order
-    }
-}
-
-// Show manual sending instructions if all else fails
-function showManualInstructions(message) {
-    var modalHtml = `
-        <div class="modal-overlay active" id="manualTelegramModal" style="z-index:10000">
-            <div class="modal" style="max-width:500px">
-                <div class="modal-header">
-                    <h3><i class="fab fa-telegram"></i> Manual Telegram Required</h3>
-                    <button class="modal-close" onclick="document.getElementById('manualTelegramModal').remove()">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <p style="margin-bottom:1rem;color:var(--danger)">
-                        ⚠️ Automatic Telegram send failed. Please send manually:
-                    </p>
-                    <ol style="margin-left:1.5rem;margin-bottom:1rem">
-                        <li>Open Telegram app</li>
-                        <li>Message the order to: <strong>@GoatKidsBot</strong> (or your bot)</li>
-                        <li>Or click the button below to open Telegram Web</li>
-                    </ol>
-                    <div class="form-group">
-                        <label>Order details (copied to clipboard):</label>
-                        <textarea id="manualMessageText" class="form-control" rows="6" readonly style="font-size:12px">${message.replace(/[*_`]/g, '')}</textarea>
-                    </div>
-                    <div class="flex gap-2">
-                        <button class="btn btn-primary" onclick="copyManualMessage()" style="flex:1">
-                            <i class="fas fa-copy"></i> Copy Message
-                        </button>
-                        <button class="btn btn-info" onclick="openTelegramWeb()" style="flex:1">
-                            <i class="fab fa-telegram"></i> Open Telegram
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Remove existing modal if any
-    var existing = document.getElementById('manualTelegramModal');
-    if (existing) existing.remove();
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    
-    // Store message for copying
-    window.manualMessage = message.replace(/[*_`]/g, '');
-    document.getElementById('manualMessageText').value = window.manualMessage;
 }
 
 function copyManualMessage() {
