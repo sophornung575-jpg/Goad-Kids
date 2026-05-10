@@ -541,6 +541,7 @@
     // Anyone viewing source can read this token.
     // =============================================
     var TELEGRAM_CONFIG = {
+        
         botToken: '8477744776:AAGaR2_GbKlYHfxuhZE01jd2huTkEkA5ONo',
         chatId: '567606573'
     };
@@ -834,79 +835,144 @@
         });
     }
 
-    // FIX #7: sendToTelegram now accepts a callback so cart clears AFTER the attempt
-    function sendToTelegram(order, callback) {
-        var itemsText = '';
-        for (var i = 0; i < order.cart.length; i++) {
-            var it = order.cart[i];
-            var sub = it.subtotal || (it.price * it.quantity) || 0;
-            itemsText += '• ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ') - $' + sub.toFixed(2) + '\n';
-        }
-        var message = '🛍️ *NEW ORDER: ' + order.orderId + '*\n\n' +
-            '👤 *Customer:* ' + (order.customerName || 'N/A') + '\n' +
-            '📞 *Phone:* ' + (order.customerPhone || 'N/A') + '\n' +
-            '📍 *Address:* ' + (order.customerAddress || '') + (order.customerCity ? ', ' + order.customerCity : '') + '\n' +
-            '🚚 *Shipping:* ' + (order.shippingMethod || 'N/A') + '\n' +
-            '💳 *Payment:* Cash on Delivery\n\n' +
-            '*ITEMS:*\n' + itemsText + '\n' +
-            '💰 *Subtotal:* $' + (order.subtotal || 0).toFixed(2) + '\n' +
-            '🚚 *Shipping Fee:* $' + (order.shipping || 0).toFixed(2) + '\n' +
-            '💵 *TOTAL:* $' + (order.total || 0).toFixed(2) + '\n\n' +
-            '📝 *Notes:* ' + (order.customerNotes || 'None');
+    // REPLACE the existing sendToTelegram and placeOrder functions with this improved version:
 
-        navigator.clipboard.writeText(message.replace(/\*/g, '')).catch(function() {});
-
-        fetch('https://api.telegram.org/bot' + TELEGRAM_CONFIG.botToken + '/sendMessage', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: TELEGRAM_CONFIG.chatId, text: message, parse_mode: 'Markdown' })
+function sendToTelegram(order, callback) {
+    var itemsText = '';
+    for (var i = 0; i < order.cart.length; i++) {
+        var it = order.cart[i];
+        var sub = it.subtotal || (it.price * it.quantity) || 0;
+        itemsText += '• ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ') - $' + sub.toFixed(2) + '\n';
+    }
+    
+    var message = '🛍️ *NEW ORDER: ' + order.orderId + '*\n\n' +
+        '👤 *Customer:* ' + (order.customerName || 'N/A') + '\n' +
+        '📞 *Phone:* ' + (order.customerPhone || 'N/A') + '\n' +
+        '📍 *Address:* ' + (order.customerAddress || '') + (order.customerCity ? ', ' + order.customerCity : '') + '\n' +
+        '🚚 *Shipping:* ' + (order.shippingMethod || 'N/A') + '\n' +
+        '💳 *Payment:* Cash on Delivery\n\n' +
+        '*ITEMS:*\n' + itemsText + '\n' +
+        '💰 *Subtotal:* $' + (order.subtotal || 0).toFixed(2) + '\n' +
+        '🚚 *Shipping Fee:* $' + (order.shipping || 0).toFixed(2) + '\n' +
+        '💵 *TOTAL:* $' + (order.total || 0).toFixed(2) + '\n\n' +
+        '📝 *Notes:* ' + (order.customerNotes || 'None');
+    
+    // Copy to clipboard for manual sending as fallback
+    navigator.clipboard.writeText(message.replace(/\*/g, '')).catch(function() {});
+    
+    // Option 1: Try fetch with proper headers
+    var url = 'https://api.telegram.org/bot' + TELEGRAM_CONFIG.botToken + '/sendMessage';
+    
+    fetch(url, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({ 
+            chat_id: TELEGRAM_CONFIG.chatId, 
+            text: message, 
+            parse_mode: 'Markdown',
+            disable_web_page_preview: true
         })
-        .then(function(r) { return r.json(); })
-        .then(function(data) { callback(data.ok); })
-        .catch(function() { callback(false); });
-    }
-
-    // =============================================
-    // FIX #9 + #12: TAB MANAGEMENT
-    // =============================================
-    function closeMobileMenu() {
-        var nav = document.getElementById('mobileNav');
-        nav.classList.remove('active');
-        document.getElementById('mobileMenuBtn').innerHTML = '<i class="fas fa-bars"></i>';
-    }
-
-    function showTab(name) {
-        document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); });
-        document.querySelectorAll('.nav-link').forEach(function(l) { l.classList.remove('active'); });
-
-        var tab = document.getElementById(name + 'Tab');
-        if (tab) {
-            tab.classList.remove('hidden');
-
-            // FIX #12: Hide floating cart on admin tab, show on others
-            var floatingCart = document.getElementById('floatingCartBtn');
-            if (name === 'admin') {
-                floatingCart.style.display = 'none';
-            } else {
-                floatingCart.style.display = 'flex';
-            }
-
-            if (name === 'store') { renderProducts(); }
-            if (name === 'cart') {
-                // Reset success screen when returning to cart
-                document.getElementById('cartMainContent').classList.remove('hidden');
-                document.getElementById('orderSuccessScreen').classList.add('hidden');
-                renderCart();
-                updateShipping();
-            }
-            if (name === 'admin') {
-                if (STATE.adminRole === 'inventory') { switchAdminTab('inventory'); document.querySelectorAll('.admin-tab')[0].style.display = 'none'; document.querySelectorAll('.admin-tab')[2].style.display = 'none'; }
-                else if (STATE.adminRole === 'orders') { switchAdminTab('orders'); document.querySelectorAll('.admin-tab')[1].style.display = 'none'; document.querySelectorAll('.admin-tab')[2].style.display = 'none'; }
-                else { switchAdminTab('orders'); }
-                updateAdminBadges();
-            }
+    })
+    .then(function(response) {
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
         }
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.ok) {
+            console.log('Telegram sent successfully');
+            callback(true);
+        } else {
+            console.error('Telegram error:', data.description);
+            // Try alternative method - open in new window
+            sendViaTelegramWeb(order, message, callback);
+        }
+    })
+    .catch(function(error) {
+        console.error('Fetch failed:', error);
+        // Try alternative method
+        sendViaTelegramWeb(order, message, callback);
+    });
+}
+
+// Alternative method: Open Telegram Web link (works even if API fails)
+function sendViaTelegramWeb(order, message, callback) {
+    var encodedMessage = encodeURIComponent(message);
+    var telegramUrl = 'https://t.me/share/url?url=' + encodedMessage + '&text=' + encodedMessage;
+    
+    // Try to open Telegram Web
+    var win = window.open(telegramUrl, '_blank', 'width=600,height=500');
+    
+    if (win) {
+        showToast('📱 Telegram opened - please send the pre-filled message', 'info');
+        callback(true); // Consider it "sent" since user can manually send
+    } else {
+        // Popup blocked - show manual instructions
+        showManualInstructions(message);
+        callback(true); // Still save order
     }
+}
+
+// Show manual sending instructions if all else fails
+function showManualInstructions(message) {
+    var modalHtml = `
+        <div class="modal-overlay active" id="manualTelegramModal" style="z-index:10000">
+            <div class="modal" style="max-width:500px">
+                <div class="modal-header">
+                    <h3><i class="fab fa-telegram"></i> Manual Telegram Required</h3>
+                    <button class="modal-close" onclick="document.getElementById('manualTelegramModal').remove()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p style="margin-bottom:1rem;color:var(--danger)">
+                        ⚠️ Automatic Telegram send failed. Please send manually:
+                    </p>
+                    <ol style="margin-left:1.5rem;margin-bottom:1rem">
+                        <li>Open Telegram app</li>
+                        <li>Message the order to: <strong>@GoatKidsBot</strong> (or your bot)</li>
+                        <li>Or click the button below to open Telegram Web</li>
+                    </ol>
+                    <div class="form-group">
+                        <label>Order details (copied to clipboard):</label>
+                        <textarea id="manualMessageText" class="form-control" rows="6" readonly style="font-size:12px">${message.replace(/[*_`]/g, '')}</textarea>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="btn btn-primary" onclick="copyManualMessage()" style="flex:1">
+                            <i class="fas fa-copy"></i> Copy Message
+                        </button>
+                        <button class="btn btn-info" onclick="openTelegramWeb()" style="flex:1">
+                            <i class="fab fa-telegram"></i> Open Telegram
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove existing modal if any
+    var existing = document.getElementById('manualTelegramModal');
+    if (existing) existing.remove();
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Store message for copying
+    window.manualMessage = message.replace(/[*_`]/g, '');
+    document.getElementById('manualMessageText').value = window.manualMessage;
+}
+
+function copyManualMessage() {
+    navigator.clipboard.writeText(window.manualMessage).then(function() {
+        showToast('Message copied!', 'success');
+    });
+}
+
+function openTelegramWeb() {
+    var msg = encodeURIComponent(window.manualMessage);
+    window.open('https://t.me/share/url?url=' + msg + '&text=' + msg, '_blank');
+}
 
     function switchAdminTab(tab) {
         document.querySelectorAll('.admin-tab').forEach(function(t) { t.classList.remove('active'); });
