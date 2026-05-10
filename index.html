@@ -540,10 +540,39 @@
     // SECURITY NOTE: Move botToken to a backend proxy in production.
     // Anyone viewing source can read this token.
     // =============================================
-    var TELEGRAM_CONFIG = {
-    botToken: '8477744776:AAGaR2_GbKlYHfxuhZE01jd2huTkEkA5ONo',
-    chatId: '567606573'
-};
+    function sendToTelegram(order, callback) {
+    var itemsText = '';
+    for (var i = 0; i < order.cart.length; i++) {
+        var it = order.cart[i];
+        var sub = it.subtotal || (it.price * it.quantity) || 0;
+        itemsText += '• ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ') - $' + sub.toFixed(2) + '\n';
+    }
+    
+    var message = '🛍️ NEW ORDER: ' + order.orderId + '\n\n' +
+        '👤 Customer: ' + (order.customerName || 'N/A') + '\n' +
+        '📞 Phone: ' + (order.customerPhone || 'N/A') + '\n' +
+        '📍 Address: ' + (order.customerAddress || '') + (order.customerCity ? ', ' + order.customerCity : '') + '\n' +
+        '🚚 Shipping: ' + (order.shippingMethod || 'N/A') + '\n' +
+        '💳 Payment: Cash on Delivery\n\n' +
+        'ITEMS:\n' + itemsText + '\n' +
+        '💰 Subtotal: $' + (order.subtotal || 0).toFixed(2) + '\n' +
+        '🚚 Shipping Fee: $' + (order.shipping || 0).toFixed(2) + '\n' +
+        '💵 TOTAL: $' + (order.total || 0).toFixed(2) + '\n\n' +
+        '📝 Notes: ' + (order.customerNotes || 'None');
+    
+    // Use Firebase Cloud Function (secure - no token exposed!)
+    var sendTelegramMessage = firebase.functions().httpsCallable('sendTelegramMessage');
+    
+    sendTelegramMessage({ message: message })
+        .then(function(result) {
+            console.log('✅ Order sent to Telegram');
+            callback(true);
+        })
+        .catch(function(error) {
+            console.error('Failed to send to Telegram:', error);
+            callback(false);
+        });
+}
 
     // =============================================
     // STATE
