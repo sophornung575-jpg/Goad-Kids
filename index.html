@@ -856,45 +856,48 @@ function sendToTelegram(order, callback) {
         '💵 *TOTAL:* $' + (order.total || 0).toFixed(2) + '\n\n' +
         '📝 *Notes:* ' + (order.customerNotes || 'None');
     
-    // Copy to clipboard for manual sending as fallback
-    navigator.clipboard.writeText(message.replace(/\*/g, '')).catch(function() {});
-    
-    // Option 1: Try fetch with proper headers
     var url = 'https://api.telegram.org/bot' + TELEGRAM_CONFIG.botToken + '/sendMessage';
     
+    // Try with HTML parse mode instead of Markdown (more reliable)
     fetch(url, {
         method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             chat_id: TELEGRAM_CONFIG.chatId, 
-            text: message, 
-            parse_mode: 'Markdown',
+            text: message.replace(/\*/g, ''), // Remove markdown
+            parse_mode: 'HTML',
             disable_web_page_preview: true
         })
     })
     .then(function(response) {
-        if (!response.ok) {
-            throw new Error('HTTP ' + response.status);
-        }
-        return response.json();
-    })
-    .then(function(data) {
-        if (data.ok) {
-            console.log('Telegram sent successfully');
-            callback(true);
-        } else {
-            console.error('Telegram error:', data.description);
-            // Try alternative method - open in new window
-            sendViaTelegramWeb(order, message, callback);
-        }
+        return response.json().then(function(data) {
+            console.log('📱 Telegram API Response:', data);
+            
+            if (data.ok) {
+                console.log('✅ Message sent successfully!');
+                callback(true);
+            } else {
+                console.error('❌ Telegram API Error:', data.description);
+                
+                // Show detailed error
+                var errorMsg = 'Telegram Error: ' + (data.description || 'Unknown error');
+                if (data.error_code === 400) {
+                    errorMsg = '❌ Bad Request - Check chat ID and message format';
+                } else if (data.error_code === 401) {
+                    errorMsg = '❌ Unauthorized - Bot token is invalid';
+                } else if (data.error_code === 403) {
+                    errorMsg = '❌ Forbidden - Bot blocked or not started by user';
+                }
+                
+                showToast(errorMsg + ' (Check console)', 'error');
+                callback(false);
+            }
+        });
     })
     .catch(function(error) {
-        console.error('Fetch failed:', error);
-        // Try alternative method
-        sendViaTelegramWeb(order, message, callback);
+        console.error('❌ Network Error:', error);
+        showToast('Network error - Check console for details', 'error');
+        callback(false);
     });
 }
 
