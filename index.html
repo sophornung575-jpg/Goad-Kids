@@ -8,7 +8,6 @@
     <title>GOAT KIDS - Children's Clothing Store</title>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-functions-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
         // =============================================
@@ -173,6 +172,14 @@
         .lightbox-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);z-index:2000;display:flex;align-items:center;justify-content:center;opacity:0;visibility:hidden;transition:all 0.3s}
         .lightbox-overlay.active{opacity:1;visibility:visible}.lightbox-img{max-width:95%;max-height:95%;object-fit:contain;cursor:zoom-in;transition:transform 0.3s;border-radius:8px}
         .lightbox-img.zoomed{transform:scale(2);cursor:zoom-out}.lightbox-close{position:absolute;top:20px;right:20px;color:#fff;font-size:2rem;cursor:pointer;z-index:2001;background:rgba(0,0,0,0.5);width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:none}
+        /* Wishlist button on product card */
+        .wishlist-btn{position:absolute;top:0.75rem;left:0.75rem;background:rgba(255,255,255,0.9);border:none;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.9rem;color:var(--gray);transition:all 0.2s;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,0.15)}
+        .wishlist-btn:hover,.wishlist-btn.active{color:var(--secondary);background:#fff;transform:scale(1.1)}
+        .wishlist-btn.active{color:var(--secondary)}
+        /* Product detail modal responsive */
+        @media(max-width:600px){#productDetailModal .modal > div:last-child{grid-template-columns:1fr!important}}
+        /* Order search bar */
+        .order-search-bar{background:#fff;padding:1rem 1.25rem;border-bottom:1px solid var(--gray-light)}
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -201,6 +208,7 @@
             <nav class="desktop-nav">
                 <a href="#" class="nav-link active" onclick="showTab('store');return false"><i class="fas fa-store"></i><span data-translate="store">Store</span></a>
                 <a href="#" class="nav-link hidden" id="adminNavLink" onclick="showTab('admin');return false"><i class="fas fa-cog"></i><span data-translate="admin">Admin</span></a>
+                <button class="btn btn-small btn-outline" onclick="openWishlistModal()" style="position:relative"><i class="fas fa-heart" style="color:var(--secondary)"></i> <span style="font-size:0.8rem">Wishlist</span> <span id="wishlistBadge" style="position:absolute;top:-6px;right:-6px;background:var(--secondary);color:#fff;font-size:0.65rem;min-width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700">0</span></button>
                 <button class="btn btn-small btn-outline" onclick="openAdminModal()" id="adminLoginBtn"><i class="fas fa-user-shield"></i><span data-translate="login">Login</span></button>
                 <button class="btn btn-small btn-success" onclick="syncToFirebase()" id="syncBtn"><i class="fas fa-cloud-upload-alt"></i><span data-translate="sync">Sync</span></button>
                 <button class="btn btn-small btn-outline" onclick="toggleLanguage()" id="langToggle"><span id="langIcon">🇰🇭</span> <span id="langText">ខ្មែរ</span></button>
@@ -237,6 +245,21 @@
                         <option value="in-stock" data-translate="inStock">In Stock</option>
                         <option value="out-of-stock" data-translate="outOfStock">Out of Stock</option>
                     </select>
+                    <select id="sortBy" class="filter-select" onchange="filterAndRender()">
+                        <option value="default">Sort: Default</option>
+                        <option value="price-asc">Price: Low → High</option>
+                        <option value="price-desc">Price: High → Low</option>
+                        <option value="name-asc">Name: A → Z</option>
+                        <option value="stock-desc">Most Stock</option>
+                        <option value="newest">Newest</option>
+                    </select>
+                </div>
+                <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.75rem;flex-wrap:wrap">
+                    <span style="font-size:0.85rem;font-weight:600;color:var(--gray-dark)"><i class="fas fa-dollar-sign"></i> Price:</span>
+                    <input type="number" id="priceMin" class="form-control" placeholder="Min $" style="width:90px;padding:0.5rem 0.6rem;font-size:0.85rem" oninput="filterAndRender()" min="0">
+                    <span style="color:var(--gray)">–</span>
+                    <input type="number" id="priceMax" class="form-control" placeholder="Max $" style="width:90px;padding:0.5rem 0.6rem;font-size:0.85rem" oninput="filterAndRender()" min="0">
+                    <button class="btn btn-outline btn-small" onclick="clearFilters()"><i class="fas fa-times"></i> Clear</button>
                 </div>
             </div>
             <div class="product-grid" id="productGrid"></div>
@@ -317,6 +340,11 @@
 
                 <!-- ORDERS -->
                 <div id="adminOrdersTab" class="admin-tab-content active">
+                    <!-- Order Search Bar -->
+                    <div style="background:#fff;padding:1rem 1.25rem;border-bottom:1px solid var(--gray-light);display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap">
+                        <div style="position:relative;flex:1;min-width:200px"><i class="fas fa-search" style="position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);color:var(--gray)"></i><input type="text" id="orderSearch" class="form-control" placeholder="Search orders by name, phone, or order ID..." style="padding-left:2.5rem" oninput="filterOrders()"></div>
+                        <button class="btn btn-info btn-small" onclick="sendDailySummary()" title="Send daily summary to Telegram"><i class="fab fa-telegram-plane"></i> Daily Summary</button>
+                    </div>
                     <div class="admin-card">
                         <div class="admin-card-header">
                             <div class="admin-card-title"><i class="fas fa-clock" style="color:var(--warning)"></i><span data-translate="pendingOrders">Pending Orders</span><span class="admin-count" id="pendingCount">0</span></div>
@@ -352,6 +380,51 @@
                             <div class="store-info-item"><small>Cloud Sync</small><button class="btn btn-success w-full" onclick="syncToFirebase()"><i class="fas fa-cloud-upload-alt"></i> Sync to Cloud</button></div>
                         </div>
                     </div>
+                    <!-- TELEGRAM SETTINGS CARD -->
+                    <div class="admin-card">
+                        <div class="admin-card-header"><div class="admin-card-title"><i class="fab fa-telegram-plane" style="color:#0088cc"></i> Telegram Notification Settings</div></div>
+                        <div class="admin-card-body">
+                            <div class="form-group">
+                                <label>Bot Token <small style="color:var(--gray)">(saved in browser, not in source code)</small></label>
+                                <div class="flex gap-2">
+                                    <input type="password" id="telegramBotTokenInput" class="form-control" placeholder="123456789:ABCdef..." style="flex:1;font-family:monospace">
+                                    <button class="btn btn-outline btn-small" onclick="toggleTelegramTokenVisibility()" id="telegramTokenEyeBtn" title="Show/Hide"><i class="fas fa-eye"></i></button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Chat ID <small style="color:var(--gray)">(your Telegram user or group chat ID)</small></label>
+                                <input type="text" id="telegramChatIdInput" class="form-control" placeholder="-1001234567890 or 123456789" style="font-family:monospace">
+                            </div>
+                            <div class="flex gap-2">
+                                <button class="btn btn-primary" onclick="saveTelegramConfig()" style="flex:1"><i class="fas fa-save"></i> Save</button>
+                                <button class="btn btn-info" onclick="testTelegramMessage()"><i class="fas fa-paper-plane"></i> Test</button>
+                                <button class="btn btn-danger btn-small" onclick="clearTelegramConfig()" title="Clear saved credentials"><i class="fas fa-trash"></i></button>
+                            </div>
+                            <div id="telegramConfigStatus" style="margin-top:0.75rem;font-size:0.85rem"></div>
+                        </div>
+                    </div>
+
+                    <!-- SECURITY SETTINGS CARD -->
+                    <div class="admin-card">
+                        <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-shield-alt" style="color:var(--danger)"></i> Security — Change Password</div></div>
+                        <div class="admin-card-body">
+                            <p style="font-size:0.85rem;color:var(--gray);margin-bottom:1rem"><i class="fas fa-info-circle"></i> Passwords are stored in your browser (localStorage). Default passwords: <code>admin123</code> / <code>orders123</code> / <code>inventory123</code> — change these immediately.</p>
+                            <div class="form-group">
+                                <label>Role to Change</label>
+                                <select id="changePwRole" class="form-control">
+                                    <option value="full">Full Admin</option>
+                                    <option value="orders">Order Manager</option>
+                                    <option value="inventory">Inventory Manager</option>
+                                </select>
+                            </div>
+                            <div class="form-group"><label>Current Password</label><input type="password" id="changePwCurrent" class="form-control" placeholder="Enter current password"></div>
+                            <div class="form-group"><label>New Password</label><input type="password" id="changePwNew" class="form-control" placeholder="At least 6 characters"></div>
+                            <div class="form-group"><label>Confirm New Password</label><input type="password" id="changePwConfirm" class="form-control" placeholder="Repeat new password"></div>
+                            <button class="btn btn-danger w-full" onclick="changePassword()"><i class="fas fa-key"></i> Change Password</button>
+                            <div id="changePwStatus" style="margin-top:0.75rem;font-size:0.85rem"></div>
+                        </div>
+                    </div>
+
                     <div class="admin-card">
                         <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-plus-circle" style="color:var(--success)"></i> <span data-translate="addProduct">Add New Product</span></div></div>
                         <div class="add-product-grid">
@@ -535,21 +608,115 @@
         </div>
     </div>
 
+    <!-- WISHLIST MODAL -->
+    <div class="modal-overlay hidden" id="wishlistModal" onclick="if(event.target===this)closeWishlistModal()">
+        <div class="modal" style="max-width:800px;width:95%">
+            <div class="modal-header"><h3><i class="fas fa-heart" style="color:var(--secondary)"></i> My Wishlist</h3><button class="modal-close" onclick="closeWishlistModal()">&times;</button></div>
+            <div id="wishlistModalContent" style="max-height:70vh;overflow-y:auto"></div>
+        </div>
+    </div>
+
+    <!-- PRODUCT DETAIL MODAL -->
+    <div class="modal-overlay hidden" id="productDetailModal" onclick="if(event.target===this)closeProductDetail()">
+    </div>
+
     <script>
     // =============================================
     // TELEGRAM CONFIG
-    // SECURITY NOTE: Move botToken to a backend proxy in production.
-    // Anyone viewing source can read this token.
+    // Token & Chat ID are stored in localStorage (set via Admin > Inventory > Telegram Settings).
+    // They are NOT in the source code — open DevTools > Application > localStorage to see them.
     // =============================================
-    function sendToTelegram(order, callback) {
+    function getTelegramConfig() {
+        return {
+            botToken: localStorage.getItem('goatTgToken') || '',
+            chatId: localStorage.getItem('goatTgChatId') || ''
+        };
+    }
+
+    function saveTelegramConfig() {
+        var token = document.getElementById('telegramBotTokenInput').value.trim();
+        var chatId = document.getElementById('telegramChatIdInput').value.trim();
+        var statusEl = document.getElementById('telegramConfigStatus');
+        if (!token || !chatId) {
+            statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Please enter both Bot Token and Chat ID.</span>';
+            return;
+        }
+        localStorage.setItem('goatTgToken', token);
+        localStorage.setItem('goatTgChatId', chatId);
+        statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Saved! Telegram notifications are now active.</span>';
+    }
+
+    function clearTelegramConfig() {
+        if (!confirm('Remove saved Telegram credentials?')) return;
+        localStorage.removeItem('goatTgToken');
+        localStorage.removeItem('goatTgChatId');
+        document.getElementById('telegramBotTokenInput').value = '';
+        document.getElementById('telegramChatIdInput').value = '';
+        document.getElementById('telegramConfigStatus').innerHTML = '<span style="color:var(--gray)"><i class="fas fa-info-circle"></i> Credentials cleared.</span>';
+    }
+
+    function toggleTelegramTokenVisibility() {
+        var inp = document.getElementById('telegramBotTokenInput');
+        var btn = document.getElementById('telegramTokenEyeBtn');
+        if (inp.type === 'password') {
+            inp.type = 'text';
+            btn.innerHTML = '<i class="fas fa-eye-slash"></i>';
+        } else {
+            inp.type = 'password';
+            btn.innerHTML = '<i class="fas fa-eye"></i>';
+        }
+    }
+
+    function testTelegramMessage() {
+        var statusEl = document.getElementById('telegramConfigStatus');
+        statusEl.innerHTML = '<span style="color:var(--info)"><i class="fas fa-spinner fa-spin"></i> Sending test message...</span>';
+        _sendTelegramRaw('🔔 GOAT KIDS: Telegram is working! Orders will be delivered here.', function(ok) {
+            if (ok) {
+                statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Test message sent successfully!</span>';
+            } else {
+                statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times-circle"></i> Failed. Check your Bot Token and Chat ID.</span>';
+            }
+        });
+    }
+
+    function _sendTelegramRaw(message, callback) {
+        var cfg = getTelegramConfig();
+        if (!cfg.botToken || !cfg.chatId) {
+            console.warn('Telegram not configured. Go to Admin > Inventory > Telegram Settings.');
+            if (callback) callback(false);
+            return;
+        }
+        var url = 'https://api.telegram.org/bot' + cfg.botToken + '/sendMessage';
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: cfg.chatId, text: message, parse_mode: 'HTML' })
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                console.log('✅ Telegram message sent');
+                if (callback) callback(true);
+            } else {
+                console.error('Telegram API error:', data.description);
+                if (callback) callback(false);
+            }
+        })
+        .catch(function(err) {
+            console.error('Telegram fetch error:', err);
+            if (callback) callback(false);
+        });
+    }
+
+function sendToTelegram(order, callback) {
     var itemsText = '';
     for (var i = 0; i < order.cart.length; i++) {
         var it = order.cart[i];
         var sub = it.subtotal || (it.price * it.quantity) || 0;
         itemsText += '• ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ') - $' + sub.toFixed(2) + '\n';
     }
-    
-    var message = '🛍️ NEW ORDER: ' + order.orderId + '\n\n' +
+
+    var message = '🛍️ <b>NEW ORDER: ' + order.orderId + '</b>\n\n' +
         '👤 Customer: ' + (order.customerName || 'N/A') + '\n' +
         '📞 Phone: ' + (order.customerPhone || 'N/A') + '\n' +
         '📍 Address: ' + (order.customerAddress || '') + (order.customerCity ? ', ' + order.customerCity : '') + '\n' +
@@ -560,29 +727,8 @@
         '🚚 Shipping Fee: $' + (order.shipping || 0).toFixed(2) + '\n' +
         '💵 TOTAL: $' + (order.total || 0).toFixed(2) + '\n\n' +
         '📝 Notes: ' + (order.customerNotes || 'None');
-    
-    // Call the cloud function with the message
-    fetch('https://us-central1-goat-kids-store.cloudfunctions.net/sendTelegramMessage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: message })
-    })
-    .then(function(response) {
-        return response.json();
-    })
-    .then(function(data) {
-        if (data.success) {
-            console.log('✅ Telegram sent');
-            callback(true);
-        } else {
-            console.error('❌ Error:', data.error);
-            callback(false);
-        }
-    })
-    .catch(function(error) {
-        console.error('❌ Error:', error);
-        callback(false);
-    });
+
+    _sendTelegramRaw(message, callback);
 }
     // =============================================
     // STATE
@@ -595,7 +741,8 @@
         loginRecords: JSON.parse(localStorage.getItem('goatLoginRecords') || '[]'),
         paymentMethod: 'cod',
         shippingFee: 0,
-        filter: { category: 'all', stock: 'all', search: '' },
+        filter: { category: 'all', stock: 'all', search: '', priceMin: 0, priceMax: 9999, sortBy: 'default' },
+        wishlist: JSON.parse(localStorage.getItem('goatWishlist') || '[]'),
         storeId: null,
         firebaseOnline: false,
         pendingOrders: [],
@@ -784,161 +931,94 @@
     // FIX #7 + #13: PLACE ORDER - with cooldown, success screen, cart cleared AFTER send
     // =============================================
     function placeOrder() {
-    var n = document.getElementById('customerName').value.trim();
-    var ph = document.getElementById('customerPhone').value.trim();
-    var ad = document.getElementById('customerAddress').value.trim();
-    var ci = document.getElementById('customerCity').value.trim();
-    if (!n || !ph || !ad) { showToast('Fill Name, Phone & Address', 'error'); return; }
-    if (!STATE.cart || STATE.cart.length === 0) { showToast('Cart is empty!', 'error'); return; }
+        var n = document.getElementById('customerName').value.trim();
+        var ph = document.getElementById('customerPhone').value.trim();
+        var ad = document.getElementById('customerAddress').value.trim();
+        var ci = document.getElementById('customerCity').value.trim();
+        if (!n || !ph || !ad) { showToast('Fill Name, Phone & Address', 'error'); return; }
+        if (!STATE.cart || STATE.cart.length === 0) { showToast('Cart is empty!', 'error'); return; }
 
-    // Rate limit check
-    var now = Date.now();
-    var elapsed = (now - STATE.lastOrderTime) / 1000;
-    if (STATE.lastOrderTime > 0 && elapsed < STATE.orderCooldownSeconds) {
-        var remaining = Math.ceil(STATE.orderCooldownSeconds - elapsed);
-        var cooldownEl = document.getElementById('orderCooldownMsg');
-        cooldownEl.textContent = '⏳ Please wait ' + remaining + ' seconds before placing another order.';
-        cooldownEl.classList.remove('hidden');
-        setTimeout(function() { cooldownEl.classList.add('hidden'); }, remaining * 1000);
-        return;
-    }
+        // FIX #7: Rate limit - 30 second cooldown between orders
+        var now = Date.now();
+        var elapsed = (now - STATE.lastOrderTime) / 1000;
+        if (STATE.lastOrderTime > 0 && elapsed < STATE.orderCooldownSeconds) {
+            var remaining = Math.ceil(STATE.orderCooldownSeconds - elapsed);
+            var cooldownEl = document.getElementById('orderCooldownMsg');
+            cooldownEl.textContent = '⏳ Please wait ' + remaining + ' seconds before placing another order.';
+            cooldownEl.classList.remove('hidden');
+            setTimeout(function() { cooldownEl.classList.add('hidden'); }, remaining * 1000);
+            return;
+        }
 
-    var placeBtn = document.getElementById('placeOrderBtn');
-    placeBtn.disabled = true;
-    placeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+        var placeBtn = document.getElementById('placeOrderBtn');
+        placeBtn.disabled = true;
+        placeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
 
-    var savedCart = [];
-    for (var i = 0; i < STATE.cart.length; i++) {
-        var item = STATE.cart[i];
-        savedCart.push({
-            productId: item.productId,
-            name: item.name,
-            size: item.size || 'One Size',
-            quantity: item.quantity,
-            price: item.price,
-            subtotal: item.price * item.quantity,
-            image: item.image || ''
+        var savedCart = [];
+        for (var i = 0; i < STATE.cart.length; i++) {
+            var item = STATE.cart[i];
+            savedCart.push({
+                productId: item.productId,
+                name: item.name,
+                size: item.size || 'One Size',
+                quantity: item.quantity,
+                price: item.price,
+                subtotal: item.price * item.quantity,
+                image: item.image || ''
+            });
+        }
+        var sm = 'Pickup';
+        var le = document.getElementById('shippingLocation');
+        if (le && le.value === 'phnompenh') sm = 'Phnom Penh';
+        else if (le && le.value === 'province') sm = 'Province';
+        var sub = 0;
+        for (var j = 0; j < savedCart.length; j++) sub += savedCart[j].price * savedCart[j].quantity;
+        var sh = STATE.shippingFee || 0;
+        var total = sub + sh;
+        var oid = 'ORD-' + Date.now();
+        var order = {
+            orderId: oid, timestamp: Date.now(), orderDate: new Date().toLocaleString(),
+            status: 'pending', shippingMethod: sm, customerName: n,
+            customerPhone: ph, customerAddress: ad, customerCity: ci,
+            customerNotes: document.getElementById('customerNotes').value.trim(),
+            paymentMethod: 'cod', storeId: STATE.storeId,
+            cart: savedCart, subtotal: sub, shipping: sh, total: total
+        };
+
+        // FIX #7: Only clear cart AFTER Telegram send attempt, not before
+        sendToTelegram(order, function(success) {
+            // Save order regardless of Telegram result
+            STATE.pendingOrders.push(order);
+            saveOrders();
+            logActivity('New Order', oid + ' - $' + total.toFixed(2));
+            if (STATE.firebaseOnline) {
+                db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order);
+            }
+
+            // Now clear cart
+            STATE.cart = [];
+            localStorage.setItem('goatCart', '[]');
+            updateCartBadge();
+
+            // Update rate limit timestamp
+            STATE.lastOrderTime = Date.now();
+            localStorage.setItem('goatLastOrderTime', STATE.lastOrderTime);
+
+            if (STATE.isAdmin) { renderPending(); updateAdminBadges(); }
+
+            placeBtn.disabled = false;
+            placeBtn.innerHTML = '<i class="fab fa-telegram-plane"></i> <span data-translate="placeOrder">Send Order via Telegram</span>';
+
+            // FIX #13: Show success screen instead of just a toast
+            document.getElementById('cartMainContent').classList.add('hidden');
+            document.getElementById('orderSuccessScreen').classList.remove('hidden');
+            document.getElementById('successOrderId').textContent = '📦 ' + oid;
+
+            if (!success) {
+                showToast('Order saved! (Telegram may have failed - seller was notified via app)', 'warning');
+            }
         });
     }
-    
-    var sm = 'Pickup';
-    var le = document.getElementById('shippingLocation');
-    if (le && le.value === 'phnompenh') sm = 'Phnom Penh';
-    else if (le && le.value === 'province') sm = 'Province';
-    
-    var sub = 0;
-    for (var j = 0; j < savedCart.length; j++) sub += savedCart[j].price * savedCart[j].quantity;
-    var sh = STATE.shippingFee || 0;
-    var total = sub + sh;
-    var oid = 'ORD-' + Date.now();
-    
-    var order = {
-        orderId: oid, timestamp: Date.now(), orderDate: new Date().toLocaleString(),
-        status: 'pending', shippingMethod: sm, customerName: n,
-        customerPhone: ph, customerAddress: ad, customerCity: ci,
-        customerNotes: document.getElementById('customerNotes').value.trim(),
-        paymentMethod: 'cod', storeId: STATE.storeId,
-        cart: savedCart, subtotal: sub, shipping: sh, total: total
-    };
-
-    // Send to Telegram first, then save
-    sendToTelegram(order, function(success) {
-        // Always save the order
-        STATE.pendingOrders.push(order);
-        saveOrders();
-        logActivity('New Order', oid + ' - $' + total.toFixed(2));
-        
-        if (STATE.firebaseOnline) {
-            db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order);
-        }
-
-        // Clear cart
-        STATE.cart = [];
-        localStorage.setItem('goatCart', '[]');
-        updateCartBadge();
-
-        // Update rate limit
-        STATE.lastOrderTime = Date.now();
-        localStorage.setItem('goatLastOrderTime', STATE.lastOrderTime);
-
-        if (STATE.isAdmin) { renderPending(); updateAdminBadges(); }
-
-        placeBtn.disabled = false;
-        placeBtn.innerHTML = '<i class="fab fa-telegram-plane"></i> <span data-translate="placeOrder">Send Order via Telegram</span>';
-
-        // Show success screen
-        document.getElementById('cartMainContent').classList.add('hidden');
-        document.getElementById('orderSuccessScreen').classList.remove('hidden');
-        document.getElementById('successOrderId').textContent = '📦 ' + oid;
-
-        if (success) {
-            showToast('Order sent to Telegram!', 'success');
-        } else {
-            showToast('Order saved! But Telegram notification failed', 'warning');
-        }
-    });
-}
-
-function sendToTelegram(order, callback) {
-    var itemsText = '';
-    for (var i = 0; i < order.cart.length; i++) {
-        var it = order.cart[i];
-        var sub = it.subtotal || (it.price * it.quantity) || 0;
-        itemsText += '• ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ') - $' + sub.toFixed(2) + '\n';
-    }
-    
-    var message = '🛍️ NEW ORDER: ' + order.orderId + '\n\n' +
-        '👤 Customer: ' + (order.customerName || 'N/A') + '\n' +
-        '📞 Phone: ' + (order.customerPhone || 'N/A') + '\n' +
-        '📍 Address: ' + (order.customerAddress || '') + (order.customerCity ? ', ' + order.customerCity : '') + '\n' +
-        '🚚 Shipping: ' + (order.shippingMethod || 'N/A') + '\n' +
-        '💳 Payment: Cash on Delivery\n\n' +
-        'ITEMS:\n' + itemsText + '\n' +
-        '💰 Subtotal: $' + (order.subtotal || 0).toFixed(2) + '\n' +
-        '🚚 Shipping Fee: $' + (order.shipping || 0).toFixed(2) + '\n' +
-        '💵 TOTAL: $' + (order.total || 0).toFixed(2) + '\n\n' +
-        '📝 Notes: ' + (order.customerNotes || 'None');
-    
-    fetch('https://us-central1-goat-kids-store.cloudfunctions.net/sendTelegramMessage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: message })
-    })
-    .then(function(response) {
-        console.log('Status:', response.status);
-        return response.text();
-    })
-    .then(function(text) {
-        console.log('Response body:', text);
-        try {
-            var data = JSON.parse(text);
-            if (data.success) {
-                console.log('✅ Telegram sent');
-                callback(true);
-            } else {
-                console.error('❌ Error:', data.error);
-                callback(false);
-            }
-        } catch(e) {
-            console.error('❌ Parse error:', text);
-            callback(false);
-        }
-    })
-    .catch(function(error) {
-        console.error('❌ Network error:', error);
-        callback(false);
-    });
-}
-function copyManualMessage() {
-    navigator.clipboard.writeText(window.manualMessage).then(function() {
-        showToast('Message copied!', 'success');
-    });
-}
-
-function openTelegramWeb() {
-    var msg = encodeURIComponent(window.manualMessage);
-    window.open('https://t.me/share/url?url=' + msg + '&text=' + msg, '_blank');
-}
 
     function switchAdminTab(tab) {
         document.querySelectorAll('.admin-tab').forEach(function(t) { t.classList.remove('active'); });
@@ -983,6 +1063,41 @@ function openTelegramWeb() {
         }
     }
 
+    // =============================================
+    // PASSWORD MANAGEMENT — stored in localStorage (not in source code)
+    // Default passwords are set on first run if nothing is stored yet.
+    // Admin can change passwords from Admin > Security Settings.
+    // =============================================
+    function getStoredPasswords() {
+        var stored = localStorage.getItem('goatPasswords');
+        if (stored) { try { return JSON.parse(stored); } catch(e) {} }
+        // First-run defaults — admin should change these immediately
+        return { fullPass: 'admin123', ordersPass: 'orders123', inventoryPass: 'inventory123' };
+    }
+    function savePasswords(obj) {
+        localStorage.setItem('goatPasswords', JSON.stringify(obj));
+    }
+    function changePassword() {
+        var role = document.getElementById('changePwRole').value;
+        var cur = document.getElementById('changePwCurrent').value;
+        var np = document.getElementById('changePwNew').value;
+        var cf = document.getElementById('changePwConfirm').value;
+        var statusEl = document.getElementById('changePwStatus');
+        if (!cur || !np || !cf) { statusEl.innerHTML = '<span style="color:var(--danger)">All fields are required.</span>'; return; }
+        if (np.length < 6) { statusEl.innerHTML = '<span style="color:var(--danger)">New password must be at least 6 characters.</span>'; return; }
+        if (np !== cf) { statusEl.innerHTML = '<span style="color:var(--danger)">New passwords do not match.</span>'; return; }
+        var passwords = getStoredPasswords();
+        var key = role === 'full' ? 'fullPass' : (role === 'orders' ? 'ordersPass' : 'inventoryPass');
+        if (passwords[key] !== cur) { statusEl.innerHTML = '<span style="color:var(--danger)">Current password is incorrect.</span>'; return; }
+        passwords[key] = np;
+        savePasswords(passwords);
+        document.getElementById('changePwCurrent').value = '';
+        document.getElementById('changePwNew').value = '';
+        document.getElementById('changePwConfirm').value = '';
+        statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Password changed successfully!</span>';
+        logActivity('Password Changed', 'Role: ' + role);
+    }
+
     async function adminLogin() {
         var pw = document.getElementById('adminPassword').value;
         var role = selectedRole;
@@ -995,25 +1110,23 @@ function openTelegramWeb() {
             return;
         }
         var valid = false, name = '';
+        var passwords = getStoredPasswords();
+        // Try Firestore credentials first, fall back to localStorage passwords
         try {
             var doc = await db.collection('_admin_').doc('credentials').get();
             var data = doc.exists ? doc.data() : null;
-            if (!data) {
-                // Fallback to hardcoded (offline mode only)
-                if (role === 'full' && pw === 'N1255550') { valid = true; name = 'Full Admin'; }
-                else if (role === 'orders' && pw === 'ord2024') { valid = true; name = 'Order Manager'; }
-                else if (role === 'inventory' && pw === 'inv2024') { valid = true; name = 'Inventory Manager'; }
-            } else {
+            if (data) {
                 if (role === 'full' && pw === data.fullPass) { valid = true; name = 'Full Admin'; }
                 else if (role === 'orders' && pw === data.ordersPass) { valid = true; name = 'Order Manager'; }
                 else if (role === 'inventory' && pw === data.inventoryPass) { valid = true; name = 'Inventory Manager'; }
-                if (pw === data.masterKey) { valid = true; name = 'Super Admin'; role = 'full'; }
+                if (data.masterKey && pw === data.masterKey) { valid = true; name = 'Super Admin'; role = 'full'; }
             }
-        } catch (e) {
-            // Firestore unreachable - use hardcoded fallback
-            if (role === 'full' && pw === 'N1255550') { valid = true; name = 'Full Admin'; }
-            else if (role === 'orders' && pw === 'ord2024') { valid = true; name = 'Order Manager'; }
-            else if (role === 'inventory' && pw === 'inv2024') { valid = true; name = 'Inventory Manager'; }
+        } catch (e) { /* offline — fall through to localStorage passwords */ }
+        // localStorage passwords (always available offline)
+        if (!valid) {
+            if (role === 'full' && pw === passwords.fullPass) { valid = true; name = 'Full Admin'; }
+            else if (role === 'orders' && pw === passwords.ordersPass) { valid = true; name = 'Order Manager'; }
+            else if (role === 'inventory' && pw === passwords.inventoryPass) { valid = true; name = 'Inventory Manager'; }
         }
         if (!valid) {
             attempts.count++;
@@ -1223,7 +1336,7 @@ function openTelegramWeb() {
         var imgs = STATE.newProductImages.length ? STATE.newProductImages.slice() : ['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'];
         var t = 0;
         for (var i = 0; i < STATE.newProductSizes.length; i++) { t += STATE.newProductSizes[i].qty; }
-        STATE.products.push({ id: 'p' + Date.now(), name: n, price: pr, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice() });
+        STATE.products.push({ id: 'p' + Date.now(), name: n, price: pr, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice(), addedAt: Date.now() });
         saveProducts();
         logActivity('Add Product', n + ' ($' + pr + ')');
         if (STATE.firebaseOnline) syncToFirebase();
@@ -1303,13 +1416,22 @@ function openTelegramWeb() {
         var f = [];
         for (var i = 0; i < STATE.products.length; i++) {
             var p = STATE.products[i];
-            if (STATE.filter.search && p.name.toLowerCase().indexOf(STATE.filter.search) === -1) continue;
+            if (STATE.filter.search && p.name.toLowerCase().indexOf(STATE.filter.search) === -1 && p.category.toLowerCase().indexOf(STATE.filter.search) === -1) continue;
             if (STATE.filter.category !== 'all' && p.category !== STATE.filter.category) continue;
             if (STATE.filter.stock === 'in-stock' && !hasStock(p)) continue;
             if (STATE.filter.stock === 'out-of-stock' && hasStock(p)) continue;
+            if (p.price < STATE.filter.priceMin || p.price > STATE.filter.priceMax) continue;
             f.push(p);
         }
-        if (!f.length) { g.innerHTML = '<div style="text-align:center;padding:3rem;grid-column:1/-1"><h3>No products found</h3></div>'; return; }
+        // Sort
+        var sort = STATE.filter.sortBy || 'default';
+        if (sort === 'price-asc') f.sort(function(a,b){return a.price-b.price;});
+        else if (sort === 'price-desc') f.sort(function(a,b){return b.price-a.price;});
+        else if (sort === 'name-asc') f.sort(function(a,b){return a.name.localeCompare(b.name);});
+        else if (sort === 'stock-desc') f.sort(function(a,b){return getTotalStock(b)-getTotalStock(a);});
+        else if (sort === 'newest') f.sort(function(a,b){return (b.addedAt||0)-(a.addedAt||0);});
+
+        if (!f.length) { g.innerHTML = '<div style="text-align:center;padding:3rem;grid-column:1/-1"><i class="fas fa-search" style="font-size:3rem;color:var(--gray-light)"></i><h3 style="margin-top:1rem">No products found</h3><button class="btn btn-outline mt-4" onclick="clearFilters()">Clear Filters</button></div>'; return; }
         var h = '';
         for (var j = 0; j < f.length; j++) {
             var p = f[j];
@@ -1327,21 +1449,148 @@ function openTelegramWeb() {
                 }
                 sz += '</div></div>';
             }
+            var inWish = STATE.wishlist.indexOf(p.id) !== -1;
             var card = '<div class="product-card">' +
-                '<div class="product-image-container" onclick="event.stopPropagation();openLightbox(\'' + allImages[0] + '\')">' +
+                '<div class="product-image-container" onclick="openProductDetail(\'' + p.id + '\')">' +
                 '<img src="' + allImages[0] + '" class="product-main-image" loading="lazy" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400\'">' +
-                '<div class="product-badge ' + bd + '">' + bt + '</div></div>' +
+                '<div class="product-badge ' + bd + '">' + bt + '</div>' +
+                '<button class="wishlist-btn ' + (inWish ? 'active' : '') + '" onclick="event.stopPropagation();toggleWishlist(\'' + p.id + '\')" title="' + (inWish ? 'Remove from wishlist' : 'Add to wishlist') + '"><i class="fas fa-heart"></i></button>' +
+                '</div>' +
                 '<div class="product-info">' +
                 '<span class="product-category ' + getCategoryDisplay(p.category) + '">' + p.category + '</span>' +
                 '<h3 class="product-title">' + p.name + '</h3>' +
                 '<div class="product-price">$' + p.price.toFixed(2) + '</div>' +
                 '<div class="product-stock ' + sc + '"><i class="fas ' + (total > 0 ? 'fa-check-circle' : 'fa-times-circle') + '"></i> ' + st + ' (' + total + ')</div>' +
                 sz +
-                '<div class="product-actions"><button class="btn btn-primary btn-add-to-cart" onclick="event.stopPropagation();addToCart(\'' + p.id + '\')" ' + (!hasStock(p) ? 'disabled' : '') + '><i class="fas fa-cart-plus"></i> Add</button></div>' +
+                '<div class="product-actions"><button class="btn btn-primary btn-add-to-cart" onclick="event.stopPropagation();addToCart(\'' + p.id + '\')" ' + (!hasStock(p) ? 'disabled' : '') + '><i class="fas fa-cart-plus"></i> Add</button>' +
+                '<button class="btn btn-outline btn-small" onclick="openProductDetail(\'' + p.id + '\')" title="View Details"><i class="fas fa-eye"></i></button>' +
+                '</div>' +
                 '</div></div>';
             h += card;
         }
         g.innerHTML = h;
+    }
+
+    function clearFilters() {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('categoryFilter').value = 'all';
+        document.getElementById('stockFilter').value = 'all';
+        document.getElementById('priceMin').value = '';
+        document.getElementById('priceMax').value = '';
+        document.getElementById('sortBy').value = 'default';
+        STATE.filter = { category: 'all', stock: 'all', search: '', priceMin: 0, priceMax: 9999, sortBy: 'default' };
+        renderProducts();
+    }
+
+    // =============================================
+    // WISHLIST
+    // =============================================
+    function toggleWishlist(pid) {
+        var idx = STATE.wishlist.indexOf(pid);
+        if (idx === -1) { STATE.wishlist.push(pid); showToast('Added to wishlist ❤️', 'success'); }
+        else { STATE.wishlist.splice(idx, 1); showToast('Removed from wishlist', 'info'); }
+        localStorage.setItem('goatWishlist', JSON.stringify(STATE.wishlist));
+        updateWishlistBadge();
+        renderProducts();
+        if (document.getElementById('wishlistModal') && document.getElementById('wishlistModal').classList.contains('active')) {
+            renderWishlistModal();
+        }
+    }
+    function updateWishlistBadge() {
+        var b = document.getElementById('wishlistBadge');
+        if (b) b.textContent = STATE.wishlist.length;
+        var b2 = document.getElementById('wishlistBadgeMobile');
+        if (b2) b2.textContent = STATE.wishlist.length;
+    }
+    function openWishlistModal() {
+        document.getElementById('wishlistModal').classList.add('active');
+        document.getElementById('wishlistModal').classList.remove('hidden');
+        renderWishlistModal();
+    }
+    function closeWishlistModal() {
+        document.getElementById('wishlistModal').classList.remove('active');
+        document.getElementById('wishlistModal').classList.add('hidden');
+    }
+    function renderWishlistModal() {
+        var c = document.getElementById('wishlistModalContent');
+        if (!STATE.wishlist.length) { c.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--gray)"><i class="fas fa-heart" style="font-size:3rem;color:var(--gray-light)"></i><p style="margin-top:1rem">Your wishlist is empty</p></div>'; return; }
+        var h = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1rem">';
+        for (var i = 0; i < STATE.wishlist.length; i++) {
+            var p = findProduct(STATE.wishlist[i]);
+            if (!p) continue;
+            var img = (p.images && p.images[0]) || 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=200';
+            h += '<div style="background:var(--light);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column">' +
+                '<img src="' + img + '" style="width:100%;height:160px;object-fit:cover" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=200\'">' +
+                '<div style="padding:0.75rem;flex:1"><div style="font-weight:600;font-size:0.9rem">' + p.name + '</div><div style="color:var(--primary);font-weight:700;margin:0.25rem 0">$' + p.price.toFixed(2) + '</div></div>' +
+                '<div style="padding:0 0.75rem 0.75rem;display:flex;gap:0.5rem">' +
+                '<button class="btn btn-primary btn-small" onclick="closeWishlistModal();showTab(\'store\');setTimeout(function(){openProductDetail(\'' + p.id + '\')},200)" style="flex:1"><i class="fas fa-eye"></i> View</button>' +
+                '<button class="btn btn-danger btn-small" onclick="toggleWishlist(\'' + p.id + '\')"><i class="fas fa-trash"></i></button>' +
+                '</div></div>';
+        }
+        h += '</div>';
+        c.innerHTML = h;
+    }
+
+    // =============================================
+    // PRODUCT DETAIL MODAL
+    // =============================================
+    function openProductDetail(pid) {
+        var p = findProduct(pid);
+        if (!p) return;
+        var allImages = (p.images && p.images.length) ? p.images : ['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=600'];
+        var total = getTotalStock(p);
+        var inWish = STATE.wishlist.indexOf(pid) !== -1;
+
+        var imagesHtml = '';
+        if (allImages.length > 1) {
+            imagesHtml = '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem">';
+            for (var i = 0; i < allImages.length; i++) {
+                imagesHtml += '<img src="' + allImages[i] + '" style="width:60px;height:60px;object-fit:cover;border-radius:var(--radius);cursor:pointer;border:2px solid transparent" onclick="document.getElementById(\'pdMainImg\').src=this.src;document.querySelectorAll(\'.pd-thumb\').forEach(function(t){t.style.borderColor=\'transparent\'});this.style.borderColor=\'var(--primary)\'" class="pd-thumb" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100\'">';
+            }
+            imagesHtml += '</div>';
+        }
+
+        var sizesHtml = '';
+        if (p.sizes && p.sizes.length) {
+            sizesHtml = '<div style="margin:1rem 0"><div style="font-weight:600;margin-bottom:0.5rem">Select Size:</div><div class="size-options" id="pdSizeOptions">';
+            for (var k = 0; k < p.sizes.length; k++) {
+                var s = p.sizes[k];
+                sizesHtml += '<div class="size-option ' + (s.qty > 0 ? '' : 'disabled') + '" onclick="selectPdSize(this,\'' + pid + '\',\'' + s.name + '\')">' + s.name + '<span class="size-stock-badge">' + s.qty + '</span></div>';
+            }
+            sizesHtml += '</div></div>';
+        }
+
+        var stockClass = total > 10 ? 'in-stock' : (total > 0 ? 'low-stock' : 'out-of-stock');
+        var stockText = total > 10 ? 'In Stock (' + total + ')' : (total > 0 ? 'Low Stock (' + total + ')' : 'Out of Stock');
+
+        document.getElementById('productDetailModal').innerHTML =
+            '<div class="modal" style="max-width:700px;width:95%">' +
+            '<div class="modal-header"><h3>' + p.name + '</h3><button class="modal-close" onclick="closeProductDetail()">&times;</button></div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">' +
+            '<div><img id="pdMainImg" src="' + allImages[0] + '" style="width:100%;height:280px;object-fit:cover;border-radius:var(--radius-lg);cursor:zoom-in" onclick="openLightbox(this.src)" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=600\'">' + imagesHtml + '</div>' +
+            '<div><span class="product-category ' + getCategoryDisplay(p.category) + '">' + p.category + '</span>' +
+            '<div style="font-size:1.8rem;font-weight:700;color:var(--primary);margin:0.5rem 0">$' + p.price.toFixed(2) + '</div>' +
+            '<div class="product-stock ' + stockClass + '" style="margin-bottom:0.5rem"><i class="fas ' + (total > 0 ? 'fa-check-circle' : 'fa-times-circle') + '"></i> ' + stockText + '</div>' +
+            sizesHtml +
+            '<div style="display:flex;gap:0.5rem;margin-top:1rem">' +
+            '<button class="btn btn-primary btn-large" onclick="addToCart(\'' + pid + '\');closeProductDetail()" style="flex:1" ' + (!hasStock(p) ? 'disabled' : '') + '><i class="fas fa-cart-plus"></i> Add to Cart</button>' +
+            '<button class="btn ' + (inWish ? 'btn-danger' : 'btn-outline') + '" onclick="toggleWishlist(\'' + pid + '\');document.querySelector(\'.pd-wish-btn\').classList.toggle(\'btn-danger\');document.querySelector(\'.pd-wish-btn\').classList.toggle(\'btn-outline\')" title="Wishlist" style="min-width:50px" class="pd-wish-btn"><i class="fas fa-heart"></i></button>' +
+            '</div></div></div></div>';
+        document.getElementById('productDetailModal').classList.add('active');
+        document.getElementById('productDetailModal').classList.remove('hidden');
+        // Sync size selection with main product card
+        document.getElementById('productDetailModal').querySelector('.modal').addEventListener('click', function(e){e.stopPropagation();});
+    }
+    function selectPdSize(el, pid, size) {
+        var opts = el.closest('#pdSizeOptions').querySelectorAll('.size-option');
+        for (var i=0;i<opts.length;i++) opts[i].classList.remove('selected');
+        el.classList.add('selected');
+        if (!STATE._selSizes) STATE._selSizes = {};
+        STATE._selSizes[pid] = size;
+    }
+    function closeProductDetail() {
+        document.getElementById('productDetailModal').classList.remove('active');
+        document.getElementById('productDetailModal').classList.add('hidden');
     }
 
     function selectSize(el, pid, size) {
@@ -1356,6 +1605,11 @@ function openTelegramWeb() {
         STATE.filter.search = document.getElementById('searchInput').value.toLowerCase();
         STATE.filter.category = document.getElementById('categoryFilter').value;
         STATE.filter.stock = document.getElementById('stockFilter').value;
+        var pMin = parseFloat(document.getElementById('priceMin').value) || 0;
+        var pMax = parseFloat(document.getElementById('priceMax').value) || 9999;
+        STATE.filter.priceMin = pMin;
+        STATE.filter.priceMax = pMax;
+        STATE.filter.sortBy = document.getElementById('sortBy').value;
         renderProducts();
     }
 
@@ -1505,7 +1759,37 @@ function openTelegramWeb() {
         if (STATE.firebaseOnline) syncToFirebase();
         renderPending(); renderHistory(); renderProducts(); renderInventory(); updateAdminBadges();
         showToast('Order ' + oid + ' confirmed!', 'success');
+        // Low stock alerts
+        for (var ls = 0; ls < order.cart.length; ls++) {
+            var lsProduct = findProduct(order.cart[ls].productId);
+            if (lsProduct) {
+                var lsTotal = getTotalStock(lsProduct);
+                if (lsTotal <= 3 && lsTotal > 0) {
+                    _sendTelegramRaw('⚠️ <b>LOW STOCK ALERT</b>\n' + lsProduct.name + ' has only <b>' + lsTotal + '</b> items left!', null);
+                } else if (lsTotal === 0) {
+                    _sendTelegramRaw('🚫 <b>OUT OF STOCK</b>\n' + lsProduct.name + ' is now out of stock!', null);
+                }
+            }
+        }
         setTimeout(function() { if (confirm('Print receipt?')) printReceipt(oid); }, 300);
+    }
+
+    function sendDailySummary() {
+        var today = new Date(); today.setHours(0,0,0,0);
+        var todayOrders = STATE.confirmedOrders.filter(function(o){ return new Date(o.timestamp) >= today && o.status === 'confirmed'; });
+        var revenue = todayOrders.reduce(function(s,o){return s+(o.total||0);}, 0);
+        var pending = STATE.pendingOrders.length;
+        var lowStock = STATE.products.filter(function(p){return getTotalStock(p)<=3&&getTotalStock(p)>0;});
+        var outStock = STATE.products.filter(function(p){return getTotalStock(p)===0;});
+        var msg = '📊 <b>GOAT KIDS Daily Summary</b>\n' + new Date().toLocaleDateString() + '\n\n' +
+            '✅ Confirmed today: ' + todayOrders.length + ' orders\n' +
+            '💰 Revenue today: $' + revenue.toFixed(2) + '\n' +
+            '⏳ Still pending: ' + pending + '\n\n';
+        if (lowStock.length) msg += '⚠️ Low stock: ' + lowStock.map(function(p){return p.name+'('+getTotalStock(p)+')';}).join(', ') + '\n';
+        if (outStock.length) msg += '🚫 Out of stock: ' + outStock.map(function(p){return p.name;}).join(', ') + '\n';
+        _sendTelegramRaw(msg, function(ok){
+            showToast(ok ? 'Daily summary sent to Telegram!' : 'Failed to send summary', ok ? 'success' : 'error');
+        });
     }
 
     function rejectOrder(oid) {
@@ -1547,41 +1831,55 @@ function openTelegramWeb() {
         showToast(orders.length + ' confirmed!', 'success');
     }
 
-    function renderPending() {
+    function renderPending(searchQ) {
         var c = document.getElementById('pendingContainer');
         document.getElementById('pendingCount').textContent = STATE.pendingOrders.length;
         if (!c) return;
-        if (!STATE.pendingOrders.length) { c.innerHTML = '<div class="admin-empty"><i class="fas fa-inbox"></i><p>No pending orders</p></div>'; return; }
+        var orders = STATE.pendingOrders;
+        if (searchQ) {
+            var q = searchQ.toLowerCase();
+            orders = orders.filter(function(o){ return (o.orderId||'').toLowerCase().indexOf(q)!==-1||(o.customerName||'').toLowerCase().indexOf(q)!==-1||(o.customerPhone||'').toLowerCase().indexOf(q)!==-1; });
+        }
+        if (!orders.length) { c.innerHTML = '<div class="admin-empty"><i class="fas fa-inbox"></i><p>' + (searchQ ? 'No matching orders' : 'No pending orders') + '</p></div>'; return; }
         var h = '';
-        for (var i = 0; i < STATE.pendingOrders.length; i++) {
-            var o = STATE.pendingOrders[i];
+        for (var i = 0; i < orders.length; i++) {
+            var o = orders[i];
             var items = '';
             if (o.cart && o.cart.length > 0) {
                 for (var j = 0; j < o.cart.length; j++) {
                     var it = o.cart[j];
-                    // FIX #11: safe subtotal fallback
                     var sub = (it.subtotal != null ? it.subtotal : (it.price * it.quantity)) || 0;
                     items += '<div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:0.25rem 0"><span>🛍️ ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ')</span><span>$' + sub.toFixed(2) + '</span></div>';
                 }
             }
-            h += '<div class="order-card"><div><strong style="color:var(--warning)">⏳ PENDING</strong><br><small>' + escHtml(o.orderId) + ' | ' + escHtml(o.orderDate || '') + '</small></div>';
-            h += '<div style="background:var(--light);padding:0.5rem;border-radius:var(--radius);margin:0.5rem 0;font-size:0.85rem">👤 ' + escHtml(o.customerName || 'N/A') + ' | 📞 ' + escHtml(o.customerPhone || 'N/A') + '<br>📍 ' + escHtml(o.customerAddress || '') + (o.customerCity ? ' | ' + escHtml(o.customerCity) : '') + '<br>🚚 ' + escHtml(o.shippingMethod || 'N/A') + ' | 💳 COD</div>';
+            h += '<div class="order-card"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><strong style="color:var(--warning)">⏳ PENDING</strong><br><small>' + escHtml(o.orderId) + ' | ' + escHtml(o.orderDate || '') + '</small></div>' +
+                '<strong style="font-size:1.1rem;color:var(--primary)">$' + (o.total || 0).toFixed(2) + '</strong></div>';
+            h += '<div style="background:var(--light);padding:0.5rem;border-radius:var(--radius);margin:0.5rem 0;font-size:0.85rem">👤 ' + escHtml(o.customerName || 'N/A') + ' | 📞 ' + escHtml(o.customerPhone || 'N/A') + '<br>📍 ' + escHtml(o.customerAddress || '') + (o.customerCity ? ' | ' + escHtml(o.customerCity) : '') + '<br>🚚 ' + escHtml(o.shippingMethod || 'N/A') + ' | 💳 COD' + (o.customerNotes ? '<br>📝 ' + escHtml(o.customerNotes) : '') + '</div>';
             h += items;
-            h += '<div style="font-weight:700;margin:0.5rem 0;font-size:1.1rem">Total: $' + (o.total || 0).toFixed(2) + '</div>';
-            h += '<div class="flex gap-2"><button class="btn btn-success btn-small" onclick="confirmOrder(\'' + o.orderId + '\')" style="flex:1"><i class="fas fa-check"></i> Confirm</button><button class="btn btn-danger btn-small" onclick="rejectOrder(\'' + o.orderId + '\')" style="flex:1"><i class="fas fa-times"></i> Reject</button></div></div>';
+            h += '<div class="flex gap-2" style="margin-top:0.5rem"><button class="btn btn-success btn-small" onclick="confirmOrder(\'' + o.orderId + '\')" style="flex:1"><i class="fas fa-check"></i> Confirm</button><button class="btn btn-danger btn-small" onclick="rejectOrder(\'' + o.orderId + '\')" style="flex:1"><i class="fas fa-times"></i> Reject</button></div></div>';
         }
         c.innerHTML = h;
     }
 
-    function renderHistory() {
+    function filterOrders() {
+        var q = document.getElementById('orderSearch') ? document.getElementById('orderSearch').value.trim() : '';
+        renderPending(q);
+        renderHistory(q);
+    }
+
+    function renderHistory(searchQ) {
         var c = document.getElementById('historyContainer');
         document.getElementById('historyCount').textContent = STATE.confirmedOrders.length;
         if (!c) return;
-        if (!STATE.confirmedOrders.length) { c.innerHTML = '<div class="admin-empty"><i class="fas fa-archive"></i><p>No order history</p></div>'; return; }
-        var rev = STATE.confirmedOrders.slice().reverse();
+        var orders = STATE.confirmedOrders.slice().reverse();
+        if (searchQ) {
+            var q = searchQ.toLowerCase();
+            orders = orders.filter(function(o){ return (o.orderId||'').toLowerCase().indexOf(q)!==-1||(o.customerName||'').toLowerCase().indexOf(q)!==-1||(o.customerPhone||'').toLowerCase().indexOf(q)!==-1; });
+        }
+        if (!orders.length) { c.innerHTML = '<div class="admin-empty"><i class="fas fa-archive"></i><p>' + (searchQ ? 'No matching orders' : 'No order history') + '</p></div>'; return; }
         var h = '';
-        for (var i = 0; i < rev.length; i++) {
-            var o = rev[i];
+        for (var i = 0; i < orders.length; i++) {
+            var o = orders[i];
             if (o.status === 'refunded') continue;
             var ok = o.status === 'confirmed';
             var items = '';
@@ -2042,6 +2340,18 @@ function openTelegramWeb() {
             if (STATE.isAdmin) {
                 renderPending(); renderHistory(); renderRefunds();
                 renderInventory(); updateAdminBadges();
+                var savedToken = localStorage.getItem('goatTgToken') || '';
+                var savedChat = localStorage.getItem('goatTgChatId') || '';
+                var tokenInp = document.getElementById('telegramBotTokenInput');
+                var chatInp = document.getElementById('telegramChatIdInput');
+                if (tokenInp) tokenInp.value = savedToken;
+                if (chatInp) chatInp.value = savedChat;
+                var tgStatusEl = document.getElementById('telegramConfigStatus');
+                if (tgStatusEl) {
+                    tgStatusEl.innerHTML = savedToken && savedChat
+                        ? '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Telegram is configured and active.</span>'
+                        : '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> Not configured — enter your Bot Token and Chat ID to enable order notifications.</span>';
+                }
             }
         } else if (tab === 'store') {
             renderProducts();
@@ -2110,6 +2420,12 @@ function openTelegramWeb() {
         // Load cart
         STATE.cart = JSON.parse(localStorage.getItem('goatCart') || '[]');
         updateCartBadge();
+        // Initialize wishlist badge
+        updateWishlistBadge();
+        // First-run: initialize default passwords if not already set
+        if (!localStorage.getItem('goatPasswords')) {
+            savePasswords({ fullPass: 'admin123', ordersPass: 'orders123', inventoryPass: 'inventory123' });
+        }
 
         // Language icon
         if (STATE.language === 'kh') {
