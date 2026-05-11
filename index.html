@@ -561,25 +561,18 @@
         '💵 TOTAL: $' + (order.total || 0).toFixed(2) + '\n\n' +
         '📝 Notes: ' + (order.customerNotes || 'None');
     
-    fetch('https://us-central1-goat-kids-store.cloudfunctions.net/sendTelegramMessage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: message })
-    })
-    .then(function(response) { return response.json(); })
-    .then(function(data) {
-        if (data.success) {
-            console.log('✅ Order sent to Telegram');
+    // Use Firebase SDK to call the function (handles CORS automatically)
+    var callFunc = firebase.functions().httpsCallable('sendTelegramMessage');
+    
+    callFunc({ message: message })
+        .then(function(result) {
+            console.log('✅ Telegram sent:', result);
             callback(true);
-        } else {
-            console.error('Error:', data.error);
+        })
+        .catch(function(error) {
+            console.error('❌ Telegram error:', error);
             callback(false);
-        }
-    })
-    .catch(function(error) {
-        console.error('Error:', error);
-        callback(false);
-    });
+        });
 }
     // =============================================
     // STATE
