@@ -905,19 +905,27 @@ function sendToTelegram(order, callback) {
         body: JSON.stringify({ message: message })
     })
     .then(function(response) {
-        return response.json();
+        console.log('Status:', response.status);
+        return response.text();
     })
-    .then(function(data) {
-        if (data.success) {
-            console.log('✅ Telegram sent');
-            callback(true);
-        } else {
-            console.error('❌ Error:', data.error);
+    .then(function(text) {
+        console.log('Response body:', text);
+        try {
+            var data = JSON.parse(text);
+            if (data.success) {
+                console.log('✅ Telegram sent');
+                callback(true);
+            } else {
+                console.error('❌ Error:', data.error);
+                callback(false);
+            }
+        } catch(e) {
+            console.error('❌ Parse error:', text);
             callback(false);
         }
     })
     .catch(function(error) {
-        console.error('❌ Error:', error);
+        console.error('❌ Network error:', error);
         callback(false);
     });
 }
