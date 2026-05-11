@@ -869,9 +869,7 @@
     });
 }
 
-    function sendToTelegram(order, callback) {
-    console.log('📤 sendToTelegram called with order:', order.orderId);
-    
+  function sendToTelegram(order, callback) {
     var itemsText = '';
     for (var i = 0; i < order.cart.length; i++) {
         var it = order.cart[i];
@@ -891,33 +889,21 @@
         '💵 TOTAL: $' + (order.total || 0).toFixed(2) + '\n\n' +
         '📝 Notes: ' + (order.customerNotes || 'None');
     
-    console.log('📤 Sending to function...');
+    var callFunc = firebase.functions().httpsCallable('sendTelegramMessage');
     
-    fetch('https://us-central1-goat-kids-store.cloudfunctions.net/sendTelegramMessage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: message })
-    })
-    .then(function(response) { 
-        console.log('📥 Response status:', response.status);
-        return response.json(); 
-    })
-    .then(function(data) {
-        console.log('📥 Response data:', data);
-        if (data.success) {
-            console.log('✅ SUCCESS');
+    callFunc({ message: message })
+        .then(function(result) {
+            console.log('✅ Telegram sent:', result);
             callback(true);
-        } else {
-            console.log('❌ FAILED:', data.error);
+        })
+        .catch(function(error) {
+            console.error('❌ Error code:', error.code);
+            console.error('❌ Error message:', error.message);
+            console.error('❌ Error details:', error.details);
+            console.error('❌ Full error:', JSON.stringify(error, null, 2));
             callback(false);
-        }
-    })
-    .catch(function(error) {
-        console.error('❌ NETWORK ERROR:', error);
-        callback(false);
-    });
+        });
 }
-
 function copyManualMessage() {
     navigator.clipboard.writeText(window.manualMessage).then(function() {
         showToast('Message copied!', 'success');
