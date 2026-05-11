@@ -876,9 +876,9 @@
     });
 }
 
-    // REPLACE the existing sendToTelegram and placeOrder functions with this improved version:
-
-function sendToTelegram(order, callback) {
+    function sendToTelegram(order, callback) {
+    console.log('📤 sendToTelegram called with order:', order.orderId);
+    
     var itemsText = '';
     for (var i = 0; i < order.cart.length; i++) {
         var it = order.cart[i];
@@ -886,7 +886,6 @@ function sendToTelegram(order, callback) {
         itemsText += '• ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ') - $' + sub.toFixed(2) + '\n';
     }
     
-    // Use plain text (no markdown) for reliability
     var message = '🛍️ NEW ORDER: ' + order.orderId + '\n\n' +
         '👤 Customer: ' + (order.customerName || 'N/A') + '\n' +
         '📞 Phone: ' + (order.customerPhone || 'N/A') + '\n' +
@@ -899,30 +898,29 @@ function sendToTelegram(order, callback) {
         '💵 TOTAL: $' + (order.total || 0).toFixed(2) + '\n\n' +
         '📝 Notes: ' + (order.customerNotes || 'None');
     
-    var url = 'https://api.telegram.org/bot' + TELEGRAM_CONFIG.botToken + '/sendMessage';
+    console.log('📤 Sending to function...');
     
-    fetch(url, {
+    fetch('https://us-central1-goat-kids-store.cloudfunctions.net/sendTelegramMessage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            chat_id: TELEGRAM_CONFIG.chatId, 
-            text: message
-        })
+        body: JSON.stringify({ message: message })
     })
-    .then(function(response) {
-        return response.json();
+    .then(function(response) { 
+        console.log('📥 Response status:', response.status);
+        return response.json(); 
     })
     .then(function(data) {
-        if (data.ok) {
-            console.log('✅ Order sent to Telegram successfully');
+        console.log('📥 Response data:', data);
+        if (data.success) {
+            console.log('✅ SUCCESS');
             callback(true);
         } else {
-            console.error('Telegram error:', data.description);
+            console.log('❌ FAILED:', data.error);
             callback(false);
         }
     })
     .catch(function(error) {
-        console.error('Network error:', error);
+        console.error('❌ NETWORK ERROR:', error);
         callback(false);
     });
 }
