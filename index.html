@@ -1335,19 +1335,72 @@ function sendToTelegram(order, callback) {
         setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 2000);
     }
 
+    async function checkFirebase() {
+        showStatus('Checking...', 'offline');
+        try {
+            // Short 5-second timeout so mobile doesn't hang
+            var timeoutPromise = new Promise(function(_, reject) {
+                setTimeout(function() { reject(new Error('timeout')); }, 5000);
+            });
+            await Promise.race([
+                db.collection('stores').doc('_test_connection_').get(),
+                timeoutPromise
+            ]);
+            STATE.firebaseOnline = true;
+            showStatus('Connected', 'online');
+            document.getElementById('syncBtn').disabled = false;
+            await flushOfflineSyncQueue();
+        } catch (e) {
+            STATE.firebaseOnline = false;
+            showStatus('Offline', 'offline');
+            document.getElementById('syncBtn').disabled = true;
+        }
+        setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 2000);
+    }
+
     async function loadData() {
-        if (STATE.firebaseOnline) {
-            try {
+        // ── STEP 1: Load localStorage IMMEDIATELY so shop shows at once ──
+        loadLocal();
+        renderProducts();
+        renderInventory();
+
+        // ── STEP 2: Try Firebase in background with a timeout ──
+        if (!STATE.firebaseOnline) return;
+        try {
+            var timeoutPromise = new Promise(function(_, reject) {
+                setTimeout(function() { reject(new Error('Firebase timeout')); }, 8000);
+            });
+            var fetchPromise = async function() {
                 var s = await db.collection('stores').doc(STATE.storeId).collection('products').where('active', '==', true).get();
                 var p = [];
-                s.forEach(function(d) { var dt = d.data(); p.push({ id: d.id, name: dt.name || '', price: dt.price || 0, stock: dt.stock || 0, category: dt.category || '', images: dt.images || [], sizes: dt.sizes || [] }); });
-                if (p.length) { STATE.products = p; saveProducts(); } else loadProductsLocal();
+                s.forEach(function(d) {
+                    var dt = d.data();
+                    p.push({ id: d.id, name: dt.name || '', price: dt.price || 0, stock: dt.stock || 0, category: dt.category || '', images: dt.images || [], sizes: dt.sizes || [], addedAt: dt.addedAt || 0 });
+                });
+                if (p.length) { STATE.products = p; saveProducts(); }
+
                 var os = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
                 STATE.pendingOrders = []; STATE.confirmedOrders = [];
-                os.forEach(function(d) { var dt = d.data(); if (dt.status === 'pending') STATE.pendingOrders.push(Object.assign({}, dt, { orderId: d.id })); else STATE.confirmedOrders.push(Object.assign({}, dt, { orderId: d.id })); });
+                os.forEach(function(d) {
+                    var dt = d.data();
+                    if (dt.status === 'pending') STATE.pendingOrders.push(Object.assign({}, dt, { orderId: d.id }));
+                    else STATE.confirmedOrders.push(Object.assign({}, dt, { orderId: d.id }));
+                });
                 saveOrders();
-            } catch (e) { loadLocal(); }
-        } else { loadLocal(); }
+            };
+            await Promise.race([fetchPromise(), timeoutPromise]);
+
+            // ── STEP 3: Update UI silently with fresh Firebase data ──
+            renderProducts();
+            renderInventory();
+            updateAdminBadges();
+            showStatus('Synced', 'online');
+        } catch (e) {
+            // Firebase timed out or failed — localStorage data already showing, no blank page
+            console.warn('Firebase load failed, using local data:', e.message);
+            showStatus('Using local data', 'offline');
+            setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 3000);
+        }
     }
 
     function loadLocal() { loadProductsLocal(); STATE.pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]'); STATE.confirmedOrders = JSON.parse(localStorage.getItem('confirmedOrders') || '[]'); loadRefunds(); }
@@ -2719,10 +2772,20 @@ function sendToTelegram(order, callback) {
             var m2 = document.getElementById('langIconMobile'); if (m2) m2.textContent = '🇺🇸';
         }
 
-        await checkFirebase();
-        await loadData();
+        // ── Show store immediately from localStorage, no waiting ──
+        loadLocal();
         showTab('store');
+        renderProducts();
         applyTranslations();
+        updateCartBadge();
+        updateWishlistBadge();
+
+        // ── Firebase check + background sync (non-blocking) ──
+        checkFirebase().then(function() {
+            loadData();
+        }).catch(function(e) {
+            console.warn('Firebase check failed:', e);
+        });
     });
 
     console.log('✅ GOAT KIDS Store Ready — v2 FIXED (showTab, closeMobileMenu, escHtml, updQty)');
