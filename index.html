@@ -218,6 +218,7 @@
         .inv-subbtn:hover{color:var(--primary)}
         .inv-subbtn.active{color:var(--primary);border-bottom-color:var(--primary)}
         .inv-subtab{display:none}.inv-subtab.active{display:block}
+        @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 
         /* ── COMPACT INVENTORY TABLE ── */
         .inventory-table{width:100%;border-collapse:collapse;font-size:0.78rem}
@@ -558,6 +559,24 @@
 
                     <!-- SETTINGS SUB-TAB -->
                     <div id="invSettingsTab" class="inv-subtab">
+
+                        <!-- PASSWORD LOCK OVERLAY -->
+                        <div id="settingsLock" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3rem 1rem;text-align:center">
+                            <div style="background:#fff;border-radius:16px;padding:2rem;max-width:320px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
+                                <div style="font-size:2.5rem;margin-bottom:0.5rem">🔐</div>
+                                <h3 style="margin-bottom:0.25rem;color:var(--gray-dark)">Settings Protected</h3>
+                                <p style="font-size:0.85rem;color:var(--gray);margin-bottom:1.5rem">Enter your admin password to access settings</p>
+                                <div style="position:relative;margin-bottom:1rem">
+                                    <input type="password" id="settingsLockInput" class="form-control" placeholder="Enter password" style="padding-right:2.5rem;text-align:center;letter-spacing:2px" onkeydown="if(event.key==='Enter')unlockSettings()">
+                                    <button onclick="toggleSettingsLockVisibility()" style="position:absolute;right:0.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray)" id="settingsLockEye"><i class="fas fa-eye"></i></button>
+                                </div>
+                                <div id="settingsLockError" style="color:var(--danger);font-size:0.8rem;margin-bottom:0.75rem;min-height:1.2em"></div>
+                                <button class="btn btn-primary w-full" onclick="unlockSettings()"><i class="fas fa-unlock"></i> Unlock Settings</button>
+                            </div>
+                        </div>
+
+                        <!-- SETTINGS CONTENT (hidden until unlocked) -->
+                        <div id="settingsContent" style="display:none">
                         <!-- Store Info -->
                         <div class="admin-card">
                             <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-store-alt" style="color:var(--primary)"></i> Store Info</div></div>
@@ -609,6 +628,7 @@
                                 <div id="changePwStatus" style="margin-top:0.75rem;font-size:0.85rem"></div>
                             </div>
                         </div>
+                        </div><!-- end settingsContent -->
                     </div>
                 </div>
 
@@ -2170,6 +2190,33 @@ function sendToTelegram(order, callback) {
         if (btn) btn.classList.add('active');
         if (tab === 'products') renderInventory();
         if (tab === 'settings') {
+            // Always lock when switching to settings
+            lockSettings();
+        }
+    }
+
+    function lockSettings() {
+        var lock = document.getElementById('settingsLock');
+        var content = document.getElementById('settingsContent');
+        if (lock) { lock.style.display = 'flex'; }
+        if (content) { content.style.display = 'none'; }
+        var inp = document.getElementById('settingsLockInput');
+        if (inp) { inp.value = ''; inp.focus(); }
+        var err = document.getElementById('settingsLockError');
+        if (err) err.textContent = '';
+    }
+
+    function unlockSettings() {
+        var inp = document.getElementById('settingsLockInput');
+        var err = document.getElementById('settingsLockError');
+        var pw = inp ? inp.value : '';
+        var passwords = getStoredPasswords();
+        // Accept full admin password OR inventory password
+        if (pw === passwords.fullPass || pw === passwords.inventoryPass) {
+            document.getElementById('settingsLock').style.display = 'none';
+            document.getElementById('settingsContent').style.display = 'block';
+            inp.value = '';
+            // Populate Telegram settings
             var savedToken = localStorage.getItem('goatTgToken') || '';
             var savedChat = localStorage.getItem('goatTgChatId') || '';
             var ti = document.getElementById('telegramBotTokenInput'); if (ti) ti.value = savedToken;
@@ -2178,6 +2225,28 @@ function sendToTelegram(order, callback) {
             if (st) st.innerHTML = savedToken && savedChat
                 ? '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Telegram active.</span>'
                 : '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> Not configured.</span>';
+        } else {
+            if (err) {
+                err.textContent = '❌ Incorrect password';
+                inp.value = '';
+                inp.focus();
+                // Shake animation
+                inp.style.animation = 'none';
+                setTimeout(function(){ inp.style.animation = 'shake 0.3s'; }, 10);
+            }
+        }
+    }
+
+    function toggleSettingsLockVisibility() {
+        var inp = document.getElementById('settingsLockInput');
+        var eye = document.getElementById('settingsLockEye');
+        if (!inp) return;
+        if (inp.type === 'password') {
+            inp.type = 'text';
+            eye.innerHTML = '<i class="fas fa-eye-slash"></i>';
+        } else {
+            inp.type = 'password';
+            eye.innerHTML = '<i class="fas fa-eye"></i>';
         }
     }
 
@@ -2352,7 +2421,7 @@ function sendToTelegram(order, callback) {
         html += '<hr class="solid">';
         html += '<div class="row tot"><span>TOTAL</span><span>$' + (order.total||0).toFixed(2) + '</span></div>';
         html += '<hr class="dash">';
-        html += '<div class="ft"><p>&#9829; Thank you for your order!</p><p>Payment: Cash on Delivery</p></div>';
+        html += '<div class="ft"><p>&#9829; Thank you for your order!</p><p>Shop Tell : 093779077</p></div>';
         html += '</div>'; // end #receipt
 
         // Share image preview overlay
