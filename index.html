@@ -2247,34 +2247,39 @@ function sendToTelegram(order, callback) {
             for (var j = 0; j < order.cart.length; j++) {
                 var it = order.cart[j];
                 var itT = (it.subtotal != null ? it.subtotal : (it.price * it.quantity)) || 0;
-                items += '<div class="item"><div class="item-name">' + it.name + ' <span class="item-size">(' + (it.size||'N/A') + ')</span></div><div class="item-row"><span>' + it.quantity + ' x $' + it.price.toFixed(2) + '</span><span><b>$' + itT.toFixed(2) + '</b></span></div></div>';
+                items += '<div style="margin:1mm 0"><div class="inm">' + it.name + ' <span class="isz">(' + (it.size||'N/A') + ')</span></div><div class="ir"><span>' + it.quantity + ' x $' + it.price.toFixed(2) + '</span><span><b>$' + itT.toFixed(2) + '</b></span></div></div>';
             }
         }
         openPrintWindow(buildReceiptHTML(order, smt, items), 'Receipt_' + oid);
     }
     function buildReceiptHTML(order, smt, items) {
-        var logoEl = document.getElementById('receiptLogo');
-        var logo = logoEl ? logoEl.src : '';
-        var pw = '58mm';
-        var html = '<!DOCTYPE html><html><head><title>Receipt</title>';
+        var logo = document.getElementById('receiptLogo') ? document.getElementById('receiptLogo').src : '';
+        var html = '';
+        html += '<!DOCTYPE html><html><head><title>Receipt ' + order.orderId + '</title>';
         html += '<meta name="viewport" content="width=device-width,initial-scale=1">';
+        html += '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>';
         html += '<style>';
         html += '@page{size:58mm auto;margin:0}';
         html += '*{margin:0;padding:0;box-sizing:border-box}';
-        html += 'body{font-family:Arial,sans-serif;background:#fff;color:#000}';
-        html += '#receipt{width:var(--pw,58mm);margin:0 auto;padding:3mm 2mm 4mm;font-size:var(--fs,7.5pt)}';
-        html += '.c{text-align:center}.logo{width:100%;display:block;margin:0 auto 1mm}';
+        html += 'body{font-family:Arial,sans-serif;background:#f0f0f0;min-height:100vh;padding-bottom:120px}';
+        html += '#receipt{width:58mm;margin:10px auto;padding:3mm 2mm 5mm;font-size:7.5pt;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.15)}';
+        html += '.c{text-align:center}';
+        html += '.logo{width:54mm;display:block;margin:0 auto 2mm}';
         html += '.dash{border:none;border-top:1px dashed #aaa;margin:1.5mm 0}';
         html += '.solid{border:none;border-top:1.5px solid #000;margin:1mm 0}';
-        html += '.row{display:flex;justify-content:space-between;padding:0.4mm 0;font-size:var(--fs,7.5pt)}';
-        html += '.lbl{color:#555}.tot{font-weight:bold;font-size:9pt}';
-        html += '.inm{font-weight:bold}.isz{font-weight:normal;color:#666}';
-        html += '.ir{display:flex;justify-content:space-between;font-size:7pt;color:#444;margin-top:0.3mm}';
-        html += '.ft{text-align:center;font-size:6.5pt;color:#888;margin-top:2mm}';
-        html += '#bar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #e2e8f0;z-index:999}';
+        html += '.row{display:flex;justify-content:space-between;padding:0.5mm 0;font-size:7.5pt}';
+        html += '.lbl{color:#555}';
+        html += '.tot{font-weight:bold;font-size:9pt}';
+        html += '.inm{font-weight:bold;font-size:7.5pt}';
+        html += '.isz{font-weight:normal;color:#666}';
+        html += '.ir{display:flex;justify-content:space-between;font-size:7pt;color:#444;margin-top:0.5mm}';
+        html += '.ft{text-align:center;font-size:6.5pt;color:#888;margin-top:2mm;line-height:1.6}';
+        html += '#bar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #e2e8f0;z-index:999;font-family:Arial,sans-serif}';
         html += '#btns{display:flex;gap:8px;padding:10px 12px;justify-content:center}';
-        html += '#btns button{flex:1;max-width:110px;padding:11px 6px;border:none;border-radius:22px;font-size:13px;font-weight:bold;cursor:pointer}';
-        html += '.ba{background:#4a90d9;color:#fff}.bp{background:#48bb78;color:#fff}.bs{background:#f6ad55;color:#fff}';
+        html += '#btns button{flex:1;max-width:110px;padding:12px 6px;border:none;border-radius:22px;font-size:13px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px}';
+        html += '.ba{background:#4a90d9;color:#fff}';
+        html += '.bp{background:#48bb78;color:#fff}';
+        html += '.bsh{background:#f6ad55;color:#fff}';
         html += '#panel{display:none;padding:10px 14px;background:#f8fafc;border-top:1px solid #e2e8f0}';
         html += '#panel.open{display:block}';
         html += '.cr{display:flex;align-items:center;gap:8px;margin-bottom:8px}';
@@ -2282,10 +2287,20 @@ function sendToTelegram(order, callback) {
         html += '.cr input[type=range]{flex:1;accent-color:#4a90d9}';
         html += '.cr select{flex:1;padding:5px 7px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px}';
         html += '.cr span{font-size:12px;color:#4a90d9;font-weight:bold;width:44px;text-align:right}';
-        html += '@media print{#bar{display:none!important}#receipt{width:var(--pw,58mm)!important}}';
+        html += '#sharePreview{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:20px}';
+        html += '#sharePreview.show{display:flex}';
+        html += '#sharePreview img{max-width:100%;max-height:60vh;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5)}';
+        html += '#sharePreview .share-btns{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;justify-content:center}';
+        html += '#sharePreview .share-btns button{padding:12px 20px;border:none;border-radius:20px;font-size:14px;font-weight:bold;cursor:pointer}';
+        html += '#sharePreview .s-save{background:#48bb78;color:#fff}';
+        html += '#sharePreview .s-share{background:#4a90d9;color:#fff}';
+        html += '#sharePreview .s-close{background:#e53e3e;color:#fff}';
+        html += '@media print{#bar{display:none!important}body{background:#fff;padding-bottom:0}#receipt{box-shadow:none;margin:0}}';
         html += '</style></head><body>';
+
+        // Receipt content
         html += '<div id="receipt">';
-        html += '<img class="logo" src="' + logo + '">';
+        html += '<img class="logo" src="' + logo + '" crossorigin="anonymous">';
         html += '<div class="c" style="font-size:6.5pt;color:#888;letter-spacing:1px;margin-bottom:1mm">ORDER RECEIPT</div>';
         html += '<hr class="dash">';
         html += '<div class="row"><span class="lbl">Order</span><span>' + order.orderId + '</span></div>';
@@ -2296,6 +2311,7 @@ function sendToTelegram(order, callback) {
         html += '<div class="row"><span class="lbl">Phone</span><span>' + (order.customerPhone||'N/A') + '</span></div>';
         if (order.customerCity) html += '<div class="row"><span class="lbl">City</span><span>' + order.customerCity + '</span></div>';
         if (order.customerAddress) html += '<div class="row"><span class="lbl">Address</span><span>' + order.customerAddress + '</span></div>';
+        if (order.customerNotes) html += '<div class="row"><span class="lbl">Notes</span><span>' + order.customerNotes + '</span></div>';
         html += '<hr class="dash">';
         html += items;
         html += '<hr class="dash">';
@@ -2304,20 +2320,79 @@ function sendToTelegram(order, callback) {
         html += '<hr class="solid">';
         html += '<div class="row tot"><span>TOTAL</span><span>$' + (order.total||0).toFixed(2) + '</span></div>';
         html += '<hr class="dash">';
-        html += '<div class="ft"><p>Thank you for your order!</p><p>Payment: Cash on Delivery</p></div>';
-        html += '</div>';
+        html += '<div class="ft"><p>&#9829; Thank you for your order!</p><p>Payment: Cash on Delivery</p></div>';
+        html += '</div>'; // end #receipt
+
+        // Share image preview overlay
+        html += '<div id="sharePreview">';
+        html += '<img id="shareImg" src="">';
+        html += '<div class="share-btns">';
+        html += '<button class="s-save" onclick="saveImg()">&#8595; Save Image</button>';
+        html += '<button class="s-share" onclick="shareImg()">&#8679; Share Image</button>';
+        html += '<button class="s-close" onclick="document.getElementById(\'sharePreview\').classList.remove(\'show\')">&#10005; Close</button>';
+        html += '</div></div>';
+
+        // Bottom bar
         html += '<div id="bar">';
         html += '<div id="btns">';
         html += '<button class="ba" onclick="document.getElementById(\'panel\').classList.toggle(\'open\')">&#9881; Adjust</button>';
         html += '<button class="bp" onclick="window.print()">&#128424; Print</button>';
-        html += '<button class="bs" onclick="if(navigator.share){navigator.share({title:\'Receipt\',url:window.location.href}).catch(function(){window.print()});}else{window.print();}">&#8679; Share</button>';
+        html += '<button class="bsh" onclick="makeImg()">&#128247; Share</button>';
         html += '</div>';
         html += '<div id="panel">';
         html += '<div class="cr"><label>Paper width</label><select id="pw" onchange="ap()"><option value="58mm" selected>58 mm</option><option value="80mm">80 mm</option><option value="100mm">100 mm</option><option value="148mm">A6</option><option value="210mm">A4</option></select></div>';
         html += '<div class="cr"><label>Font size</label><input type="range" id="fs" min="6" max="14" value="8" step="0.5" oninput="ap()"><span id="fsv">8pt</span></div>';
         html += '<div class="cr"><label>Scale</label><input type="range" id="sc" min="50" max="200" value="100" step="5" oninput="ap()"><span id="scv">100%</span></div>';
         html += '</div></div>';
-        html += '<scr'+'ipt>function ap(){var p=document.getElementById("pw").value,f=document.getElementById("fs").value,s=document.getElementById("sc").value;document.getElementById("fsv").textContent=f+"pt";document.getElementById("scv").textContent=s+"%";var r=document.documentElement.style;r.setProperty("--pw",p);r.setProperty("--fs",f+"pt");document.getElementById("receipt").style.transform="scale("+s/100+")";document.getElementById("receipt").style.transformOrigin="top center";}</'+'scr'+'ipt>';
+
+        // Scripts
+        html += '<scr' + 'ipt>';
+        html += 'var _imgBlob=null;';
+
+        html += 'function ap(){';
+        html += 'var p=document.getElementById("pw").value,';
+        html += 'f=parseFloat(document.getElementById("fs").value),';
+        html += 's=parseInt(document.getElementById("sc").value);';
+        html += 'document.getElementById("fsv").textContent=f+"pt";';
+        html += 'document.getElementById("scv").textContent=s+"%";';
+        html += 'var r=document.getElementById("receipt");';
+        html += 'r.style.width=p;';
+        html += 'r.style.fontSize=f+"pt";';
+        html += 'r.style.transform="scale("+s/100+")";';
+        html += 'r.style.transformOrigin="top center";}';
+
+        html += 'function makeImg(){';
+        html += 'var btn=document.querySelector(".bsh");';
+        html += 'btn.textContent="Converting...";btn.disabled=true;';
+        html += 'var el=document.getElementById("receipt");';
+        html += 'var ow=el.style.transform;';
+        html += 'el.style.transform="none";'; // remove scale for capture
+        html += 'html2canvas(el,{scale:3,useCORS:true,allowTaint:true,backgroundColor:"#ffffff",logging:false}).then(function(canvas){';
+        html += 'el.style.transform=ow;';
+        html += 'canvas.toBlob(function(blob){';
+        html += '_imgBlob=blob;';
+        html += 'var url=URL.createObjectURL(blob);';
+        html += 'document.getElementById("shareImg").src=url;';
+        html += 'document.getElementById("sharePreview").classList.add("show");';
+        html += 'btn.textContent="\\uD83D\\uDCF7 Share";btn.disabled=false;';
+        html += '},"image/png");';
+        html += '}).catch(function(){btn.textContent="\\uD83D\\uDCF7 Share";btn.disabled=false;alert("Image capture failed");});}';
+
+        html += 'function saveImg(){';
+        html += 'if(!_imgBlob)return;';
+        html += 'var a=document.createElement("a");';
+        html += 'a.href=URL.createObjectURL(_imgBlob);';
+        html += 'a.download="receipt.png";';
+        html += 'a.click();}';
+
+        html += 'function shareImg(){';
+        html += 'if(!_imgBlob)return;';
+        html += 'var file=new File([_imgBlob],"receipt.png",{type:"image/png"});';
+        html += 'if(navigator.canShare&&navigator.canShare({files:[file]})){';
+        html += 'navigator.share({files:[file],title:"Receipt"}).catch(function(){saveImg();});';
+        html += '}else{saveImg();}}';
+
+        html += '<\/scr' + 'ipt>';
         html += '</body></html>';
         return html;
     }
