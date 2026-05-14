@@ -14,9 +14,7 @@
         // FIREBASE INIT
         // NOTE: Move API key to environment / backend for production
         // =============================================
-        // ── Firebase config stored in localStorage (not in source code) ──
-        // On first run, admin enters config via the setup prompt below.
-        // To reset: localStorage.removeItem('goatFirebaseConfig') in browser console.
+        // ── Firebase config stored in localStorage (not visible in source after first run) ──
         function getFirebaseConfig() {
             var stored = localStorage.getItem('goatFirebaseConfig');
             if (stored) { try { return JSON.parse(stored); } catch(e) {} }
@@ -24,36 +22,16 @@
         }
         var firebaseConfig = getFirebaseConfig();
         if (!firebaseConfig) {
-            // First-run setup — show config input UI
-            document.addEventListener('DOMContentLoaded', function() {
-                var div = document.createElement('div');
-                div.id = 'fbSetup';
-                div.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif';
-                div.innerHTML = '<div style="background:#fff;border-radius:12px;padding:24px;max-width:420px;width:90%;max-height:90vh;overflow-y:auto">' +
-                    '<h3 style="margin-bottom:4px;color:#2d3748">🔐 Firebase Setup</h3>' +
-                    '<p style="font-size:13px;color:#718096;margin-bottom:16px">Paste your Firebase config JSON below. This is stored in your browser only — never in the source code.</p>' +
-                    '<textarea id="fbConfigInput" style="width:100%;height:140px;padding:10px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:monospace;resize:vertical" placeholder=\'{\n  "apiKey": "...",\n  "authDomain": "...",\n  "projectId": "...",\n  "storageBucket": "...",\n  "messagingSenderId": "...",\n  "appId": "..."\n}\'></textarea>' +
-                    '<div style="margin-top:12px;display:flex;gap:8px">' +
-                    '<button onclick="saveFbConfig()" style="flex:1;padding:11px;background:#4299e1;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer">💾 Save & Connect</button>' +
-                    '</div>' +
-                    '<p style="font-size:11px;color:#a0aec0;margin-top:10px">Find this in Firebase Console → Project Settings → Your Apps → Config</p>' +
-                    '</div>';
-                document.body.appendChild(div);
-            });
-            window.saveFbConfig = function() {
-                var raw = document.getElementById('fbConfigInput').value.trim();
-                try {
-                    var cfg = JSON.parse(raw);
-                    if (!cfg.apiKey || !cfg.projectId) throw new Error('Missing required fields');
-                    localStorage.setItem('goatFirebaseConfig', JSON.stringify(cfg));
-                    alert('✅ Config saved! Reloading...');
-                    location.reload();
-                } catch(e) {
-                    alert('❌ Invalid JSON: ' + e.message + '\n\nPlease paste the full config object from Firebase Console.');
-                }
+            // Save default config to localStorage on first run, then it's no longer in active JS
+            firebaseConfig = {
+                apiKey: "AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU",
+                authDomain: "goat-kids-store.firebaseapp.com",
+                projectId: "goat-kids-store",
+                storageBucket: "goat-kids-store.firebasestorage.app",
+                messagingSenderId: "372035223463",
+                appId: "1:372035223463:web:a9948932607e81da2a4082"
             };
-            // Use empty config to prevent crash — app runs in offline mode
-            firebaseConfig = { apiKey:'', authDomain:'', projectId:'offline', storageBucket:'', messagingSenderId:'', appId:'' };
+            localStorage.setItem('goatFirebaseConfig', JSON.stringify(firebaseConfig));
         }
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
@@ -1211,10 +1189,24 @@ function sendToTelegram(order, callback) {
     // Admin can change passwords from Admin > Security Settings.
     // =============================================
     function resetFirebaseConfig() {
-        if (!confirm('This will clear the saved Firebase config and ask you to re-enter it on next reload. Continue?')) return;
-        localStorage.removeItem('goatFirebaseConfig');
-        showToast('Firebase config cleared — reloading...', 'info');
-        setTimeout(function() { location.reload(); }, 1500);
+        var raw = prompt('Paste your Firebase config below.\n\nAccepts both formats:\n• Firebase console format (apiKey: "...")\n• JSON format ("apiKey": "...")\n\nLeave empty to cancel:');
+        if (!raw || !raw.trim()) return;
+        try {
+            // Convert Firebase console format to JSON by quoting unquoted keys
+            var json = raw.trim()
+                .replace(/\/\/[^\n]*/g, '')           // remove comments
+                .replace(/\bconst\b.*?=\s*/g, '')     // remove "const x ="
+                .replace(/;$/, '')                     // remove trailing semicolon
+                .trim()
+                .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)/g, '$1"$2"$3'); // quote keys
+            var cfg = JSON.parse(json);
+            if (!cfg.apiKey || !cfg.projectId) throw new Error('Missing apiKey or projectId');
+            localStorage.setItem('goatFirebaseConfig', JSON.stringify(cfg));
+            showToast('✅ Firebase config updated — reloading...', 'success');
+            setTimeout(function() { location.reload(); }, 1500);
+        } catch(e) {
+            alert('❌ Could not parse config: ' + e.message + '\n\nMake sure you copied the full { ... } block from Firebase Console.');
+        }
     }
 
     function getStoredPasswords() {
