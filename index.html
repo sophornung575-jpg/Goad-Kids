@@ -207,6 +207,12 @@
         /* ── WISHLIST BUTTON ON CARD ── */
         .wishlist-btn{position:absolute;top:0.75rem;left:0.75rem;background:rgba(255,255,255,0.9);border:none;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.9rem;color:var(--gray);transition:all 0.2s;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,0.15)}
         .wishlist-btn:hover,.wishlist-btn.active{color:var(--secondary);background:#fff;transform:scale(1.1)}
+        /* ── LABEL PREVIEW ── */
+        .label-preview{width:38mm;height:25mm;padding:1.5mm;background:#fff;border:1px solid #e2e8f0;border-radius:4px;display:flex;flex-direction:column;justify-content:space-between;font-family:Arial,sans-serif;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+        .label-preview .label-name{font-size:6.5pt;font-weight:bold;line-height:1.2;overflow:hidden;max-height:14pt}
+        .label-preview .label-size{font-size:6pt;color:#666}
+        .label-preview .label-price{font-size:9pt;font-weight:bold;color:#000}
+        .label-preview .label-barcode{font-size:5pt;color:#444;letter-spacing:1px;text-align:center}
         /* ── ORDERS PAGE ── */
         .orders-toolbar{display:flex;gap:0.6rem;align-items:center;padding:0.75rem 1rem;background:#fff;border-bottom:1px solid var(--gray-light);flex-wrap:wrap}
         .orders-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;min-height:400px}
@@ -489,6 +495,8 @@
                             <div class="admin-card-header">
                                 <div class="admin-card-title"><i class="fas fa-boxes" style="color:var(--primary)"></i> Inventory<span class="admin-count" id="productCount">0</span></div>
                                 <div class="flex gap-2">
+                                    <button class="btn btn-info btn-small" onclick="openBarcodeScanner()" title="Scan Barcode"><i class="fas fa-barcode"></i> Scan</button>
+                                    <button class="btn btn-success btn-small" onclick="openBulkLabelModal()" title="Bulk Print Labels"><i class="fas fa-tags"></i> Labels</button>
                                     <button class="btn btn-outline btn-small" onclick="forceSaveStock()"><i class="fas fa-save"></i></button>
                                     <button class="btn btn-outline btn-small" onclick="exportInventoryCSV()"><i class="fas fa-download"></i></button>
                                 </div>
@@ -585,7 +593,7 @@
                                 <h3 style="margin-bottom:0.25rem;color:var(--gray-dark)">Settings Protected</h3>
                                 <p style="font-size:0.85rem;color:var(--gray);margin-bottom:1.5rem">Enter your admin password to access settings</p>
                                 <div style="position:relative;margin-bottom:1rem">
-                                    <input type="password" id="settingsLockInput" class="form-control" placeholder="Enter password" style="padding-right:2.5rem;text-align:center;letter-spacing:2px" onkeydown="if(event.key==='Enter')unlockSettings()">
+                                    <input type="password" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" id="settingsLockInput" class="form-control" placeholder="Enter password" style="padding-right:2.5rem;text-align:center;letter-spacing:2px" onkeydown="if(event.key==='Enter')unlockSettings()">
                                     <button onclick="toggleSettingsLockVisibility()" style="position:absolute;right:0.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray)" id="settingsLockEye"><i class="fas fa-eye"></i></button>
                                 </div>
                                 <div id="settingsLockError" style="color:var(--danger);font-size:0.8rem;margin-bottom:0.75rem;min-height:1.2em"></div>
@@ -611,7 +619,7 @@
                                 <div class="form-group">
                                     <label>Bot Token <small style="color:var(--gray)">(saved in browser)</small></label>
                                     <div class="flex gap-2">
-                                        <input type="password" id="telegramBotTokenInput" class="form-control" placeholder="123456789:ABCdef..." style="flex:1;font-family:monospace">
+                                        <input type="password" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" id="telegramBotTokenInput" class="form-control" placeholder="123456789:ABCdef..." style="flex:1;font-family:monospace">
                                         <button class="btn btn-outline btn-small" onclick="toggleTelegramTokenVisibility()" id="telegramTokenEyeBtn"><i class="fas fa-eye"></i></button>
                                     </div>
                                 </div>
@@ -639,9 +647,9 @@
                                         <option value="inventory">Inventory Manager</option>
                                     </select>
                                 </div>
-                                <div class="form-group"><label>Current Password</label><input type="password" id="changePwCurrent" class="form-control" placeholder="Current password"></div>
-                                <div class="form-group"><label>New Password</label><input type="password" id="changePwNew" class="form-control" placeholder="Min 6 characters"></div>
-                                <div class="form-group"><label>Confirm New</label><input type="password" id="changePwConfirm" class="form-control" placeholder="Repeat new password"></div>
+                                <div class="form-group"><label>Current Password</label><input type="password" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" id="changePwCurrent" class="form-control" placeholder="Current password"></div>
+                                <div class="form-group"><label>New Password</label><input type="password" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" id="changePwNew" class="form-control" placeholder="Min 6 characters"></div>
+                                <div class="form-group"><label>Confirm New</label><input type="password" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" id="changePwConfirm" class="form-control" placeholder="Repeat new password"></div>
                                 <button class="btn btn-danger w-full" onclick="changePassword()"><i class="fas fa-key"></i> Change Password</button>
                                 <div id="changePwStatus" style="margin-top:0.75rem;font-size:0.85rem"></div>
                             </div>
@@ -696,7 +704,7 @@
                     <button class="role-btn" onclick="selectRole('inventory',this)" style="flex:1;padding:0.6rem;border:2px solid var(--gray-light);background:#fff;border-radius:8px;cursor:pointer;font-weight:600;font-size:0.85rem"><i class="fas fa-boxes"></i> Inventory</button>
                 </div>
             </div>
-            <div class="form-group"><input type="password" id="adminPassword" class="form-control" placeholder="Enter password" style="font-size:1.1rem;text-align:center" onkeydown="if(event.key==='Enter')adminLogin()"></div>
+            <div class="form-group"><input type="password" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" id="adminPassword" class="form-control" placeholder="Enter password" style="font-size:1.1rem;text-align:center" onkeydown="if(event.key==='Enter')adminLogin()"></div>
             <div style="color:var(--gray);font-size:0.8rem;text-align:center;margin-bottom:0.5rem" id="loginAttemptsLeft"></div>
             <div class="flex gap-2">
                 <button class="btn btn-primary" onclick="adminLogin()" style="flex:1"><i class="fas fa-sign-in-alt"></i> Login</button>
@@ -746,6 +754,101 @@
 
     <!-- WISHLIST MODAL -->
     <div class="modal-overlay hidden" id="wishlistModal" onclick="if(event.target===this)closeWishlistModal()">
+
+    <!-- BARCODE SCANNER MODAL -->
+    <div class="modal-overlay hidden" id="barcodeScanModal" onclick="if(event.target===this)closeBarcodeScanner()">
+        <div class="modal" style="max-width:420px;width:95%">
+            <div class="modal-header">
+                <h3><i class="fas fa-barcode" style="color:var(--primary)"></i> Barcode Scanner</h3>
+                <button class="modal-close" onclick="closeBarcodeScanner()">&times;</button>
+            </div>
+            <div style="padding:1rem">
+                <!-- Camera preview -->
+                <div style="position:relative;background:#000;border-radius:8px;overflow:hidden;margin-bottom:1rem">
+                    <video id="barcodeVideo" style="width:100%;height:220px;object-fit:cover" playsinline></video>
+                    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:80px;border:2px solid #48bb78;border-radius:4px;box-shadow:0 0 0 999px rgba(0,0,0,0.4)"></div>
+                    <div id="scanStatus" style="position:absolute;bottom:8px;left:0;right:0;text-align:center;color:#fff;font-size:12px;background:rgba(0,0,0,0.5);padding:4px">Point camera at barcode</div>
+                </div>
+                <!-- Manual entry -->
+                <div style="display:flex;gap:8px;margin-bottom:1rem">
+                    <input type="text" id="barcodeManualInput" class="form-control" placeholder="Or type barcode manually..." autocomplete="off" autocapitalize="none" onkeydown="if(event.key==='Enter')searchBarcode(document.getElementById('barcodeManualInput').value)">
+                    <button class="btn btn-primary" onclick="searchBarcode(document.getElementById('barcodeManualInput').value)"><i class="fas fa-search"></i></button>
+                </div>
+                <!-- Result -->
+                <div id="barcodeResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LABEL PRINT MODAL -->
+    <div class="modal-overlay hidden" id="labelPrintModal" onclick="if(event.target===this)closeLabelModal()">
+        <div class="modal" style="max-width:600px;width:95%;max-height:90vh;display:flex;flex-direction:column">
+            <div class="modal-header">
+                <h3><i class="fas fa-tag" style="color:var(--success)"></i> Print Labels</h3>
+                <button class="modal-close" onclick="closeLabelModal()">&times;</button>
+            </div>
+            <div style="padding:1rem;overflow-y:auto;flex:1">
+                <!-- Mode tabs -->
+                <div style="display:flex;gap:0;margin-bottom:1rem;border:1px solid var(--gray-light);border-radius:8px;overflow:hidden">
+                    <button id="lblModeSingle" class="btn" style="flex:1;border-radius:0;background:var(--primary);color:#fff;border:none" onclick="setLabelMode('single')">Single Product</button>
+                    <button id="lblModeBulk" class="btn" style="flex:1;border-radius:0;background:var(--light);color:var(--gray-dark);border:none" onclick="setLabelMode('bulk')">Bulk Print</button>
+                </div>
+
+                <!-- Single product mode -->
+                <div id="lblSingleMode">
+                    <div style="background:var(--light);border-radius:8px;padding:0.75rem;margin-bottom:1rem" id="lblProductInfo"></div>
+                    <div style="display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+                        <div class="form-group" style="flex:1;min-width:120px">
+                            <label style="font-size:0.85rem">Qty per size</label>
+                            <input type="number" id="labelQty" class="form-control" value="1" min="1" max="100" oninput="renderLabelPreview()">
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:120px">
+                            <label style="font-size:0.85rem">Label size</label>
+                            <select id="labelSize" class="form-control" onchange="renderLabelPreview()">
+                                <option value="38x25">38×25mm</option>
+                                <option value="50x30">50×30mm</option>
+                                <option value="58x40">58×40mm</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="font-size:0.82rem;color:var(--gray);margin-bottom:0.5rem">Preview:</div>
+                    <div id="labelPreviewContainer" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem;background:var(--light);padding:0.75rem;border-radius:8px;min-height:60px"></div>
+                </div>
+
+                <!-- Bulk mode -->
+                <div id="lblBulkMode" style="display:none">
+                    <div style="display:flex;gap:8px;margin-bottom:0.75rem;align-items:center;flex-wrap:wrap">
+                        <button class="btn btn-outline btn-small" onclick="selectAllForLabel()"><i class="fas fa-check-square"></i> Select All</button>
+                        <button class="btn btn-outline btn-small" onclick="deselectAllForLabel()"><i class="fas fa-square"></i> Deselect All</button>
+                        <div style="flex:1;min-width:120px">
+                            <input type="text" id="lblBulkSearch" class="form-control" placeholder="Search products..." oninput="renderBulkList()" style="font-size:0.82rem">
+                        </div>
+                    </div>
+                    <div id="lblBulkList" style="max-height:280px;overflow-y:auto;border:1px solid var(--gray-light);border-radius:8px"></div>
+                    <div style="margin-top:0.75rem;display:flex;gap:1rem;flex-wrap:wrap">
+                        <div class="form-group" style="flex:1;min-width:100px">
+                            <label style="font-size:0.82rem">Default qty per size</label>
+                            <input type="number" id="lblBulkQty" class="form-control" value="1" min="1" max="100">
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:120px">
+                            <label style="font-size:0.82rem">Label size</label>
+                            <select id="lblBulkSize" class="form-control">
+                                <option value="38x25">38×25mm</option>
+                                <option value="50x30">50×30mm</option>
+                                <option value="58x40">58×40mm</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="lblBulkSummary" style="font-size:0.82rem;color:var(--gray);margin-top:0.25rem"></div>
+                </div>
+            </div>
+            <!-- Footer buttons -->
+            <div style="padding:0.75rem 1rem;border-top:1px solid var(--gray-light);display:flex;gap:0.5rem">
+                <button class="btn btn-primary" onclick="printLabels()" style="flex:1"><i class="fas fa-print"></i> Print Labels</button>
+                <button class="btn btn-outline" onclick="closeLabelModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
         <div class="modal" style="max-width:800px;width:95%">
             <div class="modal-header"><h3><i class="fas fa-heart" style="color:var(--secondary)"></i> My Wishlist</h3><button class="modal-close" onclick="closeWishlistModal()">&times;</button></div>
             <div id="wishlistModalContent" style="max-height:70vh;overflow-y:auto"></div>
@@ -1226,6 +1329,380 @@ function sendToTelegram(order, callback) {
     // Default passwords are set on first run if nothing is stored yet.
     // Admin can change passwords from Admin > Security Settings.
     // =============================================
+    // =============================================
+    // BARCODE SCANNER & LABEL PRINTING
+    // =============================================
+    var _barcodeStream = null;
+    var _barcodeInterval = null;
+    var _labelProduct = null;
+
+    function openBarcodeScanner() {
+        document.getElementById('barcodeScanModal').classList.remove('hidden');
+        document.getElementById('barcodeScanModal').classList.add('active');
+        document.getElementById('barcodeResult').innerHTML = '';
+        document.getElementById('barcodeManualInput').value = '';
+        startCamera();
+    }
+
+    function closeBarcodeScanner() {
+        stopCamera();
+        document.getElementById('barcodeScanModal').classList.remove('active');
+        document.getElementById('barcodeScanModal').classList.add('hidden');
+    }
+
+    function startCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            document.getElementById('scanStatus').textContent = 'Camera not supported — use manual entry';
+            return;
+        }
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(function(stream) {
+            _barcodeStream = stream;
+            var video = document.getElementById('barcodeVideo');
+            video.srcObject = stream;
+            video.play();
+            document.getElementById('scanStatus').textContent = 'Scanning...';
+            // Load barcode detection library
+            if (typeof BarcodeDetector !== 'undefined') {
+                startBarcodeDetection(video);
+            } else {
+                // Fallback: load ZXing library
+                loadZXing(video);
+            }
+        })
+        .catch(function(e) {
+            document.getElementById('scanStatus').textContent = 'Camera access denied — use manual entry';
+        });
+    }
+
+    function startBarcodeDetection(video) {
+        var detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'qr_code', 'upc_a', 'upc_e'] });
+        _barcodeInterval = setInterval(function() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                detector.detect(video).then(function(codes) {
+                    if (codes.length > 0) {
+                        var code = codes[0].rawValue;
+                        clearInterval(_barcodeInterval);
+                        document.getElementById('scanStatus').textContent = '✅ Found: ' + code;
+                        searchBarcode(code);
+                    }
+                }).catch(function(){});
+            }
+        }, 300);
+    }
+
+    function loadZXing(video) {
+        var s = document.createElement('script');
+        s.src = 'https://unpkg.com/@zxing/library@latest/umd/index.min.js';
+        s.onload = function() {
+            try {
+                var codeReader = new ZXing.BrowserMultiFormatReader();
+                codeReader.decodeFromVideoElement(video, function(result, err) {
+                    if (result) {
+                        codeReader.reset();
+                        document.getElementById('scanStatus').textContent = '✅ Found: ' + result.text;
+                        searchBarcode(result.text);
+                    }
+                });
+            } catch(e) {
+                document.getElementById('scanStatus').textContent = 'Scanner error — use manual entry';
+            }
+        };
+        s.onerror = function() {
+            document.getElementById('scanStatus').textContent = 'Use manual entry below';
+        };
+        document.head.appendChild(s);
+    }
+
+    function stopCamera() {
+        if (_barcodeStream) { _barcodeStream.getTracks().forEach(function(t){t.stop();}); _barcodeStream = null; }
+        if (_barcodeInterval) { clearInterval(_barcodeInterval); _barcodeInterval = null; }
+    }
+
+    function searchBarcode(code) {
+        if (!code || !code.trim()) return;
+        code = code.trim();
+        var resultEl = document.getElementById('barcodeResult');
+        // Search products by barcode field or name match
+        var found = null;
+        for (var i = 0; i < STATE.products.length; i++) {
+            var p = STATE.products[i];
+            if (p.barcode === code || p.name.toLowerCase().indexOf(code.toLowerCase()) !== -1) {
+                found = p;
+                break;
+            }
+        }
+        if (found) {
+            resultEl.innerHTML = '<div style="background:#f0fff4;border:1px solid var(--success);border-radius:8px;padding:1rem">' +
+                '<div style="font-weight:700;color:var(--success);margin-bottom:0.5rem">✅ Product Found!</div>' +
+                '<div style="font-size:0.9rem"><b>' + found.name + '</b><br>Price: $' + found.price.toFixed(2) + '<br>Stock: ' + getTotalStock(found) + '</div>' +
+                '<div style="display:flex;gap:8px;margin-top:0.75rem">' +
+                '<button class="btn btn-primary btn-small" onclick="closeBarcodeScanner();openEditModal(\'' + found.id + '\')"><i class="fas fa-edit"></i> Edit</button>' +
+                '<button class="btn btn-info btn-small" onclick="closeBarcodeScanner();openLabelModal(\'' + found.id + '\')"><i class="fas fa-tag"></i> Print Label</button>' +
+                '</div></div>';
+        } else {
+            resultEl.innerHTML = '<div style="background:#fff5f5;border:1px solid var(--danger);border-radius:8px;padding:1rem">' +
+                '<div style="font-weight:700;color:var(--danger);margin-bottom:0.5rem">❌ Not Found: ' + code + '</div>' +
+                '<div style="font-size:0.85rem;color:var(--gray)">This barcode is not in your inventory.</div>' +
+                '<button class="btn btn-success btn-small" style="margin-top:0.75rem" onclick="closeBarcodeScanner();switchInvTab(\'add\',document.querySelectorAll(\'.inv-subbtn\')[1])"><i class="fas fa-plus"></i> Add New Product</button>' +
+                '</div>';
+        }
+    }
+
+    // ── LABEL PRINTING ──
+    var _labelProduct = null;
+    var _labelMode = 'single';
+    var _labelSelected = {};
+
+    function setLabelMode(mode) {
+        _labelMode = mode;
+        document.getElementById('lblSingleMode').style.display = mode === 'single' ? 'block' : 'none';
+        document.getElementById('lblBulkMode').style.display = mode === 'bulk' ? 'block' : 'none';
+        document.getElementById('lblModeSingle').style.background = mode === 'single' ? 'var(--primary)' : 'var(--light)';
+        document.getElementById('lblModeSingle').style.color = mode === 'single' ? '#fff' : 'var(--gray-dark)';
+        document.getElementById('lblModeBulk').style.background = mode === 'bulk' ? 'var(--primary)' : 'var(--light)';
+        document.getElementById('lblModeBulk').style.color = mode === 'bulk' ? '#fff' : 'var(--gray-dark)';
+        if (mode === 'bulk') renderBulkList();
+    }
+
+    function openBulkLabelModal() {
+        _labelProduct = null;
+        _labelSelected = {};
+        _labelMode = 'bulk';
+        var modal = document.getElementById('labelPrintModal');
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+        setTimeout(function() { modal.classList.add('active'); }, 10);
+        setLabelMode('bulk');
+    }
+
+    function openLabelModal(pid) {
+        _labelProduct = pid ? findProduct(pid) : null;
+        _labelSelected = {};
+        _labelMode = 'single';
+        // Fix: must remove 'hidden' BEFORE adding 'active'
+        var modal = document.getElementById('labelPrintModal');
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+        setTimeout(function() { modal.classList.add('active'); }, 10);
+        setLabelMode('single');
+        if (_labelProduct) {
+            document.getElementById('lblProductInfo').innerHTML =
+                '<b>' + _labelProduct.name + '</b> &middot; $' + _labelProduct.price.toFixed(2) +
+                ' &middot; Stock: ' + getTotalStock(_labelProduct);
+        }
+        renderLabelPreview();
+    }
+
+    function closeLabelModal() {
+        var modal = document.getElementById('labelPrintModal');
+        modal.classList.remove('active');
+        setTimeout(function() {
+            modal.classList.add('hidden');
+            modal.style.display = '';
+        }, 300);
+        _labelProduct = null;
+        _labelSelected = {};
+    }
+
+    function getLabelDims(sizeVal) {
+        if (sizeVal === '50x30') return { w: 50, h: 30 };
+        if (sizeVal === '58x40') return { w: 58, h: 40 };
+        return { w: 38, h: 25 };
+    }
+
+    function renderLabelPreview() {
+        var p = _labelProduct;
+        if (!p) return;
+        var dims = getLabelDims(document.getElementById('labelSize').value);
+        var sizes = p.sizes && p.sizes.length ? p.sizes : [{ name: 'One Size' }];
+        var scale = 3.2;
+        var html = '';
+        sizes.forEach(function(s) {
+            html += '<div style="width:' + Math.round(dims.w * scale) + 'px;height:' + Math.round(dims.h * scale) + 'px;' +
+                'padding:4px;background:#fff;border:1px solid #ccc;border-radius:3px;' +
+                'display:inline-flex;flex-direction:column;justify-content:space-between;' +
+                'box-shadow:0 1px 3px rgba(0,0,0,0.12);margin:3px;vertical-align:top">' +
+                '<div style="font-size:7px;font-weight:bold;overflow:hidden;line-height:1.2">' + escHtml(p.name) + '</div>' +
+                '<div style="font-size:6px;color:#555">Size: <b>' + escHtml(s.name) + '</b></div>' +
+                '<div style="font-size:10px;font-weight:bold">$' + p.price.toFixed(2) + '</div>' +
+                '<div style="font-size:5px;color:#888;text-align:center;letter-spacing:0.5px">&#9612;&#9616;&#9612;&#9612;&#9616; ' + p.id + ' &#9616;&#9612;&#9612;&#9616;&#9612;</div>' +
+                '</div>';
+        });
+        var el = document.getElementById('labelPreviewContainer');
+        if (el) el.innerHTML = html || '<p style="color:var(--gray)">No sizes</p>';
+    }
+
+    function renderBulkList() {
+        var q = (document.getElementById('lblBulkSearch') ? document.getElementById('lblBulkSearch').value : '').toLowerCase();
+        var products = STATE.products.filter(function(p) {
+            return !q || p.name.toLowerCase().indexOf(q) !== -1 || p.category.toLowerCase().indexOf(q) !== -1;
+        });
+        var selected = Object.keys(_labelSelected).length;
+        var html = '';
+        products.forEach(function(p) {
+            var isChecked = !!_labelSelected[p.id];
+            var sizes = p.sizes && p.sizes.length ? p.sizes.map(function(s) { return s.name; }).join(', ') : 'One Size';
+            html += '<div style="display:flex;align-items:center;gap:8px;padding:0.5rem 0.75rem;border-bottom:1px solid var(--gray-light)">' +
+                '<input type="checkbox" id="lbl_' + p.id + '" ' + (isChecked ? 'checked' : '') +
+                ' style="width:16px;height:16px;cursor:pointer" onchange="toggleLabelSelect(\'' + p.id + '\',this.checked)">' +
+                '<label for="lbl_' + p.id + '" style="flex:1;cursor:pointer;min-width:0">' +
+                '<div style="font-weight:600;font-size:0.82rem">' + escHtml(p.name) + '</div>' +
+                '<div style="font-size:0.72rem;color:var(--gray)">' + escHtml(sizes) + ' &middot; $' + p.price.toFixed(2) + '</div>' +
+                '</label>' +
+                '<input type="number" value="' + (_labelSelected[p.id] || 1) + '" min="1" max="50"' +
+                ' style="width:50px;padding:2px 4px;border:1px solid var(--gray-light);border-radius:4px;font-size:0.8rem"' +
+                ' ' + (isChecked ? '' : 'disabled') +
+                ' onchange="updateLabelQty(\'' + p.id + '\',this.value)">' +
+                '</div>';
+        });
+        if (!html) html = '<div style="padding:1rem;text-align:center;color:var(--gray)">No products</div>';
+        document.getElementById('lblBulkList').innerHTML = html;
+        var sum = document.getElementById('lblBulkSummary');
+        if (sum) sum.textContent = selected + ' product(s) selected';
+    }
+
+    function toggleLabelSelect(pid, checked) {
+        if (checked) { _labelSelected[pid] = _labelSelected[pid] || 1; }
+        else { delete _labelSelected[pid]; }
+        // update qty input state
+        var inp = document.querySelector('input[onchange*="updateLabelQty(\'' + pid + '\'"]');
+        if (inp) inp.disabled = !checked;
+        var sum = document.getElementById('lblBulkSummary');
+        if (sum) sum.textContent = Object.keys(_labelSelected).length + ' product(s) selected';
+    }
+
+    function updateLabelQty(pid, val) {
+        if (_labelSelected[pid] !== undefined) {
+            _labelSelected[pid] = Math.max(1, parseInt(val) || 1);
+        }
+    }
+
+    function selectAllForLabel() {
+        STATE.products.forEach(function(p) { _labelSelected[p.id] = _labelSelected[p.id] || 1; });
+        renderBulkList();
+    }
+
+    function deselectAllForLabel() {
+        _labelSelected = {};
+        renderBulkList();
+    }
+
+    function printLabels() {
+        var labelsData = []; // [{product, sizeName, qty}]
+        var sizeVal, dims;
+
+        if (_labelMode === 'single') {
+            if (!_labelProduct) { showToast('No product selected', 'error'); return; }
+            sizeVal = document.getElementById('labelSize').value;
+            dims = getLabelDims(sizeVal);
+            var qty = parseInt(document.getElementById('labelQty').value) || 1;
+            var sizes = _labelProduct.sizes && _labelProduct.sizes.length
+                ? _labelProduct.sizes : [{ name: 'One Size' }];
+            sizes.forEach(function(s) {
+                labelsData.push({ p: _labelProduct, size: s.name, qty: qty });
+            });
+        } else {
+            var pids = Object.keys(_labelSelected);
+            if (!pids.length) { showToast('Select at least one product', 'warning'); return; }
+            sizeVal = document.getElementById('lblBulkSize').value;
+            dims = getLabelDims(sizeVal);
+            pids.forEach(function(pid) {
+                var pr = findProduct(pid);
+                if (!pr) return;
+                var q = parseInt(_labelSelected[pid]) || 1;
+                var szs = pr.sizes && pr.sizes.length ? pr.sizes : [{ name: 'One Size' }];
+                szs.forEach(function(s) {
+                    labelsData.push({ p: pr, size: s.name, qty: q });
+                });
+            });
+        }
+
+        if (!labelsData.length) { showToast('Nothing to print', 'warning'); return; }
+
+        // Build label rows HTML
+        var labelsHtml = '';
+        labelsData.forEach(function(ld) {
+            for (var i = 0; i < ld.qty; i++) {
+                labelsHtml += '<div class="lbl">' +
+                    '<div class="n">' + escHtml(ld.p.name) + '</div>' +
+                    '<div class="s">Size: <b>' + escHtml(ld.size) + '</b></div>' +
+                    '<div class="pr">$' + ld.p.price.toFixed(2) + '</div>' +
+                    '<svg class="bc" data-v="' + escHtml(ld.p.id) + '"></svg>' +
+                    '</div>';
+            }
+        });
+
+        var wPt = dims.w === 38 ? '107.7pt' : (dims.w === 50 ? '141.7pt' : '164.4pt');
+        var hPt = dims.h === 25 ? '70.9pt' : (dims.h === 30 ? '85pt' : '113.4pt');
+        var fName = dims.h > 30 ? '7.5' : '6';
+        var fSize = dims.h > 30 ? '7' : '5.5';
+        var fPrice = dims.h > 30 ? '11' : '9';
+        var barH = dims.h > 30 ? '16mm' : '11mm';
+
+        var printHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Labels</title>' +
+            '<style>' +
+            '@page{size:' + dims.w + 'mm ' + dims.h + 'mm;margin:0}' +
+            'html,body{margin:0;padding:0;background:#fff;font-family:Arial,sans-serif}' +
+            '.lbl{width:' + dims.w + 'mm;height:' + dims.h + 'mm;padding:1.2mm 1.5mm;' +
+            'display:flex;flex-direction:column;justify-content:space-between;' +
+            'page-break-after:always;break-after:page;overflow:hidden;box-sizing:border-box}' +
+            '.n{font-size:' + fName + 'pt;font-weight:bold;line-height:1.2;max-height:' + (dims.h > 30 ? '16' : '13') + 'pt;overflow:hidden}' +
+            '.s{font-size:' + fSize + 'pt;color:#444}' +
+            '.pr{font-size:' + fPrice + 'pt;font-weight:bold;color:#000}' +
+            '.bc{width:100%;height:' + barH + ';display:block}' +
+            '@media print{html,body{margin:0;padding:0}' +
+            '.lbl{page-break-after:always;break-after:page}}' +
+            '</style>' +
+            '</head><body>' +
+            labelsHtml +
+            '<scr'+'ipt src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><'+'/scr'+'ipt>' +
+            '<scr'+'ipt>' +
+            'function go(){' +
+            'var svgs=document.querySelectorAll(".bc");' +
+            'var ok=0;' +
+            'svgs.forEach(function(el){' +
+            'try{' +
+            'JsBarcode(el,el.dataset.v,{' +
+            'format:"CODE128",width:1.2,' +
+            'height:' + (dims.h > 30 ? 36 : 28) + ',' +
+            'displayValue:true,' +
+            'fontSize:' + (dims.h > 30 ? 8 : 6) + ',' +
+            'margin:1,background:"#ffffff",lineColor:"#000000"' +
+            '});ok++;' +
+            '}catch(e){console.error(e);}' +
+            '});' +
+            'console.log(ok+"/"+svgs.length+" barcodes rendered");' +
+            'setTimeout(function(){window.print();},600);' +
+            '}' +
+            'if(document.readyState==="complete"){go();}' +
+            'else{window.addEventListener("load",go);}' +
+            '<'+'/scr'+'ipt>' +
+            '</body></html>';
+
+        // Write to a new window directly - most reliable method
+        var w = window.open('', '_blank');
+        if (w) {
+            w.document.open();
+            w.document.write(printHtml);
+            w.document.close();
+            closeLabelModal();
+            showToast('Labels ready — tap Print in the new window', 'success');
+        } else {
+            // Fallback: blob URL
+            var blob = new Blob([printHtml], { type: 'text/html;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.target = '_blank';
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a);
+            setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+            closeLabelModal();
+            showToast('Labels ready — tap Print when it opens', 'success');
+        }
+    }
+
+
     function resetFirebaseConfig() {
         var raw = prompt('Paste your Firebase config below.\n\nAccepts both formats:\n• Firebase console format (apiKey: "...")\n• JSON format ("apiKey": "...")\n\nLeave empty to cancel:');
         if (!raw || !raw.trim()) return;
@@ -2376,7 +2853,7 @@ function sendToTelegram(order, callback) {
         var html = '';
         html += '<!DOCTYPE html><html><head><title>Receipt ' + order.orderId + '</title>';
         html += '<meta name="viewport" content="width=device-width,initial-scale=1">';
-        html += '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>';
+        html += '<scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/scr' + 'ipt>';
         html += '<style>';
         html += '@page{size:58mm auto;margin:0}';
         html += '*{margin:0;padding:0;box-sizing:border-box}';
@@ -2386,16 +2863,16 @@ function sendToTelegram(order, callback) {
         html += '.logo{width:36mm;display:block;margin:0 auto 2mm}';
         html += '.dash{border:none;border-top:1px dashed #aaa;margin:1.5mm 0}';
         html += '.solid{border:none;border-top:1.5px solid #000;margin:1mm 0}';
-        html += '.row{display:flex;justify-content:space-between;padding:0.5mm 0;font-size:9.5pt}';
+        html += '.row{display:flex;justify-content:space-between;padding:0.5mm 0;font-size:7.5pt}';
         html += '.lbl{color:#555}';
-        html += '.tot{font-weight:bold;font-size:12pt}';
-        html += '.inm{font-weight:bold;font-size:9.5pt}';
+        html += '.tot{font-weight:bold;font-size:9pt}';
+        html += '.inm{font-weight:bold;font-size:7.5pt}';
         html += '.isz{font-weight:normal;color:#666}';
-        html += '.ir{display:flex;justify-content:space-between;font-size:9pt;color:#444;margin-top:0.5mm}';
-        html += '.ft{text-align:center;font-size:11pt;color:#888;margin-top:2mm;line-height:1.6}';
+        html += '.ir{display:flex;justify-content:space-between;font-size:7pt;color:#444;margin-top:0.5mm}';
+        html += '.ft{text-align:center;font-size:6.5pt;color:#888;margin-top:2mm;line-height:1.6}';
         html += '#bar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #e2e8f0;z-index:999;font-family:Arial,sans-serif}';
         html += '#btns{display:flex;gap:8px;padding:10px 12px;justify-content:center}';
-        html += '#btns button{flex:1;max-width:110px;padding:12px 6px;border:none;border-radius:22px;font-size:15px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px}';
+        html += '#btns button{flex:1;max-width:110px;padding:12px 6px;border:none;border-radius:22px;font-size:13px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px}';
         html += '.ba{background:#4a90d9;color:#fff}';
         html += '.bp{background:#48bb78;color:#fff}';
         html += '.bsh{background:#f6ad55;color:#fff}';
@@ -2441,7 +2918,7 @@ function sendToTelegram(order, callback) {
         html += '<hr class="solid">';
         html += '<div class="row tot"><span>TOTAL</span><span>$' + (order.total||0).toFixed(2) + '</span></div>';
         html += '<hr class="dash">';
-        html += '<div class="ft"><p>&#9829; Thank you for your order!</p><p>Shop Tell : 093779077</p></div>';
+        html += '<div class="ft"><p>&#9829; Thank you for your order!</p><p>Payment: Cash on Delivery</p></div>';
         html += '</div>'; // end #receipt
 
         // Share image preview overlay
@@ -2621,7 +3098,7 @@ function sendToTelegram(order, callback) {
                 '<td style="font-weight:600;font-size:0.78rem">$' + p.price.toFixed(2) + '</td>' +
                 '<td>' + sizeHtml + '</td>' +
                 '<td><strong style="color:' + stockColor + ';font-size:0.78rem">' + totalStock + '</strong></td>' +
-                '<td><div style="display:flex;gap:3px"><button class="btn btn-warning btn-small" onclick="openEditModal(\'' + p.id + '\')" style="padding:0.2rem 0.4rem"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct(\'' + p.id + '\')" style="padding:0.2rem 0.4rem"><i class="fas fa-trash"></i></button></div></td>' +
+                '<td><div style="display:flex;gap:3px"><button class="btn btn-info btn-small" onclick="openLabelModal(\'' + p.id + '\')" style="padding:0.2rem 0.4rem" title="Print Label"><i class="fas fa-tag"></i></button><button class="btn btn-warning btn-small" onclick="openEditModal(\'' + p.id + '\')" style="padding:0.2rem 0.4rem"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct(\'' + p.id + '\')" style="padding:0.2rem 0.4rem"><i class="fas fa-trash"></i></button></div></td>' +
                 '</tr>';
         }
         tb.innerHTML = h;
