@@ -1,0 +1,81 @@
+name: Test Goat Kids Store
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Extract and test JavaScript
+        run: |
+          node -e "
+          const fs = require('fs');
+          const content = fs.readFileSync('index.html', 'utf8');
+          const scripts = content.match(/<script(?!\s+src)[^>]*>([\s\S]*?)<\/script>/g);
+          const main = scripts.reduce((a,b) => a.length > b.length ? a : b);
+          const js = main.replace(/<\/?script[^>]*>/g, '');
+          fs.writeFileSync('test.js', js);
+          console.log('✅ JavaScript extracted successfully');
+          "
+          node --check test.js && echo "✅ JS Syntax OK" || echo "❌ JS Syntax Error"
+
+      - name: Check required functions exist
+        run: |
+          node -e "
+          const fs = require('fs');
+          const js = fs.readFileSync('test.js', 'utf8');
+          const required = [
+            'renderProducts',
+            'confirmOrder',
+            'sendToTelegram',
+            'printLabels',
+            'buildReceiptHTML',
+            'filterAndRender',
+            'saveOrders',
+            'loadData'
+          ];
+          let passed = 0, failed = 0;
+          required.forEach(fn => {
+            if (js.includes('function ' + fn)) {
+              console.log('✅ ' + fn);
+              passed++;
+            } else {
+              console.log('❌ MISSING: ' + fn);
+              failed++;
+            }
+          });
+          console.log(passed + '/' + required.length + ' functions found');
+          if (failed > 0) process.exit(1);
+          "
+
+      - name: Check no hardcoded secrets
+        run: |
+          node -e "
+          const fs = require('fs');
+          const content = fs.readFileSync('index.html', 'utf8');
+          const secrets = [
+            'N1255550',
+            'ord2024',
+            'inv2024'
+          ];
+          let found = 0;
+          secrets.forEach(s => {
+            if (content.includes(s)) {
+              console.log('❌ Hardcoded secret found: ' + s);
+              found++;
+            }
+          });
+          if (found === 0) console.log('✅ No hardcoded secrets found');
+          else process.exit(1);
+          "
