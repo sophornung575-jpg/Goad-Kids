@@ -693,7 +693,7 @@
     </main>
 
     <!-- ADMIN LOGIN MODAL -->
-    <div class="modal-overlay hidden" id="adminModal">
+    <div class="modal-overlay" id="adminModal">
         <div class="modal">
             <div class="modal-header"><h3><i class="fas fa-user-shield"></i> Admin Login</h3><button class="modal-close" onclick="closeAdminModal()">&times;</button></div>
             <div class="form-group">
@@ -717,7 +717,7 @@
     </div>
 
     <!-- LOGIN HISTORY MODAL -->
-    <div class="modal-overlay hidden" id="loginHistoryModal">
+    <div class="modal-overlay" id="loginHistoryModal">
         <div class="modal">
             <div class="modal-header"><h3><i class="fas fa-history"></i> Login History</h3><button class="modal-close" onclick="closeLoginHistory()">&times;</button></div>
             <div id="loginHistoryContent" style="max-height:300px;overflow-y:auto;font-size:0.85rem"><p style="color:var(--gray);text-align:center">No records</p></div>
@@ -726,7 +726,7 @@
     </div>
 
     <!-- EDIT PRODUCT MODAL -->
-    <div class="modal-overlay hidden" id="editProductModal">
+    <div class="modal-overlay" id="editProductModal">
         <div class="modal">
             <div class="modal-header"><h3><i class="fas fa-edit"></i> Edit Product</h3><button class="modal-close" onclick="closeEditModal()">&times;</button></div>
             <input type="hidden" id="editProductId">
@@ -753,10 +753,10 @@
     </div>
 
     <!-- WISHLIST MODAL -->
-    <div class="modal-overlay hidden" id="wishlistModal" onclick="if(event.target===this)closeWishlistModal()">
+    <div class="modal-overlay" id="wishlistModal" onclick="if(event.target===this)closeWishlistModal()">
 
     <!-- BARCODE SCANNER MODAL -->
-    <div class="modal-overlay hidden" id="barcodeScanModal" onclick="if(event.target===this)closeBarcodeScanner()">
+    <div class="modal-overlay" id="barcodeScanModal" onclick="if(event.target===this)closeBarcodeScanner()">
         <div class="modal" style="max-width:420px;width:95%">
             <div class="modal-header">
                 <h3><i class="fas fa-barcode" style="color:var(--primary)"></i> Barcode Scanner</h3>
@@ -781,7 +781,7 @@
     </div>
 
     <!-- LABEL PRINT MODAL -->
-    <div class="modal-overlay hidden" id="labelPrintModal" onclick="if(event.target===this)closeLabelModal()">
+    <div class="modal-overlay" id="labelPrintModal" onclick="if(event.target===this)closeLabelModal()">
         <div class="modal" style="max-width:600px;width:95%;max-height:90vh;display:flex;flex-direction:column">
             <div class="modal-header">
                 <h3><i class="fas fa-tag" style="color:var(--success)"></i> Print Labels</h3>
@@ -856,7 +856,7 @@
     </div>
 
     <!-- PRODUCT DETAIL MODAL -->
-    <div class="modal-overlay hidden" id="productDetailModal" onclick="if(event.target===this)closeProductDetail()">
+    <div class="modal-overlay" id="productDetailModal" onclick="if(event.target===this)closeProductDetail()">
     </div>
 
     <script>
@@ -1691,6 +1691,17 @@ function sendToTelegram(order, callback) {
         }
     }
 
+
+    // Event delegation for inventory table buttons (avoids onclick escaping issues)
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('button');
+        if (!btn) return;
+        var pid = btn.getAttribute('data-pid');
+        if (!pid) return;
+        if (btn.classList.contains('lbl-btn')) { e.stopPropagation(); openLabelModal(pid); }
+        else if (btn.classList.contains('edt-btn')) { e.stopPropagation(); openEditModal(pid); }
+        else if (btn.classList.contains('del-btn')) { e.stopPropagation(); deleteProduct(pid); }
+    });
 
     function resetFirebaseConfig() {
         var raw = prompt('Paste your Firebase config below.\n\nAccepts both formats:\n• Firebase console format (apiKey: "...")\n• JSON format ("apiKey": "...")\n\nLeave empty to cancel:');
@@ -3083,7 +3094,11 @@ function sendToTelegram(order, callback) {
                 '<td style="font-weight:600;font-size:0.78rem">$' + p.price.toFixed(2) + '</td>' +
                 '<td>' + sizeHtml + '</td>' +
                 '<td><strong style="color:' + stockColor + ';font-size:0.78rem">' + totalStock + '</strong></td>' +
-                '<td><div style="display:flex;gap:3px"><button class="btn btn-info btn-small" onclick="openLabelModal(\'' + p.id + '\')" style="padding:0.2rem 0.4rem" title="Print Label"><i class="fas fa-tag"></i></button><button class="btn btn-warning btn-small" onclick="openEditModal(\'' + p.id + '\')" style="padding:0.2rem 0.4rem"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-small" onclick="deleteProduct(\'' + p.id + '\')" style="padding:0.2rem 0.4rem"><i class="fas fa-trash"></i></button></div></td>' +
+                '<td><div style="display:flex;gap:3px">' +
+                '<button class="btn btn-info btn-small lbl-btn" data-pid="' + p.id + '" style="padding:0.2rem 0.4rem" title="Print Label"><i class="fas fa-tag"></i></button>' +
+                '<button class="btn btn-warning btn-small edt-btn" data-pid="' + p.id + '" style="padding:0.2rem 0.4rem"><i class="fas fa-edit"></i></button>' +
+                '<button class="btn btn-danger btn-small del-btn" data-pid="' + p.id + '" style="padding:0.2rem 0.4rem"><i class="fas fa-trash"></i></button>' +
+                '</div></td>' +
                 '</tr>';
         }
         tb.innerHTML = h;
