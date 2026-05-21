@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- [KEEPING YOUR EXISTING HEAD SECTION - NOT REPEATED FOR BREVITY] -->
+    <!-- Meta tags, Firebase, Chart.js, CSS all remain the same -->
+</head>
+<body>
+    <!-- [YOUR EXISTING HEADER, MAIN, MODALS...] -->
+    
+    <!-- LABEL PRINT MODAL - FIXED -->
+    <div class="modal-overlay" id="labelPrintModal" onclick="if(event.target.id==='labelPrintModal')closeLabelModal()">
+        <div class="modal" style="max-width:700px;width:95%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden">
+            <div class="modal-header">
+                <h3><i class="fas fa-tag" style="color:var(--success)"></i> Print Labels</h3>
+                <button class="modal-close" onclick="closeLabelModal()">&times;</button>
+            </div>
+            
+            <!-- Mode Selector -->
+            <div style="padding:0 1rem;display:flex;gap:8px;border-bottom:1px solid var(--gray-light)">
+                <button id="lblModeSingleBtn" class="btn" style="flex:1;border-radius:0;background:var(--primary);color:#fff;border:none;padding:0.75rem;font-weight:600;cursor:pointer;font-size:0.95rem" onclick="setLabelMode('single')">Single Product</button>
+                <button id="lblModeBulkBtn" class="btn" style="flex:1;border-radius:0;background:var(--light);color:var(--gray-dark);border:none;padding:0.75rem;font-weight:600;cursor:pointer;font-size:0.95rem" onclick="setLabelMode('bulk')">Bulk Print</button>
+            </div>
+
+            <div style="flex:1;overflow-y:auto;padding:1rem">
+                
+                <!-- Single Product Mode -->
+                <div id="lblSingleMode" style="display:block">
+                    <div style="background:var(--light);border-radius:8px;padding:0.75rem;margin-bottom:1rem;font-weight:600" id="lblProductInfo">Select a product...</div>
+                    
+                    <div style="display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+                        <div class="form-group" style="flex:1;min-width:120px">
+                            <label style="font-size:0.85rem;font-weight:600">Qty per Size</label>
+                            <input type="number" id="labelQty" class="form-control" value="1" min="1" max="100" oninput="renderLabelPreview()" style="font-size:0.9rem">
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:120px">
+                            <label style="font-size:0.85rem;font-weight:600">Label Size</label>
+                            <select id="labelSize" class="form-control" onchange="renderLabelPreview()" style="font-size:0.9rem">
+                                <option value="38x25">38×25mm</option>
+                                <option value="50x30">50×30mm</option>
+                                <option value="58x40">58×40mm</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="font-size:0.82rem;color:var(--gray);margin-bottom:0.5rem;font-weight:600">Preview (click to zoom):</div>
+                    <div id="labelPreviewContainer" style="display:flex;flex-wrap:wrap;gap:8px;padding:0.75rem;background:var(--light);border-radius:8px;min-height:100px;border:1px dashed var(--gray-light);overflow-y:auto"></div>
+                </div>
+
+                <!-- Bulk Mode -->
+                <div id="lblBulkMode" style="display:none">
+                    <div style="display:flex;gap:8px;margin-bottom:0.75rem;align-items:center;flex-wrap:wrap">
+                        <button class="btn btn-outline btn-small" onclick="selectAllForLabel()"><i class="fas fa-check-square"></i> All</button>
+                        <button class="btn btn-outline btn-small" onclick="deselectAllForLabel()"><i class="fas fa-square"></i> None</button>
+                        <input type="text" id="lblBulkSearch" class="form-control" placeholder="Search products..." oninput="renderBulkList()" style="font-size:0.82rem;flex:1;min-width:150px">
+                    </div>
+                    <div id="lblBulkList" style="max-height:280px;overflow-y:auto;border:1px solid var(--gray-light);border-radius:8px;margin-bottom:0.75rem;background:#fff"></div>
+                    
+                    <div style="display:flex;gap:1rem;flex-wrap:wrap">
+                        <div class="form-group" style="flex:1;min-width:100px">
+                            <label style="font-size:0.82rem;font-weight:600">Default Qty</label>
+                            <input type="number" id="lblBulkQty" class="form-control" value="1" min="1" max="100" style="font-size:0.9rem">
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:120px">
+                            <label style="font-size:0.82rem;font-weight:600">Label Size</label>
+                            <select id="lblBulkSize" class="form-control" style="font-size:0.9rem">
+                                <option value="38x25">38×25mm</option>
+                                <option value="50x30">50×30mm</option>
+                                <option value="58x40">58×40mm</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="lblBulkSummary" style="font-size:0.82rem;color:var(--gray);margin-top:0.5rem;padding:0.5rem;background:var(--light);border-radius:4px">0 products selected</div>
+                </div>
+
+            </div>
+
+            <!-- Footer -->
+            <div style="padding:0.75rem 1rem;border-top:1px solid var(--gray-light);display:flex;gap:0.5rem;background:#fff">
+                <button class="btn btn-primary" onclick="printLabels()" style="flex:1"><i class="fas fa-print"></i> Print Labels</button>
+                <button class="btn btn-outline" onclick="closeLabelModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // =============================================
+    // LABEL PRINTING - FIXED VERSION
+    // =============================================
+    var _labelProduct = null;
+    var _labelMode = 'single';
+    var _labelSelected = {};
+
+    function setLabelMode(mode) {
+        _labelMode = mode;
+        
+        // Update button states
+        var singleBtn = document.getElementById('lblModeSingleBtn');
+        var bulkBtn = document.getElementById('lblModeBulkBtn');
+        
+        if (mode === 'single') {
+            document.getElementById('lblSingleMode').style.display = 'block';
+            document.getElementById('lblBulkMode').style.display = 'none';
+            singleBtn.style.background = 'var(--primary)';
+            singleBtn.style.color = '#fff';
+            bulkBtn.style.background = 'var(--light)';
+            bulkBtn.style.color = 'var(--gray-dark)';
+            renderLabelPreview();
+        } else {
+            document.getElementById('lblSingleMode').style.display = 'none';
+            document.getElementById('lblBulkMode').style.display = 'block';
+            singleBtn.style.background = 'var(--light)';
+            singleBtn.style.color = 'var(--gray-dark)';
+            bulkBtn.style.background = 'var(--primary)';
+            bulkBtn.style.color = '#fff';
+            renderBulkList();
+        }
+    }
+
+    function openBulkLabelModal() {
+        try {
+            _labelProduct = null;
+            _labelSelected = {};
+            _labelMode = 'single';
+            var modal = document.getElementById('labelPrintModal');
+            if (!modal) {
+                showToast('ERROR: Label modal not found in DOM', 'error');
+                return;
+            }
+            modal.classList.add('active');
+            setTimeout(function() {
+                setLabelMode('bulk');
+            }, 100);
+        } catch(e) {
+            showToast('Error opening label modal: ' + e.message, 'error');
+            console.error(e);
+        }
+    }
+
+    function openLabelModal(pid) {
+        try {
+            _labelProduct = pid ? findProduct(pid) : null;
+            _labelSelected = {};
+            _labelMode = 'single';
+            var modal = document.getElementById('labelPrintModal');
+            if (!modal) {
+                showToast('ERROR: Label modal not found in DOM', 'error');
+                return;
+            }
+            modal.classList.add('active');
+            setTimeout(function() {
+                setLabelMode('single');
+                if (_labelProduct) {
+                    var info = document.getElementById('lblProductInfo');
+                    if (info) {
+                        info.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center">' +
+                            '<div><div style="font-weight:600">' + escHtml(_labelProduct.name) + '</div>' +
+                            '<div style="font-size:0.85rem;color:var(--gray)">$' + _labelProduct.price.toFixed(2) + ' · Stock: ' + getTotalStock(_labelProduct) + '</div></div>' +
+                            '<img src="' + ((_labelProduct.images && _labelProduct.images[0]) || 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60') + '" style="width:50px;height:50px;object-fit:cover;border-radius:4px" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=60\'">' +
+                            '</div>';
+                    }
+                }
+                renderLabelPreview();
+            }, 100);
+        } catch(e) {
+            showToast('Error opening label modal: ' + e.message, 'error');
+            console.error(e);
+        }
+    }
+
+    function closeLabelModal() {
+        try {
+            var modal = document.getElementById('labelPrintModal');
+            if (modal) modal.classList.remove('active');
+        } catch(e) {
+            console.error('Error closing label modal:', e);
+        }
+        _labelProduct = null;
+        _labelSelected = {};
+    }
+
+    function getLabelDims(sizeVal) {
+        // Returns dimensions in mm
+        var dims = {
+            '38x25': { w: 38, h: 25, scale: 3.5 },
+            '50x30': { w: 50, h: 30, scale: 3.2 },
+            '58x40': { w: 58, h: 40, scale: 2.8 }
+        };
+        return dims[sizeVal] || dims['38x25'];
+    }
+
+    function renderLabelPreview() {
+        if (!_labelProduct) {
+            document.getElementById('labelPreviewContainer').innerHTML = '<div style="width:100%;text-align:center;color:var(--gray);padding:1rem">No product selected. Go back to inventory and click the label icon.</div>';
+            return;
+        }
+        
+        var sizeVal = document.getElementById('labelSize').value;
+        var dims = getLabelDims(sizeVal);
+        var sizes = (_labelProduct.sizes && _labelProduct.sizes.length) ? _labelProduct.sizes : [{ name: 'One Size' }];
+        var qty = parseInt(document.getElementById('labelQty').value) || 1;
+        
+        var html = '';
+        sizes.forEach(function(s, idx) {
+            for (var i = 0; i < qty; i++) {
+                var w = Math.round(dims.w * dims.scale);
+                var h = Math.round(dims.h * dims.scale);
+                html += '<div style="' +
+                    'width:' + w + 'px;height:' + h + 'px;' +
+                    'padding:3px;background:#fff;border:1px solid #ccc;border-radius:3px;' +
+                    'display:flex;flex-direction:column;justify-content:space-between;' +
+                    'font-family:Arial,sans-serif;font-size:' + (dims.h > 30 ? '7px' : '6px') + ';' +
+                    'overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.1);' +
+                    'cursor:pointer" ' +
+                    'onclick="alert(\'Label preview - will print as ' + dims.w + '×' + dims.h + 'mm\')">' +
+                    '<div style="font-weight:bold;overflow:hidden;line-height:1.1;word-break:break-word">' + escHtml(_labelProduct.name) + '</div>' +
+                    '<div style="font-size:' + (dims.h > 30 ? '6px' : '5px') + ';color:#666">Size: <b>' + escHtml(s.name) + '</b></div>' +
+                    '<div style="font-weight:bold;font-size:' + (dims.h > 30 ? '9px' : '8px') + '">$' + _labelProduct.price.toFixed(2) + '</div>' +
+                    '<div style="font-size:' + (dims.h > 30 ? '5px' : '4px') + ';color:#888;text-align:center;letter-spacing:0.5px">ID: ' + escHtml(_labelProduct.id) + '</div>' +
+                    '</div>';
+            }
+        });
+        
+        document.getElementById('labelPreviewContainer').innerHTML = html;
+    }
+
+    function renderBulkList() {
+        var q = (document.getElementById('lblBulkSearch').value || '').toLowerCase();
+        var products = STATE.products.filter(function(p) {
+            return !q || p.name.toLowerCase().indexOf(q) !== -1 || p.category.toLowerCase().indexOf(q) !== -1;
+        });
+        
+        var html = '';
+        products.forEach(function(p) {
+            var isChecked = !!_labelSelected[p.id];
+            var sizes = (p.sizes && p.sizes.length) ? p.sizes.map(function(s) { return s.name; }).join(', ') : 'One Size';
+            var stock = getTotalStock(p);
+            
+            html += '<div style="display:flex;align-items:center;gap:8px;padding:0.5rem 0.75rem;border-bottom:1px solid var(--gray-light);background:' + (isChecked ? 'rgba(102,126,234,0.08)' : '#fff') + '">' +
+                '<input type="checkbox" id="lbl_' + p.id + '" ' + (isChecked ? 'checked' : '') +
+                ' style="width:18px;height:18px;cursor:pointer" onchange="toggleLabelSelect(\'' + p.id + '\',this.checked)">' +
+                '<label for="lbl_' + p.id + '" style="flex:1;cursor:pointer;user-select:none">' +
+                '<div style="font-weight:600;font-size:0.85rem">' + escHtml(p.name) + '</div>' +
+                '<div style="font-size:0.75rem;color:var(--gray)">' + escHtml(sizes) + ' · $' + p.price.toFixed(2) + ' · Stock: ' + stock + '</div>' +
+                '</label>' +
+                '<input type="number" value="' + (_labelSelected[p.id] || 1) + '" min="1" max="50"' +
+                ' style="width:60px;padding:4px 6px;border:1px solid var(--gray-light);border-radius:4px;font-size:0.85rem;' + (isChecked ? '' : 'background:#f5f5f5;') + '"' +
+                ' ' + (isChecked ? '' : 'disabled') +
+                ' onchange="updateLabelQty(\'' + p.id + '\',this.value)">' +
+                '</div>';
+        });
+        
+        if (!html) {
+            html = '<div style="padding:1rem;text-align:center;color:var(--gray);font-size:0.9rem">No products found</div>';
+        }
+        
+        document.getElementById('lblBulkList').innerHTML = html;
+        updateBulkSummary();
+    }
+
+    function toggleLabelSelect(pid, checked) {
+        if (checked) {
+            _labelSelected[pid] = _labelSelected[pid] || 1;
+        } else {
+            delete _labelSelected[pid];
+        }
+        renderBulkList();
+    }
+
+    function updateLabelQty(pid, val) {
+        if (_labelSelected[pid] !== undefined) {
+            _labelSelected[pid] = Math.max(1, parseInt(val) || 1);
+        }
+    }
+
+    function updateBulkSummary() {
+        var selected = Object.keys(_labelSelected).length;
+        var totalLabels = 0;
+        Object.keys(_labelSelected).forEach(function(pid) {
+            var p = findProduct(pid);
+            if (p && p.sizes && p.sizes.length) {
+                totalLabels += p.sizes.length * (_labelSelected[pid] || 1);
+            } else {
+                totalLabels += (_labelSelected[pid] || 1);
+            }
+        });
+        var sumEl = document.getElementById('lblBulkSummary');
+        if (sumEl) {
+            sumEl.textContent = selected + ' product(s) selected · ' + totalLabels + ' label(s) to print';
+        }
+    }
+
+    function selectAllForLabel() {
+        STATE.products.forEach(function(p) {
+            _labelSelected[p.id] = 1;
+        });
+        renderBulkList();
+    }
+
+    function deselectAllForLabel() {
+        _labelSelected = {};
+        renderBulkList();
+    }
+
+    function printLabels() {
+        var labelsData = []; // [{product, sizeName, qty}]
+        var sizeVal, dims;
+
+        if (_labelMode === 'single') {
+            if (!_labelProduct) {
+                showToast('No product selected', 'error');
+                return;
+            }
+            sizeVal = document.getElementById('labelSize').value;
+            dims = getLabelDims(sizeVal);
+            var qty = parseInt(document.getElementById('labelQty').value) || 1;
+            var sizes = (_labelProduct.sizes && _labelProduct.sizes.length)
+                ? _labelProduct.sizes : [{ name: 'One Size' }];
+            sizes.forEach(function(s) {
+                labelsData.push({ p: _labelProduct, size: s.name, qty: qty });
+            });
+        } else {
+            var pids = Object.keys(_labelSelected);
+            if (!pids.length) {
+                showToast('Select at least one product', 'warning');
+                return;
+            }
+            sizeVal = document.getElementById('lblBulkSize').value;
+            dims = getLabelDims(sizeVal);
+            pids.forEach(function(pid) {
+                var pr = findProduct(pid);
+                if (!pr) return;
+                var q = parseInt(_labelSelected[pid]) || 1;
+                var szs = (pr.sizes && pr.sizes.length) ? pr.sizes : [{ name: 'One Size' }];
+                szs.forEach(function(s) {
+                    labelsData.push({ p: pr, size: s.name, qty: q });
+                });
+            });
+        }
+
+        if (!labelsData.length) {
+            showToast('Nothing to print', 'warning');
+            return;
+        }
+
+        // Build print HTML
+        var printHtml = buildLabelPrintHTML(labelsData, dims);
+        openPrintWindow(printHtml, 'Labels_' + Date.now());
+        closeLabelModal();
+        showToast('Opening print preview...', 'info');
+    }
+
+    function buildLabelPrintHTML(labelsData, dims) {
+        var wMm = dims.w;
+        var hMm = dims.h;
+        var wPt = dims.w / 0.3528; // mm to pt
+        var hPt = dims.h / 0.3528;
+        var fontName = dims.h > 30 ? '7.5' : '6';
+        var fontSize = dims.h > 30 ? '7' : '5.5';
+        var fontPrice = dims.h > 30 ? '11' : '9';
+        var barH = dims.h > 30 ? '16mm' : '11mm';
+
+        var labelsHtml = '';
+        labelsData.forEach(function(ld, idx) {
+            for (var i = 0; i < ld.qty; i++) {
+                var barcode = ld.p.id + '-' + ld.size + '-' + idx;
+                labelsHtml += '<div class="lbl" data-barcode="' + escHtml(barcode) + '">' +
+                    '<div class="n">' + escHtml(ld.p.name) + '</div>' +
+                    '<div class="s">Size: <b>' + escHtml(ld.size) + '</b></div>' +
+                    '<div class="pr">$' + ld.p.price.toFixed(2) + '</div>' +
+                    '<svg class="bc" style="width:100%;height:' + barH + '"></svg>' +
+                    '</div>';
+            }
+        });
+
+        var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Labels</title>' +
+            '<style>' +
+            '@page{size:' + wMm + 'mm ' + hMm + 'mm;margin:0}' +
+            'html,body{margin:0;padding:0;background:#fff;font-family:Arial,sans-serif}' +
+            '.lbl{width:' + wMm + 'mm;height:' + hMm + 'mm;padding:0.8mm 1mm;' +
+            'display:flex;flex-direction:column;justify-content:space-between;' +
+            'page-break-after:always;break-after:page;overflow:hidden;box-sizing:border-box;' +
+            'border:0.5px solid #eee}' +
+            '.n{font-size:' + fontName + 'pt;font-weight:bold;line-height:1.2;max-height:' + (dims.h > 30 ? '14pt' : '12pt') + ';overflow:hidden}' +
+            '.s{font-size:' + fontSize + 'pt;color:#444}' +
+            '.pr{font-size:' + fontPrice + 'pt;font-weight:bold;color:#000}' +
+            '.bc{width:100%;height:' + barH + ';display:block}' +
+            '@media print{html,body{margin:0;padding:0;background:#fff}.lbl{page-break-after:always;break-after:page;border:none}}' +
+            '</style>' +
+            '</head><body>' +
+            labelsHtml +
+            '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>' +
+            '<script>' +
+            'function renderBarcodes(){' +
+            'var svgs=document.querySelectorAll(".bc");' +
+            'var rendered=0;' +
+            'svgs.forEach(function(el,idx){' +
+            'try{' +
+            'var barcode=el.parentElement.getAttribute("data-barcode");' +
+            'JsBarcode(el,barcode||("L"+idx),{' +
+            'format:"CODE128",width:0.8,' +
+            'height:' + (dims.h > 30 ? '28' : '20') + ',' +
+            'displayValue:false,' +
+            'margin:0,' +
+            'background:"#ffffff",' +
+            'lineColor:"#000000"' +
+            '});' +
+            'rendered++;' +
+            '}catch(e){console.error("Barcode error:",e);}' +
+            '});' +
+            'console.log("Rendered "+rendered+" of "+svgs.length+" barcodes");' +
+            'setTimeout(function(){window.print();},500);' +
+            '}' +
+            'if(document.readyState==="complete"){renderBarcodes();}' +
+            'else{window.addEventListener("load",renderBarcodes);}' +
+            '<\/script>' +
+            '</body></html>';
+
+        return html;
+    }
+
+    console.log('✅ Label printing module loaded');
+    </script>
+</body>
+</html>
