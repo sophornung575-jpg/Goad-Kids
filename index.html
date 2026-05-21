@@ -1582,46 +1582,92 @@ function sendToTelegram(order, callback) {
         var fPrice = dims.h > 30 ? '11' : '9';
         var barH = dims.h > 30 ? '16mm' : '11mm';
 
-        var printHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Labels</title>' +
+        var printHtml = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+            '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+            '<title>Labels</title>' +
+            '<scr'+'ipt src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><'+'/scr'+'ipt>' +
+            '<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><'+'/scr'+'ipt>' +
             '<style>' +
             '@page{size:' + dims.w + 'mm ' + dims.h + 'mm;margin:0}' +
-            'html,body{margin:0;padding:0;background:#fff;font-family:Arial,sans-serif}' +
-            '.lbl{width:' + dims.w + 'mm;height:' + dims.h + 'mm;padding:1.2mm 1.5mm;' +
+            'html,body{margin:0;padding:0;background:#f0f0f0;font-family:Arial,sans-serif;padding-bottom:80px}' +
+            '#labelsWrap{display:flex;flex-wrap:wrap;gap:4px;padding:8px;justify-content:flex-start}' +
+            '.lbl{width:' + dims.w + 'mm;height:' + dims.h + 'mm;padding:' + (dims.h <= 10 ? '0.3mm 0.5mm' : dims.h <= 20 ? '0.5mm 0.8mm' : '1mm 1.5mm') + ';' +
             'display:flex;flex-direction:column;justify-content:space-between;' +
-            'page-break-after:always;break-after:page;overflow:hidden;box-sizing:border-box}' +
-            '.n{font-size:' + fName + 'pt;font-weight:bold;line-height:1.2;max-height:' + (dims.h > 30 ? '16' : '13') + 'pt;overflow:hidden}' +
-            '.s{font-size:' + fSize + 'pt;color:#444}' +
-            '.pr{font-size:' + fPrice + 'pt;font-weight:bold;color:#000}' +
-            '.bc{width:100%;height:' + barH + ';display:block}' +
-            '@media print{html,body{margin:0;padding:0}' +
-            '.lbl{page-break-after:always;break-after:page}}' +
-            '</style>' +
-            '</head><body>' +
-            labelsHtml +
-            '<scr'+'ipt src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><'+'/scr'+'ipt>' +
+            'overflow:hidden;box-sizing:border-box;background:#fff;border:1px solid #eee}' +
+            '.n{font-size:' + (dims.h > 20 ? (dims.h > 30 ? '7' : '5.5') : '4') + 'pt;font-weight:bold;line-height:1.2;overflow:hidden}' +
+            '.s{font-size:' + (dims.h > 20 ? (dims.h > 30 ? '6' : '5') : '3.5') + 'pt;color:#444}' +
+            '.pr{font-size:' + (dims.h > 20 ? (dims.h > 30 ? '10' : '8') : '5') + 'pt;font-weight:bold}' +
+            '.bc{width:100%;height:' + (dims.h > 20 ? (dims.h > 30 ? '12mm' : '8mm') : '4mm') + ';display:block}' +
+            '#bar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #e2e8f0;z-index:999;font-family:Arial,sans-serif}' +
+            '#btns{display:flex;gap:8px;padding:10px 12px;justify-content:center}' +
+            '#btns button{flex:1;max-width:120px;padding:11px 6px;border:none;border-radius:22px;font-size:13px;font-weight:bold;cursor:pointer}' +
+            '.ba{background:#4a90d9;color:#fff}.bp{background:#48bb78;color:#fff}.bsh{background:#f6ad55;color:#fff}' +
+            '#panel{display:none;padding:10px 14px;background:#f8fafc;border-top:1px solid #e2e8f0}' +
+            '#panel.open{display:block}' +
+            '.cr{display:flex;align-items:center;gap:8px;margin-bottom:8px}' +
+            '.cr label{font-size:12px;color:#555;width:80px;flex-shrink:0}' +
+            '.cr select{flex:1;padding:5px 7px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px}' +
+            '.cr input[type=range]{flex:1;accent-color:#4a90d9}' +
+            '.cr span{font-size:12px;color:#4a90d9;font-weight:bold;width:44px;text-align:right}' +
+            '#sharePreview{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.88);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:16px}' +
+            '#sharePreview.show{display:flex}' +
+            '#sharePreview img{max-width:100%;max-height:65vh;border-radius:8px}' +
+            '#sharePreview .sb{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;justify-content:center}' +
+            '#sharePreview .sb button{padding:12px 20px;border:none;border-radius:20px;font-size:14px;font-weight:bold;cursor:pointer}' +
+            '.ss{background:#48bb78;color:#fff}.shs{background:#4a90d9;color:#fff}.sc{background:#e53e3e;color:#fff}' +
+            '@media print{#bar{display:none!important}body{background:#fff;padding-bottom:0}#labelsWrap{gap:0;padding:0}}' +
+            '</style></head><body>' +
+            '<div id="labelsWrap">' + labelsHtml + '</div>' +
+            '<div id="sharePreview">' +
+            '<img id="shareImg" src="">' +
+            '<div class="sb">' +
+            '<button class="ss" onclick="saveImg()">&#8595; Save Image</button>' +
+            '<button class="shs" onclick="shareImg()">&#8679; Share</button>' +
+            '<button class="sc" onclick="document.getElementById(\'sharePreview\').classList.remove(\'show\')">&#10005; Close</button>' +
+            '</div></div>' +
+            '<div id="bar">' +
+            '<div id="btns">' +
+            '<button class="ba" onclick="document.getElementById(\'panel\').classList.toggle(\'open\')">&#9881; Adjust</button>' +
+            '<button class="bp" onclick="window.print()">&#128424; Print</button>' +
+            '<button class="bsh" onclick="makeImg()">&#128247; Share Image</button>' +
+            '</div>' +
+            '<div id="panel">' +
+            '<div class="cr"><label>Paper size</label><select id="psel" onchange="ap()"><option value="' + dims.w + 'x' + dims.h + '" selected>' + dims.w + '×' + dims.h + 'mm</option><option value="58x' + dims.h + '">58×' + dims.h + 'mm</option><option value="148x210">A6</option><option value="210x297">A4</option></select></div>' +
+            '<div class="cr"><label>Scale</label><input type="range" id="scl" min="50" max="200" value="100" step="5" oninput="ap()"><span id="sclv">100%</span></div>' +
+            '<div class="cr"><label>Columns</label><input type="range" id="cols" min="1" max="10" value="' + (dims.w <= 20 ? '5' : dims.w <= 30 ? '4' : '3') + '" step="1" oninput="ap()"><span id="colsv">' + (dims.w <= 20 ? '5' : dims.w <= 30 ? '4' : '3') + '</span></div>' +
+            '</div></div>' +
             '<scr'+'ipt>' +
-            'function go(){' +
-            'var svgs=document.querySelectorAll(".bc");' +
-            'var ok=0;' +
-            'svgs.forEach(function(el){' +
-            'try{' +
-            'JsBarcode(el,el.dataset.v,{' +
-            'format:"CODE128",width:1.2,' +
-            'height:' + (dims.h > 30 ? 36 : 28) + ',' +
-            'displayValue:true,' +
-            'fontSize:' + (dims.h > 30 ? 8 : 6) + ',' +
-            'margin:1,background:"#ffffff",lineColor:"#000000"' +
-            '});ok++;' +
-            '}catch(e){console.error(e);}' +
-            '});' +
-            'console.log(ok+"/"+svgs.length+" barcodes rendered");' +
-            'setTimeout(function(){window.print();},600);' +
-            '}' +
-            'if(document.readyState==="complete"){go();}' +
-            'else{window.addEventListener("load",go);}' +
+            'var _imgBlob=null;' +
+            'function ap(){' +
+            'var s=parseInt(document.getElementById("scl").value);' +
+            'var c=parseInt(document.getElementById("cols").value);' +
+            'document.getElementById("sclv").textContent=s+"%";' +
+            'document.getElementById("colsv").textContent=c;' +
+            'var w=document.getElementById("labelsWrap");' +
+            'w.style.transform="scale("+s/100+")";w.style.transformOrigin="top left";' +
+            'w.style.gridTemplateColumns="repeat("+c+",auto)";}' +
+            'function makeImg(){' +
+            'var btn=document.querySelector(".bsh");btn.textContent="Converting...";btn.disabled=true;' +
+            'var el=document.getElementById("labelsWrap");' +
+            'var ot=el.style.transform;el.style.transform="none";' +
+            'html2canvas(el,{scale:3,useCORS:true,backgroundColor:"#ffffff",logging:false}).then(function(canvas){' +
+            'el.style.transform=ot;' +
+            'canvas.toBlob(function(blob){' +
+            '_imgBlob=blob;' +
+            'var url=URL.createObjectURL(blob);' +
+            'document.getElementById("shareImg").src=url;' +
+            'document.getElementById("sharePreview").classList.add("show");' +
+            'btn.textContent="\uD83D\uDCF7 Share Image";btn.disabled=false;' +
+            '},"image/png");' +
+            '}).catch(function(){btn.textContent="\uD83D\uDCF7 Share Image";btn.disabled=false;alert("Capture failed");});}' +
+            'function saveImg(){if(!_imgBlob)return;var a=document.createElement("a");a.href=URL.createObjectURL(_imgBlob);a.download="labels.png";a.click();}' +
+            'function shareImg(){if(!_imgBlob)return;var f=new File([_imgBlob],"labels.png",{type:"image/png"});if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:"Labels"}).catch(function(){saveImg();});}else{saveImg();}}' +
+            'window.onload=function(){' +
+            'document.querySelectorAll(".bc").forEach(function(el){' +
+            'try{JsBarcode(el,el.dataset.v,{format:"CODE128",width:' + (dims.h <= 10 ? '0.8' : dims.h <= 20 ? '1.0' : '1.2') + ',height:' + (dims.h <= 10 ? 12 : dims.h <= 20 ? 20 : 32) + ',displayValue:' + (dims.h <= 10 ? 'false' : 'true') + ',fontSize:' + (dims.h <= 10 ? 5 : dims.h <= 20 ? 6 : 8) + ',margin:0,background:"#fff",lineColor:"#000"});}catch(e){el.style.display="none";}' +
+            '});};' +
             '<'+'/scr'+'ipt>' +
             '</body></html>';
-
         // Write to a new window directly - most reliable method
         var w = window.open('', '_blank');
         if (w) {
@@ -2881,6 +2927,7 @@ function sendToTelegram(order, callback) {
         html += '<div class="cr"><label>Scale</label><input type="range" id="sc" min="50" max="200" value="100" step="5" oninput="ap()"><span id="scv">100%</span></div>';
         html += '</div></div>';
 
+        // Scripts
         // Scripts
         html += '<scr' + 'ipt>';
         html += 'var _imgBlob=null;';
