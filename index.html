@@ -485,7 +485,7 @@
                     <!-- Inventory Sub-Nav -->
                     <div class="inv-subnav">
                         <button class="inv-subbtn active" onclick="switchInvTab('products',this)"><i class="fas fa-boxes"></i> Products</button>
-                        <button class="inv-subbtn" onclick="switchInvTab('add',this)"><i class="fas fa-plus"></i> Add New</button>
+                '<button class="btn btn-success btn-small" onclick="closeBarcodeScanner();switchInvTab(&quot;add&quot;,document.querySelectorAll(&quot;.inv-subbtn&quot;)[1])"><i class="fas fa-plus" style="pointer-events:none"></i> Add Product</button>' +
                         <button class="inv-subbtn" onclick="switchInvTab('settings',this)"><i class="fas fa-cog"></i> Settings</button>
                     </div>
 
@@ -1272,103 +1272,156 @@ function sendToTelegram(order, callback) {
     }
 
     function startCamera() {
+        var statusEl = document.getElementById('scanStatus');
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            document.getElementById('scanStatus').textContent = 'Camera not supported — use manual entry';
+            statusEl.textContent = 'Camera not supported — use manual entry below';
             return;
         }
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        statusEl.textContent = 'Starting camera...';
+        navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        })
         .then(function(stream) {
             _barcodeStream = stream;
             var video = document.getElementById('barcodeVideo');
             video.srcObject = stream;
+            video.setAttribute('playsinline', true);
+            video.setAttribute('autoplay', true);
+            video.setAttribute('muted', true);
             video.play();
-            document.getElementById('scanStatus').textContent = 'Scanning...';
-            // Load barcode detection library
-            if (typeof BarcodeDetector !== 'undefined') {
-                startBarcodeDetection(video);
-            } else {
-                // Fallback: load ZXing library
-                loadZXing(video);
-            }
+            video.addEventListener('loadedmetadata', function() {
+                var support = typeof BarcodeDetector !== 'undefined' ? 'BarcodeDetector' : (typeof jsQR !== 'undefined' ? 'jsQR' : 'loading...');
+                statusEl.textContent = 'Ready [' + support + '] ' + video.videoWidth + 'x' + video.videoHeight;
+                startFrameScanning(video);
+            });
         })
         .catch(function(e) {
-            document.getElementById('scanStatus').textContent = 'Camera access denied — use manual entry';
+            statusEl.textContent = 'Camera error: ' + e.message + ' — use manual entry';
         });
     }
 
-    function startBarcodeDetection(video) {
-        var detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'qr_code', 'upc_a', 'upc_e'] });
-        _barcodeInterval = setInterval(function() {
+    function startFrameScanning(video) {
+        // Use canvas to grab frames and detect barcodes
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        var statusEl = document.getElementById('scanStatus');
+
+        function scanFrame() {
+            if (!_barcodeStream) return; // stopped
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                detector.detect(video).then(function(codes) {
-                    if (codes.length > 0) {
-                        var code = codes[0].rawValue;
-                        clearInterval(_barcodeInterval);
-                        document.getElementById('scanStatus').textContent = '✅ Found: ' + code;
-                        searchBarcode(code);
-                    }
-                }).catch(function(){});
-            }
-        }, 300);
-    }
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    function loadZXing(video) {
-        var s = document.createElement('script');
-        s.src = 'https://unpkg.com/@zxing/library@latest/umd/index.min.js';
-        s.onload = function() {
-            try {
-                var codeReader = new ZXing.BrowserMultiFormatReader();
-                codeReader.decodeFromVideoElement(video, function(result, err) {
-                    if (result) {
-                        codeReader.reset();
-                        document.getElementById('scanStatus').textContent = '✅ Found: ' + result.text;
-                        searchBarcode(result.text);
+                // Try native BarcodeDetector first (Chrome Android)
+                if (typeof BarcodeDetector !== 'undefined') {
+                    var detector = new BarcodeDetector({
+                        formats: ['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e','itf','codabar']
+                    });
+                    detector.detect(canvas).then(function(codes) {
+                        if (codes.length > 0) {
+                            var code = codes[0].rawValue;
+                            statusEl.textContent = '✅ Found: ' + code;
+                            stopCamera();
+                            searchBarcode(code);
+                            return;
+                        }
+                        _barcodeInterval = requestAnimationFrame(scanFrame);
+                    }).catch(function() {
+                        _barcodeInterval = requestAnimationFrame(scanFrame);
+                    });
+                } else {
+                    // Fallback: try jsQR for QR codes
+                    if (typeof jsQR !== 'undefined') {
+                        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        var code = jsQR(imageData.data, imageData.width, imageData.height);
+                        if (code) {
+                            statusEl.textContent = '✅ Found: ' + code.data;
+                            stopCamera();
+                            searchBarcode(code.data);
+                            return;
+                        }
                     }
-                });
-            } catch(e) {
-                document.getElementById('scanStatus').textContent = 'Scanner error — use manual entry';
+                    _barcodeInterval = requestAnimationFrame(scanFrame);
+                }
+            } else {
+                _barcodeInterval = requestAnimationFrame(scanFrame);
             }
-        };
-        s.onerror = function() {
-            document.getElementById('scanStatus').textContent = 'Use manual entry below';
-        };
-        document.head.appendChild(s);
+        }
+        // Load jsQR as fallback
+        if (typeof jsQR === 'undefined') {
+            var s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+            s.onload = function() { _barcodeInterval = requestAnimationFrame(scanFrame); };
+            s.onerror = function() { _barcodeInterval = requestAnimationFrame(scanFrame); };
+            document.head.appendChild(s);
+        } else {
+            _barcodeInterval = requestAnimationFrame(scanFrame);
+        }
     }
-
     function stopCamera() {
         if (_barcodeStream) { _barcodeStream.getTracks().forEach(function(t){t.stop();}); _barcodeStream = null; }
-        if (_barcodeInterval) { clearInterval(_barcodeInterval); _barcodeInterval = null; }
+        if (_barcodeInterval) { cancelAnimationFrame(_barcodeInterval); _barcodeInterval = null; }
+        var video = document.getElementById('barcodeVideo');
+        if (video) { video.srcObject = null; }
     }
 
     function searchBarcode(code) {
         if (!code || !code.trim()) return;
         code = code.trim();
         var resultEl = document.getElementById('barcodeResult');
-        // Search products by barcode field or name match
+        var statusEl = document.getElementById('scanStatus');
+        statusEl.textContent = '✅ Scanned: ' + code;
+
         var found = null;
         for (var i = 0; i < STATE.products.length; i++) {
             var p = STATE.products[i];
-            if (p.barcode === code || p.name.toLowerCase().indexOf(code.toLowerCase()) !== -1) {
-                found = p;
-                break;
+            if (p.barcode === code || p.id === code ||
+                p.name.toLowerCase().indexOf(code.toLowerCase()) !== -1) {
+                found = p; break;
             }
         }
         if (found) {
             resultEl.innerHTML = '<div style="background:#f0fff4;border:1px solid var(--success);border-radius:8px;padding:1rem">' +
-                '<div style="font-weight:700;color:var(--success);margin-bottom:0.5rem">✅ Product Found!</div>' +
-                '<div style="font-size:0.9rem"><b>' + found.name + '</b><br>Price: $' + found.price.toFixed(2) + '<br>Stock: ' + getTotalStock(found) + '</div>' +
+                '<div style="font-weight:700;color:var(--success);margin-bottom:0.5rem">✅ ' + found.name + '</div>' +
+                '<div style="font-size:0.9rem">Price: $' + found.price.toFixed(2) + ' | Stock: ' + getTotalStock(found) + '</div>' +
                 '<div style="display:flex;gap:8px;margin-top:0.75rem">' +
-                '<button class="btn btn-primary btn-small" onclick="closeBarcodeScanner();openEditModal(\'' + found.id + '\')"><i class="fas fa-edit"></i> Edit</button>' +
-                '<button class="btn btn-info btn-small" onclick="closeBarcodeScanner();openLabelModal(\'' + found.id + '\')"><i class="fas fa-tag"></i> Print Label</button>' +
+                '<button class="btn btn-primary btn-small" data-pid="' + found.id + '" data-act="edit" onclick="inv(event,this);closeBarcodeScanner()"><i class="fas fa-edit" style="pointer-events:none"></i> Edit</button>' +
+                '<button class="btn btn-info btn-small" data-pid="' + found.id + '" data-act="label" onclick="inv(event,this);closeBarcodeScanner()"><i class="fas fa-tag" style="pointer-events:none"></i> Label</button>' +
                 '</div></div>';
         } else {
             resultEl.innerHTML = '<div style="background:#fff5f5;border:1px solid var(--danger);border-radius:8px;padding:1rem">' +
-                '<div style="font-weight:700;color:var(--danger);margin-bottom:0.5rem">❌ Not Found: ' + code + '</div>' +
-                '<div style="font-size:0.85rem;color:var(--gray)">This barcode is not in your inventory.</div>' +
-                '<button class="btn btn-success btn-small" style="margin-top:0.75rem" onclick="closeBarcodeScanner();switchInvTab(\'add\',document.querySelectorAll(\'.inv-subbtn\')[1])"><i class="fas fa-plus"></i> Add New Product</button>' +
-                '</div>';
+                '<div style="font-weight:700;color:var(--danger)">❌ Not found</div>' +
+                '<div style="font-size:0.82rem;color:#666;margin:0.4rem 0">Scanned: <b>' + code + '</b></div>' +
+                '<div style="display:flex;gap:8px;margin-top:0.5rem">' +
+                '<button class="btn btn-outline btn-small assign-bc" data-code="' + code + '" onclick="assignBarcode(this.getAttribute(\'data-code\'))"><i class="fas fa-link" style="pointer-events:none"></i> Assign</button>' +
+                '</div></div>';
         }
     }
+
+    function assignBarcode(code) {
+        var opts = '<option value="">-- Select product --</option>';
+        STATE.products.forEach(function(p) { opts += '<option value="' + p.id + '">' + p.name + '</option>'; });
+        document.getElementById('barcodeResult').innerHTML +=
+            '<div style="margin-top:0.75rem;padding:0.75rem;background:#f8fafc;border-radius:8px">' +
+            '<div style="font-size:0.82rem;font-weight:600;margin-bottom:0.4rem">Assign to product:</div>' +
+            '<select id="assignProd" class="form-control">' + opts + '</select>' +
+            '<button class="btn btn-primary w-full" style="margin-top:0.5rem" onclick="doAssignBarcode(this.closest(\'[data-code]\').getAttribute(\'data-code\'))">' +
+            '<i class="fas fa-save"></i> Save</button></div>';
+    }
+
+    function doAssignBarcode(code) {
+        var pid = document.getElementById('assignProd').value;
+        if (!pid) { showToast('Select a product first', 'warning'); return; }
+        var p = findProduct(pid);
+        if (!p) return;
+        p.barcode = code;
+        saveProducts();
+        showToast('Barcode assigned to ' + p.name + ' ✅', 'success');
+        closeBarcodeScanner();
+        renderInventory();
+    }
+
 
     // ── LABEL PRINTING ──
     var _labelProduct = null;
@@ -1632,13 +1685,13 @@ function sendToTelegram(order, callback) {
             'document.addEventListener("DOMContentLoaded",function(){' +
             'document.querySelectorAll(".bc").forEach(function(c){' +
             'var v=c.getAttribute("data-v")||"000000";' +
-            'try{C128.draw(c,v,' + (dims.h<=10?1:dims.h<=20?1:2) + ',' + (dims.h<=10?12:dims.h<=20?20:30) + ');}' +
+            'try{C128.draw(c,v,' + (dims.h<=10?1:dims.h<=20?1.5:2) + ',' + (dims.h<=10?12:dims.h<=20?28:36) + ');}' +
             'catch(e){console.error("BC:",e);}' +
             '});});' +
             // Image generation
             'var _imgs=[],_cur=0;' +
             'function makeImgs(){' +
-            'var btn=document.querySelector(".bsh");btn.textContent="Wait...";btn.disabled=true;' +
+            'var btn=document.querySelector(".bsh");btn.textContent="Converting...";btn.disabled=true;' +
             'var dpi=parseInt(document.getElementById("dpi").value)||203;' +
             'var wraps=document.querySelectorAll(".lbl-wrap");' +
             'var pxW=Math.round(' + dims.w + '/25.4*dpi),pxH=Math.round(' + dims.h + '/25.4*dpi);' +
@@ -1647,16 +1700,24 @@ function sendToTelegram(order, callback) {
             'var out=document.createElement("canvas");out.width=pxW;out.height=pxH;' +
             'var ctx=out.getContext("2d");' +
             'ctx.fillStyle="#fff";ctx.fillRect(0,0,pxW,pxH);' +
-            'var pad=Math.round(pxW*0.04);' +
-            'var fN=Math.round(pxH*0.20),fS=Math.round(pxH*0.16),fP=Math.round(pxH*0.25),lh=Math.round(pxH*0.05);' +
-            'var n=wrap.querySelector(".n"),s=wrap.querySelector(".s"),pr=wrap.querySelector(".pr"),bc=wrap.querySelector(".bc");' +
+            'var n=wrap.querySelector(".n");' +
+            'var s=wrap.querySelector(".s");' +
+            'var pr=wrap.querySelector(".pr");' +
+            'var bc=wrap.querySelector(".bc");' +
+            'if(bc&&bc.width===0){try{C128.draw(bc,bc.getAttribute("data-v")||"000000",1.5,28);}catch(e){}}' +
+            'var pad=Math.round(pxW*0.05);' +
+            'var maxW=pxW-pad*2;' +
+            'var fN=Math.round(pxH*0.16),fS=Math.round(pxH*0.13),fP=Math.round(pxH*0.18),lh=Math.round(pxH*0.04);' +
             'ctx.fillStyle="#000";' +
-            'ctx.font="bold "+fN+"px Arial";ctx.fillText(n?n.textContent:"",pad,pad+fN);' +
+            'ctx.font="bold "+fN+"px Arial";' +
+            'var nt=n?n.textContent:"";' +
+            'while(nt.length>0&&ctx.measureText(nt).width>maxW)nt=nt.slice(0,-1);' +
+            'ctx.fillText(nt,pad,pad+fN);' +
             'ctx.font=fS+"px Arial";ctx.fillText(s?s.textContent:"",pad,pad+fN+lh+fS);' +
             'ctx.font="bold "+fP+"px Arial";ctx.fillText(pr?pr.textContent:"",pad,pad+fN+lh+fS+lh+fP);' +
-            'if(bc&&bc.width>0){ctx.drawImage(bc,0,Math.round(pxH*0.6),pxW,Math.round(pxH*0.36));}' +
+            'if(bc&&bc.width>0){var bcH=Math.round(pxH*0.38);ctx.drawImage(bc,0,pxH-bcH,pxW,bcH);}' +
             'out.toBlob(function(blob){_imgs[wi]=blob;done++;' +
-            'if(done===total){btn.textContent="Share";btn.disabled=false;showImg(0);document.getElementById("sharePreview").classList.add("show");}' +
+            'if(done===total){btn.textContent="\uD83D\uDCF7 Share";btn.disabled=false;showImg(0);document.getElementById("sharePreview").classList.add("show");}' +
             '},"image/png");});' +
             '}' +
             'function showImg(i){if(i<0)i=_imgs.length-1;if(i>=_imgs.length)i=0;_cur=i;var url=URL.createObjectURL(_imgs[i]);document.getElementById("shareImg").src=url;document.getElementById("lblCounter").textContent="Label "+(_cur+1)+" / "+_imgs.length;}' +
@@ -2837,7 +2898,7 @@ function sendToTelegram(order, callback) {
         var html = '';
         html += '<!DOCTYPE html><html><head><title>Receipt ' + order.orderId + '</title>';
         html += '<meta name="viewport" content="width=device-width,initial-scale=1">';
-        html += '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>';
+        html += '<scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/scr' + 'ipt>';
         html += '<style>';
         html += '@page{size:58mm auto;margin:0}';
         html += '*{margin:0;padding:0;box-sizing:border-box}';
@@ -2847,16 +2908,16 @@ function sendToTelegram(order, callback) {
         html += '.logo{width:36mm;display:block;margin:0 auto 2mm}';
         html += '.dash{border:none;border-top:1px dashed #aaa;margin:1.5mm 0}';
         html += '.solid{border:none;border-top:1.5px solid #000;margin:1mm 0}';
-        html += '.row{display:flex;justify-content:space-between;padding:0.5mm 0;font-size:9.5pt}';
+        html += '.row{display:flex;justify-content:space-between;padding:0.5mm 0;font-size:7.5pt}';
         html += '.lbl{color:#555}';
-        html += '.tot{font-weight:bold;font-size:12pt}';
-        html += '.inm{font-weight:bold;font-size:9.5pt}';
+        html += '.tot{font-weight:bold;font-size:9pt}';
+        html += '.inm{font-weight:bold;font-size:7.5pt}';
         html += '.isz{font-weight:normal;color:#666}';
-        html += '.ir{display:flex;justify-content:space-between;font-size:9pt;color:#444;margin-top:0.5mm}';
-        html += '.ft{text-align:center;font-size:11pt;color:#888;margin-top:2mm;line-height:1.6}';
+        html += '.ir{display:flex;justify-content:space-between;font-size:7pt;color:#444;margin-top:0.5mm}';
+        html += '.ft{text-align:center;font-size:6.5pt;color:#888;margin-top:2mm;line-height:1.6}';
         html += '#bar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #e2e8f0;z-index:999;font-family:Arial,sans-serif}';
         html += '#btns{display:flex;gap:8px;padding:10px 12px;justify-content:center}';
-        html += '#btns button{flex:1;max-width:110px;padding:12px 6px;border:none;border-radius:22px;font-size:15px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px}';
+        html += '#btns button{flex:1;max-width:110px;padding:12px 6px;border:none;border-radius:22px;font-size:13px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px}';
         html += '.ba{background:#4a90d9;color:#fff}';
         html += '.bp{background:#48bb78;color:#fff}';
         html += '.bsh{background:#f6ad55;color:#fff}';
@@ -2902,7 +2963,7 @@ function sendToTelegram(order, callback) {
         html += '<hr class="solid">';
         html += '<div class="row tot"><span>TOTAL</span><span>$' + (order.total||0).toFixed(2) + '</span></div>';
         html += '<hr class="dash">';
-        html += '<div class="ft"><p>&#9829; Thank you for your order!</p><p>Shop Tell : 093779077</p></div>';
+        html += '<div class="ft"><p>&#9829; Thank you for your order!</p><p>Payment: Cash on Delivery</p></div>';
         html += '</div>'; // end #receipt
 
         // Share image preview overlay
