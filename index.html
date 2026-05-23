@@ -1752,6 +1752,56 @@ function sendToTelegram(order, callback) {
     }
 
 
+    // ── Native camera photo scan ──
+    function scanFromPhoto(input) {
+        if (!input.files || !input.files[0]) return;
+        var resultEl = document.getElementById('barcodeResult');
+        resultEl.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--gray)"><i class="fas fa-spinner fa-spin"></i> Scanning...</div>';
+        var file = input.files[0];
+        var img = new Image();
+        img.onload = function() {
+            var canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            // Try BarcodeDetector first
+            if (typeof BarcodeDetector !== 'undefined') {
+                var det = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e','itf','codabar'] });
+                det.detect(canvas).then(function(codes) {
+                    if (codes.length > 0) {
+                        searchBarcode(codes[0].rawValue);
+                    } else {
+                        resultEl.innerHTML = '<div style="color:var(--warning);padding:0.75rem;background:#fff8e6;border-radius:8px">No barcode found in photo. Try again with better lighting or closer shot.</div>';
+                    }
+                }).catch(function() {
+                    resultEl.innerHTML = '<div style="color:var(--danger);padding:0.75rem;background:#fff5f5;border-radius:8px">Scan failed. Please type the barcode manually below.</div>';
+                });
+            } else {
+                resultEl.innerHTML = '<div style="color:var(--warning);padding:0.75rem;background:#fff8e6;border-radius:8px">⚠️ Your browser doesn\'t support image scanning. Please type the barcode manually below.</div>';
+            }
+            URL.revokeObjectURL(img.src);
+        };
+        img.src = URL.createObjectURL(file);
+        // Reset input so same photo can be retaken
+        input.value = '';
+    }
+
+    // ── Toggle webcam for PC ──
+    function toggleWebcam() {
+        var preview = document.getElementById('webcamPreview');
+        var btn = document.getElementById('webcamBtn');
+        if (preview.style.display === 'none') {
+            preview.style.display = 'block';
+            btn.innerHTML = '<i class="fas fa-video-slash"></i> Stop Webcam';
+            startCamera();
+        } else {
+            preview.style.display = 'none';
+            btn.innerHTML = '<i class="fas fa-video"></i> Use Webcam (PC only)';
+            stopCamera();
+        }
+    }
+
     function resetFirebaseConfig() {
         var raw = prompt('Paste your Firebase config below.\n\nAccepts both formats:\n• Firebase console format (apiKey: "...")\n• JSON format ("apiKey": "...")\n\nLeave empty to cancel:');
         if (!raw || !raw.trim()) return;
@@ -3589,8 +3639,8 @@ function sendToTelegram(order, callback) {
                             <label style="font-size:0.85rem">Label size</label>
                             <select id="labelSize" class="form-control" onchange="renderLabelPreview()">
                                 <option value="20x10">20×10mm (tiny)</option>
-                                <option value="30x20">30×20mm (small)</option>
-                                <option value="38x25" selected>38×25mm (standard)</option>
+                                <option value="30x20" selected>30×20mm (Xprinter 320B) ✓</option>
+                                <option value="38x25">38×25mm (standard)</option>
                                 <option value="50x30">50×30mm</option>
                                 <option value="58x40">58×40mm</option>
                             </select>
@@ -3619,8 +3669,8 @@ function sendToTelegram(order, callback) {
                             <label style="font-size:0.82rem">Label size</label>
                             <select id="lblBulkSize" class="form-control">
                                 <option value="20x10">20×10mm (tiny)</option>
-                                <option value="30x20">30×20mm (small)</option>
-                                <option value="38x25" selected>38×25mm (standard)</option>
+                                <option value="30x20" selected>30×20mm (Xprinter 320B) ✓</option>
+                                <option value="38x25">38×25mm (standard)</option>
                                 <option value="50x30">50×30mm</option>
                                 <option value="58x40">58×40mm</option>
                             </select>
@@ -3646,18 +3696,31 @@ function sendToTelegram(order, callback) {
                 <button class="modal-close" onclick="closeBarcodeScanner()">&times;</button>
             </div>
             <div style="padding:1rem">
-                <!-- Camera preview -->
-                <div style="position:relative;background:#000;border-radius:8px;overflow:hidden;margin-bottom:1rem">
-                    <video id="barcodeVideo" style="width:100%;height:220px;object-fit:cover" playsinline autoplay muted></video>
-                    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:80px;border:2px solid #48bb78;border-radius:4px;box-shadow:0 0 0 999px rgba(0,0,0,0.4)"></div>
-                    <div id="scanStatus" style="position:absolute;bottom:8px;left:0;right:0;text-align:center;color:#fff;font-size:12px;background:rgba(0,0,0,0.5);padding:4px">Point camera at barcode</div>
+                <!-- Method 1: Native phone camera - works on ALL phones -->
+                <div style="background:var(--light);border-radius:8px;padding:1rem;margin-bottom:1rem;text-align:center">
+                    <div style="font-size:0.85rem;color:var(--gray);margin-bottom:0.75rem"><i class="fas fa-mobile-alt"></i> Scan with phone camera</div>
+                    <label style="display:inline-block;background:var(--primary);color:#fff;padding:12px 28px;border-radius:22px;cursor:pointer;font-weight:600;font-size:14px">
+                        <i class="fas fa-camera"></i> Open Camera
+                        <input type="file" accept="image/*" capture="environment" id="barcodeCapture" style="display:none" onchange="scanFromPhoto(this)">
+                    </label>
+                    <div style="font-size:0.75rem;color:var(--gray);margin-top:0.5rem">Take photo of barcode → auto scan</div>
                 </div>
-                <!-- Manual entry -->
+                <!-- Method 2: PC webcam -->
+                <div style="margin-bottom:1rem">
+                    <button class="btn btn-outline w-full" onclick="toggleWebcam()" id="webcamBtn"><i class="fas fa-video"></i> Use Webcam (PC only)</button>
+                    <div id="webcamPreview" style="display:none;margin-top:0.75rem">
+                        <div style="position:relative;background:#000;border-radius:8px;overflow:hidden">
+                            <video id="barcodeVideo" style="width:100%;height:200px;object-fit:cover" playsinline autoplay muted></video>
+                            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:180px;height:60px;border:2px solid #48bb78;border-radius:4px;box-shadow:0 0 0 999px rgba(0,0,0,0.35)"></div>
+                            <div id="scanStatus" style="position:absolute;bottom:8px;left:0;right:0;text-align:center;color:#fff;font-size:11px;background:rgba(0,0,0,0.5);padding:3px">Starting...</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Method 3: Manual -->
                 <div style="display:flex;gap:8px;margin-bottom:1rem">
-                    <input type="text" id="barcodeManualInput" class="form-control" placeholder="Or type barcode manually..." autocomplete="off" autocapitalize="none" onkeydown="if(event.key==='Enter')searchBarcode(document.getElementById('barcodeManualInput').value)">
+                    <input type="text" id="barcodeManualInput" class="form-control" placeholder="Or type / paste barcode..." autocomplete="off" autocapitalize="none" onkeydown="if(event.key==='Enter')searchBarcode(document.getElementById('barcodeManualInput').value)">
                     <button class="btn btn-primary" onclick="searchBarcode(document.getElementById('barcodeManualInput').value)"><i class="fas fa-search"></i></button>
                 </div>
-                <!-- Result -->
                 <div id="barcodeResult"></div>
             </div>
         </div>
