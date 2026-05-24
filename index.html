@@ -808,7 +808,7 @@
     function testTelegramMessage() {
         var statusEl = document.getElementById('telegramConfigStatus');
         statusEl.innerHTML = '<span style="color:var(--info)"><i class="fas fa-spinner fa-spin"></i> Sending test message...</span>';
-        _sendTelegramRaw('GOAT KIDS: Telegram is working! Orders will be delivered here.', function(ok) {
+        _sendTelegramRaw('📨 GOAT KIDS: Telegram is working! Orders will be delivered here.', function(ok) {
             if (ok) {
                 statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Test message sent successfully!</span>';
             } else {
@@ -1212,7 +1212,7 @@ function sendToTelegram(order, callback) {
         var el = document.getElementById('loginAttemptsLeft');
         if (attempts.lockedUntil > now) {
             var mins = Math.ceil((attempts.lockedUntil - now) / 60000);
-            el.textContent = ' Locked for ' + mins + ' more minutes';
+            el.textContent = 'Locked for ' + mins + ' more minutes';
             el.style.color = 'var(--danger)';
         } else if (attempts.count > 0) {
             var rem = STATE.maxLoginAttempts - attempts.count;
@@ -3517,6 +3517,7 @@ function sendToTelegram(order, callback) {
         try {
             _labelProduct = pid ? findProduct(pid) : null;
             _labelSelected = {}; _labelMode = 'single';
+            _labelQtyMode = 'auto'; _customQtys = {};
             var modal = document.getElementById('labelPrintModal');
             if (!modal) { alert('ERROR: labelPrintModal not found'); return; }
             modal.classList.add('active'); // show modal FIRST
@@ -3550,10 +3551,17 @@ function sendToTelegram(order, callback) {
         var p = _labelProduct;
         if (!p) return;
         var dims = getLabelDims(document.getElementById('labelSize').value);
-        var sizes = p.sizes && p.sizes.length ? p.sizes : [{ name: 'One Size' }];
+        var sizes = p.sizes && p.sizes.length ? p.sizes : [{ name: 'One Size', qty: 1 }];
         var scale = 3.2;
-        var html = '';
+        var totalLabels = 0;
         sizes.forEach(function(s) {
+            if (_labelQtyMode === 'auto') totalLabels += (s.qty||0);
+            else totalLabels += (_customQtys[s.name] !== undefined ? _customQtys[s.name] : (s.qty||1));
+        });
+        var html = '<div style="font-size:0.78rem;color:var(--gray);margin-bottom:6px">Total labels: <b>' + totalLabels + '</b>' + (_labelQtyMode==='auto' ? ' (from stock)' : ' (custom)') + '</div>';
+        sizes.forEach(function(s) {
+            var qty = _labelQtyMode === 'auto' ? (s.qty||0) : (_customQtys[s.name] !== undefined ? _customQtys[s.name] : (s.qty||1));
+            if (qty === 0) return; // skip zero qty sizes
             html += '<div style="width:' + Math.round(dims.w * scale) + 'px;height:' + Math.round(dims.h * scale) + 'px;' +
                 'padding:4px;background:#fff;border:1px solid #ccc;border-radius:3px;' +
                 'display:inline-flex;flex-direction:column;justify-content:space-between;' +
@@ -3623,6 +3631,74 @@ function sendToTelegram(order, callback) {
         renderBulkList();
     }
 
+    var _labelQtyMode = 'auto'; // 'auto' or 'custom'
+    var _customQtys = {}; // {sizeName: qty}
+
+    function setLabelQtyMode(mode) {
+        _labelQtyMode = mode;
+        var autoBtn = document.getElementById('lblQtyAuto');
+        var customBtn = document.getElementById('lblQtyCustom');
+        var sizeList = document.getElementById('lblSizeQtyList');
+        if (!autoBtn) return;
+
+        if (mode === 'auto') {
+            autoBtn.style.background = 'var(--success)';
+            autoBtn.style.color = '#fff';
+            customBtn.style.background = 'var(--light)';
+            customBtn.style.color = 'var(--gray-dark)';
+            if (sizeList) sizeList.style.display = 'none';
+        } else {
+            autoBtn.style.background = 'var(--light)';
+            autoBtn.style.color = 'var(--gray-dark)';
+            customBtn.style.background = 'var(--primary)';
+            customBtn.style.color = '#fff';
+            if (sizeList) {
+                sizeList.style.display = 'block';
+                renderSizeQtyList();
+            }
+        }
+        renderLabelPreview();
+    }
+
+    function renderSizeQtyList() {
+        var p = _labelProduct;
+        if (!p) return;
+        var el = document.getElementById('lblSizeQtyList');
+        if (!el) return;
+        var sizes = p.sizes && p.sizes.length ? p.sizes : [{name:'One Size', qty:1}];
+        var html = '<div style="background:#fff;border:1px solid var(--gray-light);border-radius:8px;padding:0.5rem">';
+        html += '<div style="font-size:0.78rem;color:var(--gray);margin-bottom:0.4rem">Set qty per size (0 = skip):</div>';
+        sizes.forEach(function(s) {
+            var cur = _customQtys[s.name] !== undefined ? _customQtys[s.name] : s.qty || 1;
+            html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+                '<span style="flex:1;font-size:0.85rem;font-weight:600">' + escHtml(s.name) +
+                ' <span style="color:var(--gray);font-weight:400;font-size:0.78rem">(stock: ' + (s.qty||0) + ')</span></span>' +
+                '<div style="display:flex;align-items:center;gap:4px">' +
+                '<button data-sn="' + escHtml(s.name) + '" onclick="adjQty(this.dataset.sn,-1)" style="width:26px;height:26px;border:1px solid var(--gray-light);border-radius:4px;background:#fff;cursor:pointer;font-size:14px">-</button>' +
+                '<input type="number" min="0" max="999" value="' + cur + '" ' +
+                'style="width:46px;text-align:center;border:1px solid var(--gray-light);border-radius:4px;padding:2px;font-size:0.85rem" ' +
+                'data-sn="' + escHtml(s.name) + '" onchange="setQty(this.dataset.sn,this.value)" id="sqty_' + s.name + '">' +
+                '<button data-sn="' + escHtml(s.name) + '" onclick="adjQty(this.dataset.sn,1)" style="width:26px;height:26px;border:1px solid var(--gray-light);border-radius:4px;background:#fff;cursor:pointer;font-size:14px">+</button>' +
+                '</div></div>';
+        });
+        html += '</div>';
+        el.innerHTML = html;
+    }
+
+    function adjQty(sizeName, delta) {
+        var el = document.getElementById('sqty_' + sizeName);
+        if (!el) return;
+        var v = Math.max(0, (parseInt(el.value) || 0) + delta);
+        el.value = v;
+        _customQtys[sizeName] = v;
+        renderLabelPreview();
+    }
+
+    function setQty(sizeName, val) {
+        _customQtys[sizeName] = Math.max(0, parseInt(val) || 0);
+        renderLabelPreview();
+    }
+
     function printLabels() {
         var labelsData = []; // [{product, sizeName, qty}]
         var sizeVal, dims;
@@ -3645,10 +3721,13 @@ function sendToTelegram(order, callback) {
             pids.forEach(function(pid) {
                 var pr = findProduct(pid);
                 if (!pr) return;
-                var q = parseInt(_labelSelected[pid]) || 1;
-                var szs = pr.sizes && pr.sizes.length ? pr.sizes : [{ name: 'One Size' }];
+                var useBulkStock = document.getElementById('useBulkStockQty') && document.getElementById('useBulkStockQty').checked;
+                var defaultQ = parseInt(_labelSelected[pid]) || parseInt(document.getElementById('lblBulkQty').value) || 1;
+                var szs = pr.sizes && pr.sizes.length ? pr.sizes : [{ name: 'One Size', qty: defaultQ }];
                 szs.forEach(function(s) {
-                    labelsData.push({ p: pr, size: s.name, qty: q });
+                    var q = useBulkStock ? (s.qty || 0) : defaultQ;
+                    if (q > 0) labelsData.push({ p: pr, size: s.name, qty: q });
+                    else if (!useBulkStock) labelsData.push({ p: pr, size: s.name, qty: defaultQ });
                 });
             });
         }
@@ -5131,24 +5210,34 @@ function sendToTelegram(order, callback) {
                     <button id="lblModeBulk" class="btn" style="flex:1;border-radius:0;background:var(--light);color:var(--gray-dark);border:none" onclick="setLabelMode('bulk')">Bulk Print</button>
                 </div>
                 <div id="lblSingleMode">
-                    <div style="background:var(--light);border-radius:8px;padding:0.75rem;margin-bottom:1rem" id="lblProductInfo"></div>
-                    <div style="display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
-                        <div class="form-group" style="flex:1;min-width:120px">
-                            <label style="font-size:0.85rem">Qty per size</label>
-                            <input type="number" id="labelQty" class="form-control" value="1" min="1" max="100" oninput="renderLabelPreview()">
-                        </div>
-                        <div class="form-group" style="flex:1;min-width:120px">
-                            <label style="font-size:0.85rem">Label size</label>
-                            <select id="labelSize" class="form-control" onchange="renderLabelPreview()">
-                                <option value="20x10">20x10mm (tiny)</option>
-                                <option value="30x20" selected>30x20mm (Xprinter 320B) ✓</option>
-                                <option value="38x25">38x25mm (standard)</option>
-                                <option value="50x30">50x30mm</option>
-                                <option value="58x40">58x40mm</option>
-                            </select>
-                        </div>
+                    <div style="background:var(--light);border-radius:8px;padding:0.75rem;margin-bottom:0.75rem" id="lblProductInfo"></div>
+
+                    <!-- Auto / Custom toggle -->
+                    <div style="display:flex;gap:0;margin-bottom:0.75rem;border:1px solid var(--gray-light);border-radius:8px;overflow:hidden">
+                        <button id="lblQtyAuto" class="btn" style="flex:1;border-radius:0;background:var(--success);color:#fff;border:none;font-size:0.82rem;padding:8px 4px" onclick="setLabelQtyMode('auto')">
+                            <i class="fas fa-magic"></i> Auto (Stock Qty)
+                        </button>
+                        <button id="lblQtyCustom" class="btn" style="flex:1;border-radius:0;background:var(--light);color:var(--gray-dark);border:none;font-size:0.82rem;padding:8px 4px" onclick="setLabelQtyMode('custom')">
+                            <i class="fas fa-edit"></i> Custom Qty
+                        </button>
                     </div>
-                    <div id="labelPreviewContainer" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem;background:var(--light);padding:0.75rem;border-radius:8px;min-height:60px"></div>
+
+                    <!-- Per-size qty editors (custom mode) -->
+                    <div id="lblSizeQtyList" style="display:none;margin-bottom:0.75rem"></div>
+
+                    <!-- Label size selector -->
+                    <div style="margin-bottom:0.75rem">
+                        <label style="font-size:0.82rem;color:var(--gray)">Label size</label>
+                        <select id="labelSize" class="form-control" onchange="renderLabelPreview()" style="margin-top:3px">
+                            <option value="20x10">20×10mm (tiny)</option>
+                            <option value="30x20" selected>30×20mm (Xprinter 320B) ✓</option>
+                            <option value="38x25">38×25mm</option>
+                            <option value="50x30">50×30mm</option>
+                            <option value="58x40">58×40mm</option>
+                        </select>
+                    </div>
+
+                    <div id="labelPreviewContainer" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:0.5rem;background:var(--light);padding:0.75rem;border-radius:8px;min-height:60px"></div>
                 </div>
                 <div id="lblBulkMode" style="display:none">
                     <div style="display:flex;gap:8px;margin-bottom:0.75rem;align-items:center;flex-wrap:wrap">
@@ -5161,6 +5250,12 @@ function sendToTelegram(order, callback) {
                         <div class="form-group" style="flex:1;min-width:100px">
                             <label style="font-size:0.82rem">Default qty</label>
                             <input type="number" id="lblBulkQty" class="form-control" value="1" min="1" max="100">
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:120px;display:flex;align-items:flex-end">
+                            <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;cursor:pointer;padding-bottom:6px">
+                                <input type="checkbox" id="useBulkStockQty" style="width:16px;height:16px;cursor:pointer">
+                                Use stock qty
+                            </label>
                         </div>
                         <div class="form-group" style="flex:1;min-width:120px">
                             <label style="font-size:0.82rem">Label size</label>
