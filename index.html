@@ -1461,21 +1461,54 @@ function sendToTelegram(order, callback) {
         var found = null;
         for (var i = 0; i < STATE.products.length; i++) {
             var p = STATE.products[i];
-            if (p.barcode === code || p.id === code ||
-                p.name.toLowerCase().indexOf(code.toLowerCase()) !== -1) {
-                found = p; break;
-            }
+            if (p.barcode === code || p.id === code) { found = p; break; }
         }
 
         if (found) {
+            var stock = getTotalStock(found);
+            var sizesHtml = '';
+            if (found.sizes && found.sizes.length > 0) {
+                sizesHtml = '<div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:4px">';
+                found.sizes.forEach(function(s) {
+                    sizesHtml += '<button class="btn btn-outline btn-small" style="padding:4px 10px;font-size:12px" ' +
+                        'onclick="addScannedToOrder(this.dataset.pid,this.dataset.size)" ' +
+                        'data-pid="' + found.id + '" data-size="' + escHtml(s.name) + '">' +
+                        escHtml(s.name) + ' <span style="color:var(--gray)">('+s.qty+')</span></button>';
+                });
+                sizesHtml += '</div>';
+            }
+
             resultEl.innerHTML =
-                '<div style="background:#f0fff4;border:1px solid var(--success);border-radius:8px;padding:1rem">' +
-                '<div style="font-weight:700;color:var(--success);margin-bottom:0.25rem">✅ ' + escHtml(found.name) + '</div>' +
-                '<div style="font-size:0.85rem">$' + found.price.toFixed(2) + ' · Stock: ' + getTotalStock(found) + '</div>' +
-                '<div style="display:flex;gap:8px;margin-top:0.75rem">' +
-                '<button class="btn btn-primary btn-small" data-pid="' + found.id + '" data-act="edit" onclick="inv(event,this);closeBarcodeScanner()"><i class="fas fa-edit" style="pointer-events:none"></i> Edit</button>' +
-                '<button class="btn btn-info btn-small" data-pid="' + found.id + '" data-act="label" onclick="inv(event,this);closeBarcodeScanner()"><i class="fas fa-tag" style="pointer-events:none"></i> Label</button>' +
-                '</div></div>';
+                '<div style="background:#f0fff4;border:1px solid var(--success);border-radius:10px;padding:0.9rem">' +
+                '<div style="font-weight:700;font-size:1rem;margin-bottom:0.2rem">✅ ' + escHtml(found.name) + '</div>' +
+                '<div style="font-size:0.85rem;color:#555">$' + found.price.toFixed(2) + ' · Stock: ' + stock + '</div>' +
+
+                // 4 action buttons
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:0.75rem">' +
+
+                // 1. Add to order
+                '<button class="btn btn-success btn-small" style="padding:8px 4px;font-size:12px;border-radius:8px" ' +
+                'data-pid="' + found.id + '" onclick="showAddToOrderPanel(this.dataset.pid)">' +
+                '<i class="fas fa-cart-plus" style="pointer-events:none"></i><br>Add to Order</button>' +
+
+                // 2. Stock check
+                '<button class="btn btn-info btn-small" style="padding:8px 4px;font-size:12px;border-radius:8px" ' +
+                'data-pid="' + found.id + '" onclick="showStockPanel(this.dataset.pid)">' +
+                '<i class="fas fa-boxes" style="pointer-events:none"></i><br>Stock Check</button>' +
+
+                // 3. Quick edit
+                '<button class="btn btn-warning btn-small" style="padding:8px 4px;font-size:12px;border-radius:8px" ' +
+                'data-pid="' + found.id + '" data-act="edit" onclick="inv(event,this);closeBarcodeScanner()">' +
+                '<i class="fas fa-edit" style="pointer-events:none"></i><br>Quick Edit</button>' +
+
+                // 4. Print label
+                '<button class="btn btn-primary btn-small" style="padding:8px 4px;font-size:12px;border-radius:8px" ' +
+                'data-pid="' + found.id + '" data-act="label" onclick="inv(event,this);closeBarcodeScanner()">' +
+                '<i class="fas fa-tag" style="pointer-events:none"></i><br>Print Label</button>' +
+
+                '</div>' +
+                '<div id="scanActionPanel" style="margin-top:0.75rem"></div>' +
+                '</div>';
         } else {
             resultEl.innerHTML =
                 '<div style="background:#fff5f5;border:1px solid var(--danger);border-radius:8px;padding:0.75rem">' +
@@ -1485,6 +1518,106 @@ function sendToTelegram(order, callback) {
                 'data-code="' + escHtml(code) + '" onclick="assignBarcodeToProduct(this.dataset.code)">' +
                 '<i class="fas fa-link"></i> Assign to product</button>' +
                 '</div>';
+        }
+    }
+
+    function showStockPanel(pid) {
+        var p = findProduct(pid);
+        if (!p) return;
+        var panel = document.getElementById('scanActionPanel');
+        var html = '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:0.75rem">' +
+            '<div style="font-weight:600;margin-bottom:0.5rem"><i class="fas fa-boxes" style="color:var(--info)"></i> Stock Details</div>';
+        if (p.sizes && p.sizes.length > 0) {
+            p.sizes.forEach(function(s) {
+                var pct = Math.min(100, (s.qty / 20) * 100);
+                var color = s.qty === 0 ? 'var(--danger)' : s.qty < 3 ? 'var(--warning)' : 'var(--success)';
+                html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+                    '<span style="min-width:36px;font-size:0.82rem;font-weight:600">' + escHtml(s.name) + '</span>' +
+                    '<div style="flex:1;height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden">' +
+                    '<div style="width:' + pct + '%;height:100%;background:' + color + ';border-radius:4px"></div></div>' +
+                    '<span style="min-width:24px;font-size:0.82rem;color:' + color + ';font-weight:700">' + s.qty + '</span>' +
+                    '</div>';
+            });
+        } else {
+            html += '<div style="font-size:0.85rem">Total stock: <b>' + getTotalStock(p) + '</b></div>';
+        }
+        html += '</div>';
+        panel.innerHTML = html;
+    }
+
+    function showAddToOrderPanel(pid) {
+        var p = findProduct(pid);
+        if (!p) return;
+        var panel = document.getElementById('scanActionPanel');
+
+        // Build size selector
+        var sizeOptions = '';
+        if (p.sizes && p.sizes.length > 0) {
+            p.sizes.forEach(function(s) {
+                if (s.qty > 0) {
+                    sizeOptions += '<option value="' + escHtml(s.name) + '">' + escHtml(s.name) + ' (stock: ' + s.qty + ')</option>';
+                }
+            });
+        }
+        if (!sizeOptions) sizeOptions = '<option value="">No stock</option>';
+
+        panel.innerHTML =
+            '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:0.75rem">' +
+            '<div style="font-weight:600;margin-bottom:0.5rem"><i class="fas fa-cart-plus" style="color:var(--success)"></i> Add to Order</div>' +
+            '<div style="display:flex;gap:6px;margin-bottom:0.5rem">' +
+            '<select id="scanSizeSelect" class="form-control" style="flex:2;font-size:0.85rem">' + sizeOptions + '</select>' +
+            '<input type="number" id="scanQtyInput" class="form-control" value="1" min="1" max="99" style="flex:1;font-size:0.85rem">' +
+            '</div>' +
+            '<button class="btn btn-success w-full" style="font-size:0.85rem" ' +
+            'data-pid="' + pid + '" onclick="addScannedToOrder(this.dataset.pid)">' +
+            '<i class="fas fa-plus"></i> Add to Order</button>' +
+            '</div>';
+    }
+
+    function addScannedToOrder(pid, sizeName) {
+        var p = findProduct(pid);
+        if (!p) return;
+
+        // Get size and qty from panel if not passed directly
+        if (!sizeName) {
+            var sel = document.getElementById('scanSizeSelect');
+            var qty = parseInt(document.getElementById('scanQtyInput').value) || 1;
+            sizeName = sel ? sel.value : '';
+        } else {
+            var qty = 1;
+        }
+
+        if (!sizeName) { showToast('Select a size', 'warning'); return; }
+
+        // Add to cart
+        var existing = null;
+        for (var i = 0; i < STATE.cart.length; i++) {
+            if (STATE.cart[i].id === pid && STATE.cart[i].size === sizeName) {
+                existing = STATE.cart[i]; break;
+            }
+        }
+        if (existing) {
+            existing.qty += qty;
+        } else {
+            STATE.cart.push({ id: pid, name: p.name, size: sizeName, price: p.price, qty: qty });
+        }
+
+        updateCartBadge();
+        showToast(p.name + ' (' + sizeName + ') x' + qty + ' added to order ✅', 'success');
+
+        // Update panel to show confirmation
+        var panel = document.getElementById('scanActionPanel');
+        if (panel) {
+            panel.innerHTML =
+                '<div style="background:#f0fff4;border:1px solid var(--success);border-radius:8px;padding:0.75rem;text-align:center">' +
+                '<div style="font-size:1.2rem">✅</div>' +
+                '<div style="font-weight:600;font-size:0.9rem">' + escHtml(p.name) + ' (' + escHtml(sizeName) + ') × ' + qty + '</div>' +
+                '<div style="font-size:0.8rem;color:var(--gray);margin-top:2px">Added to order</div>' +
+                '<div style="display:flex;gap:6px;margin-top:0.5rem">' +
+                '<button class="btn btn-success btn-small" style="flex:1" ' +
+                'data-pid="' + pid + '" onclick="showAddToOrderPanel(this.dataset.pid)">+ More</button>' +
+                '<button class="btn btn-outline btn-small" style="flex:1" onclick="closeBarcodeScanner();showTab(\'store\')">Go to Cart</button>' +
+                '</div></div>';
         }
     }
 
@@ -3513,9 +3646,11 @@ function sendToTelegram(order, callback) {
         labelsData.forEach(function(ld) {
             for (var i = 0; i < ld.qty; i++) {
                 labelsHtml += '<div class="lbl-wrap"><div class="lbl">' +
+                    '<div class="lbl-left">' +
                     '<div class="n">' + escHtml(ld.p.name) + '</div>' +
                     '<div class="s">Size: <b>' + escHtml(ld.size) + '</b></div>' +
                     '<div class="pr">$' + ld.p.price.toFixed(2) + '</div>' +
+                    '</div>' +
                     '<div class="bc" data-v="' + escHtml(ld.p.id) + '"></div>' +
                     '</div></div>';
             }
@@ -3535,11 +3670,13 @@ function sendToTelegram(order, callback) {
             '@page{size:' + dims.w + 'mm ' + dims.h + 'mm;margin:0}' +
             '*{margin:0;padding:0;box-sizing:border-box}' +
             'body{font-family:Arial,sans-serif;background:#f0f0f0;padding-bottom:90px}' +
-            '.lbl{width:' + dims.w + 'mm;height:' + dims.h + 'mm;padding:' + (dims.h<=10?'0.3mm 0.5mm':dims.h<=20?'0.5mm 0.8mm':'1mm 1.5mm') + ';display:flex;flex-direction:column;overflow:hidden;background:#fff;box-sizing:border-box;page-break-after:always;break-after:page}' +
-            '.n{font-size:' + (dims.h<=10?'3.5':dims.h<=20?'5':'6.5') + 'pt;font-weight:bold;line-height:1.2;overflow:hidden}' +
-            '.s{font-size:' + (dims.h<=10?'3':dims.h<=20?'4':'5.5') + 'pt;color:#333}' +
-            '.pr{font-size:' + (dims.h<=10?'4.5':dims.h<=20?'7':'9') + 'pt;font-weight:bold}' +
-            '.bc{flex:1;display:flex;align-items:center;justify-content:center}' +
+            '.lbl{width:' + dims.w + 'mm;height:' + dims.h + 'mm;padding:' + (dims.h<=10?'0.3mm 0.5mm':dims.h<=20?'0.5mm 0.8mm':'1mm 1.5mm') + ';display:flex;flex-direction:row;align-items:center;overflow:hidden;background:#fff;box-sizing:border-box;gap:0.8mm;box-sizing:border-box;page-break-after:always;break-after:page}' +
+            '.lbl-left{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.3mm}' +
+            '.n{font-size:' + (dims.h<=10?'3.5':dims.h<=20?'5.5':'6.5') + 'pt;font-weight:bold;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}' +
+            '.s{font-size:' + (dims.h<=10?'3':dims.h<=20?'4':'5') + 'pt;color:#333;white-space:nowrap}' +
+            '.pr{font-size:' + (dims.h<=10?'4.5':dims.h<=20?'7.5':'9') + 'pt;font-weight:bold;white-space:nowrap}' +
+            '.bc{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:' + (dims.h<=10?'7mm':dims.h<=20?'11mm':'15mm') + ';height:' + (dims.h<=10?'7mm':dims.h<=20?'11mm':'15mm') + '}' +
+            '.bc canvas{width:100%!important;height:100%!important;image-rendering:pixelated}' +
             '#preview{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px}' +
             '.lbl-wrap{box-shadow:0 2px 6px rgba(0,0,0,0.15)}' +
             '#bar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #e2e8f0;z-index:999}' +
@@ -4829,7 +4966,7 @@ function sendToTelegram(order, callback) {
             '    }\n' +
             '};\n' +
 'var _imgs=[],_cur=0;' +
-            'function renderQR(){document.querySelectorAll(".bc").forEach(function(el){var v=el.getAttribute("data-v")||"TEST";var c=document.createElement("canvas");el.appendChild(c);try{QRGen.draw(c,v,' + (dims.h<=10?24:dims.h<=20?48:60) + ');}catch(e){el.innerHTML="<b style=color:red>"+e.message+"</b>";}});}' +
+            'function renderQR(){document.querySelectorAll(".bc").forEach(function(el){var v=el.getAttribute("data-v")||"TEST";var c=document.createElement("canvas");el.appendChild(c);try{QRGen.draw(c,v,' + (dims.h<=10?26:dims.h<=20?40:56) + ');}catch(e){el.innerHTML="<b style=color:red>"+e.message+"</b>";}});}' +
             'renderQR();' +
             'function showImg(i){if(i<0)i=_imgs.length-1;if(i>=_imgs.length)i=0;_cur=i;document.getElementById("shareImg").src=URL.createObjectURL(_imgs[i]);document.getElementById("lblCounter").textContent="Label "+(_cur+1)+" / "+_imgs.length;}' +
             'function navImg(d){showImg(_cur+d);}' +
