@@ -172,8 +172,8 @@
         .top-item-name{font-weight:600;display:flex;align-items:center;gap:0.5rem}.top-item-rank{background:var(--primary);color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700}.top-item-sales{color:var(--success);font-weight:700}
         .category-girl{background:#fbb6ce;color:#c2185b}.category-boy{background:#90caf9;color:#1565c0}.category-baby-shoes{background:#ffe0b2;color:#e65100}
         .role-btn.active{border-color:var(--primary)!important;background:rgba(102,126,234,0.1)!important}
-        .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:1000}
-        .modal-overlay.active{display:flex}.modal{background:#fff;border-radius:var(--radius-lg);padding:1.5rem;max-width:550px;width:90%;max-height:90vh;overflow-y:auto}
+        .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;opacity:0;visibility:hidden;transition:all 0.3s}
+        .modal-overlay.active{opacity:1;visibility:visible}.modal{background:#fff;border-radius:var(--radius-lg);padding:1.5rem;max-width:550px;width:90%;max-height:90vh;overflow-y:auto}
         .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}.modal-close{background:none;border:none;font-size:1.5rem;color:var(--gray);cursor:pointer}
         .size-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.5rem}
         .size-edit-item{display:flex;align-items:center;gap:0.5rem;padding:0.5rem;background:var(--light);border-radius:var(--radius)}
@@ -207,12 +207,6 @@
         /* ── WISHLIST BUTTON ON CARD ── */
         .wishlist-btn{position:absolute;top:0.75rem;left:0.75rem;background:rgba(255,255,255,0.9);border:none;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.9rem;color:var(--gray);transition:all 0.2s;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,0.15)}
         .wishlist-btn:hover,.wishlist-btn.active{color:var(--secondary);background:#fff;transform:scale(1.1)}
-        /* ── LABEL PREVIEW ── */
-        .label-preview{width:38mm;height:25mm;padding:1.5mm;background:#fff;border:1px solid #e2e8f0;border-radius:4px;display:flex;flex-direction:column;justify-content:space-between;font-family:Arial,sans-serif;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
-        .label-preview .label-name{font-size:6.5pt;font-weight:bold;line-height:1.2;overflow:hidden;max-height:14pt}
-        .label-preview .label-size{font-size:6pt;color:#666}
-        .label-preview .label-price{font-size:9pt;font-weight:bold;color:#000}
-        .label-preview .label-barcode{font-size:5pt;color:#444;letter-spacing:1px;text-align:center}
         /* ── ORDERS PAGE ── */
         .orders-toolbar{display:flex;gap:0.6rem;align-items:center;padding:0.75rem 1rem;background:#fff;border-bottom:1px solid var(--gray-light);flex-wrap:wrap}
         .orders-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;min-height:400px}
@@ -489,14 +483,14 @@
                         <button class="inv-subbtn" onclick="switchInvTab('settings',this)"><i class="fas fa-cog"></i> Settings</button>
                     </div>
 
-                    
+                    <!-- PRODUCTS SUB-TAB -->
                     <div id="invProductsTab" class="inv-subtab active">
                         <div class="admin-card">
                             <div class="admin-card-header">
                                 <div class="admin-card-title"><i class="fas fa-boxes" style="color:var(--primary)"></i> Inventory<span class="admin-count" id="productCount">0</span></div>
                                 <div class="flex gap-2">
                                     <button class="btn btn-info btn-small" onclick="openBarcodeScanner()" title="Scan Barcode"><i class="fas fa-barcode"></i> Scan</button>
-                                    <button class="btn btn-success btn-small" onclick="openBulkLabelModal()" title="Bulk Print Labels"><i class="fas fa-tags"></i> Labels</button>
+                                    <button class="btn btn-success btn-small" onclick="openBulkLabelModal()" title="Print Labels"><i class="fas fa-tags"></i> Labels</button>
                                     <button class="btn btn-outline btn-small" onclick="forceSaveStock()"><i class="fas fa-save"></i></button>
                                     <button class="btn btn-outline btn-small" onclick="exportInventoryCSV()"><i class="fas fa-download"></i></button>
                                 </div>
@@ -589,11 +583,11 @@
                         <!-- PASSWORD LOCK OVERLAY -->
                         <div id="settingsLock" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3rem 1rem;text-align:center">
                             <div style="background:#fff;border-radius:16px;padding:2rem;max-width:320px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
-                                <div style="font-size:2.5rem;margin-bottom:0.5rem"></div>
+                                <div style="font-size:2.5rem;margin-bottom:0.5rem">🔐</div>
                                 <h3 style="margin-bottom:0.25rem;color:var(--gray-dark)">Settings Protected</h3>
                                 <p style="font-size:0.85rem;color:var(--gray);margin-bottom:1.5rem">Enter your admin password to access settings</p>
                                 <div style="position:relative;margin-bottom:1rem">
-                                    <input type="password" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" id="settingsLockInput" class="form-control" placeholder="Enter password" style="padding-right:2.5rem;text-align:center;letter-spacing:2px" onkeydown="if(event.key==='Enter')unlockSettings()">
+                                    <input type="password" id="settingsLockInput" class="form-control" placeholder="Enter password" style="padding-right:2.5rem;text-align:center;letter-spacing:2px" onkeydown="if(event.key==='Enter')unlockSettings()">
                                     <button onclick="toggleSettingsLockVisibility()" style="position:absolute;right:0.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray)" id="settingsLockEye"><i class="fas fa-eye"></i></button>
                                 </div>
                                 <div id="settingsLockError" style="color:var(--danger);font-size:0.8rem;margin-bottom:0.75rem;min-height:1.2em"></div>
@@ -619,7 +613,7 @@
                                 <div class="form-group">
                                     <label>Bot Token <small style="color:var(--gray)">(saved in browser)</small></label>
                                     <div class="flex gap-2">
-                                        <input type="password" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" id="telegramBotTokenInput" class="form-control" placeholder="123456789:ABCdef..." style="flex:1;font-family:monospace">
+                                        <input type="password" id="telegramBotTokenInput" class="form-control" placeholder="123456789:ABCdef..." style="flex:1;font-family:monospace">
                                         <button class="btn btn-outline btn-small" onclick="toggleTelegramTokenVisibility()" id="telegramTokenEyeBtn"><i class="fas fa-eye"></i></button>
                                     </div>
                                 </div>
@@ -647,9 +641,9 @@
                                         <option value="inventory">Inventory Manager</option>
                                     </select>
                                 </div>
-                                <div class="form-group"><label>Current Password</label><input type="password" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" id="changePwCurrent" class="form-control" placeholder="Current password"></div>
-                                <div class="form-group"><label>New Password</label><input type="password" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" id="changePwNew" class="form-control" placeholder="Min 6 characters"></div>
-                                <div class="form-group"><label>Confirm New</label><input type="password" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" id="changePwConfirm" class="form-control" placeholder="Repeat new password"></div>
+                                <div class="form-group"><label>Current Password</label><input type="password" id="changePwCurrent" class="form-control" placeholder="Current password"></div>
+                                <div class="form-group"><label>New Password</label><input type="password" id="changePwNew" class="form-control" placeholder="Min 6 characters"></div>
+                                <div class="form-group"><label>Confirm New</label><input type="password" id="changePwConfirm" class="form-control" placeholder="Repeat new password"></div>
                                 <button class="btn btn-danger w-full" onclick="changePassword()"><i class="fas fa-key"></i> Change Password</button>
                                 <div id="changePwStatus" style="margin-top:0.75rem;font-size:0.85rem"></div>
                             </div>
@@ -704,7 +698,7 @@
                     <button class="role-btn" onclick="selectRole('inventory',this)" style="flex:1;padding:0.6rem;border:2px solid var(--gray-light);background:#fff;border-radius:8px;cursor:pointer;font-weight:600;font-size:0.85rem"><i class="fas fa-boxes"></i> Inventory</button>
                 </div>
             </div>
-            <div class="form-group"><input type="password" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" id="adminPassword" class="form-control" placeholder="Enter password" style="font-size:1.1rem;text-align:center" onkeydown="if(event.key==='Enter')adminLogin()"></div>
+            <div class="form-group"><input type="password" id="adminPassword" class="form-control" placeholder="Enter password" style="font-size:1.1rem;text-align:center" onkeydown="if(event.key==='Enter')adminLogin()"></div>
             <div style="color:var(--gray);font-size:0.8rem;text-align:center;margin-bottom:0.5rem" id="loginAttemptsLeft"></div>
             <div class="flex gap-2">
                 <button class="btn btn-primary" onclick="adminLogin()" style="flex:1"><i class="fas fa-sign-in-alt"></i> Login</button>
@@ -754,8 +748,6 @@
 
     <!-- WISHLIST MODAL -->
     <div class="modal-overlay" id="wishlistModal" onclick="if(event.target===this)closeWishlistModal()">
-
-
         <div class="modal" style="max-width:800px;width:95%">
             <div class="modal-header"><h3><i class="fas fa-heart" style="color:var(--secondary)"></i> My Wishlist</h3><button class="modal-close" onclick="closeWishlistModal()">&times;</button></div>
             <div id="wishlistModalContent" style="max-height:70vh;overflow-y:auto"></div>
@@ -767,22 +759,6 @@
     </div>
 
     <script>
-    // ── Global inventory action handler ──
-    function inv(e, btn) {
-        if (e) e.stopPropagation();
-        var pid = btn.getAttribute('data-pid');
-        var action = btn.getAttribute('data-act');
-        try {
-            if (action === 'label') openLabelModal(pid);
-            else if (action === 'edit') openEditModal(pid);
-            else if (action === 'del') {
-                if (confirm('Delete this product?')) deleteProduct(pid);
-            }
-        } catch(err) {
-            alert('Error [' + action + ']: ' + err.message);
-        }
-    }
-
     // =============================================
     // TELEGRAM CONFIG
     // Token & Chat ID are stored in localStorage (set via Admin > Inventory > Telegram Settings).
@@ -1252,562 +1228,27 @@ function sendToTelegram(order, callback) {
     // Default passwords are set on first run if nothing is stored yet.
     // Admin can change passwords from Admin > Security Settings.
     // =============================================
-    // =============================================
-    // BARCODE SCANNER & LABEL PRINTING
-    // =============================================
-    var _barcodeStream = null;
-    var _barcodeInterval = null;
-    var _labelProduct = null;
-
+    // ── BARCODE SCANNER ──
     function openBarcodeScanner() {
-        document.getElementById('barcodeScanModal').classList.add('active');
+        var modal = document.getElementById('barcodeScanModal');
+        if (!modal) return;
+        modal.classList.add('active');
         document.getElementById('barcodeResult').innerHTML = '';
         document.getElementById('barcodeManualInput').value = '';
-        startCamera();
+        document.getElementById('scanMsg').textContent = 'Point camera at QR code on label → take photo';
     }
 
     function closeBarcodeScanner() {
-        stopCamera();
-        document.getElementById('barcodeScanModal').classList.remove('active');
+        var modal = document.getElementById('barcodeScanModal');
+        if (modal) modal.classList.remove('active');
     }
 
-    function startCamera() {
-        var statusEl = document.getElementById('scanStatus');
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            statusEl.textContent = 'Camera not supported — use manual entry below';
-            return;
-        }
-        statusEl.textContent = 'Starting camera...';
-        navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-        })
-        .then(function(stream) {
-            _barcodeStream = stream;
-            var video = document.getElementById('barcodeVideo');
-            video.srcObject = stream;
-            video.setAttribute('playsinline', true);
-            video.setAttribute('autoplay', true);
-            video.setAttribute('muted', true);
-            video.play();
-            video.addEventListener('loadedmetadata', function() {
-                var support = typeof BarcodeDetector !== 'undefined' ? 'BarcodeDetector' : (typeof jsQR !== 'undefined' ? 'jsQR' : 'loading...');
-                statusEl.textContent = 'Ready [' + support + '] ' + video.videoWidth + 'x' + video.videoHeight;
-                startFrameScanning(video);
-            });
-        })
-        .catch(function(e) {
-            statusEl.textContent = 'Camera error: ' + e.message + ' — use manual entry';
-        });
+    function doManualScan() {
+        var val = document.getElementById('barcodeManualInput').value.trim();
+        if (val) searchBarcode(val);
     }
 
-    function startFrameScanning(video) {
-        // Use canvas to grab frames and detect barcodes
-        var canvas = document.createElement('canvas');
-        var ctx = canvas.getContext('2d');
-        var statusEl = document.getElementById('scanStatus');
-
-        function scanFrame() {
-            if (!_barcodeStream) return; // stopped
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                // Try native BarcodeDetector first (Chrome Android)
-                if (typeof BarcodeDetector !== 'undefined') {
-                    var detector = new BarcodeDetector({
-                        formats: ['qr_code','ean_13','ean_8','code_128','code_39','upc_a','upc_e']
-                    });
-                    detector.detect(canvas).then(function(codes) {
-                        if (codes.length > 0) {
-                            var code = codes[0].rawValue;
-                            statusEl.textContent = '✅ Found: ' + code;
-                            stopCamera();
-                            searchBarcode(code);
-                            return;
-                        }
-                        _barcodeInterval = requestAnimationFrame(scanFrame);
-                    }).catch(function() {
-                        _barcodeInterval = requestAnimationFrame(scanFrame);
-                    });
-                } else {
-                    // Fallback: try jsQR for QR codes
-                    if (typeof jsQR !== 'undefined') {
-                        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                        var code = jsQR(imageData.data, imageData.width, imageData.height);
-                        if (code) {
-                            statusEl.textContent = '✅ Found: ' + code.data;
-                            stopCamera();
-                            searchBarcode(code.data);
-                            return;
-                        }
-                    }
-                    _barcodeInterval = requestAnimationFrame(scanFrame);
-                }
-            } else {
-                _barcodeInterval = requestAnimationFrame(scanFrame);
-            }
-        }
-        // Load jsQR as fallback
-        if (typeof jsQR === 'undefined') {
-            var s = document.createElement('script');
-            s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
-            s.onload = function() { _barcodeInterval = requestAnimationFrame(scanFrame); };
-            s.onerror = function() { _barcodeInterval = requestAnimationFrame(scanFrame); };
-            document.head.appendChild(s);
-        } else {
-            _barcodeInterval = requestAnimationFrame(scanFrame);
-        }
-    }
-    function stopCamera() {
-        if (_barcodeStream) { _barcodeStream.getTracks().forEach(function(t){t.stop();}); _barcodeStream = null; }
-        if (_barcodeInterval) { cancelAnimationFrame(_barcodeInterval); _barcodeInterval = null; }
-        var video = document.getElementById('barcodeVideo');
-        if (video) { video.srcObject = null; }
-    }
-
-    function searchBarcode(code) {
-        if (!code || !code.trim()) return;
-        code = code.trim();
-        var resultEl = document.getElementById('barcodeResult');
-        var statusEl = document.getElementById('scanStatus');
-        statusEl.textContent = '✅ Scanned: ' + code;
-
-        var found = null;
-        for (var i = 0; i < STATE.products.length; i++) {
-            var p = STATE.products[i];
-            if (p.barcode === code || p.id === code ||
-                p.name.toLowerCase().indexOf(code.toLowerCase()) !== -1) {
-                found = p; break;
-            }
-        }
-        if (found) {
-            resultEl.innerHTML = '<div style="background:#f0fff4;border:1px solid var(--success);border-radius:8px;padding:1rem">' +
-                '<div style="font-weight:700;color:var(--success);margin-bottom:0.5rem">✅ ' + found.name + '</div>' +
-                '<div style="font-size:0.9rem">Price: $' + found.price.toFixed(2) + ' | Stock: ' + getTotalStock(found) + '</div>' +
-                '<div style="display:flex;gap:8px;margin-top:0.75rem">' +
-                '<button class="btn btn-primary btn-small" data-pid="' + found.id + '" data-act="edit" onclick="inv(event,this);closeBarcodeScanner()"><i class="fas fa-edit" style="pointer-events:none"></i> Edit</button>' +
-                '<button class="btn btn-info btn-small" data-pid="' + found.id + '" data-act="label" onclick="inv(event,this);closeBarcodeScanner()"><i class="fas fa-tag" style="pointer-events:none"></i> Label</button>' +
-                '</div></div>';
-        } else {
-            resultEl.innerHTML = '<div style="background:#fff5f5;border:1px solid var(--danger);border-radius:8px;padding:1rem">' +
-                '<div style="font-weight:700;color:var(--danger)">❌ Not found</div>' +
-                '<div style="font-size:0.82rem;color:#666;margin:0.4rem 0">Scanned: <b>' + code + '</b></div>' +
-                '<div style="display:flex;gap:8px;margin-top:0.5rem">' +
-                '<button class="btn btn-outline btn-small assign-bc" data-code="' + code + '" onclick="assignBarcode(this.getAttribute(\'data-code\'))"><i class="fas fa-link" style="pointer-events:none"></i> Assign</button>' +
-                '</div></div>';
-        }
-    }
-
-    function assignBarcode(code) {
-        var opts = '<option value="">-- Select product --</option>';
-        STATE.products.forEach(function(p) { opts += '<option value="' + p.id + '">' + p.name + '</option>'; });
-        document.getElementById('barcodeResult').innerHTML +=
-            '<div style="margin-top:0.75rem;padding:0.75rem;background:#f8fafc;border-radius:8px">' +
-            '<div style="font-size:0.82rem;font-weight:600;margin-bottom:0.4rem">Assign to product:</div>' +
-            '<select id="assignProd" class="form-control">' + opts + '</select>' +
-            '<button class="btn btn-primary w-full" style="margin-top:0.5rem" onclick="doAssignBarcode(this.closest(\'[data-code]\').getAttribute(\'data-code\'))">' +
-            '<i class="fas fa-save"></i> Save</button></div>';
-    }
-
-    function doAssignBarcode(code) {
-        var pid = document.getElementById('assignProd').value;
-        if (!pid) { showToast('Select a product first', 'warning'); return; }
-        var p = findProduct(pid);
-        if (!p) return;
-        p.barcode = code;
-        saveProducts();
-        showToast('Barcode assigned to ' + p.name + ' ✅', 'success');
-        closeBarcodeScanner();
-        renderInventory();
-    }
-
-
-    // ── LABEL PRINTING ──
-    var _labelProduct = null;
-    var _labelMode = 'single';
-    var _labelSelected = {};
-
-    function setLabelMode(mode) {
-        _labelMode = mode;
-        document.getElementById('lblSingleMode').style.display = mode === 'single' ? 'block' : 'none';
-        document.getElementById('lblBulkMode').style.display = mode === 'bulk' ? 'block' : 'none';
-        document.getElementById('lblModeSingle').style.background = mode === 'single' ? 'var(--primary)' : 'var(--light)';
-        document.getElementById('lblModeSingle').style.color = mode === 'single' ? '#fff' : 'var(--gray-dark)';
-        document.getElementById('lblModeBulk').style.background = mode === 'bulk' ? 'var(--primary)' : 'var(--light)';
-        document.getElementById('lblModeBulk').style.color = mode === 'bulk' ? '#fff' : 'var(--gray-dark)';
-        if (mode === 'bulk') renderBulkList();
-    }
-
-    function openBulkLabelModal() {
-        try {
-            _labelProduct = null; _labelSelected = {}; _labelMode = 'bulk';
-            var modal = document.getElementById('labelPrintModal');
-            if (!modal) { alert('ERROR: labelPrintModal not found'); return; }
-            modal.classList.add('active'); // show modal FIRST
-            setTimeout(function() { setLabelMode('bulk'); renderBulkList(); }, 50); // THEN set content
-        } catch(e) { alert('openBulkLabelModal error: ' + e.message); }
-    }
-
-    function openLabelModal(pid) {
-        try {
-            _labelProduct = pid ? findProduct(pid) : null;
-            _labelSelected = {}; _labelMode = 'single';
-            var modal = document.getElementById('labelPrintModal');
-            if (!modal) { alert('ERROR: labelPrintModal not found'); return; }
-            modal.classList.add('active'); // show modal FIRST
-            setTimeout(function() { // THEN populate content
-                setLabelMode('single');
-                if (_labelProduct) {
-                    var info = document.getElementById('lblProductInfo');
-                    if (info) info.innerHTML = '<b>' + _labelProduct.name + '</b> &middot; $' + _labelProduct.price.toFixed(2) + ' &middot; Stock: ' + getTotalStock(_labelProduct);
-                }
-                renderLabelPreview();
-            }, 50);
-        } catch(e) { alert('openLabelModal error: ' + e.message); }
-    }
-
-    function closeLabelModal() {
-        try {
-            document.getElementById('labelPrintModal').classList.remove('active');
-        } catch(e) {}
-        _labelProduct = null; _labelSelected = {};
-    }
-
-    function getLabelDims(sizeVal) {
-        if (sizeVal === '20x10') return { w: 20, h: 10 };
-        if (sizeVal === '30x20') return { w: 30, h: 20 };
-        if (sizeVal === '50x30') return { w: 50, h: 30 };
-        if (sizeVal === '58x40') return { w: 58, h: 40 };
-        return { w: 38, h: 25 };
-    }
-
-    function renderLabelPreview() {
-        var p = _labelProduct;
-        if (!p) return;
-        var dims = getLabelDims(document.getElementById('labelSize').value);
-        var sizes = p.sizes && p.sizes.length ? p.sizes : [{ name: 'One Size' }];
-        var scale = 3.2;
-        var html = '';
-        sizes.forEach(function(s) {
-            html += '<div style="width:' + Math.round(dims.w * scale) + 'px;height:' + Math.round(dims.h * scale) + 'px;' +
-                'padding:4px;background:#fff;border:1px solid #ccc;border-radius:3px;' +
-                'display:inline-flex;flex-direction:column;justify-content:space-between;' +
-                'box-shadow:0 1px 3px rgba(0,0,0,0.12);margin:3px;vertical-align:top">' +
-                '<div style="font-size:7px;font-weight:bold;overflow:hidden;line-height:1.2">' + escHtml(p.name) + '</div>' +
-                '<div style="font-size:6px;color:#555">Size: <b>' + escHtml(s.name) + '</b></div>' +
-                '<div style="font-size:10px;font-weight:bold">$' + p.price.toFixed(2) + '</div>' +
-                '<div style="font-size:5px;color:#888;text-align:center;letter-spacing:0.5px">&#9612;&#9616;&#9612;&#9612;&#9616; ' + p.id + ' &#9616;&#9612;&#9612;&#9616;&#9612;</div>' +
-                '</div>';
-        });
-        var el = document.getElementById('labelPreviewContainer');
-        if (el) el.innerHTML = html || '<p style="color:var(--gray)">No sizes</p>';
-    }
-
-    function renderBulkList() {
-        var q = (document.getElementById('lblBulkSearch') ? document.getElementById('lblBulkSearch').value : '').toLowerCase();
-        var products = STATE.products.filter(function(p) {
-            return !q || p.name.toLowerCase().indexOf(q) !== -1 || p.category.toLowerCase().indexOf(q) !== -1;
-        });
-        var selected = Object.keys(_labelSelected).length;
-        var html = '';
-        products.forEach(function(p) {
-            var isChecked = !!_labelSelected[p.id];
-            var sizes = p.sizes && p.sizes.length ? p.sizes.map(function(s) { return s.name; }).join(', ') : 'One Size';
-            html += '<div style="display:flex;align-items:center;gap:8px;padding:0.5rem 0.75rem;border-bottom:1px solid var(--gray-light)">' +
-                '<input type="checkbox" id="lbl_' + p.id + '" ' + (isChecked ? 'checked' : '') +
-                ' style="width:16px;height:16px;cursor:pointer" onchange="toggleLabelSelect(\'' + p.id + '\',this.checked)">' +
-                '<label for="lbl_' + p.id + '" style="flex:1;cursor:pointer;min-width:0">' +
-                '<div style="font-weight:600;font-size:0.82rem">' + escHtml(p.name) + '</div>' +
-                '<div style="font-size:0.72rem;color:var(--gray)">' + escHtml(sizes) + ' &middot; $' + p.price.toFixed(2) + '</div>' +
-                '</label>' +
-                '<input type="number" value="' + (_labelSelected[p.id] || 1) + '" min="1" max="50"' +
-                ' style="width:50px;padding:2px 4px;border:1px solid var(--gray-light);border-radius:4px;font-size:0.8rem"' +
-                ' ' + (isChecked ? '' : 'disabled') +
-                ' onchange="updateLabelQty(\'' + p.id + '\',this.value)">' +
-                '</div>';
-        });
-        if (!html) html = '<div style="padding:1rem;text-align:center;color:var(--gray)">No products</div>';
-        document.getElementById('lblBulkList').innerHTML = html;
-        var sum = document.getElementById('lblBulkSummary');
-        if (sum) sum.textContent = selected + ' product(s) selected';
-    }
-
-    function toggleLabelSelect(pid, checked) {
-        if (checked) { _labelSelected[pid] = _labelSelected[pid] || 1; }
-        else { delete _labelSelected[pid]; }
-        // update qty input state
-        var inp = document.querySelector('input[onchange*="updateLabelQty(\'' + pid + '\'"]');
-        if (inp) inp.disabled = !checked;
-        var sum = document.getElementById('lblBulkSummary');
-        if (sum) sum.textContent = Object.keys(_labelSelected).length + ' product(s) selected';
-    }
-
-    function updateLabelQty(pid, val) {
-        if (_labelSelected[pid] !== undefined) {
-            _labelSelected[pid] = Math.max(1, parseInt(val) || 1);
-        }
-    }
-
-    function selectAllForLabel() {
-        STATE.products.forEach(function(p) { _labelSelected[p.id] = _labelSelected[p.id] || 1; });
-        renderBulkList();
-    }
-
-    function deselectAllForLabel() {
-        _labelSelected = {};
-        renderBulkList();
-    }
-
-    function printLabels() {
-        var labelsData = []; // [{product, sizeName, qty}]
-        var sizeVal, dims;
-
-        if (_labelMode === 'single') {
-            if (!_labelProduct) { showToast('No product selected', 'error'); return; }
-            sizeVal = document.getElementById('labelSize').value;
-            dims = getLabelDims(sizeVal);
-            var qty = parseInt(document.getElementById('labelQty').value) || 1;
-            var sizes = _labelProduct.sizes && _labelProduct.sizes.length
-                ? _labelProduct.sizes : [{ name: 'One Size' }];
-            sizes.forEach(function(s) {
-                labelsData.push({ p: _labelProduct, size: s.name, qty: qty });
-            });
-        } else {
-            var pids = Object.keys(_labelSelected);
-            if (!pids.length) { showToast('Select at least one product', 'warning'); return; }
-            sizeVal = document.getElementById('lblBulkSize').value;
-            dims = getLabelDims(sizeVal);
-            pids.forEach(function(pid) {
-                var pr = findProduct(pid);
-                if (!pr) return;
-                var q = parseInt(_labelSelected[pid]) || 1;
-                var szs = pr.sizes && pr.sizes.length ? pr.sizes : [{ name: 'One Size' }];
-                szs.forEach(function(s) {
-                    labelsData.push({ p: pr, size: s.name, qty: q });
-                });
-            });
-        }
-
-        if (!labelsData.length) { showToast('Nothing to print', 'warning'); return; }
-
-        // Build label rows HTML
-        var labelsHtml = '';
-        labelsData.forEach(function(ld) {
-            for (var i = 0; i < ld.qty; i++) {
-                labelsHtml += '<div class="lbl-wrap"><div class="lbl">' +
-                    '<div class="n">' + escHtml(ld.p.name) + '</div>' +
-                    '<div class="s">Size: <b>' + escHtml(ld.size) + '</b></div>' +
-                    '<div class="pr">$' + ld.p.price.toFixed(2) + '</div>' +
-                    '<div class="bc" data-v="' + escHtml(ld.p.id) + '"></div>' +
-                    '</div></div>';
-            }
-        });
-
-        var wPt = dims.w === 38 ? '107.7pt' : (dims.w === 50 ? '141.7pt' : '164.4pt');
-        var hPt = dims.h === 25 ? '70.9pt' : (dims.h === 30 ? '85pt' : '113.4pt');
-        var fName = dims.h > 30 ? '7.5' : '6';
-        var fSize = dims.h > 30 ? '7' : '5.5';
-        var fPrice = dims.h > 30 ? '11' : '9';
-        var barH = dims.h > 30 ? '16mm' : '11mm';
-
-        var printHtml = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
-            '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-            '<title>Labels</title>' +
-            '<style>' +
-            '@page{size:' + dims.w + 'mm ' + dims.h + 'mm;margin:0}' +
-            '*{margin:0;padding:0;box-sizing:border-box}' +
-            'body{font-family:Arial,sans-serif;background:#f0f0f0;padding-bottom:90px}' +
-            '.lbl{width:' + dims.w + 'mm;height:' + dims.h + 'mm;padding:' + (dims.h<=10?'0.3mm 0.5mm':dims.h<=20?'0.5mm 0.8mm':'1mm 1.5mm') + ';display:flex;flex-direction:column;overflow:hidden;background:#fff;box-sizing:border-box;page-break-after:always;break-after:page}' +
-            '.n{font-size:' + (dims.h<=10?'3.5':dims.h<=20?'5':'6.5') + 'pt;font-weight:bold;line-height:1.2;overflow:hidden}' +
-            '.s{font-size:' + (dims.h<=10?'3':dims.h<=20?'4':'5.5') + 'pt;color:#333}' +
-            '.pr{font-size:' + (dims.h<=10?'4.5':dims.h<=20?'7':'9') + 'pt;font-weight:bold}' +
-            '.bc{flex:1;display:flex;align-items:center;justify-content:center}' +
-            '#preview{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px}' +
-            '.lbl-wrap{box-shadow:0 2px 6px rgba(0,0,0,0.15)}' +
-            '#bar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #e2e8f0;z-index:999}' +
-            '#btns{display:flex;gap:8px;padding:10px 12px;justify-content:center;flex-wrap:wrap}' +
-            '#btns button{flex:1;min-width:80px;max-width:130px;padding:12px 6px;border:none;border-radius:22px;font-size:13px;font-weight:bold;cursor:pointer}' +
-            '.bp{background:#48bb78;color:#fff}.bpdf{background:#e74c3c;color:#fff}.bsh{background:#f6ad55;color:#fff}' +
-            '#sharePreview{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.88);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:16px}' +
-            '#sharePreview.show{display:flex}' +
-            '#sharePreview img{max-width:100%;max-height:60vh;border-radius:4px}' +
-            '.nav-btns{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;justify-content:center}' +
-            '.nav-btns button{padding:10px 16px;border:none;border-radius:18px;font-size:13px;font-weight:bold;cursor:pointer}' +
-            '.s-prev,.s-next{background:#666;color:#fff}.s-save{background:#48bb78;color:#fff}' +
-            '.s-share{background:#4a90d9;color:#fff}.s-strip{background:#e67e22;color:#fff}' +
-            '.s-all{background:#9b59b6;color:#fff}.s-close{background:#e53e3e;color:#fff}' +
-            '#lblCounter{color:#fff;font-size:13px;font-weight:600;margin-bottom:6px}' +
-            '@media print{#bar,#sharePreview{display:none!important}body{background:#fff;padding:0}#preview{padding:0;gap:0}.lbl-wrap{box-shadow:none}}' +
-            '</style></head><body>' +
-            '<div id="preview">' + labelsHtml + '</div>' +
-            '<div id="sharePreview">' +
-            '<div id="lblCounter">-</div>' +
-            '<img id="shareImg" src="">' +
-            '<div class="nav-btns"><button class="s-prev" onclick="navImg(-1)">&#9664;</button><button class="s-next" onclick="navImg(1)">Next &#9654;</button></div>' +
-            '<div class="nav-btns">' +
-            '<button class="s-save" onclick="saveImg()">&#8595; Save</button>' +
-            '<button class="s-share" onclick="shareImg()">&#8679; Share</button>' +
-            '<button class="s-strip" onclick="makeStrip()">&#128203; Strip</button>' +
-            '<button class="s-all" onclick="saveAllImgs()">&#8595; All</button>' +
-            '<button class="s-close" onclick="document.getElementById(\'sharePreview\').classList.remove(\'show\')">&#10005;</button>' +
-            '</div></div>' +
-            '<div id="bar"><div id="btns">' +
-            '<button class="bp" onclick="window.print()">&#128424; Print</button>' +
-            '<button class="bpdf" onclick="savePDF()">&#128196; Save PDF</button>' +
-            '<button class="bsh" onclick="makeImgs()">&#128247; Images</button>' +
-            '</div></div>' +
-            '<scr'+'ipt>' +
-            '// QR Code Generator v2 - Pure JS, no dependencies\n' +
-            '// Based on standard QR spec, Version 2-L (25x25)\n' +
-            'var QRGen = (function() {\n' +
-            '    var SIZE = 25;\n' +
-            '    \n' +
-            '    // Reed-Solomon\n' +
-            '    var EXP = [], LOG = [];\n' +
-            '    (function(){\n' +
-            '        var x=1;\n' +
-            '        for(var i=0;i<255;i++){EXP[i]=x;LOG[x]=i;x<<=1;if(x>255)x^=285;}\n' +
-            '        for(var i=255;i<512;i++)EXP[i]=EXP[i-255];\n' +
-            '    })();\n' +
-            '    function mul(a,b){return(a&&b)?EXP[(LOG[a]+LOG[b])%255]:0;}\n' +
-            '    function rsGen(n){var g=[1];for(var i=0;i<n;i++){var t=[1,EXP[i]];var r=new Array(g.length+1).fill(0);for(var a=0;a<g.length;a++)for(var b=0;b<t.length;b++)r[a+b]^=mul(g[a],t[b]);g=r;}return g;}\n' +
-            '    function rsDiv(msg,gen){var r=msg.slice();for(var i=0;i<msg.length;i++){var c=r[i];if(c)for(var j=1;j<gen.length;j++)r[i+j]^=mul(gen[j],c);}return r.slice(msg.length);}\n' +
-            '    \n' +
-            '    function encode(text){\n' +
-            '        var bytes=[];for(var i=0;i<text.length;i++)bytes.push(text.charCodeAt(i)&0xFF);\n' +
-            '        var bits=[];\n' +
-            '        function add(v,n){for(var i=n-1;i>=0;i--)bits.push((v>>i)&1);}\n' +
-            '        add(4,4);add(bytes.length,8);\n' +
-            '        for(var i=0;i<bytes.length;i++)add(bytes[i],8);\n' +
-            '        add(0,4);\n' +
-            '        while(bits.length%8)bits.push(0);\n' +
-            '        var cw=[];for(var i=0;i<bits.length;i+=8){var b=0;for(var j=0;j<8;j++)b=(b<<1)|bits[i+j];cw.push(b);}\n' +
-            '        var pad=[0xEC,0x11];while(cw.length<44)cw.push(pad[(cw.length-0)%2]);\n' +
-            '        return cw.concat(rsDiv(cw,rsGen(10)));\n' +
-            '    }\n' +
-            '    \n' +
-            '    function matrix(data){\n' +
-            '        var m=[];\n' +
-            '        for(var i=0;i<SIZE;i++){m.push(new Array(SIZE).fill(-1));}\n' +
-            '        \n' +
-            '        // Finder pattern (7x7 with border)\n' +
-            '        function finder(row,col){\n' +
-            '            for(var r=-1;r<=7;r++){\n' +
-            '                for(var c=-1;c<=7;c++){\n' +
-            '                    var pr=row+r, pc=col+c;\n' +
-            '                    if(pr<0||pr>=SIZE||pc<0||pc>=SIZE)continue;\n' +
-            '                    var v;\n' +
-            '                    if(r===-1||r===7||c===-1||c===7) v=0;      // separator\n' +
-            '                    else if(r===0||r===6||c===0||c===6) v=1;    // outer ring\n' +
-            '                    else if(r>=2&&r<=4&&c>=2&&c<=4) v=1;        // inner square\n' +
-            '                    else v=0;                                     // inner white\n' +
-            '                    m[pr][pc]=v;\n' +
-            '                }\n' +
-            '            }\n' +
-            '        }\n' +
-            '        finder(0,0);\n' +
-            '        finder(0,SIZE-7);\n' +
-            '        finder(SIZE-7,0);\n' +
-            '        \n' +
-            '        // Alignment pattern at (18,18) for version 2\n' +
-            '        for(var r=16;r<=20;r++)for(var c=16;c<=20;c++){\n' +
-            '            if(m[r][c]!==-1)continue;\n' +
-            '            m[r][c]=(r===16||r===20||c===16||c===20||(r===18&&c===18))?1:0;\n' +
-            '        }\n' +
-            '        \n' +
-            '        // Timing patterns\n' +
-            '        for(var i=8;i<SIZE-8;i++){\n' +
-            '            if(m[6][i]===-1)m[6][i]=i%2===0?1:0;\n' +
-            '            if(m[i][6]===-1)m[i][6]=i%2===0?1:0;\n' +
-            '        }\n' +
-            '        \n' +
-            '        // Dark module\n' +
-            '        m[SIZE-8][8]=1;\n' +
-            '        \n' +
-            '        // Format info (Version 2-L, mask 0: (i+j)%2==0)\n' +
-            '        // Pre-computed format string for L+mask0: 111011111000100 XOR 101010000010010 = 010001111010110\n' +
-            '        var fmt=[0,1,0,0,0,1,1,1,1,0,1,0,1,1,0];\n' +
-            '        // Top-left format\n' +
-            '        var fmtPos=[[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]];\n' +
-            '        // Top-right format\n' +
-            '        var fmtPos2=[[8,SIZE-1],[8,SIZE-2],[8,SIZE-3],[8,SIZE-4],[8,SIZE-5],[8,SIZE-6],[8,SIZE-7],[8,SIZE-8],[SIZE-7,8],[SIZE-6,8],[SIZE-5,8],[SIZE-4,8],[SIZE-3,8],[SIZE-2,8],[SIZE-1,8]];\n' +
-            '        for(var i=0;i<15;i++){\n' +
-            '            m[fmtPos[i][0]][fmtPos[i][1]]=fmt[i];\n' +
-            '            m[fmtPos2[i][0]][fmtPos2[i][1]]=fmt[i];\n' +
-            '        }\n' +
-            '        \n' +
-            '        // Data placement\n' +
-            '        var bits=[];\n' +
-            '        for(var i=0;i<data.length;i++)for(var b=7;b>=0;b--)bits.push((data[i]>>b)&1);\n' +
-            '        \n' +
-            '        var bi=0;\n' +
-            '        var col=SIZE-1;\n' +
-            '        while(col>0){\n' +
-            '            if(col===6)col--;\n' +
-            '            for(var row=0;row<SIZE;row++){\n' +
-            '                for(var dc=0;dc<2;dc++){\n' +
-            '                    var c=col-dc;\n' +
-            '                    var r=(col%4<2)?row:SIZE-1-row;  // alternate direction\n' +
-            '                    if(m[r][c]===-1){\n' +
-            '                        var bit=bi<bits.length?bits[bi++]:0;\n' +
-            '                        // Apply mask 0: (r+c)%2==0 → invert\n' +
-            '                        m[r][c]=((r+c)%2===0)?bit^1:bit;\n' +
-            '                    }\n' +
-            '                }\n' +
-            '            }\n' +
-            '            col-=2;\n' +
-            '        }\n' +
-            '        return m;\n' +
-            '    }\n' +
-            '    \n' +
-            '    function draw(canvas, text, size){\n' +
-            '        var quiet=4;\n' +
-            '        var data=encode(text);\n' +
-            '        var mat=matrix(data);\n' +
-            '        var mod=Math.max(1,Math.floor(size/(SIZE+quiet*2)));\n' +
-            '        var total=(SIZE+quiet*2)*mod;\n' +
-            '        canvas.width=total;canvas.height=total;\n' +
-            '        var ctx=canvas.getContext(\'2d\');\n' +
-            '        ctx.fillStyle=\'#fff\';ctx.fillRect(0,0,total,total);\n' +
-            '        ctx.fillStyle=\'#000\';\n' +
-            '        for(var r=0;r<SIZE;r++)\n' +
-            '            for(var c=0;c<SIZE;c++)\n' +
-            '                if(mat[r][c]===1)\n' +
-            '                    ctx.fillRect((c+quiet)*mod,(r+quiet)*mod,mod,mod);\n' +
-            '    }\n' +
-            '    \n' +
-            '    return {draw:draw};\n' +
-            '})();\n' +
-'var _imgs=[],_cur=0;' +
-            'function renderQR(){document.querySelectorAll(".bc").forEach(function(el){var v=el.getAttribute("data-v")||"TEST";var c=document.createElement("canvas");el.appendChild(c);try{QRGen.draw(c,v,' + (dims.h<=10?24:dims.h<=20?48:60) + ');}catch(e){el.innerHTML="<b style=color:red>"+e.message+"</b>";}});}' +
-            'renderQR();' +
-            'function showImg(i){if(i<0)i=_imgs.length-1;if(i>=_imgs.length)i=0;_cur=i;document.getElementById("shareImg").src=URL.createObjectURL(_imgs[i]);document.getElementById("lblCounter").textContent="Label "+(_cur+1)+" / "+_imgs.length;}' +
-            'function navImg(d){showImg(_cur+d);}' +
-            'function saveImg(){if(!_imgs[_cur])return;var a=document.createElement("a");a.href=URL.createObjectURL(_imgs[_cur]);a.download="label_"+(String(_cur+1).padStart(3,"0"))+".png";a.click();}' +
-            'function saveAllImgs(){_imgs.forEach(function(blob,i){setTimeout(function(){var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="label_"+(String(i+1).padStart(3,"0"))+".png";a.click();},i*600);});}' +
-            'function shareImg(){if(!_imgs[_cur])return;var f=new File([_imgs[_cur]],"label.png",{type:"image/png"});if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f]}).catch(function(){saveImg();});}else{saveImg();}}' +
-            'function makeStrip(){if(!_imgs.length){alert("Tap Images first");return;}var W=0,H=0,loaded=0,imgs=[];_imgs.forEach(function(blob,i){var img=new Image();img.onload=function(){imgs[i]=img;if(img.width>W)W=img.width;H+=img.height;loaded++;if(loaded===_imgs.length){var c=document.createElement("canvas");c.width=W;c.height=H;var ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,W,H);var y=0;imgs.forEach(function(im){ctx.drawImage(im,0,y);y+=im.height;});c.toBlob(function(blob){var f=new File([blob],"strip.png",{type:"image/png"});if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f]}).catch(function(){var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="strip.png";a.click();});}else{var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="strip.png";a.click();}},"image/png");}};img.src=URL.createObjectURL(blob);});}' +
-            'function savePDF(){var wraps=document.querySelectorAll(".lbl-wrap");if(!wraps.length){alert("No labels");return;}var dpi=203,pw=' + dims.w + ',ph=' + dims.h + ';var pxW=Math.round(pw/25.4*dpi),pxH=Math.round(ph/25.4*dpi);var totalH=pxH*wraps.length;var strip=document.createElement("canvas");strip.width=pxW;strip.height=totalH;var ctx=strip.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,pxW,totalH);var done=0;wraps.forEach(function(wrap,wi){var out=document.createElement("canvas");out.width=pxW;out.height=pxH;var c2=out.getContext("2d");c2.fillStyle="#fff";c2.fillRect(0,0,pxW,pxH);var n=wrap.querySelector(".n"),s=wrap.querySelector(".s"),pr=wrap.querySelector(".pr"),bcDiv=wrap.querySelector(".bc"),bc=bcDiv?bcDiv.querySelector("canvas"):null;if(!bc){bc=document.createElement("canvas");var v2=bcDiv?bcDiv.querySelector("[data-v]"):null;if(v2)try{QRGen.draw(bc,v2.getAttribute("data-v")||"TEST",ph<=10?24:ph<=20?48:60);}catch(e){}}var pad=Math.round(pxW*0.05),maxW=pxW-pad*2;var fN=Math.round(pxH*0.16),fS=Math.round(pxH*0.13),fP=Math.round(pxH*0.18),lh=Math.round(pxH*0.04);c2.fillStyle="#000";c2.font="bold "+fN+"px Arial";var nt=n?n.textContent:"";while(nt.length>0&&c2.measureText(nt).width>maxW)nt=nt.slice(0,-1);c2.fillText(nt,pad,pad+fN);c2.font=fS+"px Arial";c2.fillText(s?s.textContent:"",pad,pad+fN+lh+fS);c2.font="bold "+fP+"px Arial";c2.fillText(pr?pr.textContent:"",pad,pad+fN+lh+fS+lh+fP);if(bc&&bc.width>0){c2.drawImage(bc,pad,pxH-Math.round(pxH*0.42),pxW-pad*2,Math.round(pxH*0.38));}ctx.drawImage(out,0,wi*pxH);done++;if(done===wraps.length){strip.toBlob(function(blob){var imgUrl=URL.createObjectURL(blob);var pdf=window.open("","_blank");if(pdf){pdf.document.write("<html><head><style>@page{size:' + dims.w + 'mm ' + dims.h + 'mm;margin:0}*{margin:0;padding:0}body{margin:0}img{width:' + dims.w + 'mm;height:' + dims.h + 'mm;display:block;page-break-after:always}</style></head><body>");for(var k=0;k<wraps.length;k++)pdf.document.write("<img src=\'"+imgUrl+"\'>");pdf.document.write("</body></html>");pdf.document.close();setTimeout(function(){pdf.print();},500);}else{var a=document.createElement("a");a.href=imgUrl;a.download="labels.png";a.click();}},"image/png");}})}function makeImgs(){var btn=document.querySelector(".bsh");btn.textContent="Converting...";btn.disabled=true;var dpi=203;var wraps=document.querySelectorAll(".lbl-wrap");var pxW=Math.round(' + dims.w + '/25.4*dpi),pxH=Math.round(' + dims.h + '/25.4*dpi);_imgs=[];var done=0,total=wraps.length;wraps.forEach(function(wrap,wi){var out=document.createElement("canvas");out.width=pxW;out.height=pxH;var ctx=out.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,pxW,pxH);var n=wrap.querySelector(".n"),s=wrap.querySelector(".s"),pr=wrap.querySelector(".pr"),bcDiv=wrap.querySelector(".bc"),bc=bcDiv?bcDiv.querySelector("canvas"):null;var pad=Math.round(pxW*0.05),maxW=pxW-pad*2;var fN=Math.round(pxH*0.16),fS=Math.round(pxH*0.13),fP=Math.round(pxH*0.18),lh=Math.round(pxH*0.04);ctx.fillStyle="#000";ctx.font="bold "+fN+"px Arial";var nt=n?n.textContent:"";while(nt.length>0&&ctx.measureText(nt).width>maxW)nt=nt.slice(0,-1);ctx.fillText(nt,pad,pad+fN);ctx.font=fS+"px Arial";ctx.fillText(s?s.textContent:"",pad,pad+fN+lh+fS);ctx.font="bold "+fP+"px Arial";ctx.fillText(pr?pr.textContent:"",pad,pad+fN+lh+fS+lh+fP);if(bc&&bc.width>0){ctx.drawImage(bc,pad,pxH-Math.round(pxH*0.42),pxW-pad*2,Math.round(pxH*0.38));}out.toBlob(function(blob){_imgs[wi]=blob;done++;if(done===total){btn.textContent="\uD83D\uDCF7 Images";btn.disabled=false;showImg(0);document.getElementById("sharePreview").classList.add("show");}},"image/png");});}' +
-            '<'+'/scr'+'ipt>' +
-            '</body></html>';
-        // Always use blob URL - document.write() breaks script timing for QR/barcodes
-        var blob = new Blob([printHtml], { type: 'text/html;charset=utf-8' });
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.target = '_blank';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
-        closeLabelModal();
-        showToast('Labels opening — tap Print when ready', 'success');
-    }
-
-
-    // ── Native camera photo scan ──
-    // Use event delegation so it works even if modal added late
+    // Event delegation for camera file input
     document.addEventListener('change', function(e) {
         if (e.target && e.target.id === 'barcodeCapture') {
             scanFromPhoto(e.target);
@@ -1817,136 +1258,137 @@ function sendToTelegram(order, callback) {
     function scanFromPhoto(input) {
         if (!input.files || !input.files[0]) return;
         var resultEl = document.getElementById('barcodeResult');
+        var msgEl = document.getElementById('scanMsg');
         var label = document.getElementById('cameraLabel');
-        if (label) label.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
-        resultEl.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--gray)"><i class="fas fa-spinner fa-spin"></i> Processing image...</div>';
+
+        if (label) label.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:20px"></i> Scanning...';
+        if (msgEl) msgEl.textContent = 'Processing image...';
+        resultEl.innerHTML = '';
 
         var file = input.files[0];
         var url = URL.createObjectURL(file);
         var img = new Image();
+
         img.onload = function() {
-            if (label) label.innerHTML = '<i class="fas fa-camera"></i> Open Camera';
+            if (label) label.innerHTML = '<i class="fas fa-camera" style="font-size:20px"></i> Open Camera';
+
+            // Resize large photos for better detection
+            var maxW = 1200;
             var canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            var ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
+            var ratio = img.naturalWidth > maxW ? maxW / img.naturalWidth : 1;
+            canvas.width = Math.round(img.naturalWidth * ratio);
+            canvas.height = Math.round(img.naturalHeight * ratio);
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
             URL.revokeObjectURL(url);
             input.value = '';
 
-            // Try BarcodeDetector (Chrome Android / Chrome desktop)
             if (typeof BarcodeDetector !== 'undefined') {
+                // Chrome Android / Chrome Desktop
                 new BarcodeDetector({
-                    formats: ['qr_code','ean_13','ean_8','code_128','code_39','upc_a','upc_e']
+                    formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
                 }).detect(canvas).then(function(codes) {
                     if (codes.length > 0) {
+                        if (msgEl) msgEl.textContent = '✅ Found: ' + codes[0].rawValue;
                         searchBarcode(codes[0].rawValue);
                     } else {
-                        tryZXing(canvas, resultEl);
+                        showScanTip(resultEl, msgEl, 'No QR code found. Try again closer and with good lighting.');
                     }
-                }).catch(function() { tryZXing(canvas, resultEl); });
+                }).catch(function(e) {
+                    showScanTip(resultEl, msgEl, 'Scan error: ' + e.message);
+                });
             } else {
-                tryZXing(canvas, resultEl);
+                // iPhone Safari - BarcodeDetector not supported
+                showScanTip(resultEl, msgEl, null);
             }
         };
+
         img.onerror = function() {
             URL.revokeObjectURL(url); input.value = '';
-            if (label) label.innerHTML = '<i class="fas fa-camera"></i> Open Camera';
-            resultEl.innerHTML = '<div style="color:var(--danger);padding:0.75rem;background:#fff5f5;border-radius:8px">Failed to load image. Try again.</div>';
+            if (label) label.innerHTML = '<i class="fas fa-camera" style="font-size:20px"></i> Open Camera';
+            resultEl.innerHTML = '<div style="color:var(--danger);padding:0.75rem">Failed to load image. Try again.</div>';
         };
+
         img.src = url;
     }
 
-    function tryZXing(canvas, resultEl) {
-        if (typeof ZXing !== 'undefined') {
-            decodeWithZXing(canvas, resultEl);
-            return;
-        }
-        resultEl.innerHTML = '<div style="text-align:center;padding:0.75rem;color:var(--gray)"><i class="fas fa-spinner fa-spin"></i> Loading decoder...</div>';
-        var s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js';
-        s.onload = function() { decodeWithZXing(canvas, resultEl); };
-        s.onerror = function() {
-            resultEl.innerHTML = '<div style="color:var(--warning);padding:0.75rem;background:#fff8e6;border-radius:8px;font-size:0.85rem">' +
-                '<b>Could not load decoder.</b> Please type barcode manually below.</div>';
-        };
-        document.head.appendChild(s);
+    function showScanTip(resultEl, msgEl, msg) {
+        var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+        if (msgEl) msgEl.textContent = msg || (isIOS ? 'iPhone tip below ↓' : 'Try again with better photo');
+        resultEl.innerHTML = msg && !isIOS
+            ? '<div style="color:var(--warning);padding:0.75rem;background:#fff8e6;border-radius:8px;font-size:0.85rem">' + msg + '</div>'
+            : '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;font-size:0.85rem">' +
+              '<div style="font-weight:700;margin-bottom:0.5rem">📱 iPhone: Use native Camera app</div>' +
+              '<div style="color:#555;line-height:1.6">' +
+              '1. Close this scanner<br>' +
+              '2. Open iPhone <b>Camera</b> app<br>' +
+              '3. Point at the QR code on the label<br>' +
+              '4. Tap the <b>yellow notification</b> at top<br>' +
+              '5. Copy the value → come back here → paste below</div>' +
+              '</div>';
     }
 
-    function resizeCanvas(canvas, maxW) {
-        // Resize large images - ZXing works better on smaller images
-        if (canvas.width <= maxW) return canvas;
-        var ratio = maxW / canvas.width;
-        var c = document.createElement('canvas');
-        c.width = maxW;
-        c.height = Math.round(canvas.height * ratio);
-        c.getContext('2d').drawImage(canvas, 0, 0, c.width, c.height);
-        return c;
-    }
+    function searchBarcode(code) {
+        if (!code || !code.trim()) return;
+        code = code.trim();
+        var resultEl = document.getElementById('barcodeResult');
+        var msgEl = document.getElementById('scanMsg');
+        if (msgEl) msgEl.textContent = '✅ Scanned: ' + code;
 
-    function decodeWithZXing(canvas, resultEl) {
-        resultEl.innerHTML = '<div style="text-align:center;padding:0.75rem;color:var(--gray)"><i class="fas fa-spinner fa-spin"></i> Decoding...</div>';
-        var hints = new Map();
-        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-            ZXing.BarcodeFormat.QR_CODE,
-            ZXing.BarcodeFormat.CODE_128,
-            ZXing.BarcodeFormat.EAN_13,
-            ZXing.BarcodeFormat.EAN_8,
-            ZXing.BarcodeFormat.CODE_39,
-            ZXing.BarcodeFormat.UPC_A,
-            ZXing.BarcodeFormat.UPC_E,
-            ZXing.BarcodeFormat.QR_CODE,
-            ZXing.BarcodeFormat.ITF,
-            ZXing.BarcodeFormat.CODABAR
-        ]);
-        var reader = new ZXing.MultiFormatReader();
-        reader.setHints(hints);
-
-        // Try multiple sizes - phones take huge photos, ZXing needs smaller
-        var sizes = [1200, 800, 600, 400];
-        var found = false;
-
-        for (var i = 0; i < sizes.length; i++) {
-            if (found) break;
-            try {
-                var c = resizeCanvas(canvas, sizes[i]);
-                var imgData = c.getContext('2d').getImageData(0, 0, c.width, c.height);
-                var lum = new ZXing.RGBLuminanceSource(imgData.data, c.width, c.height);
-                var bin = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
-                var result = reader.decode(bin);
-                found = true;
-                searchBarcode(result.getText());
-                return;
-            } catch(e) { /* try next size */ }
+        var found = null;
+        for (var i = 0; i < STATE.products.length; i++) {
+            var p = STATE.products[i];
+            if (p.barcode === code || p.id === code ||
+                p.name.toLowerCase().indexOf(code.toLowerCase()) !== -1) {
+                found = p; break;
+            }
         }
 
-        if (!found) {
-            resultEl.innerHTML = '<div style="color:var(--warning);padding:0.75rem;background:#fff8e6;border-radius:8px;font-size:0.85rem">' +
-                '<b>Barcode not detected.</b><br>' +
-                '📌 Tips:<br>' +
-                '• Hold phone 10-15cm from barcode<br>' +
-                '• Make sure barcode fills most of photo<br>' +
-                '• Good lighting, no shadows<br>' +
-                '• Keep camera steady<br><br>' +
-                'Or type the barcode manually below.</div>';
-        }
-    }
-
-    // ── Toggle webcam for PC ──
-    function toggleWebcam() {
-        var preview = document.getElementById('webcamPreview');
-        var btn = document.getElementById('webcamBtn');
-        if (preview.style.display === 'none') {
-            preview.style.display = 'block';
-            btn.innerHTML = '<i class="fas fa-video-slash"></i> Stop Webcam';
-            startCamera();
+        if (found) {
+            resultEl.innerHTML =
+                '<div style="background:#f0fff4;border:1px solid var(--success);border-radius:8px;padding:1rem">' +
+                '<div style="font-weight:700;color:var(--success);margin-bottom:0.25rem">✅ ' + escHtml(found.name) + '</div>' +
+                '<div style="font-size:0.85rem">$' + found.price.toFixed(2) + ' · Stock: ' + getTotalStock(found) + '</div>' +
+                '<div style="display:flex;gap:8px;margin-top:0.75rem">' +
+                '<button class="btn btn-primary btn-small" data-pid="' + found.id + '" data-act="edit" onclick="inv(event,this);closeBarcodeScanner()"><i class="fas fa-edit" style="pointer-events:none"></i> Edit</button>' +
+                '<button class="btn btn-info btn-small" data-pid="' + found.id + '" data-act="label" onclick="inv(event,this);closeBarcodeScanner()"><i class="fas fa-tag" style="pointer-events:none"></i> Label</button>' +
+                '</div></div>';
         } else {
-            preview.style.display = 'none';
-            btn.innerHTML = '<i class="fas fa-video"></i> Use Webcam (PC only)';
-            stopCamera();
+            resultEl.innerHTML =
+                '<div style="background:#fff5f5;border:1px solid var(--danger);border-radius:8px;padding:0.75rem">' +
+                '<div style="font-weight:700;color:var(--danger)">❌ Not found</div>' +
+                '<div style="font-size:0.82rem;color:#666;margin-top:0.25rem">Code: <b>' + escHtml(code) + '</b></div>' +
+                '<button class="btn btn-outline btn-small" style="margin-top:0.5rem" ' +
+                'data-code="' + escHtml(code) + '" ' +
+                'onclick="assignBarcodeToProduct(this.dataset.code)"><i class="fas fa-link"></i> Assign to product</button>' +
+                '</div>';
         }
     }
+
+    function assignBarcodeToProduct(code) {
+        var opts = '<option value="">-- Select product --</option>';
+        STATE.products.forEach(function(p) { opts += '<option value="' + p.id + '">' + escHtml(p.name) + '</option>'; });
+        document.getElementById('barcodeResult').innerHTML +=
+            '<div style="margin-top:0.75rem;padding:0.75rem;background:#f8fafc;border-radius:8px">' +
+            '<div style="font-size:0.82rem;font-weight:600;margin-bottom:0.4rem">Assign to:</div>' +
+            '<select id="assignProd" class="form-control">' + opts + '</select>' +
+            '<button class="btn btn-primary w-full" style="margin-top:0.5rem" ' +
+            'data-code="' + escHtml(code) + '" ' +
+            'onclick="doAssignBarcode(this.dataset.code)">Save</button>' +
+            '</div>';
+    }
+
+    function doAssignBarcode(code) {
+        var pid = document.getElementById('assignProd').value;
+        if (!pid) { showToast('Select a product', 'warning'); return; }
+        var p = findProduct(pid);
+        if (!p) return;
+        p.barcode = code;
+        saveProducts();
+        showToast('Barcode assigned to ' + p.name, 'success');
+        closeBarcodeScanner();
+    }
+
+
 
     function resetFirebaseConfig() {
         var raw = prompt('Paste your Firebase config below.\n\nAccepts both formats:\n• Firebase console format (apiKey: "...")\n• JSON format ("apiKey": "...")\n\nLeave empty to cancel:');
@@ -2100,13 +1542,13 @@ function sendToTelegram(order, callback) {
             c.innerHTML = h;
         }
         document.getElementById('loginHistoryModal').classList.add('active');
-        
+        document.getElementById('loginHistoryModal').classList.remove('hidden');
     }
 
-    function closeLoginHistory() { document.getElementById('loginHistoryModal').classList.remove('active');  }
+    function closeLoginHistory() { document.getElementById('loginHistoryModal').classList.remove('active'); document.getElementById('loginHistoryModal').classList.add('hidden'); }
     function clearLoginHistory() { if (confirm('Clear all?')) { STATE.loginRecords = []; localStorage.removeItem('goatLoginRecords'); showLoginHistory(); showToast('Cleared', 'info'); } }
-    function openAdminModal() { document.getElementById('adminModal').classList.add('active'); updateLoginAttemptsDisplay(); }
-    function closeAdminModal() { document.getElementById('adminModal').classList.remove('active'); }
+    function openAdminModal() { document.getElementById('adminModal').classList.add('active'); document.getElementById('adminModal').classList.remove('hidden'); updateLoginAttemptsDisplay(); }
+    function closeAdminModal() { document.getElementById('adminModal').classList.remove('active'); document.getElementById('adminModal').classList.add('hidden'); }
     function copyStoreId() { navigator.clipboard.writeText(STATE.storeId).then(function() { showToast('Copied!', 'success'); }).catch(function() { showToast('Failed', 'error'); }); }
 
     // =============================================
@@ -2338,10 +1780,10 @@ function sendToTelegram(order, callback) {
         } else { sh = '<p style="color:var(--gray)">No sizes</p>'; }
         document.getElementById('editSizeInventory').innerHTML = sh;
         document.getElementById('editProductModal').classList.add('active');
-        
+        document.getElementById('editProductModal').classList.remove('hidden');
     }
 
-    function closeEditModal() { document.getElementById('editProductModal').classList.remove('active');  }
+    function closeEditModal() { document.getElementById('editProductModal').classList.remove('active'); document.getElementById('editProductModal').classList.add('hidden'); }
 
     function saveEditProduct() {
         var pid = document.getElementById('editProductId').value;
@@ -2460,10 +1902,12 @@ function sendToTelegram(order, callback) {
     }
     function openWishlistModal() {
         document.getElementById('wishlistModal').classList.add('active');
+        document.getElementById('wishlistModal').classList.remove('hidden');
         renderWishlistModal();
     }
     function closeWishlistModal() {
         document.getElementById('wishlistModal').classList.remove('active');
+        document.getElementById('wishlistModal').classList.add('hidden');
     }
     function renderWishlistModal() {
         var c = document.getElementById('wishlistModalContent');
@@ -2531,6 +1975,7 @@ function sendToTelegram(order, callback) {
             '<button class="btn ' + (inWish ? 'btn-danger' : 'btn-outline') + '" onclick="toggleWishlist(\'' + pid + '\');document.querySelector(\'.pd-wish-btn\').classList.toggle(\'btn-danger\');document.querySelector(\'.pd-wish-btn\').classList.toggle(\'btn-outline\')" title="Wishlist" style="min-width:50px" class="pd-wish-btn"><i class="fas fa-heart"></i></button>' +
             '</div></div></div></div>';
         document.getElementById('productDetailModal').classList.add('active');
+        document.getElementById('productDetailModal').classList.remove('hidden');
         // Sync size selection with main product card
         document.getElementById('productDetailModal').querySelector('.modal').addEventListener('click', function(e){e.stopPropagation();});
     }
@@ -2543,6 +1988,7 @@ function sendToTelegram(order, callback) {
     }
     function closeProductDetail() {
         document.getElementById('productDetailModal').classList.remove('active');
+        document.getElementById('productDetailModal').classList.add('hidden');
     }
 
     function selectSize(el, pid, size) {
@@ -3094,7 +2540,7 @@ function sendToTelegram(order, callback) {
         var html = '';
         html += '<!DOCTYPE html><html><head><title>Receipt ' + order.orderId + '</title>';
         html += '<meta name="viewport" content="width=device-width,initial-scale=1">';
-        html += '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>';
+        html += '<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/scr'+'ipt>';
         html += '<style>';
         html += '@page{size:58mm auto;margin:0}';
         html += '*{margin:0;padding:0;box-sizing:border-box}';
@@ -3104,16 +2550,16 @@ function sendToTelegram(order, callback) {
         html += '.logo{width:36mm;display:block;margin:0 auto 2mm}';
         html += '.dash{border:none;border-top:1px dashed #aaa;margin:1.5mm 0}';
         html += '.solid{border:none;border-top:1.5px solid #000;margin:1mm 0}';
-        html += '.row{display:flex;justify-content:space-between;padding:0.5mm 0;font-size:9.5pt}';
+        html += '.row{display:flex;justify-content:space-between;padding:0.5mm 0;font-size:7.5pt}';
         html += '.lbl{color:#555}';
-        html += '.tot{font-weight:bold;font-size:12pt}';
-        html += '.inm{font-weight:bold;font-size:9.5pt}';
+        html += '.tot{font-weight:bold;font-size:9pt}';
+        html += '.inm{font-weight:bold;font-size:7.5pt}';
         html += '.isz{font-weight:normal;color:#666}';
-        html += '.ir{display:flex;justify-content:space-between;font-size:9pt;color:#444;margin-top:0.5mm}';
-        html += '.ft{text-align:center;font-size:11pt;color:#888;margin-top:2mm;line-height:1.6}';
+        html += '.ir{display:flex;justify-content:space-between;font-size:7pt;color:#444;margin-top:0.5mm}';
+        html += '.ft{text-align:center;font-size:6.5pt;color:#888;margin-top:2mm;line-height:1.6}';
         html += '#bar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #e2e8f0;z-index:999;font-family:Arial,sans-serif}';
         html += '#btns{display:flex;gap:8px;padding:10px 12px;justify-content:center}';
-        html += '#btns button{flex:1;max-width:110px;padding:12px 6px;border:none;border-radius:22px;font-size:15px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px}';
+        html += '#btns button{flex:1;max-width:110px;padding:12px 6px;border:none;border-radius:22px;font-size:13px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px}';
         html += '.ba{background:#4a90d9;color:#fff}';
         html += '.bp{background:#48bb78;color:#fff}';
         html += '.bsh{background:#f6ad55;color:#fff}';
@@ -3159,7 +2605,7 @@ function sendToTelegram(order, callback) {
         html += '<hr class="solid">';
         html += '<div class="row tot"><span>TOTAL</span><span>$' + (order.total||0).toFixed(2) + '</span></div>';
         html += '<hr class="dash">';
-        html += '<div class="ft"><p>&#9829; Thank you for your order!</p><p>Shop Tell : 093779077</p></div>';
+        html += '<div class="ft"><p>&#9829; Thank you for your order!</p><p>Payment: Cash on Delivery</p></div>';
         html += '</div>'; // end #receipt
 
         // Share image preview overlay
@@ -3339,7 +2785,11 @@ function sendToTelegram(order, callback) {
                 '<td style="font-weight:600;font-size:0.78rem">$' + p.price.toFixed(2) + '</td>' +
                 '<td>' + sizeHtml + '</td>' +
                 '<td><strong style="color:' + stockColor + ';font-size:0.78rem">' + totalStock + '</strong></td>' +
-                '<td><div style="display:flex;gap:3px"><button class="btn btn-info btn-small" data-pid="' + p.id + '" data-act="label" onclick="inv(event,this)" style="padding:0.2rem 0.4rem" title="Label"><i class="fas fa-tag" style="pointer-events:none"></i></button><button class="btn btn-warning btn-small" data-pid="' + p.id + '" data-act="edit" onclick="inv(event,this)" style="padding:0.2rem 0.4rem"><i class="fas fa-edit" style="pointer-events:none"></i></button><button class="btn btn-danger btn-small" data-pid="' + p.id + '" data-act="del" onclick="inv(event,this)" style="padding:0.2rem 0.4rem"><i class="fas fa-trash" style="pointer-events:none"></i></button></div></td>' +
+                '<td><div style="display:flex;gap:3px">' +
+                '<button class="btn btn-info btn-small" data-pid="' + p.id + '" data-act="label" onclick="inv(event,this)" style="padding:0.2rem 0.4rem"><i class="fas fa-tag" style="pointer-events:none"></i></button>' +
+                '<button class="btn btn-warning btn-small" data-pid="' + p.id + '" data-act="edit" onclick="inv(event,this)" style="padding:0.2rem 0.4rem"><i class="fas fa-edit" style="pointer-events:none"></i></button>' +
+                '<button class="btn btn-danger btn-small" data-pid="' + p.id + '" data-act="del" onclick="inv(event,this)" style="padding:0.2rem 0.4rem"><i class="fas fa-trash" style="pointer-events:none"></i></button>' +
+                '</div></td>' +
                 '</tr>';
         }
         tb.innerHTML = h;
@@ -3756,7 +3206,451 @@ function sendToTelegram(order, callback) {
     });
 
     console.log('✅ GOAT KIDS Store Ready — v2 FIXED (showTab, closeMobileMenu, escHtml, updQty)');
-    </script>
+    
+    // ── LABEL PRINTING ──
+    var _labelProduct = null;
+    var _labelMode = 'single';
+    var _labelSelected = {};
+
+    function setLabelMode(mode) {
+        _labelMode = mode;
+        document.getElementById('lblSingleMode').style.display = mode === 'single' ? 'block' : 'none';
+        document.getElementById('lblBulkMode').style.display = mode === 'bulk' ? 'block' : 'none';
+        document.getElementById('lblModeSingle').style.background = mode === 'single' ? 'var(--primary)' : 'var(--light)';
+        document.getElementById('lblModeSingle').style.color = mode === 'single' ? '#fff' : 'var(--gray-dark)';
+        document.getElementById('lblModeBulk').style.background = mode === 'bulk' ? 'var(--primary)' : 'var(--light)';
+        document.getElementById('lblModeBulk').style.color = mode === 'bulk' ? '#fff' : 'var(--gray-dark)';
+        if (mode === 'bulk') renderBulkList();
+    }
+
+    function openBulkLabelModal() {
+        try {
+            _labelProduct = null; _labelSelected = {}; _labelMode = 'bulk';
+            var modal = document.getElementById('labelPrintModal');
+            if (!modal) { alert('ERROR: labelPrintModal not found'); return; }
+            modal.classList.add('active'); // show modal FIRST
+            setTimeout(function() { setLabelMode('bulk'); renderBulkList(); }, 50); // THEN set content
+        } catch(e) { alert('openBulkLabelModal error: ' + e.message); }
+    }
+
+    function openLabelModal(pid) {
+        try {
+            _labelProduct = pid ? findProduct(pid) : null;
+            _labelSelected = {}; _labelMode = 'single';
+            var modal = document.getElementById('labelPrintModal');
+            if (!modal) { alert('ERROR: labelPrintModal not found'); return; }
+            modal.classList.add('active'); // show modal FIRST
+            setTimeout(function() { // THEN populate content
+                setLabelMode('single');
+                if (_labelProduct) {
+                    var info = document.getElementById('lblProductInfo');
+                    if (info) info.innerHTML = '<b>' + _labelProduct.name + '</b> &middot; $' + _labelProduct.price.toFixed(2) + ' &middot; Stock: ' + getTotalStock(_labelProduct);
+                }
+                renderLabelPreview();
+            }, 50);
+        } catch(e) { alert('openLabelModal error: ' + e.message); }
+    }
+
+    function closeLabelModal() {
+        try {
+            document.getElementById('labelPrintModal').classList.remove('active');
+        } catch(e) {}
+        _labelProduct = null; _labelSelected = {};
+    }
+
+    function getLabelDims(sizeVal) {
+        if (sizeVal === '20x10') return { w: 20, h: 10 };
+        if (sizeVal === '30x20') return { w: 30, h: 20 };
+        if (sizeVal === '50x30') return { w: 50, h: 30 };
+        if (sizeVal === '58x40') return { w: 58, h: 40 };
+        return { w: 38, h: 25 };
+    }
+
+    function renderLabelPreview() {
+        var p = _labelProduct;
+        if (!p) return;
+        var dims = getLabelDims(document.getElementById('labelSize').value);
+        var sizes = p.sizes && p.sizes.length ? p.sizes : [{ name: 'One Size' }];
+        var scale = 3.2;
+        var html = '';
+        sizes.forEach(function(s) {
+            html += '<div style="width:' + Math.round(dims.w * scale) + 'px;height:' + Math.round(dims.h * scale) + 'px;' +
+                'padding:4px;background:#fff;border:1px solid #ccc;border-radius:3px;' +
+                'display:inline-flex;flex-direction:column;justify-content:space-between;' +
+                'box-shadow:0 1px 3px rgba(0,0,0,0.12);margin:3px;vertical-align:top">' +
+                '<div style="font-size:7px;font-weight:bold;overflow:hidden;line-height:1.2">' + escHtml(p.name) + '</div>' +
+                '<div style="font-size:6px;color:#555">Size: <b>' + escHtml(s.name) + '</b></div>' +
+                '<div style="font-size:10px;font-weight:bold">$' + p.price.toFixed(2) + '</div>' +
+                '<div style="font-size:5px;color:#888;text-align:center;letter-spacing:0.5px">&#9612;&#9616;&#9612;&#9612;&#9616; ' + p.id + ' &#9616;&#9612;&#9612;&#9616;&#9612;</div>' +
+                '</div>';
+        });
+        var el = document.getElementById('labelPreviewContainer');
+        if (el) el.innerHTML = html || '<p style="color:var(--gray)">No sizes</p>';
+    }
+
+    function renderBulkList() {
+        var q = (document.getElementById('lblBulkSearch') ? document.getElementById('lblBulkSearch').value : '').toLowerCase();
+        var products = STATE.products.filter(function(p) {
+            return !q || p.name.toLowerCase().indexOf(q) !== -1 || p.category.toLowerCase().indexOf(q) !== -1;
+        });
+        var selected = Object.keys(_labelSelected).length;
+        var html = '';
+        products.forEach(function(p) {
+            var isChecked = !!_labelSelected[p.id];
+            var sizes = p.sizes && p.sizes.length ? p.sizes.map(function(s) { return s.name; }).join(', ') : 'One Size';
+            html += '<div style="display:flex;align-items:center;gap:8px;padding:0.5rem 0.75rem;border-bottom:1px solid var(--gray-light)">' +
+                '<input type="checkbox" id="lbl_' + p.id + '" ' + (isChecked ? 'checked' : '') +
+                ' style="width:16px;height:16px;cursor:pointer" onchange="toggleLabelSelect(\'' + p.id + '\',this.checked)">' +
+                '<label for="lbl_' + p.id + '" style="flex:1;cursor:pointer;min-width:0">' +
+                '<div style="font-weight:600;font-size:0.82rem">' + escHtml(p.name) + '</div>' +
+                '<div style="font-size:0.72rem;color:var(--gray)">' + escHtml(sizes) + ' &middot; $' + p.price.toFixed(2) + '</div>' +
+                '</label>' +
+                '<input type="number" value="' + (_labelSelected[p.id] || 1) + '" min="1" max="50"' +
+                ' style="width:50px;padding:2px 4px;border:1px solid var(--gray-light);border-radius:4px;font-size:0.8rem"' +
+                ' ' + (isChecked ? '' : 'disabled') +
+                ' onchange="updateLabelQty(\'' + p.id + '\',this.value)">' +
+                '</div>';
+        });
+        if (!html) html = '<div style="padding:1rem;text-align:center;color:var(--gray)">No products</div>';
+        document.getElementById('lblBulkList').innerHTML = html;
+        var sum = document.getElementById('lblBulkSummary');
+        if (sum) sum.textContent = selected + ' product(s) selected';
+    }
+
+    function toggleLabelSelect(pid, checked) {
+        if (checked) { _labelSelected[pid] = _labelSelected[pid] || 1; }
+        else { delete _labelSelected[pid]; }
+        // update qty input state
+        var inp = document.querySelector('input[onchange*="updateLabelQty(\'' + pid + '\'"]');
+        if (inp) inp.disabled = !checked;
+        var sum = document.getElementById('lblBulkSummary');
+        if (sum) sum.textContent = Object.keys(_labelSelected).length + ' product(s) selected';
+    }
+
+    function updateLabelQty(pid, val) {
+        if (_labelSelected[pid] !== undefined) {
+            _labelSelected[pid] = Math.max(1, parseInt(val) || 1);
+        }
+    }
+
+    function selectAllForLabel() {
+        STATE.products.forEach(function(p) { _labelSelected[p.id] = _labelSelected[p.id] || 1; });
+        renderBulkList();
+    }
+
+    function deselectAllForLabel() {
+        _labelSelected = {};
+        renderBulkList();
+    }
+
+    function printLabels() {
+        var labelsData = []; // [{product, sizeName, qty}]
+        var sizeVal, dims;
+
+        if (_labelMode === 'single') {
+            if (!_labelProduct) { showToast('No product selected', 'error'); return; }
+            sizeVal = document.getElementById('labelSize').value;
+            dims = getLabelDims(sizeVal);
+            var qty = parseInt(document.getElementById('labelQty').value) || 1;
+            var sizes = _labelProduct.sizes && _labelProduct.sizes.length
+                ? _labelProduct.sizes : [{ name: 'One Size' }];
+            sizes.forEach(function(s) {
+                labelsData.push({ p: _labelProduct, size: s.name, qty: qty });
+            });
+        } else {
+            var pids = Object.keys(_labelSelected);
+            if (!pids.length) { showToast('Select at least one product', 'warning'); return; }
+            sizeVal = document.getElementById('lblBulkSize').value;
+            dims = getLabelDims(sizeVal);
+            pids.forEach(function(pid) {
+                var pr = findProduct(pid);
+                if (!pr) return;
+                var q = parseInt(_labelSelected[pid]) || 1;
+                var szs = pr.sizes && pr.sizes.length ? pr.sizes : [{ name: 'One Size' }];
+                szs.forEach(function(s) {
+                    labelsData.push({ p: pr, size: s.name, qty: q });
+                });
+            });
+        }
+
+        if (!labelsData.length) { showToast('Nothing to print', 'warning'); return; }
+
+        // Build label rows HTML
+        var labelsHtml = '';
+        labelsData.forEach(function(ld) {
+            for (var i = 0; i < ld.qty; i++) {
+                labelsHtml += '<div class="lbl-wrap"><div class="lbl">' +
+                    '<div class="n">' + escHtml(ld.p.name) + '</div>' +
+                    '<div class="s">Size: <b>' + escHtml(ld.size) + '</b></div>' +
+                    '<div class="pr">$' + ld.p.price.toFixed(2) + '</div>' +
+                    '<div class="bc" data-v="' + escHtml(ld.p.id) + '"></div>' +
+                    '</div></div>';
+            }
+        });
+
+        var wPt = dims.w === 38 ? '107.7pt' : (dims.w === 50 ? '141.7pt' : '164.4pt');
+        var hPt = dims.h === 25 ? '70.9pt' : (dims.h === 30 ? '85pt' : '113.4pt');
+        var fName = dims.h > 30 ? '7.5' : '6';
+        var fSize = dims.h > 30 ? '7' : '5.5';
+        var fPrice = dims.h > 30 ? '11' : '9';
+        var barH = dims.h > 30 ? '16mm' : '11mm';
+
+        var printHtml = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+            '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+            '<title>Labels</title>' +
+            '<style>' +
+            '@page{size:' + dims.w + 'mm ' + dims.h + 'mm;margin:0}' +
+            '*{margin:0;padding:0;box-sizing:border-box}' +
+            'body{font-family:Arial,sans-serif;background:#f0f0f0;padding-bottom:90px}' +
+            '.lbl{width:' + dims.w + 'mm;height:' + dims.h + 'mm;padding:' + (dims.h<=10?'0.3mm 0.5mm':dims.h<=20?'0.5mm 0.8mm':'1mm 1.5mm') + ';display:flex;flex-direction:column;overflow:hidden;background:#fff;box-sizing:border-box;page-break-after:always;break-after:page}' +
+            '.n{font-size:' + (dims.h<=10?'3.5':dims.h<=20?'5':'6.5') + 'pt;font-weight:bold;line-height:1.2;overflow:hidden}' +
+            '.s{font-size:' + (dims.h<=10?'3':dims.h<=20?'4':'5.5') + 'pt;color:#333}' +
+            '.pr{font-size:' + (dims.h<=10?'4.5':dims.h<=20?'7':'9') + 'pt;font-weight:bold}' +
+            '.bc{flex:1;display:flex;align-items:center;justify-content:center}' +
+            '#preview{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px}' +
+            '.lbl-wrap{box-shadow:0 2px 6px rgba(0,0,0,0.15)}' +
+            '#bar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #e2e8f0;z-index:999}' +
+            '#btns{display:flex;gap:8px;padding:10px 12px;justify-content:center;flex-wrap:wrap}' +
+            '#btns button{flex:1;min-width:80px;max-width:130px;padding:12px 6px;border:none;border-radius:22px;font-size:13px;font-weight:bold;cursor:pointer}' +
+            '.bp{background:#48bb78;color:#fff}.bpdf{background:#e74c3c;color:#fff}.bsh{background:#f6ad55;color:#fff}' +
+            '#sharePreview{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.88);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:16px}' +
+            '#sharePreview.show{display:flex}' +
+            '#sharePreview img{max-width:100%;max-height:60vh;border-radius:4px}' +
+            '.nav-btns{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;justify-content:center}' +
+            '.nav-btns button{padding:10px 16px;border:none;border-radius:18px;font-size:13px;font-weight:bold;cursor:pointer}' +
+            '.s-prev,.s-next{background:#666;color:#fff}.s-save{background:#48bb78;color:#fff}' +
+            '.s-share{background:#4a90d9;color:#fff}.s-strip{background:#e67e22;color:#fff}' +
+            '.s-all{background:#9b59b6;color:#fff}.s-close{background:#e53e3e;color:#fff}' +
+            '#lblCounter{color:#fff;font-size:13px;font-weight:600;margin-bottom:6px}' +
+            '@media print{#bar,#sharePreview{display:none!important}body{background:#fff;padding:0}#preview{padding:0;gap:0}.lbl-wrap{box-shadow:none}}' +
+            '</style></head><body>' +
+            '<div id="preview">' + labelsHtml + '</div>' +
+            '<div id="sharePreview">' +
+            '<div id="lblCounter">-</div>' +
+            '<img id="shareImg" src="">' +
+            '<div class="nav-btns"><button class="s-prev" onclick="navImg(-1)">&#9664;</button><button class="s-next" onclick="navImg(1)">Next &#9654;</button></div>' +
+            '<div class="nav-btns">' +
+            '<button class="s-save" onclick="saveImg()">&#8595; Save</button>' +
+            '<button class="s-share" onclick="shareImg()">&#8679; Share</button>' +
+            '<button class="s-strip" onclick="makeStrip()">&#128203; Strip</button>' +
+            '<button class="s-all" onclick="saveAllImgs()">&#8595; All</button>' +
+            '<button class="s-close" onclick="document.getElementById(\'sharePreview\').classList.remove(\'show\')">&#10005;</button>' +
+            '</div></div>' +
+            '<div id="bar"><div id="btns">' +
+            '<button class="bp" onclick="window.print()">&#128424; Print</button>' +
+            '<button class="bpdf" onclick="savePDF()">&#128196; Save PDF</button>' +
+            '<button class="bsh" onclick="makeImgs()">&#128247; Images</button>' +
+            '</div></div>' +
+            '<scr'+'ipt>' +
+            '// QR Code Generator v2 - Pure JS, no dependencies\n' +
+            '// Based on standard QR spec, Version 2-L (25x25)\n' +
+            'var QRGen = (function() {\n' +
+            '    var SIZE = 25;\n' +
+            '    \n' +
+            '    // Reed-Solomon\n' +
+            '    var EXP = [], LOG = [];\n' +
+            '    (function(){\n' +
+            '        var x=1;\n' +
+            '        for(var i=0;i<255;i++){EXP[i]=x;LOG[x]=i;x<<=1;if(x>255)x^=285;}\n' +
+            '        for(var i=255;i<512;i++)EXP[i]=EXP[i-255];\n' +
+            '    })();\n' +
+            '    function mul(a,b){return(a&&b)?EXP[(LOG[a]+LOG[b])%255]:0;}\n' +
+            '    function rsGen(n){var g=[1];for(var i=0;i<n;i++){var t=[1,EXP[i]];var r=new Array(g.length+1).fill(0);for(var a=0;a<g.length;a++)for(var b=0;b<t.length;b++)r[a+b]^=mul(g[a],t[b]);g=r;}return g;}\n' +
+            '    function rsDiv(msg,gen){var r=msg.slice();for(var i=0;i<msg.length;i++){var c=r[i];if(c)for(var j=1;j<gen.length;j++)r[i+j]^=mul(gen[j],c);}return r.slice(msg.length);}\n' +
+            '    \n' +
+            '    function encode(text){\n' +
+            '        var bytes=[];for(var i=0;i<text.length;i++)bytes.push(text.charCodeAt(i)&0xFF);\n' +
+            '        var bits=[];\n' +
+            '        function add(v,n){for(var i=n-1;i>=0;i--)bits.push((v>>i)&1);}\n' +
+            '        add(4,4);add(bytes.length,8);\n' +
+            '        for(var i=0;i<bytes.length;i++)add(bytes[i],8);\n' +
+            '        add(0,4);\n' +
+            '        while(bits.length%8)bits.push(0);\n' +
+            '        var cw=[];for(var i=0;i<bits.length;i+=8){var b=0;for(var j=0;j<8;j++)b=(b<<1)|bits[i+j];cw.push(b);}\n' +
+            '        var pad=[0xEC,0x11];while(cw.length<44)cw.push(pad[(cw.length-0)%2]);\n' +
+            '        return cw.concat(rsDiv(cw,rsGen(10)));\n' +
+            '    }\n' +
+            '    \n' +
+            '    function matrix(data){\n' +
+            '        var m=[];\n' +
+            '        for(var i=0;i<SIZE;i++){m.push(new Array(SIZE).fill(-1));}\n' +
+            '        \n' +
+            '        // Finder pattern (7x7 with border)\n' +
+            '        function finder(row,col){\n' +
+            '            for(var r=-1;r<=7;r++){\n' +
+            '                for(var c=-1;c<=7;c++){\n' +
+            '                    var pr=row+r, pc=col+c;\n' +
+            '                    if(pr<0||pr>=SIZE||pc<0||pc>=SIZE)continue;\n' +
+            '                    var v;\n' +
+            '                    if(r===-1||r===7||c===-1||c===7) v=0;      // separator\n' +
+            '                    else if(r===0||r===6||c===0||c===6) v=1;    // outer ring\n' +
+            '                    else if(r>=2&&r<=4&&c>=2&&c<=4) v=1;        // inner square\n' +
+            '                    else v=0;                                     // inner white\n' +
+            '                    m[pr][pc]=v;\n' +
+            '                }\n' +
+            '            }\n' +
+            '        }\n' +
+            '        finder(0,0);\n' +
+            '        finder(0,SIZE-7);\n' +
+            '        finder(SIZE-7,0);\n' +
+            '        \n' +
+            '        // Alignment pattern at (18,18) for version 2\n' +
+            '        for(var r=16;r<=20;r++)for(var c=16;c<=20;c++){\n' +
+            '            if(m[r][c]!==-1)continue;\n' +
+            '            m[r][c]=(r===16||r===20||c===16||c===20||(r===18&&c===18))?1:0;\n' +
+            '        }\n' +
+            '        \n' +
+            '        // Timing patterns\n' +
+            '        for(var i=8;i<SIZE-8;i++){\n' +
+            '            if(m[6][i]===-1)m[6][i]=i%2===0?1:0;\n' +
+            '            if(m[i][6]===-1)m[i][6]=i%2===0?1:0;\n' +
+            '        }\n' +
+            '        \n' +
+            '        // Dark module\n' +
+            '        m[SIZE-8][8]=1;\n' +
+            '        \n' +
+            '        // Format info (Version 2-L, mask 0: (i+j)%2==0)\n' +
+            '        // Pre-computed format string for L+mask0: 111011111000100 XOR 101010000010010 = 010001111010110\n' +
+            '        var fmt=[0,1,0,0,0,1,1,1,1,0,1,0,1,1,0];\n' +
+            '        // Top-left format\n' +
+            '        var fmtPos=[[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]];\n' +
+            '        // Top-right format\n' +
+            '        var fmtPos2=[[8,SIZE-1],[8,SIZE-2],[8,SIZE-3],[8,SIZE-4],[8,SIZE-5],[8,SIZE-6],[8,SIZE-7],[8,SIZE-8],[SIZE-7,8],[SIZE-6,8],[SIZE-5,8],[SIZE-4,8],[SIZE-3,8],[SIZE-2,8],[SIZE-1,8]];\n' +
+            '        for(var i=0;i<15;i++){\n' +
+            '            m[fmtPos[i][0]][fmtPos[i][1]]=fmt[i];\n' +
+            '            m[fmtPos2[i][0]][fmtPos2[i][1]]=fmt[i];\n' +
+            '        }\n' +
+            '        \n' +
+            '        // Data placement\n' +
+            '        var bits=[];\n' +
+            '        for(var i=0;i<data.length;i++)for(var b=7;b>=0;b--)bits.push((data[i]>>b)&1);\n' +
+            '        \n' +
+            '        var bi=0;\n' +
+            '        var col=SIZE-1;\n' +
+            '        while(col>0){\n' +
+            '            if(col===6)col--;\n' +
+            '            for(var row=0;row<SIZE;row++){\n' +
+            '                for(var dc=0;dc<2;dc++){\n' +
+            '                    var c=col-dc;\n' +
+            '                    var r=(col%4<2)?row:SIZE-1-row;  // alternate direction\n' +
+            '                    if(m[r][c]===-1){\n' +
+            '                        var bit=bi<bits.length?bits[bi++]:0;\n' +
+            '                        // Apply mask 0: (r+c)%2==0 → invert\n' +
+            '                        m[r][c]=((r+c)%2===0)?bit^1:bit;\n' +
+            '                    }\n' +
+            '                }\n' +
+            '            }\n' +
+            '            col-=2;\n' +
+            '        }\n' +
+            '        return m;\n' +
+            '    }\n' +
+            '    \n' +
+            '    function draw(canvas, text, size){\n' +
+            '        var quiet=4;\n' +
+            '        var data=encode(text);\n' +
+            '        var mat=matrix(data);\n' +
+            '        var mod=Math.max(1,Math.floor(size/(SIZE+quiet*2)));\n' +
+            '        var total=(SIZE+quiet*2)*mod;\n' +
+            '        canvas.width=total;canvas.height=total;\n' +
+            '        var ctx=canvas.getContext(\'2d\');\n' +
+            '        ctx.fillStyle=\'#fff\';ctx.fillRect(0,0,total,total);\n' +
+            '        ctx.fillStyle=\'#000\';\n' +
+            '        for(var r=0;r<SIZE;r++)\n' +
+            '            for(var c=0;c<SIZE;c++)\n' +
+            '                if(mat[r][c]===1)\n' +
+            '                    ctx.fillRect((c+quiet)*mod,(r+quiet)*mod,mod,mod);\n' +
+            '    }\n' +
+            '    \n' +
+            '    return {draw:draw};\n' +
+            '})();\n' +
+'var _imgs=[],_cur=0;' +
+            'function renderQR(){document.querySelectorAll(".bc").forEach(function(el){var v=el.getAttribute("data-v")||"TEST";var c=document.createElement("canvas");el.appendChild(c);try{QRGen.draw(c,v,' + (dims.h<=10?24:dims.h<=20?48:60) + ');}catch(e){el.innerHTML="<b style=color:red>"+e.message+"</b>";}});}' +
+            'renderQR();' +
+            'function showImg(i){if(i<0)i=_imgs.length-1;if(i>=_imgs.length)i=0;_cur=i;document.getElementById("shareImg").src=URL.createObjectURL(_imgs[i]);document.getElementById("lblCounter").textContent="Label "+(_cur+1)+" / "+_imgs.length;}' +
+            'function navImg(d){showImg(_cur+d);}' +
+            'function saveImg(){if(!_imgs[_cur])return;var a=document.createElement("a");a.href=URL.createObjectURL(_imgs[_cur]);a.download="label_"+(String(_cur+1).padStart(3,"0"))+".png";a.click();}' +
+            'function saveAllImgs(){_imgs.forEach(function(blob,i){setTimeout(function(){var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="label_"+(String(i+1).padStart(3,"0"))+".png";a.click();},i*600);});}' +
+            'function shareImg(){if(!_imgs[_cur])return;var f=new File([_imgs[_cur]],"label.png",{type:"image/png"});if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f]}).catch(function(){saveImg();});}else{saveImg();}}' +
+            'function makeStrip(){if(!_imgs.length){alert("Tap Images first");return;}var W=0,H=0,loaded=0,imgs=[];_imgs.forEach(function(blob,i){var img=new Image();img.onload=function(){imgs[i]=img;if(img.width>W)W=img.width;H+=img.height;loaded++;if(loaded===_imgs.length){var c=document.createElement("canvas");c.width=W;c.height=H;var ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,W,H);var y=0;imgs.forEach(function(im){ctx.drawImage(im,0,y);y+=im.height;});c.toBlob(function(blob){var f=new File([blob],"strip.png",{type:"image/png"});if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f]}).catch(function(){var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="strip.png";a.click();});}else{var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="strip.png";a.click();}},"image/png");}};img.src=URL.createObjectURL(blob);});}' +
+            'function savePDF(){var wraps=document.querySelectorAll(".lbl-wrap");if(!wraps.length){alert("No labels");return;}var dpi=203,pw=' + dims.w + ',ph=' + dims.h + ';var pxW=Math.round(pw/25.4*dpi),pxH=Math.round(ph/25.4*dpi);var totalH=pxH*wraps.length;var strip=document.createElement("canvas");strip.width=pxW;strip.height=totalH;var ctx=strip.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,pxW,totalH);var done=0;wraps.forEach(function(wrap,wi){var out=document.createElement("canvas");out.width=pxW;out.height=pxH;var c2=out.getContext("2d");c2.fillStyle="#fff";c2.fillRect(0,0,pxW,pxH);var n=wrap.querySelector(".n"),s=wrap.querySelector(".s"),pr=wrap.querySelector(".pr"),bcDiv=wrap.querySelector(".bc"),bc=bcDiv?bcDiv.querySelector("canvas"):null;if(!bc){bc=document.createElement("canvas");var v2=bcDiv?bcDiv.querySelector("[data-v]"):null;if(v2)try{QRGen.draw(bc,v2.getAttribute("data-v")||"TEST",ph<=10?24:ph<=20?48:60);}catch(e){}}var pad=Math.round(pxW*0.05),maxW=pxW-pad*2;var fN=Math.round(pxH*0.16),fS=Math.round(pxH*0.13),fP=Math.round(pxH*0.18),lh=Math.round(pxH*0.04);c2.fillStyle="#000";c2.font="bold "+fN+"px Arial";var nt=n?n.textContent:"";while(nt.length>0&&c2.measureText(nt).width>maxW)nt=nt.slice(0,-1);c2.fillText(nt,pad,pad+fN);c2.font=fS+"px Arial";c2.fillText(s?s.textContent:"",pad,pad+fN+lh+fS);c2.font="bold "+fP+"px Arial";c2.fillText(pr?pr.textContent:"",pad,pad+fN+lh+fS+lh+fP);if(bc&&bc.width>0){c2.drawImage(bc,pad,pxH-Math.round(pxH*0.42),pxW-pad*2,Math.round(pxH*0.38));}ctx.drawImage(out,0,wi*pxH);done++;if(done===wraps.length){strip.toBlob(function(blob){var imgUrl=URL.createObjectURL(blob);var pdf=window.open("","_blank");if(pdf){pdf.document.write("<html><head><style>@page{size:' + dims.w + 'mm ' + dims.h + 'mm;margin:0}*{margin:0;padding:0}body{margin:0}img{width:' + dims.w + 'mm;height:' + dims.h + 'mm;display:block;page-break-after:always}</style></head><body>");for(var k=0;k<wraps.length;k++)pdf.document.write("<img src=\'"+imgUrl+"\'>");pdf.document.write("</body></html>");pdf.document.close();setTimeout(function(){pdf.print();},500);}else{var a=document.createElement("a");a.href=imgUrl;a.download="labels.png";a.click();}},"image/png");}})}function makeImgs(){var btn=document.querySelector(".bsh");btn.textContent="Converting...";btn.disabled=true;var dpi=203;var wraps=document.querySelectorAll(".lbl-wrap");var pxW=Math.round(' + dims.w + '/25.4*dpi),pxH=Math.round(' + dims.h + '/25.4*dpi);_imgs=[];var done=0,total=wraps.length;wraps.forEach(function(wrap,wi){var out=document.createElement("canvas");out.width=pxW;out.height=pxH;var ctx=out.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,pxW,pxH);var n=wrap.querySelector(".n"),s=wrap.querySelector(".s"),pr=wrap.querySelector(".pr"),bcDiv=wrap.querySelector(".bc"),bc=bcDiv?bcDiv.querySelector("canvas"):null;var pad=Math.round(pxW*0.05),maxW=pxW-pad*2;var fN=Math.round(pxH*0.16),fS=Math.round(pxH*0.13),fP=Math.round(pxH*0.18),lh=Math.round(pxH*0.04);ctx.fillStyle="#000";ctx.font="bold "+fN+"px Arial";var nt=n?n.textContent:"";while(nt.length>0&&ctx.measureText(nt).width>maxW)nt=nt.slice(0,-1);ctx.fillText(nt,pad,pad+fN);ctx.font=fS+"px Arial";ctx.fillText(s?s.textContent:"",pad,pad+fN+lh+fS);ctx.font="bold "+fP+"px Arial";ctx.fillText(pr?pr.textContent:"",pad,pad+fN+lh+fS+lh+fP);if(bc&&bc.width>0){ctx.drawImage(bc,pad,pxH-Math.round(pxH*0.42),pxW-pad*2,Math.round(pxH*0.38));}out.toBlob(function(blob){_imgs[wi]=blob;done++;if(done===total){btn.textContent="\uD83D\uDCF7 Images";btn.disabled=false;showImg(0);document.getElementById("sharePreview").classList.add("show");}},"image/png");});}' +
+            '<'+'/scr'+'ipt>' +
+            '</body></html>';
+        // Always use blob URL - document.write() breaks script timing for QR/barcodes
+        var blob = new Blob([printHtml], { type: 'text/html;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+        closeLabelModal();
+        showToast('Labels opening — tap Print when ready', 'success');
+    }
+
+
+    // ── Native camera photo scan ──
+    // Use event delegation so it works even if modal added late
+    document.addEventListener('change', function(e) {
+        if (e.target && e.target.id === 'barcodeCapture') {
+            scanFromPhoto(e.target);
+        }
+    });
+
+    function scanFromPhoto(input) {
+        if (!input.files || !input.files[0]) return;
+        var resultEl = document.getElementById('barcodeResult');
+        var label = document.getElementById('cameraLabel');
+        if (label) label.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
+        resultEl.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--gray)"><i class="fas fa-spinner fa-spin"></i> Processing image...</div>';
+
+        var file = input.files[0];
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function() {
+            if (label) label.innerHTML = '<i class="fas fa-camera"></i> Open Camera';
+            var canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            URL.revokeObjectURL(url);
+            input.value = '';
+
+            // Try BarcodeDetector (Chrome Android / Chrome desktop)
+            if (typeof BarcodeDetector !== 'undefined') {
+                new BarcodeDetector({
+                    formats: ['qr_code','ean_13','ean_8','code_128','code_39','upc_a','upc_e']
+                }).detect(canvas).then(function(codes) {
+                    if (codes.length > 0) {
+                        searchBarcode(codes[0].rawValue);
+                    } else {
+                        tryZXing(canvas, resultEl);
+                    }
+                }).catch(function() { tryZXing(canvas, resultEl); });
+            } else {
+                tryZXing(canvas, resultEl);
+            }
+        };
+        img.onerror = function() {
+            URL.revokeObjectURL(url); input.value = '';
+            if (label) label.innerHTML = '<i class="fas fa-camera"></i> Open Camera';
+            resultEl.innerHTML = '<div style="color:var(--danger);padding:0.75rem;background:#fff5f5;border-radius:8px">Failed to load image. Try again.</div>';
+        };
+        img.src = url;
+    }
+
+    function tryZXing(canvas, resultEl) {
+        resultEl.innerHTML = '<div style="color:var(--gray);padding:0.75rem;background:#fff8e6;border-radius:8px;font-size:0.85rem">' +
+            '<b>📱 How to scan QR code:</b><br><br>' +
+            '<b>iPhone:</b> Use Camera app → point at QR → tap yellow notification → copy value → paste below<br><br>' +
+            '<b>Android Chrome:</b> Tap 🎥 Webcam button for live scanning<br><br>' +
+            'Or type the code manually below</div>';
+    }
+
+   </script>
+
 
 
     <!-- LABEL PRINT MODAL -->
@@ -3767,13 +3661,10 @@ function sendToTelegram(order, callback) {
                 <button class="modal-close" onclick="closeLabelModal()">&times;</button>
             </div>
             <div style="padding:1rem;overflow-y:auto;flex:1">
-                <!-- Mode tabs -->
                 <div style="display:flex;gap:0;margin-bottom:1rem;border:1px solid var(--gray-light);border-radius:8px;overflow:hidden">
                     <button id="lblModeSingle" class="btn" style="flex:1;border-radius:0;background:var(--primary);color:#fff;border:none" onclick="setLabelMode('single')">Single Product</button>
                     <button id="lblModeBulk" class="btn" style="flex:1;border-radius:0;background:var(--light);color:var(--gray-dark);border:none" onclick="setLabelMode('bulk')">Bulk Print</button>
                 </div>
-
-                <!-- Single product mode -->
                 <div id="lblSingleMode">
                     <div style="background:var(--light);border-radius:8px;padding:0.75rem;margin-bottom:1rem" id="lblProductInfo"></div>
                     <div style="display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
@@ -3784,48 +3675,42 @@ function sendToTelegram(order, callback) {
                         <div class="form-group" style="flex:1;min-width:120px">
                             <label style="font-size:0.85rem">Label size</label>
                             <select id="labelSize" class="form-control" onchange="renderLabelPreview()">
-                                <option value="20x10">20×10mm (tiny)</option>
-                                <option value="30x20" selected>30×20mm (Xprinter 320B) ✓</option>
-                                <option value="38x25">38×25mm (standard)</option>
-                                <option value="50x30">50×30mm</option>
-                                <option value="58x40">58×40mm</option>
+                                <option value="20x10">20x10mm (tiny)</option>
+                                <option value="30x20" selected>30x20mm (Xprinter 320B) ✓</option>
+                                <option value="38x25">38x25mm (standard)</option>
+                                <option value="50x30">50x30mm</option>
+                                <option value="58x40">58x40mm</option>
                             </select>
                         </div>
                     </div>
-                    <div style="font-size:0.82rem;color:var(--gray);margin-bottom:0.5rem">Preview:</div>
                     <div id="labelPreviewContainer" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1rem;background:var(--light);padding:0.75rem;border-radius:8px;min-height:60px"></div>
                 </div>
-
-                <!-- Bulk mode -->
                 <div id="lblBulkMode" style="display:none">
                     <div style="display:flex;gap:8px;margin-bottom:0.75rem;align-items:center;flex-wrap:wrap">
                         <button class="btn btn-outline btn-small" onclick="selectAllForLabel()"><i class="fas fa-check-square"></i> Select All</button>
                         <button class="btn btn-outline btn-small" onclick="deselectAllForLabel()"><i class="fas fa-square"></i> Deselect All</button>
-                        <div style="flex:1;min-width:120px">
-                            <input type="text" id="lblBulkSearch" class="form-control" placeholder="Search products..." oninput="renderBulkList()" style="font-size:0.82rem">
-                        </div>
+                        <input type="text" id="lblBulkSearch" class="form-control" placeholder="Search..." oninput="renderBulkList()" style="flex:1;min-width:120px;font-size:0.82rem">
                     </div>
                     <div id="lblBulkList" style="max-height:280px;overflow-y:auto;border:1px solid var(--gray-light);border-radius:8px"></div>
                     <div style="margin-top:0.75rem;display:flex;gap:1rem;flex-wrap:wrap">
                         <div class="form-group" style="flex:1;min-width:100px">
-                            <label style="font-size:0.82rem">Default qty per size</label>
+                            <label style="font-size:0.82rem">Default qty</label>
                             <input type="number" id="lblBulkQty" class="form-control" value="1" min="1" max="100">
                         </div>
                         <div class="form-group" style="flex:1;min-width:120px">
                             <label style="font-size:0.82rem">Label size</label>
                             <select id="lblBulkSize" class="form-control">
-                                <option value="20x10">20×10mm (tiny)</option>
-                                <option value="30x20" selected>30×20mm (Xprinter 320B) ✓</option>
-                                <option value="38x25">38×25mm (standard)</option>
-                                <option value="50x30">50×30mm</option>
-                                <option value="58x40">58×40mm</option>
+                                <option value="20x10">20x10mm (tiny)</option>
+                                <option value="30x20" selected>30x20mm (Xprinter 320B) ✓</option>
+                                <option value="38x25">38x25mm</option>
+                                <option value="50x30">50x30mm</option>
+                                <option value="58x40">58x40mm</option>
                             </select>
                         </div>
                     </div>
                     <div id="lblBulkSummary" style="font-size:0.82rem;color:var(--gray);margin-top:0.25rem"></div>
                 </div>
             </div>
-            <!-- Footer buttons -->
             <div style="padding:0.75rem 1rem;border-top:1px solid var(--gray-light);display:flex;gap:0.5rem">
                 <button class="btn btn-primary" onclick="printLabels()" style="flex:1"><i class="fas fa-print"></i> Print Labels</button>
                 <button class="btn btn-outline" onclick="closeLabelModal()">Cancel</button>
@@ -3833,40 +3718,34 @@ function sendToTelegram(order, callback) {
         </div>
     </div>
 
-
     <!-- BARCODE SCANNER MODAL -->
     <div class="modal-overlay" id="barcodeScanModal" onclick="if(event.target===this)closeBarcodeScanner()">
         <div class="modal" style="max-width:420px;width:95%">
             <div class="modal-header">
-                <h3><i class="fas fa-barcode" style="color:var(--primary)"></i> Barcode Scanner</h3>
+                <h3><i class="fas fa-qrcode" style="color:var(--primary)"></i> Scan QR Code</h3>
                 <button class="modal-close" onclick="closeBarcodeScanner()">&times;</button>
             </div>
             <div style="padding:1rem">
-                <!-- Method 1: Native phone camera - works on ALL phones -->
-                <div style="background:var(--light);border-radius:8px;padding:1rem;margin-bottom:1rem;text-align:center">
-                    <div style="font-size:0.85rem;color:var(--gray);margin-bottom:0.75rem"><i class="fas fa-mobile-alt"></i> Scan with phone camera</div>
-                    <label style="display:inline-block;background:var(--primary);color:#fff;padding:12px 28px;border-radius:22px;cursor:pointer;font-weight:600;font-size:14px" id="cameraLabel">
-                        <i class="fas fa-camera"></i> Open Camera
+
+                <!-- Phone camera button -->
+                <div style="text-align:center;margin-bottom:1.25rem">
+                    <label id="cameraLabel" style="display:inline-flex;align-items:center;gap:10px;background:var(--primary);color:#fff;padding:14px 32px;border-radius:28px;cursor:pointer;font-weight:700;font-size:16px;box-shadow:0 4px 12px rgba(74,144,217,0.4)">
+                        <i class="fas fa-camera" style="font-size:20px"></i> Open Camera
                         <input type="file" accept="image/*" capture="environment" id="barcodeCapture" style="display:none">
                     </label>
-                    <div style="font-size:0.75rem;color:var(--gray);margin-top:0.5rem">Take photo of barcode → auto detect</div>
+                    <div id="scanMsg" style="margin-top:0.75rem;font-size:0.82rem;color:var(--gray)">Point camera at QR code on label → take photo</div>
                 </div>
-                <!-- Method 2: PC webcam -->
-                <div style="margin-bottom:1rem">
-                    <button class="btn btn-outline w-full" onclick="toggleWebcam()" id="webcamBtn"><i class="fas fa-video"></i> Use Webcam (PC only)</button>
-                    <div id="webcamPreview" style="display:none;margin-top:0.75rem">
-                        <div style="position:relative;background:#000;border-radius:8px;overflow:hidden">
-                            <video id="barcodeVideo" style="width:100%;height:200px;object-fit:cover" playsinline autoplay muted></video>
-                            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:180px;height:60px;border:2px solid #48bb78;border-radius:4px;box-shadow:0 0 0 999px rgba(0,0,0,0.35)"></div>
-                            <div id="scanStatus" style="position:absolute;bottom:8px;left:0;right:0;text-align:center;color:#fff;font-size:11px;background:rgba(0,0,0,0.5);padding:3px">Starting...</div>
-                        </div>
-                    </div>
+
+                <!-- Manual entry -->
+                <div style="display:flex;gap:8px;margin-bottom:0.75rem">
+                    <input type="text" id="barcodeManualInput" class="form-control"
+                        placeholder="Or type / paste code manually..."
+                        autocomplete="off" autocapitalize="none"
+                        onkeydown="if(event.key==='Enter')doManualScan()">
+                    <button class="btn btn-primary" onclick="doManualScan()"><i class="fas fa-search"></i></button>
                 </div>
-                <!-- Method 3: Manual -->
-                <div style="display:flex;gap:8px;margin-bottom:1rem">
-                    <input type="text" id="barcodeManualInput" class="form-control" placeholder="Or type / paste barcode..." autocomplete="off" autocapitalize="none" onkeydown="if(event.key==='Enter')searchBarcode(document.getElementById('barcodeManualInput').value)">
-                    <button class="btn btn-primary" onclick="searchBarcode(document.getElementById('barcodeManualInput').value)"><i class="fas fa-search"></i></button>
-                </div>
+
+                <!-- Result -->
                 <div id="barcodeResult"></div>
             </div>
         </div>
