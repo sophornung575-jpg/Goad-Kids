@@ -1587,23 +1587,32 @@ function sendToTelegram(order, callback) {
             var qty = 1;
         }
 
-        if (!sizeName) { showToast('Select a size', 'warning'); return; }
+        if (!sizeName) {
+            // Product has no sizes - use 'One Size'
+            if (!p.sizes || p.sizes.length === 0) {
+                sizeName = 'One Size';
+            } else {
+                showToast('Select a size', 'warning'); return;
+            }
+        }
 
-        // Add to cart
+        // Add to cart - use same structure as addToCart()
         var existing = null;
         for (var i = 0; i < STATE.cart.length; i++) {
-            if (STATE.cart[i].id === pid && STATE.cart[i].size === sizeName) {
+            if (STATE.cart[i].productId === pid && STATE.cart[i].size === sizeName) {
                 existing = STATE.cart[i]; break;
             }
         }
         if (existing) {
-            existing.qty += qty;
+            existing.quantity += qty;
         } else {
-            STATE.cart.push({ id: pid, name: p.name, size: sizeName, price: p.price, qty: qty });
+            STATE.cart.push({ productId: pid, name: p.name, price: p.price, size: sizeName, quantity: qty, image: (p.images && p.images[0]) || '' });
         }
+        // Save cart
+        try { localStorage.setItem('goatCart', JSON.stringify(STATE.cart)); } catch(e) {}
 
         updateCartBadge();
-        showToast(p.name + ' (' + sizeName + ') x' + qty + ' added to order ✅', 'success');
+        showToast(p.name + ' (' + sizeName + ') ×' + qty + ' added to cart ✅', 'success');
 
         // Update panel to show confirmation
         var panel = document.getElementById('scanActionPanel');
@@ -1611,7 +1620,7 @@ function sendToTelegram(order, callback) {
             panel.innerHTML =
                 '<div style="background:#f0fff4;border:1px solid var(--success);border-radius:8px;padding:0.75rem;text-align:center">' +
                 '<div style="font-size:1.2rem">✅</div>' +
-                '<div style="font-weight:600;font-size:0.9rem">' + escHtml(p.name) + ' (' + escHtml(sizeName) + ') × ' + qty + '</div>' +
+                '<div style="font-weight:600;font-size:0.9rem">' + escHtml(p.name) + ' (' + escHtml(sizeName) + ') ×' + qty + '</div>' +
                 '<div style="font-size:0.8rem;color:var(--gray);margin-top:2px">Added to order</div>' +
                 '<div style="display:flex;gap:6px;margin-top:0.5rem">' +
                 '<button class="btn btn-success btn-small" style="flex:1" ' +
