@@ -40,16 +40,10 @@
         }
         var firebaseConfig = getFirebaseConfig();
         if (!firebaseConfig) {
-            // Save default config to localStorage on first run, then it's no longer in active JS
-            firebaseConfig = {
-                apiKey: "AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU",
-                authDomain: "goat-kids-store.firebaseapp.com",
-                projectId: "goat-kids-store",
-                storageBucket: "goat-kids-store.firebasestorage.app",
-                messagingSenderId: "372035223463",
-                appId: "1:372035223463:web:a9948932607e81da2a4082"
-            };
-            localStorage.setItem('goatFirebaseConfig', JSON.stringify(firebaseConfig));
+            // No config in localStorage - show setup screen instead of using hardcoded key
+            document.getElementById('firebaseSetupScreen').style.display = 'flex';
+            document.getElementById('appRoot').style.display = 'none';
+            return;
         }
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
@@ -288,7 +282,50 @@
         <span class="floating-cart-count" id="floatingCartCount">0</span>
     </div>
 
-    <header>
+    
+    <!-- Firebase Setup Screen -->
+    <div id="firebaseSetupScreen" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:#f7fafc;z-index:99999;flex-direction:column;align-items:center;justify-content:center;padding:20px">
+        <div style="background:#fff;border-radius:16px;padding:2rem;max-width:480px;width:100%;box-shadow:0 4px 24px rgba(0,0,0,0.12)">
+            <div style="text-align:center;margin-bottom:1.5rem">
+                <div style="font-size:2.5rem">🐐</div>
+                <h2 style="margin:0.5rem 0;color:#2d3748">Goat Kids Setup</h2>
+                <p style="color:#718096;font-size:0.9rem">Enter your Firebase config to get started</p>
+            </div>
+            <div class="form-group">
+                <label>Firebase Config (JSON)</label>
+                <textarea id="setupFirebaseJson" class="form-control" rows="8" 
+                    placeholder='Paste your Firebase config object here:
+
+{
+  "apiKey": "...",
+  "authDomain": "...",
+  "projectId": "...",
+  ...
+}'
+                    style="font-family:monospace;font-size:0.82rem;resize:vertical"></textarea>
+            </div>
+            <div class="form-group" style="margin-top:1rem">
+                <label>Admin Password (optional, default: admin123)</label>
+                <input type="password" id="setupAdminPass" class="form-control" placeholder="Set admin password">
+            </div>
+            <div class="form-group">
+                <label>Orders Password (optional, default: orders123)</label>
+                <input type="password" id="setupOrdersPass" class="form-control" placeholder="Set orders password">
+            </div>
+            <div class="form-group">
+                <label>Inventory Password (optional, default: inventory123)</label>
+                <input type="password" id="setupInventoryPass" class="form-control" placeholder="Set inventory password">
+            </div>
+            <button class="btn btn-primary w-full" style="margin-top:0.5rem" onclick="completeSetup()">
+                <i class="fas fa-check"></i> Save & Start App
+            </button>
+            <p style="text-align:center;font-size:0.78rem;color:#a0aec0;margin-top:1rem">
+                Config is stored locally on this device only
+            </p>
+        </div>
+    </div>
+
+<header id="appRoot">
         <div class="header-container">
             <div class="logo" onclick="showTab('store')"><span>GOAT KIDS</span><span id="adminBadge" class="admin-badge hidden">ADMIN</span></div>
             <div style="display:flex;align-items:center;gap:0.5rem">
@@ -583,7 +620,7 @@
                         <!-- PASSWORD LOCK OVERLAY -->
                         <div id="settingsLock" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3rem 1rem;text-align:center">
                             <div style="background:#fff;border-radius:16px;padding:2rem;max-width:320px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
-                                <div style="font-size:2.5rem;margin-bottom:0.5rem"></div>
+                                <div style="font-size:2.5rem;margin-bottom:0.5rem">🔐</div>
                                 <h3 style="margin-bottom:0.25rem;color:var(--gray-dark)">Settings Protected</h3>
                                 <p style="font-size:0.85rem;color:var(--gray);margin-bottom:1.5rem">Enter your admin password to access settings</p>
                                 <div style="position:relative;margin-bottom:1rem">
@@ -603,7 +640,28 @@
                             <div class="store-info-grid">
                                 <div class="store-info-item"><small>Store ID</small><div class="store-id-box"><code id="storeIdDisplay">...</code><button class="btn btn-primary btn-small" onclick="copyStoreId()"><i class="fas fa-copy"></i></button></div></div>
                                 <div class="store-info-item"><small>Cloud Sync</small><button class="btn btn-success w-full" onclick="syncToFirebase()"><i class="fas fa-cloud-upload-alt"></i> Sync to Cloud</button></div>
-                                <div class="store-info-item"><small>Firebase Config</small><button class="btn btn-warning w-full" onclick="resetFirebaseConfig()"><i class="fas fa-key"></i> Update API Config</button></div>
+                                <div class="store-info-item" style="grid-column:1/-1">
+                                    <small>Firebase Config</small>
+                                    <div style="margin-top:6px">
+                                        <div id="firebaseConfigStatus" style="font-size:0.78rem;color:var(--success);margin-bottom:6px">
+                                            ✅ Config stored in localStorage
+                                        </div>
+                                        <textarea id="settingsFirebaseJson" class="form-control" rows="5" 
+                                            style="font-family:monospace;font-size:0.75rem;resize:vertical"
+                                            placeholder='Paste Firebase config JSON here...'></textarea>
+                                        <div style="display:flex;gap:8px;margin-top:6px">
+                                            <button class="btn btn-warning" style="flex:1" onclick="loadCurrentFirebaseConfig()">
+                                                <i class="fas fa-eye"></i> View Current
+                                            </button>
+                                            <button class="btn btn-primary" style="flex:1" onclick="saveFirebaseConfigFromSettings()">
+                                                <i class="fas fa-save"></i> Save Config
+                                            </button>
+                                        </div>
+                                        <button class="btn btn-outline btn-small w-full" style="margin-top:6px;color:var(--danger)" onclick="clearFirebaseConfig()">
+                                            <i class="fas fa-trash"></i> Clear Config (shows setup screen)
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <!-- Telegram Settings -->
@@ -808,7 +866,7 @@
     function testTelegramMessage() {
         var statusEl = document.getElementById('telegramConfigStatus');
         statusEl.innerHTML = '<span style="color:var(--info)"><i class="fas fa-spinner fa-spin"></i> Sending test message...</span>';
-        _sendTelegramRaw('📨 GOAT KIDS: Telegram is working! Orders will be delivered here.', function(ok) {
+        _sendTelegramRaw('🔔 GOAT KIDS: Telegram is working! Orders will be delivered here.', function(ok) {
             if (ok) {
                 statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Test message sent successfully!</span>';
             } else {
@@ -1212,7 +1270,7 @@ function sendToTelegram(order, callback) {
         var el = document.getElementById('loginAttemptsLeft');
         if (attempts.lockedUntil > now) {
             var mins = Math.ceil((attempts.lockedUntil - now) / 60000);
-            el.textContent = 'Locked for ' + mins + ' more minutes';
+            el.textContent = '🔒 Locked for ' + mins + ' more minutes';
             el.style.color = 'var(--danger)';
         } else if (attempts.count > 0) {
             var rem = STATE.maxLoginAttempts - attempts.count;
@@ -1670,14 +1728,69 @@ function sendToTelegram(order, callback) {
         else if (action === 'del') { if (confirm('Delete this product?')) deleteProduct(pid); }
     }
 
+    function loadCurrentFirebaseConfig() {
+        var cfg = localStorage.getItem('goatFirebaseConfig');
+        var ta = document.getElementById('settingsFirebaseJson');
+        if (ta) {
+            if (cfg) {
+                ta.value = JSON.stringify(JSON.parse(cfg), null, 2);
+            } else {
+                ta.value = '// No config stored';
+            }
+        }
+    }
+
+    function cleanFirebaseJson(raw) {
+        // Remove single-line comments, const declaration, trailing semicolon
+        var lines = raw.split('\n');
+        var cleaned = lines
+            .map(function(l) { return l.replace(/\/\/.*/, '').trim(); })
+            .filter(function(l) { return l.length > 0; })
+            .join('\n');
+        cleaned = cleaned
+            .replace(/^const\s+\w+\s*=\s*/, '')
+            .replace(/;\s*$/, '')
+            .trim();
+        // Quote unquoted keys: {key: -> {"key":
+        cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)/g, '$1"$2"$3');
+        return cleaned;
+    }
+
+    function saveFirebaseConfigFromSettings() {
+        var raw = document.getElementById('settingsFirebaseJson').value.trim();
+        if (!raw) { showToast('Paste your Firebase config first', 'warning'); return; }
+        try {
+            // Accept Firebase console format (unquoted keys) or JSON
+            var json = cleanFirebaseJson(raw);
+            // cleaned by cleanFirebaseJson helper
+            var cfg = JSON.parse(json);
+            if (!cfg.apiKey || !cfg.projectId) {
+                showToast('Invalid config: missing apiKey or projectId', 'error');
+                return;
+            }
+            localStorage.setItem('goatFirebaseConfig', JSON.stringify(cfg));
+            showToast('✅ Firebase config saved — reloading...', 'success');
+            setTimeout(function() { location.reload(); }, 1500);
+        } catch(e) {
+            showToast('Invalid JSON: ' + e.message, 'error');
+        }
+    }
+
+    function clearFirebaseConfig() {
+        if (!confirm('This will clear the Firebase config and show the setup screen on next reload. Continue?')) return;
+        localStorage.removeItem('goatFirebaseConfig');
+        showToast('Config cleared — reloading...', 'warning');
+        setTimeout(function() { location.reload(); }, 1000);
+    }
+
     function resetFirebaseConfig() {
         var raw = prompt('Paste your Firebase config below.\n\nAccepts both formats:\n• Firebase console format (apiKey: "...")\n• JSON format ("apiKey": "...")\n\nLeave empty to cancel:');
         if (!raw || !raw.trim()) return;
         try {
             // Convert Firebase console format to JSON by quoting unquoted keys
             var json = raw.trim()
-                .replace(/\/\/[^\n]*/g, '')           // remove comments
-                .replace(/\bconst\b.*?=\s*/g, '')     // remove "const x ="
+                .replace(/[/][/].*/g, '')           // remove comments
+                .replace(/const[^=]+=\s*/g, '')     // remove "const x ="
                 .replace(/;$/, '')                     // remove trailing semicolon
                 .trim()
                 .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)/g, '$1"$2"$3'); // quote keys
@@ -1695,10 +1808,46 @@ function sendToTelegram(order, callback) {
         var stored = localStorage.getItem('goatPasswords');
         if (stored) { try { return JSON.parse(stored); } catch(e) {} }
         // First-run defaults (overwritten immediately if user has set passwords)
-        return { fullPass: 'admin123', ordersPass: 'orders123', inventoryPass: 'inventory123' };
+        // First run - return defaults so app works, user should change in settings
+        var defaults = { fullPass: 'admin123', ordersPass: 'orders123', inventoryPass: 'inventory123' };
+        localStorage.setItem('goatPasswords', JSON.stringify(defaults));
+        return defaults;
     }
     function savePasswords(obj) {
         localStorage.setItem('goatPasswords', JSON.stringify(obj));
+    }
+
+    function completeSetup() {
+        // 1. Save Firebase config
+        var json = document.getElementById('setupFirebaseJson').value.trim();
+        if (!json) { alert('Please paste your Firebase config JSON'); return; }
+        try {
+            // Accept both object literal and JSON
+            var cfg = JSON.parse(json);
+            if (!cfg.apiKey || !cfg.projectId) {
+                alert('Invalid config: missing apiKey or projectId');
+                return;
+            }
+            localStorage.setItem('goatFirebaseConfig', JSON.stringify(cfg));
+        } catch(e) {
+            alert('Invalid JSON: ' + e.message + '\n\nMake sure you paste valid JSON (use double quotes)');
+            return;
+        }
+
+        // 2. Save passwords if provided
+        var ap = document.getElementById('setupAdminPass').value.trim();
+        var op = document.getElementById('setupOrdersPass').value.trim();
+        var ip = document.getElementById('setupInventoryPass').value.trim();
+        var pw = {
+            fullPass: ap || 'admin123',
+            ordersPass: op || 'orders123',
+            inventoryPass: ip || 'inventory123'
+        };
+        localStorage.setItem('goatPasswords', JSON.stringify(pw));
+
+        // 3. Reload to initialize Firebase
+        showToast('Setup complete! Loading app...', 'success');
+        setTimeout(function() { location.reload(); }, 1000);
     }
     function changePassword() {
         var role = document.getElementById('changePwRole').value;
@@ -2820,7 +2969,7 @@ function sendToTelegram(order, callback) {
         var html = '';
         html += '<!DOCTYPE html><html><head><title>Receipt ' + order.orderId + '</title>';
         html += '<meta name="viewport" content="width=device-width,initial-scale=1">';
-        html += '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>';
+        html += '<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/scr'+'ipt>';
         html += '<style>';
         html += '@page{size:58mm auto;margin:0}';
         html += '*{margin:0;padding:0;box-sizing:border-box}';
@@ -2830,16 +2979,16 @@ function sendToTelegram(order, callback) {
         html += '.logo{width:36mm;display:block;margin:0 auto 2mm}';
         html += '.dash{border:none;border-top:1px dashed #aaa;margin:1.5mm 0}';
         html += '.solid{border:none;border-top:1.5px solid #000;margin:1mm 0}';
-        html += '.row{display:flex;justify-content:space-between;padding:0.5mm 0;font-size:9.5pt}';
+        html += '.row{display:flex;justify-content:space-between;padding:0.5mm 0;font-size:7.5pt}';
         html += '.lbl{color:#555}';
-        html += '.tot{font-weight:bold;font-size:12pt}';
-        html += '.inm{font-weight:bold;font-size:9.5pt}';
+        html += '.tot{font-weight:bold;font-size:9pt}';
+        html += '.inm{font-weight:bold;font-size:7.5pt}';
         html += '.isz{font-weight:normal;color:#666}';
-        html += '.ir{display:flex;justify-content:space-between;font-size:9pt;color:#444;margin-top:0.5mm}';
-        html += '.ft{text-align:center;font-size:11pt;color:#888;margin-top:2mm;line-height:1.6}';
+        html += '.ir{display:flex;justify-content:space-between;font-size:7pt;color:#444;margin-top:0.5mm}';
+        html += '.ft{text-align:center;font-size:6.5pt;color:#888;margin-top:2mm;line-height:1.6}';
         html += '#bar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #e2e8f0;z-index:999;font-family:Arial,sans-serif}';
         html += '#btns{display:flex;gap:8px;padding:10px 12px;justify-content:center}';
-        html += '#btns button{flex:1;max-width:110px;padding:12px 6px;border:none;border-radius:22px;font-size:15px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px}';
+        html += '#btns button{flex:1;max-width:110px;padding:12px 6px;border:none;border-radius:22px;font-size:13px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px}';
         html += '.ba{background:#4a90d9;color:#fff}';
         html += '.bp{background:#48bb78;color:#fff}';
         html += '.bsh{background:#f6ad55;color:#fff}';
@@ -2885,7 +3034,7 @@ function sendToTelegram(order, callback) {
         html += '<hr class="solid">';
         html += '<div class="row tot"><span>TOTAL</span><span>$' + (order.total||0).toFixed(2) + '</span></div>';
         html += '<hr class="dash">';
-        html += '<div class="ft"><p>&#9829; Thank you for your order!</p><p>Shop Tell : 093779077</p></div>';
+        html += '<div class="ft"><p>&#9829; Thank you for your order!</p><p>Payment: Cash on Delivery</p></div>';
         html += '</div>'; // end #receipt
 
         // Share image preview overlay
@@ -3114,16 +3263,37 @@ function sendToTelegram(order, callback) {
     }
 
     function getDateRange(filter) {
-        var now = new Date(); now.setHours(23, 59, 59, 999); var startDate;
+        var today = new Date();
+        var y = today.getFullYear(), mo = today.getMonth(), d = today.getDate();
+        var endDate = new Date(y, mo, d, 23, 59, 59, 999); // end of today
+        var startDate;
         switch (filter) {
-            case 'today': startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0); break;
-            case 'week': startDate = new Date(now); startDate.setDate(now.getDate() - now.getDay()); startDate.setHours(0, 0, 0, 0); break;
-            case 'month': startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0); break;
-            case 'year': startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0); break;
-            case 'custom': startDate = STATE.customStartDate; now = STATE.customEndDate || new Date(); break;
-            default: startDate = new Date(0); break;
+            case 'today':
+                startDate = new Date(y, mo, d, 0, 0, 0, 0);
+                break;
+            case 'week':
+                // Start of current week (Monday)
+                var day = today.getDay(); // 0=Sun,1=Mon...6=Sat
+                var diff = (day === 0) ? 6 : day - 1; // days since Monday
+                startDate = new Date(y, mo, d - diff, 0, 0, 0, 0);
+                break;
+            case 'month':
+                startDate = new Date(y, mo, 1, 0, 0, 0, 0);
+                break;
+            case 'year':
+                startDate = new Date(y, 0, 1, 0, 0, 0, 0);
+                break;
+            case 'custom':
+                startDate = STATE.customStartDate ? new Date(STATE.customStartDate) : new Date(y, mo, d, 0, 0, 0, 0);
+                startDate.setHours(0, 0, 0, 0);
+                endDate = STATE.customEndDate ? new Date(STATE.customEndDate) : endDate;
+                endDate.setHours(23, 59, 59, 999);
+                break;
+            default:
+                startDate = new Date(0);
+                break;
         }
-        return { start: startDate, end: now };
+        return { start: startDate, end: endDate };
     }
 
     function getFilteredOrders() {
@@ -3145,7 +3315,13 @@ function sendToTelegram(order, callback) {
         document.getElementById('reportTotalOrders').textContent = filtered.confirmed.length + filtered.pending.length;
         var is = 0; for (var j = 0; j < filtered.confirmed.length; j++) { if (filtered.confirmed[j].status === 'confirmed') { for (var k = 0; k < filtered.confirmed[j].cart.length; k++) is += filtered.confirmed[j].cart[k].quantity; } }
         document.getElementById('reportItemsSold').textContent = is;
-        var cs = new Set(); for (var l = 0; l < filtered.confirmed.length; l++) { if (filtered.confirmed[l].status === 'confirmed' && filtered.confirmed[l].customerPhone) cs.add(filtered.confirmed[l].customerPhone); } for (var m = 0; m < filtered.pending.length; m++) { if (filtered.pending[m].customerPhone) cs.add(filtered.pending[m].customerPhone); }
+        var cs = new Set();
+        for (var l = 0; l < filtered.confirmed.length; l++) {
+            var co = filtered.confirmed[l];
+            if (co.status === 'confirmed' && (co.customerPhone || co.customerName)) {
+                cs.add(co.customerPhone || co.customerName);
+            }
+        }
         document.getElementById('reportTotalCustomers').textContent = cs.size;
     }
 
@@ -3707,12 +3883,21 @@ function sendToTelegram(order, callback) {
             if (!_labelProduct) { showToast('No product selected', 'error'); return; }
             sizeVal = document.getElementById('labelSize').value;
             dims = getLabelDims(sizeVal);
-            var qty = parseInt(document.getElementById('labelQty').value) || 1;
             var sizes = _labelProduct.sizes && _labelProduct.sizes.length
-                ? _labelProduct.sizes : [{ name: 'One Size' }];
+                ? _labelProduct.sizes : [{ name: 'One Size', qty: 1 }];
             sizes.forEach(function(s) {
-                labelsData.push({ p: _labelProduct, size: s.name, qty: qty });
+                var qty;
+                if (_labelQtyMode === 'auto') {
+                    qty = s.qty || 0;
+                } else {
+                    qty = _customQtys[s.name] !== undefined ? _customQtys[s.name] : (s.qty || 1);
+                }
+                if (qty > 0) labelsData.push({ p: _labelProduct, size: s.name, qty: qty });
             });
+            // If auto mode and all sizes 0, fallback to 1 per size
+            if (labelsData.length === 0) {
+                sizes.forEach(function(s) { labelsData.push({ p: _labelProduct, size: s.name, qty: 1 }); });
+            }
         } else {
             var pids = Object.keys(_labelSelected);
             if (!pids.length) { showToast('Select at least one product', 'warning'); return; }
