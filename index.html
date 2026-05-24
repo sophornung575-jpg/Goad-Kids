@@ -3722,7 +3722,7 @@ function sendToTelegram(order, callback) {
             '</div></div>' +
             '<div id="bar"><div id="btns">' +
             '<button class="bp" onclick="window.print()">&#128424; Print</button>' +
-            '<button class="bpdf" onclick="savePDF()">&#128196; Save PDF</button>' +
+            '<button class="bpdf" onclick="downloadPDF()">&#11015; Download PDF</button>' +
             '<button class="bsh" onclick="makeImgs()">&#128247; Images</button>' +
             '</div></div>' +
             '<scr'+'ipt>' +
@@ -4988,7 +4988,56 @@ function sendToTelegram(order, callback) {
             'function saveAllImgs(){_imgs.forEach(function(blob,i){setTimeout(function(){var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="label_"+(String(i+1).padStart(3,"0"))+".png";a.click();},i*600);});}' +
             'function shareImg(){if(!_imgs[_cur])return;var f=new File([_imgs[_cur]],"label.png",{type:"image/png"});if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f]}).catch(function(){saveImg();});}else{saveImg();}}' +
             'function makeStrip(){if(!_imgs.length){alert("Tap Images first");return;}var W=0,H=0,loaded=0,imgs=[];_imgs.forEach(function(blob,i){var img=new Image();img.onload=function(){imgs[i]=img;if(img.width>W)W=img.width;H+=img.height;loaded++;if(loaded===_imgs.length){var c=document.createElement("canvas");c.width=W;c.height=H;var ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,W,H);var y=0;imgs.forEach(function(im){ctx.drawImage(im,0,y);y+=im.height;});c.toBlob(function(blob){var f=new File([blob],"strip.png",{type:"image/png"});if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f]}).catch(function(){var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="strip.png";a.click();});}else{var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="strip.png";a.click();}},"image/png");}};img.src=URL.createObjectURL(blob);});}' +
-            'function savePDF(){var wraps=document.querySelectorAll(".lbl-wrap");if(!wraps.length){alert("No labels");return;}var dpi=203,pw=' + dims.w + ',ph=' + dims.h + ';var pxW=Math.round(pw/25.4*dpi),pxH=Math.round(ph/25.4*dpi);var totalH=pxH*wraps.length;var strip=document.createElement("canvas");strip.width=pxW;strip.height=totalH;var ctx=strip.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,pxW,totalH);var done=0;wraps.forEach(function(wrap,wi){var out=document.createElement("canvas");out.width=pxW;out.height=pxH;var c2=out.getContext("2d");c2.fillStyle="#fff";c2.fillRect(0,0,pxW,pxH);var n=wrap.querySelector(".n"),s=wrap.querySelector(".s"),pr=wrap.querySelector(".pr"),bcDiv=wrap.querySelector(".bc"),bc=bcDiv?bcDiv.querySelector("canvas"):null;if(!bc){bc=document.createElement("canvas");var v2=bcDiv?bcDiv.querySelector("[data-v]"):null;if(v2)try{QRGen.draw(bc,v2.getAttribute("data-v")||"TEST",ph<=10?24:ph<=20?48:60);}catch(e){}}var pad=Math.round(pxW*0.05),maxW=pxW-pad*2;var fN=Math.round(pxH*0.16),fS=Math.round(pxH*0.13),fP=Math.round(pxH*0.18),lh=Math.round(pxH*0.04);c2.fillStyle="#000";c2.font="bold "+fN+"px Arial";var nt=n?n.textContent:"";while(nt.length>0&&c2.measureText(nt).width>maxW)nt=nt.slice(0,-1);c2.fillText(nt,pad,pad+fN);c2.font=fS+"px Arial";c2.fillText(s?s.textContent:"",pad,pad+fN+lh+fS);c2.font="bold "+fP+"px Arial";c2.fillText(pr?pr.textContent:"",pad,pad+fN+lh+fS+lh+fP);if(bc&&bc.width>0){c2.drawImage(bc,pad,pxH-Math.round(pxH*0.42),pxW-pad*2,Math.round(pxH*0.38));}ctx.drawImage(out,0,wi*pxH);done++;if(done===wraps.length){strip.toBlob(function(blob){var imgUrl=URL.createObjectURL(blob);var pdf=window.open("","_blank");if(pdf){pdf.document.write("<html><head><style>@page{size:' + dims.w + 'mm ' + dims.h + 'mm;margin:0}*{margin:0;padding:0}body{margin:0}img{width:' + dims.w + 'mm;height:' + dims.h + 'mm;display:block;page-break-after:always}</style></head><body>");for(var k=0;k<wraps.length;k++)pdf.document.write("<img src=\'"+imgUrl+"\'>");pdf.document.write("</body></html>");pdf.document.close();setTimeout(function(){pdf.print();},500);}else{var a=document.createElement("a");a.href=imgUrl;a.download="labels.png";a.click();}},"image/png");}})}function makeImgs(){var btn=document.querySelector(".bsh");btn.textContent="Converting...";btn.disabled=true;var dpi=203;var wraps=document.querySelectorAll(".lbl-wrap");var pxW=Math.round(' + dims.w + '/25.4*dpi),pxH=Math.round(' + dims.h + '/25.4*dpi);_imgs=[];var done=0,total=wraps.length;wraps.forEach(function(wrap,wi){var out=document.createElement("canvas");out.width=pxW;out.height=pxH;var ctx=out.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,pxW,pxH);var n=wrap.querySelector(".n"),s=wrap.querySelector(".s"),pr=wrap.querySelector(".pr"),bcDiv=wrap.querySelector(".bc"),bc=bcDiv?bcDiv.querySelector("canvas"):null;var pad=Math.round(pxW*0.05),maxW=pxW-pad*2;var fN=Math.round(pxH*0.16),fS=Math.round(pxH*0.13),fP=Math.round(pxH*0.18),lh=Math.round(pxH*0.04);ctx.fillStyle="#000";ctx.font="bold "+fN+"px Arial";var nt=n?n.textContent:"";while(nt.length>0&&ctx.measureText(nt).width>maxW)nt=nt.slice(0,-1);ctx.fillText(nt,pad,pad+fN);ctx.font=fS+"px Arial";ctx.fillText(s?s.textContent:"",pad,pad+fN+lh+fS);ctx.font="bold "+fP+"px Arial";ctx.fillText(pr?pr.textContent:"",pad,pad+fN+lh+fS+lh+fP);if(bc&&bc.width>0){ctx.drawImage(bc,pad,pxH-Math.round(pxH*0.42),pxW-pad*2,Math.round(pxH*0.38));}out.toBlob(function(blob){_imgs[wi]=blob;done++;if(done===total){btn.textContent="\uD83D\uDCF7 Images";btn.disabled=false;showImg(0);document.getElementById("sharePreview").classList.add("show");}},"image/png");});}' +
+            'function downloadPDF(){' +
+            'var wraps=document.querySelectorAll(".lbl-wrap");' +
+            'if(!wraps.length){alert("No labels");return;}' +
+            'var btn=document.querySelector(".bpdf");' +
+            'btn.innerHTML="&#9203; Building...";btn.disabled=true;' +
+            'var pw=' + dims.w + ',ph=' + dims.h + ';' +
+            'function runPDF(){' +
+            'var s2=document.createElement("script");' +
+            's2.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";' +
+            's2.onload=function(){' +
+            'var doc=new window.jspdf.jsPDF({unit:"mm",format:[pw,ph],orientation:pw>=ph?"landscape":"portrait"});' +
+            'var done=0,total=wraps.length;' +
+            'wraps.forEach(function(wrap,wi){' +
+            'var lbl=wrap.querySelector(".lbl");' +
+            'if(typeof html2canvas!=="undefined"){' +
+            'html2canvas(lbl,{scale:4,useCORS:true,backgroundColor:"#ffffff",logging:false}).then(function(canvas){' +
+            'var img=canvas.toDataURL("image/png");' +
+            'if(wi>0)doc.addPage([pw,ph],pw>=ph?"landscape":"portrait");' +
+            'doc.addImage(img,"PNG",0,0,pw,ph);' +
+            'done++;if(done===total){doc.save("labels.pdf");btn.innerHTML="\u2b07 Download PDF";btn.disabled=false;}' +
+            '});}else{' +
+            'var dpi=203,pxW=Math.round(pw/25.4*dpi),pxH=Math.round(ph/25.4*dpi);' +
+            'var out=document.createElement("canvas");out.width=pxW;out.height=pxH;' +
+            'var ctx=out.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,pxW,pxH);' +
+            'var pad=Math.round(pxW*0.04),qSize=Math.round(pxH*0.62);' +
+            'var qX=pxW-pad-qSize,qY=Math.round((pxH-qSize)/2),textW=qX-pad*2;' +
+            'var fN=Math.round(pxH*0.17),fS=Math.round(pxH*0.13),fP=Math.round(pxH*0.21),lh=Math.round(pxH*0.06);' +
+            'ctx.fillStyle="#000";' +
+            'var n=lbl.querySelector(".n"),s=lbl.querySelector(".s"),pr=lbl.querySelector(".pr");' +
+            'ctx.font="bold "+fN+"px Arial";' +
+            'var words=(n?n.textContent:"").split(" "),l1="",l2="";' +
+            'words.forEach(function(w){var t=l1?l1+" "+w:w;if(ctx.measureText(t).width<=textW)l1=t;else if(!l2)l2=w;else l2+=" "+w;});' +
+            'var y=pad+fN;ctx.fillText(l1,pad,y);if(l2){y+=fN+lh;ctx.fillText(l2,pad,y);}' +
+            'ctx.font=fS+"px Arial";y+=fN+lh;ctx.fillText(s?s.textContent:"",pad,y);' +
+            'ctx.font="bold "+fP+"px Arial";y+=fS+lh;ctx.fillText(pr?pr.textContent:"",pad,y);' +
+            'var bc=lbl.querySelector(".bc canvas");if(bc&&bc.width>0)ctx.drawImage(bc,qX,qY,qSize,qSize);' +
+            'var img=out.toDataURL("image/png");' +
+            'if(wi>0)doc.addPage([pw,ph],pw>=ph?"landscape":"portrait");' +
+            'doc.addImage(img,"PNG",0,0,pw,ph);' +
+            'done++;if(done===total){doc.save("labels.pdf");btn.innerHTML="\u2b07 Download PDF";btn.disabled=false;}' +
+            '}});' +
+            '};' +
+            's2.onerror=function(){btn.innerHTML="\u2b07 Download PDF";btn.disabled=false;alert("CDN unavailable");};' +
+            'document.head.appendChild(s2);}' +
+            'if(typeof html2canvas==="undefined"){' +
+            'var s1=document.createElement("script");' +
+            's1.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";' +
+            's1.onload=runPDF;s1.onerror=runPDF;' +
+            'document.head.appendChild(s1);}else{runPDF();}' +
+            '}' +
             '<'+'/scr'+'ipt>' +
             '</body></html>';
         // Always use blob URL - document.write() breaks script timing for QR/barcodes
