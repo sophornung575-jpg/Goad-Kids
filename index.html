@@ -41,22 +41,31 @@
         var firebaseConfig = getFirebaseConfig();
         var db;
         if (!firebaseConfig) {
-            window.addEventListener('DOMContentLoaded', function() {
-                var s = document.getElementById('firebaseSetupScreen');
-                var r = document.getElementById('appRoot');
-                if (s) s.style.display = 'flex';
-                if (r) r.style.display = 'none';
-            });
-        } else {
-            firebase.initializeApp(firebaseConfig);
-            db = firebase.firestore();
-            db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
-            db.enablePersistence().catch(function(err) {
-                if (err.code !== 'failed-precondition' && err.code !== 'unimplemented') {
-                    console.warn('Persistence error:', err);
+            // No config - ask user to paste it
+            window.addEventListener('load', function() {
+                var raw = prompt('⚙️ Firebase Setup\n\nPaste your Firebase config JSON:\n{"apiKey":"...","projectId":"..."}');
+                if (raw) {
+                    try {
+                        var cfg = JSON.parse(raw.trim());
+                        if (cfg.apiKey && cfg.projectId) {
+                            localStorage.setItem('goatFirebaseConfig', JSON.stringify(cfg));
+                            location.reload();
+                        } else { alert('Invalid config - missing apiKey or projectId'); }
+                    } catch(e) { alert('Invalid JSON: ' + e.message); }
                 }
             });
-        }
+        } else {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        // enablePersistence replaced with cache settings (synchronizeTabs deprecated)
+        db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
+        db.enablePersistence().catch(function(err) {
+            if (err.code !== 'failed-precondition' && err.code !== 'unimplemented') {
+                console.warn('Persistence error:', err);
+            }
+        });
+    
+        } // end else firebaseConfig
     </script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
