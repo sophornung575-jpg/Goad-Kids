@@ -1989,22 +1989,7 @@ function sendToTelegram(order, callback) {
     // =============================================
     // FIREBASE & DATA
     // =============================================
-    async function checkFirebase() {
-        showStatus('Checking...', 'offline');
-        try {
-            await db.collection('stores').doc('GOAT-1979').get();
-            STATE.firebaseOnline = true;
-            showStatus('Connected', 'online');
-            document.getElementById('syncBtn').disabled = false;
-            // Auto-flush any orders confirmed while offline
-            await flushOfflineSyncQueue();
-        } catch (e) {
-            STATE.firebaseOnline = false;
-            showStatus('Offline', 'offline');
-            document.getElementById('syncBtn').disabled = true;
-        }
-        setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 2000);
-    }
+    async 
 
     async function checkFirebase() {
         showStatus('Checking...', 'offline');
@@ -2023,7 +2008,17 @@ function sendToTelegram(order, callback) {
             await flushOfflineSyncQueue();
         } catch (e) {
             STATE.firebaseOnline = false;
-            showStatus('Offline', 'offline');
+            var errMsg = e.message || 'unknown error';
+            // Show specific error in status
+            if (errMsg === 'timeout') {
+                showStatus('Offline (timeout)', 'offline');
+            } else if (errMsg.indexOf('permission') !== -1 || errMsg.indexOf('PERMISSION') !== -1) {
+                showStatus('Offline (rules blocked)', 'offline');
+                console.error('Firestore rules blocking connection. Check rules allow GOAT-1979 path.');
+            } else {
+                showStatus('Offline: ' + errMsg.substring(0, 30), 'offline');
+            }
+            console.error('Firebase connection error:', errMsg);
             document.getElementById('syncBtn').disabled = true;
         }
         setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 2000);
