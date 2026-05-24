@@ -1277,6 +1277,8 @@ function sendToTelegram(order, callback) {
         var statusEl = document.getElementById('scanStatus');
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
         btn.disabled = true;
+        // Preload jsQR immediately for iPhone Safari
+        if (typeof BarcodeDetector === 'undefined') preloadJsQR();
 
         navigator.mediaDevices.getUserMedia({
             video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
@@ -1323,21 +1325,20 @@ function sendToTelegram(order, callback) {
 
     var _scanCanvas = document.createElement('canvas');
     var _scanCtx = _scanCanvas.getContext('2d');
-    var _jsqrLoaded = false;
+    var _jsqrReady = false;   // jsQR fully loaded
+    var _jsqrLoading = false; // jsQR currently loading
 
-    function loadJsQR(cb) {
-        if (typeof jsQR !== 'undefined') { cb(); return; }
-        if (_jsqrLoaded) { setTimeout(cb, 200); return; }
-        _jsqrLoaded = true;
+    function preloadJsQR() {
+        if (_jsqrReady || _jsqrLoading) return;
+        _jsqrLoading = true;
         var s = document.createElement('script');
         s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
-        s.onload = function() { cb(); };
+        s.onload = function() { _jsqrReady = true; _jsqrLoading = false; };
         s.onerror = function() {
-            // Try unpkg fallback
             var s2 = document.createElement('script');
             s2.src = 'https://unpkg.com/jsqr@1.4.0/dist/jsQR.js';
-            s2.onload = function() { cb(); };
-            s2.onerror = function() { _jsqrLoaded = false; };
+            s2.onload = function() { _jsqrReady = true; _jsqrLoading = false; };
+            s2.onerror = function() { _jsqrLoading = false; };
             document.head.appendChild(s2);
         };
         document.head.appendChild(s);
@@ -1355,7 +1356,7 @@ function sendToTelegram(order, callback) {
         _scanCtx.drawImage(video, 0, 0);
 
         if (typeof BarcodeDetector !== 'undefined') {
-            // Chrome Android / Chrome Desktop
+            // Chrome Android / Chrome Desktop - fast native detection
             new BarcodeDetector({ formats: ['qr_code','ean_13','ean_8','code_128','code_39','upc_a','upc_e'] })
             .detect(_scanCanvas).then(function(codes) {
                 if (codes.length > 0) {
@@ -1367,24 +1368,23 @@ function sendToTelegram(order, callback) {
             }).catch(function() {
                 _camTimer = requestAnimationFrame(function(){ scanLiveFrame(video); });
             });
+
+        } else if (_jsqrReady && typeof jsQR !== 'undefined') {
+            // jsQR loaded and ready - iPhone Safari / Firefox
+            var imageData = _scanCtx.getImageData(0, 0, _scanCanvas.width, _scanCanvas.height);
+            var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
+            if (code && code.data) {
+                stopLiveCamera();
+                searchBarcode(code.data);
+            } else {
+                // Scan every 150ms to balance speed and battery
+                setTimeout(function() { if (_camActive) scanLiveFrame(video); }, 150);
+            }
+
         } else {
-            // iPhone Safari / Firefox - use jsQR
-            loadJsQR(function() {
-                if (!_camActive) return;
-                if (typeof jsQR !== 'undefined') {
-                    var imageData = _scanCtx.getImageData(0, 0, _scanCanvas.width, _scanCanvas.height);
-                    var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
-                    if (code) {
-                        stopLiveCamera();
-                        searchBarcode(code.data);
-                        return;
-                    }
-                }
-                // Scan every 200ms to save battery
-                setTimeout(function() {
-                    if (_camActive) scanLiveFrame(video);
-                }, 200);
-            });
+            // jsQR not ready yet - wait for it
+            if (!_jsqrReady) preloadJsQR();
+            setTimeout(function() { if (_camActive) scanLiveFrame(video); }, 300);
         }
     }
 
