@@ -2050,9 +2050,11 @@ function sendToTelegram(order, callback) {
             var fetchPromise = async function() {
                 var s = await db.collection('stores').doc(STATE.storeId).collection('products').get();
                 var p = [];
+                var deleted = JSON.parse(localStorage.getItem('goatDeletedProducts') || '[]');
                 s.forEach(function(d) {
+                    if (deleted.indexOf(d.id) !== -1) return; // skip locally deleted
                     var dt = d.data();
-                    p.push({ id: d.id, name: dt.name || '', price: dt.price || 0, stock: dt.stock || 0, category: dt.category || '', images: dt.images || [], sizes: dt.sizes || [], addedAt: dt.addedAt || 0 });
+                    p.push({ id: d.id, name: dt.name || '', price: dt.price || 0, stock: dt.stock || 0, category: dt.category || '', images: dt.images || [], sizes: dt.sizes || [], addedAt: dt.addedAt || 0, active: dt.active !== false });
                 });
                 if (p.length) { STATE.products = p; saveProducts(); }
 
@@ -2097,6 +2099,13 @@ function sendToTelegram(order, callback) {
                 var p = STATE.products[i];
                 await db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({ name: p.name, price: p.price, stock: p.stock, category: p.category, images: p.images || [], sizes: p.sizes || [], active: true, updatedAt: new Date().toISOString() }, { merge: true });
             }
+            // Delete products that were deleted locally
+            var deleted = JSON.parse(localStorage.getItem('goatDeletedProducts') || '[]');
+            for (var d = 0; d < deleted.length; d++) {
+                await db.collection('stores').doc(STATE.storeId).collection('products').doc(deleted[d]).delete();
+            }
+            if (deleted.length > 0) localStorage.setItem('goatDeletedProducts', '[]');
+
             var all = STATE.pendingOrders.concat(STATE.confirmedOrders);
             for (var j = 0; j < all.length; j++) {
                 await db.collection('stores').doc(STATE.storeId).collection('orders').doc(all[j].orderId).set(Object.assign({}, all[j], { updatedAt: new Date().toISOString() }), { merge: true });
@@ -2192,8 +2201,19 @@ function sendToTelegram(order, callback) {
         for (var i = 0; i < STATE.products.length; i++) { if (STATE.products[i].id === pid) { p = STATE.products[i]; break; } }
         if (!p) return;
         if (!confirm('Delete "' + p.name + '"?')) return;
+        // Remove from local state
         STATE.products = STATE.products.filter(function(x) { return x.id !== pid; });
         saveProducts();
+        // Track deleted IDs so sync knows to delete from Firebase
+        var deleted = JSON.parse(localStorage.getItem('goatDeletedProducts') || '[]');
+        deleted.push(pid);
+        localStorage.setItem('goatDeletedProducts', JSON.stringify(deleted));
+        // Delete from Firebase immediately if online
+        if (STATE.firebaseOnline && db) {
+            db.collection('stores').doc(STATE.storeId).collection('products').doc(pid).delete()
+            .then(function() { showToast('Product deleted from cloud ✅', 'success'); })
+            .catch(function(e) { showToast('Deleted locally, will sync later', 'warning'); });
+        }
         logActivity('Delete Product', p.name);
         // FIX #10: Mark active:false in Firestore so other devices stop loading it
         if (STATE.firebaseOnline) {
