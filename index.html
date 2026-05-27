@@ -1540,7 +1540,8 @@ function sendToTelegram(order, callback) {
             var p = STATE.products[i];
             if (p.id === code || p.barcode === code ||
                 (p.id && p.id.toLowerCase() === codeLower) ||
-                (p.barcode && p.barcode.toLowerCase() === codeLower)) {
+                (p.barcode && p.barcode.toLowerCase() === codeLower) ||
+                (p.name && p.name.toLowerCase().indexOf(codeLower) !== -1)) {
                 found = p; break;
             }
         }
@@ -2047,7 +2048,7 @@ function sendToTelegram(order, callback) {
                 setTimeout(function() { reject(new Error('Firebase timeout')); }, 8000);
             });
             var fetchPromise = async function() {
-                var s = await db.collection('stores').doc(STATE.storeId).collection('products').where('active', '==', true).get();
+                var s = await db.collection('stores').doc(STATE.storeId).collection('products').get();
                 var p = [];
                 s.forEach(function(d) {
                     var dt = d.data();
@@ -2174,7 +2175,7 @@ function sendToTelegram(order, callback) {
         var imgs = STATE.newProductImages.length ? STATE.newProductImages.slice() : ['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'];
         var t = 0;
         for (var i = 0; i < STATE.newProductSizes.length; i++) { t += STATE.newProductSizes[i].qty; }
-        STATE.products.push({ id: 'p' + Date.now(), name: n, price: pr, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice(), addedAt: Date.now() });
+        STATE.products.push({ id: 'p' + Date.now(), name: n, price: pr, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice(), addedAt: Date.now(), active: true });
         saveProducts();
         logActivity('Add Product', n + ' ($' + pr + ')');
         if (STATE.firebaseOnline) syncToFirebase();
@@ -2979,7 +2980,7 @@ function sendToTelegram(order, callback) {
         var html = '';
         html += '<!DOCTYPE html><html><head><title>Receipt ' + order.orderId + '</title>';
         html += '<meta name="viewport" content="width=device-width,initial-scale=1">';
-        html += '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>';
+        html += '<scr'+'ipt src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/scr'+'ipt>';
         html += '<style>';
         html += '@page{size:58mm auto;margin:0}';
         html += '*{margin:0;padding:0;box-sizing:border-box}';
