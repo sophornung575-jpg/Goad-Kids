@@ -972,7 +972,7 @@ function sendToTelegram(order, callback) {
         historyPageSize: 15,
         filter: { category: 'all', stock: 'all', search: '', priceMin: 0, priceMax: 9999, sortBy: 'default' },
         wishlist: JSON.parse(localStorage.getItem('goatWishlist') || '[]'),
-        storeId: null,
+        storeId: localStorage.getItem('goatStoreId') || 'GOAT-1979',
         firebaseOnline: false,
         pendingOrders: [],
         confirmedOrders: [],
@@ -1131,7 +1131,7 @@ function sendToTelegram(order, callback) {
 
     function saveProducts() { localStorage.setItem('goatProducts', JSON.stringify(STATE.products)); }
     function saveOrders() {
-        localStorage.setItem('pendingOrders', JSON.stringify(STATE.pendingOrders));
+        localStorage.setItem('goatPendingOrders', JSON.stringify(STATE.pendingOrders));
         // Keep only the latest 50 confirmed orders in localStorage
         var sorted = STATE.confirmedOrders.slice().sort(function(a,b){return (a.timestamp||0)-(b.timestamp||0);});
         if (sorted.length > 50) {
@@ -1146,7 +1146,7 @@ function sendToTelegram(order, callback) {
                 batch.commit().catch(function(e){ console.warn('Auto-archive failed:', e); });
             }
         }
-        localStorage.setItem('confirmedOrders', JSON.stringify(STATE.confirmedOrders));
+        localStorage.setItem('goatConfirmedOrders', JSON.stringify(STATE.confirmedOrders));
     }
 
     function logActivity(action, details) {
@@ -2100,7 +2100,7 @@ function sendToTelegram(order, callback) {
         }
     }
 
-    function loadLocal() { loadProductsLocal(); STATE.pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]'); STATE.confirmedOrders = JSON.parse(localStorage.getItem('confirmedOrders') || '[]'); loadRefunds(); }
+    function loadLocal() { loadProductsLocal(); STATE.pendingOrders = JSON.parse(localStorage.getItem('goatPendingOrders') || localStorage.getItem('pendingOrders') || '[]'); STATE.confirmedOrders = JSON.parse(localStorage.getItem('goatConfirmedOrders') || localStorage.getItem('confirmedOrders') || '[]'); loadRefunds(); }
     function loadProductsLocal() { var s = localStorage.getItem('goatProducts'); STATE.products = s ? JSON.parse(s) : []; if (!STATE.products.length) loadSamples(); }
 
     async function syncToFirebase() {
