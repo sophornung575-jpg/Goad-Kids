@@ -2850,6 +2850,18 @@ function sendToTelegram(order, callback) {
     }
 
     function renderPending(searchQ) {
+        // Always sync from localStorage to catch any orders saved while on another tab
+        var stored = localStorage.getItem('goatPendingOrders') || localStorage.getItem('pendingOrders');
+        if (stored) {
+            try {
+                var local = JSON.parse(stored);
+                // Merge: add any local orders not in STATE
+                var stateIds = STATE.pendingOrders.map(function(o){ return o.orderId; });
+                local.forEach(function(o) {
+                    if (stateIds.indexOf(o.orderId) === -1) STATE.pendingOrders.push(o);
+                });
+            } catch(e) {}
+        }
         var c = document.getElementById('pendingContainer');
         document.getElementById('pendingCount').textContent = STATE.pendingOrders.length;
         if (!c) return;
