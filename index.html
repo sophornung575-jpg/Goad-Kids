@@ -30,18 +30,34 @@
     <script>
         // =============================================
         // FIREBASE INIT
-        // NOTE: Move API key to environment / backend for production
         // =============================================
-        // ── Firebase config stored in localStorage (not visible in source after first run) ──
         function getFirebaseConfig() {
-            var stored = localStorage.getItem('goatFirebaseConfig');
-            if (stored) { try { return JSON.parse(stored); } catch(e) {} }
+            try {
+                var stored = localStorage.getItem('goatFirebaseConfig');
+                if (stored) return JSON.parse(stored);
+            } catch(e) {}
             return null;
         }
+
+        var db = null;
         var firebaseConfig = getFirebaseConfig();
-        var db;
-        if (!firebaseConfig) {
-            // No config - ask user to paste it
+
+        if (firebaseConfig) {
+            try {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
+                db.enablePersistence().catch(function(err) {
+                    if (err.code !== 'failed-precondition' && err.code !== 'unimplemented') {
+                        console.warn('Persistence error:', err);
+                    }
+                });
+            } catch(e) {
+                console.error('Firebase init error:', e);
+                db = null;
+            }
+        } else {
+            // No config stored - prompt on load
             window.addEventListener('load', function() {
                 var raw = prompt('⚙️ Firebase Setup\n\nPaste your Firebase config JSON:\n{"apiKey":"...","projectId":"..."}');
                 if (raw) {
@@ -54,18 +70,7 @@
                     } catch(e) { alert('Invalid JSON: ' + e.message); }
                 }
             });
-        } else {
-        firebase.initializeApp(firebaseConfig);
-        db = firebase.firestore();
-        // enablePersistence replaced with cache settings (synchronizeTabs deprecated)
-        db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
-        db.enablePersistence().catch(function(err) {
-            if (err.code !== 'failed-precondition' && err.code !== 'unimplemented') {
-                console.warn('Persistence error:', err);
-            }
-        });
-    
-        } // end else firebaseConfig
+        }
     </script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
@@ -2011,6 +2016,11 @@ function sendToTelegram(order, callback) {
     // FIREBASE & DATA
     // =============================================
     async function checkFirebase() {
+        if (!db) {
+            showStatus('No Firebase config', 'offline');
+            STATE.firebaseOnline = false;
+            return Promise.resolve();
+        }
         showStatus('Checking...', 'offline');
         try {
             // Short 5-second timeout so mobile doesn't hang
