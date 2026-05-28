@@ -1234,8 +1234,9 @@ function sendToTelegram(order, callback) {
             STATE.pendingOrders.push(order);
             saveOrders();
             logActivity('New Order', oid + ' - $' + total.toFixed(2));
-            if (STATE.firebaseOnline) {
-                db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order);
+            if (STATE.firebaseOnline && db) {
+                db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order)
+                .catch(function(e) { console.warn('Order Firebase save failed:', e); });
             }
 
             // Now clear cart
@@ -2077,12 +2078,22 @@ function sendToTelegram(order, callback) {
                 if (p.length) { STATE.products = p; saveProducts(); }
 
                 var os = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
-                STATE.pendingOrders = []; STATE.confirmedOrders = [];
+                var fbPending = [], fbConfirmed = [];
                 os.forEach(function(d) {
                     var dt = d.data();
-                    if (dt.status === 'pending') STATE.pendingOrders.push(Object.assign({}, dt, { orderId: d.id }));
-                    else STATE.confirmedOrders.push(Object.assign({}, dt, { orderId: d.id }));
+                    if (dt.status === 'pending') fbPending.push(Object.assign({}, dt, { orderId: d.id }));
+                    else fbConfirmed.push(Object.assign({}, dt, { orderId: d.id }));
                 });
+                // Merge: keep local orders not yet in Firebase
+                var fbIds = fbPending.concat(fbConfirmed).map(function(o){ return o.orderId; });
+                STATE.pendingOrders.forEach(function(o) {
+                    if (fbIds.indexOf(o.orderId) === -1) fbPending.push(o);
+                });
+                STATE.confirmedOrders.forEach(function(o) {
+                    if (fbIds.indexOf(o.orderId) === -1) fbConfirmed.push(o);
+                });
+                STATE.pendingOrders = fbPending;
+                STATE.confirmedOrders = fbConfirmed;
                 saveOrders();
             };
             await Promise.race([fetchPromise(), timeoutPromise]);
