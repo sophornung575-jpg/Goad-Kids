@@ -42,34 +42,30 @@
         var db = null;
         var firebaseConfig = getFirebaseConfig();
 
-        if (firebaseConfig) {
-            try {
-                firebase.initializeApp(firebaseConfig);
-                db = firebase.firestore();
-                db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
-                db.enablePersistence().catch(function(err) {
-                    if (err.code !== 'failed-precondition' && err.code !== 'unimplemented') {
-                        console.warn('Persistence error:', err);
-                    }
-                });
-            } catch(e) {
-                console.error('Firebase init error:', e);
-                db = null;
-            }
-        } else {
-            // No config stored - prompt on load
-            window.addEventListener('load', function() {
-                var raw = prompt('⚙️ Firebase Setup\n\nPaste your Firebase config JSON:\n{"apiKey":"...","projectId":"..."}');
-                if (raw) {
-                    try {
-                        var cfg = JSON.parse(raw.trim());
-                        if (cfg.apiKey && cfg.projectId) {
-                            localStorage.setItem('goatFirebaseConfig', JSON.stringify(cfg));
-                            location.reload();
-                        } else { alert('Invalid config - missing apiKey or projectId'); }
-                    } catch(e) { alert('Invalid JSON: ' + e.message); }
+        if (!firebaseConfig) {
+            // Use default config if none stored
+            firebaseConfig = {
+                apiKey: "AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU",
+                authDomain: "goat-kids-store.firebaseapp.com",
+                projectId: "goat-kids-store",
+                storageBucket: "goat-kids-store.firebasestorage.app",
+                messagingSenderId: "372035223463",
+                appId: "1:372035223463:web:a9948932607e81da2a4082"
+            };
+            localStorage.setItem('goatFirebaseConfig', JSON.stringify(firebaseConfig));
+        }
+        try {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+            db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
+            db.enablePersistence().catch(function(err) {
+                if (err.code !== 'failed-precondition' && err.code !== 'unimplemented') {
+                    console.warn('Persistence error:', err);
                 }
             });
+        } catch(e) {
+            console.error('Firebase init error:', e);
+            db = null;
         }
     </script>
     <style>
