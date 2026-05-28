@@ -1231,8 +1231,11 @@ function sendToTelegram(order, callback) {
         // FIX #7: Only clear cart AFTER Telegram send attempt, not before
         sendToTelegram(order, function(success) {
             // Save order regardless of Telegram result
+            console.log('[ORDER] Pushing order to STATE.pendingOrders:', oid);
             STATE.pendingOrders.push(order);
             saveOrders();
+            console.log('[ORDER] STATE.pendingOrders count:', STATE.pendingOrders.length);
+            console.log('[ORDER] localStorage goatPendingOrders:', localStorage.getItem('goatPendingOrders') ? 'HAS DATA' : 'EMPTY');
             logActivity('New Order', oid + ' - $' + total.toFixed(2));
             if (STATE.firebaseOnline && db) {
                 db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order)
@@ -2092,9 +2095,11 @@ function sendToTelegram(order, callback) {
                 STATE.confirmedOrders.forEach(function(o) {
                     if (fbIds.indexOf(o.orderId) === -1) fbConfirmed.push(o);
                 });
+                console.log('[LOAD] Firebase pending:', fbPending.length, 'confirmed:', fbConfirmed.length);
                 STATE.pendingOrders = fbPending;
                 STATE.confirmedOrders = fbConfirmed;
                 saveOrders();
+                console.log('[LOAD] After saveOrders, STATE.pendingOrders:', STATE.pendingOrders.length);
             };
             await Promise.race([fetchPromise(), timeoutPromise]);
 
@@ -2852,16 +2857,18 @@ function sendToTelegram(order, callback) {
     function renderPending(searchQ) {
         // Always sync from localStorage to catch any orders saved while on another tab
         var stored = localStorage.getItem('goatPendingOrders') || localStorage.getItem('pendingOrders');
+        console.log('[PENDING] renderPending called, stored:', stored ? JSON.parse(stored).length + ' orders' : 'EMPTY');
+        console.log('[PENDING] STATE.pendingOrders:', STATE.pendingOrders.length);
         if (stored) {
             try {
                 var local = JSON.parse(stored);
-                // Merge: add any local orders not in STATE
                 var stateIds = STATE.pendingOrders.map(function(o){ return o.orderId; });
                 local.forEach(function(o) {
                     if (stateIds.indexOf(o.orderId) === -1) STATE.pendingOrders.push(o);
                 });
-            } catch(e) {}
+            } catch(e) { console.log('[PENDING] parse error:', e); }
         }
+        console.log('[PENDING] After merge:', STATE.pendingOrders.length);
         var c = document.getElementById('pendingContainer');
         document.getElementById('pendingCount').textContent = STATE.pendingOrders.length;
         if (!c) return;
