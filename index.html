@@ -1127,7 +1127,21 @@ function sendToTelegram(order, callback) {
         return '';
     }
 
-    function saveProducts() { localStorage.setItem('goatProducts', JSON.stringify(STATE.products)); }
+    function saveProducts() {
+        localStorage.setItem('goatProducts', JSON.stringify(STATE.products));
+    }
+    function saveProductsToFirebase() {
+        // Push all products to Firebase - call after bulk changes
+        if (!STATE.firebaseOnline || !db) return;
+        for (var i = 0; i < STATE.products.length; i++) {
+            var p = STATE.products[i];
+            db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({
+                name: p.name, price: p.price, stock: p.stock, category: p.category,
+                images: p.images || [], sizes: p.sizes || [], active: true,
+                updatedAt: new Date().toISOString()
+            }, { merge: true }).catch(function(e){ console.warn('Product sync failed:', e); });
+        }
+    }
     function saveOrders() {
         localStorage.setItem('pendingOrders', JSON.stringify(STATE.pendingOrders));
         // Keep only the latest 50 confirmed orders in localStorage
@@ -2072,13 +2086,14 @@ function sendToTelegram(order, callback) {
             var fetchPromise = async function() {
                 var s = await db.collection('stores').doc(STATE.storeId).collection('products').get();
                 var p = [];
-                var deleted = JSON.parse(localStorage.getItem('goatDeletedProducts') || '[]');
                 s.forEach(function(d) {
-                    if (deleted.indexOf(d.id) !== -1) return; // skip locally deleted
                     var dt = d.data();
                     p.push({ id: d.id, name: dt.name || '', price: dt.price || 0, stock: dt.stock || 0, category: dt.category || '', images: dt.images || [], sizes: dt.sizes || [], addedAt: dt.addedAt || 0, active: dt.active !== false });
                 });
+                // Firebase is source of truth - always use Firebase products
                 if (p.length) { STATE.products = p; saveProducts(); }
+                // Clear deleted list after successful Firebase sync (products are already gone from Firebase)
+                localStorage.setItem('goatDeletedProducts', '[]');
 
                 var os = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
                 var fbPending = [], fbConfirmed = [];
@@ -2087,13 +2102,22 @@ function sendToTelegram(order, callback) {
                     if (dt.status === 'pending') fbPending.push(Object.assign({}, dt, { orderId: d.id }));
                     else fbConfirmed.push(Object.assign({}, dt, { orderId: d.id }));
                 });
-                // Merge: keep local orders not yet in Firebase
+                // Merge: keep local orders not yet in Firebase AND push them up
                 var fbIds = fbPending.concat(fbConfirmed).map(function(o){ return o.orderId; });
                 STATE.pendingOrders.forEach(function(o) {
-                    if (fbIds.indexOf(o.orderId) === -1) fbPending.push(o);
+                    if (fbIds.indexOf(o.orderId) === -1) {
+                        fbPending.push(o);
+                        // Push missing order to Firebase
+                        db.collection('stores').doc(STATE.storeId).collection('orders').doc(o.orderId).set(o)
+                          .catch(function(e){ console.warn('Order sync failed:', e); });
+                    }
                 });
                 STATE.confirmedOrders.forEach(function(o) {
-                    if (fbIds.indexOf(o.orderId) === -1) fbConfirmed.push(o);
+                    if (fbIds.indexOf(o.orderId) === -1) {
+                        fbConfirmed.push(o);
+                        db.collection('stores').doc(STATE.storeId).collection('orders').doc(o.orderId).set(o)
+                          .catch(function(e){ console.warn('Order sync failed:', e); });
+                    }
                 });
                 console.log('[LOAD] Firebase pending:', fbPending.length, 'confirmed:', fbConfirmed.length);
                 STATE.pendingOrders = fbPending;
@@ -2320,17 +2344,31 @@ function sendToTelegram(order, callback) {
         var p = null;
         for (var i = 0; i < STATE.products.length; i++) { if (STATE.products[i].id === pid) { p = STATE.products[i]; break; } }
         if (!p) return;
+        p.name = document.getElementById('editProductName').value.trim() || p.name;
         p.category = document.getElementById('editProductCategory').value;
         p.price = parseFloat(document.getElementById('editProductPrice').value);
         p.images = STATE.editProductImages.slice();
-        var qi = document.querySelectorAll('.edit-size-qty');
-        for (var j = 0; j < qi.length; j++) { var idx = parseInt(qi[j].getAttribute('data-size-index')); if (p.sizes && p.sizes[idx]) p.sizes[idx].qty = parseInt(qi[j].value) || 0; }
-        // FIX #6: Always recalculate p.stock from sum of sizes to keep them in sync
+        // Read sizes from STATE._editSizes (supports add/rename/delete)
+        if (STATE._editSizes && STATE._editSizes.length) {
+            var nameInputs = document.querySelectorAll('.edit-size-name');
+            var qtyInputs = document.querySelectorAll('.edit-size-qty');
+            for (var j = 0; j < STATE._editSizes.length; j++) {
+                if (nameInputs[j]) STATE._editSizes[j].name = nameInputs[j].value.trim() || STATE._editSizes[j].name;
+                if (qtyInputs[j]) STATE._editSizes[j].qty = parseInt(qtyInputs[j].value) || 0;
+            }
+            p.sizes = STATE._editSizes.slice();
+        }
+        // Always recalculate stock from sizes
         p.stock = getTotalStock(p);
         saveProducts();
         logActivity('Edit Product', p.name + ' (Stock:' + p.stock + ')');
-        if (STATE.firebaseOnline) {
-            db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({ name: p.name, price: p.price, stock: p.stock, category: p.category, images: p.images || [], sizes: p.sizes || [], active: true, updatedAt: new Date().toISOString() }, { merge: true });
+        // Push to Firebase immediately
+        if (STATE.firebaseOnline && db) {
+            db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({
+                name: p.name, price: p.price, stock: p.stock, category: p.category,
+                images: p.images || [], sizes: p.sizes || [], active: true,
+                updatedAt: new Date().toISOString()
+            }, { merge: true }).catch(function(e){ console.warn('Edit save failed:', e); });
         }
         closeEditModal(); renderProducts(); renderInventory(); updateAdminBadges();
         showToast('"' + p.name + '" updated!', 'success');
