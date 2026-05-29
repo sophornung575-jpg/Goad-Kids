@@ -1243,11 +1243,9 @@ function sendToTelegram(order, callback) {
         // FIX #7: Only clear cart AFTER Telegram send attempt, not before
         sendToTelegram(order, function(success) {
             // Save order regardless of Telegram result
-            console.log('[ORDER] Pushing order to STATE.pendingOrders:', oid);
             STATE.pendingOrders.push(order);
             saveOrders();
-            console.log('[ORDER] STATE.pendingOrders count:', STATE.pendingOrders.length);
-            console.log('[ORDER] localStorage goatPendingOrders:', localStorage.getItem('goatPendingOrders') ? 'HAS DATA' : 'EMPTY');
+
             logActivity('New Order', oid + ' - $' + total.toFixed(2));
             if (STATE.firebaseOnline && db) {
                 db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order)
@@ -2050,7 +2048,6 @@ function sendToTelegram(order, callback) {
                 timeoutPromise
             ]);
             STATE.firebaseOnline = true;
-            console.log('[FIREBASE] Connected! STATE.firebaseOnline =', STATE.firebaseOnline);
             showStatus('Connected', 'online');
             document.getElementById('syncBtn').disabled = false;
             await flushOfflineSyncQueue();
@@ -2080,7 +2077,6 @@ function sendToTelegram(order, callback) {
 
         // ── STEP 2: Try Firebase in background with a timeout ──
         if (!STATE.firebaseOnline) {
-            console.log('[LOAD] Offline - using local data only');
             return;
         }
         try {
@@ -2103,8 +2099,14 @@ function sendToTelegram(order, callback) {
                 var fbPending = [], fbConfirmed = [];
                 os.forEach(function(d) {
                     var dt = d.data();
-                    if (dt.status === 'pending') fbPending.push(Object.assign({}, dt, { orderId: d.id }));
-                    else fbConfirmed.push(Object.assign({}, dt, { orderId: d.id }));
+                    var o = Object.assign({}, dt, { orderId: d.id });
+                    if (dt.status === 'confirmed' || dt.status === 'refunded') {
+                        fbConfirmed.push(o);
+                    } else {
+                        // pending, undefined, or any other status = pending
+                        o.status = 'pending';
+                        fbPending.push(o);
+                    }
                 });
                 // Merge: keep local orders not yet in Firebase AND push them up
                 var fbIds = fbPending.concat(fbConfirmed).map(function(o){ return o.orderId; });
@@ -2123,11 +2125,9 @@ function sendToTelegram(order, callback) {
                           .catch(function(e){ console.warn('Order sync failed:', e); });
                     }
                 });
-                console.log('[LOAD] Firebase pending:', fbPending.length, 'confirmed:', fbConfirmed.length);
                 STATE.pendingOrders = fbPending;
                 STATE.confirmedOrders = fbConfirmed;
                 saveOrders();
-                console.log('[LOAD] After saveOrders, STATE.pendingOrders:', STATE.pendingOrders.length);
             };
             await Promise.race([fetchPromise(), timeoutPromise]);
 
@@ -2901,8 +2901,7 @@ function sendToTelegram(order, callback) {
     function renderPending(searchQ) {
         // Always sync from localStorage to catch any orders saved while on another tab
         var stored = localStorage.getItem('pendingOrders');
-        console.log('[PENDING] renderPending called, stored:', stored ? JSON.parse(stored).length + ' orders' : 'EMPTY');
-        console.log('[PENDING] STATE.pendingOrders:', STATE.pendingOrders.length);
+
         if (stored) {
             try {
                 var local = JSON.parse(stored);
@@ -2912,7 +2911,6 @@ function sendToTelegram(order, callback) {
                 });
             } catch(e) { console.log('[PENDING] parse error:', e); }
         }
-        console.log('[PENDING] After merge:', STATE.pendingOrders.length);
         var c = document.getElementById('pendingContainer');
         document.getElementById('pendingCount').textContent = STATE.pendingOrders.length;
         if (!c) return;
