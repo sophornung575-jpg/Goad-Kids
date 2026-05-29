@@ -59,15 +59,10 @@
         try {
             firebase.initializeApp(firebaseConfig);
             db = firebase.firestore();
-            // Use long-polling to avoid HTTP2 protocol errors
-            db.settings({
-                cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
-                experimentalForceLongPolling: true,
-                merge: true
-            });
-            // Enable offline persistence (silently ignore errors)
-            db.enablePersistence({ synchronizeTabs: true }).catch(function(err) {
-                console.log('Persistence not available:', err.code);
+            db.enablePersistence().catch(function(err) {
+                if (err.code !== 'failed-precondition' && err.code !== 'unimplemented') {
+                    console.warn('Persistence error:', err);
+                }
             });
         } catch(e) {
             console.error('Firebase init error:', e);
