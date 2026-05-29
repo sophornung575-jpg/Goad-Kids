@@ -2117,23 +2117,19 @@ function sendToTelegram(order, callback) {
                         fbPending.push(o);
                     }
                 });
-                // Merge: keep local orders not yet in Firebase AND push them up
+                // Firebase is source of truth for orders
+                // Only keep local pending orders that Firebase doesn't know about yet
+                // (placed while offline - they have no Firebase record)
                 var fbIds = fbPending.concat(fbConfirmed).map(function(o){ return o.orderId; });
                 STATE.pendingOrders.forEach(function(o) {
-                    if (fbIds.indexOf(o.orderId) === -1) {
+                    if (fbIds.indexOf(o.orderId) === -1 && o.status === 'pending') {
+                        // Only push truly new pending orders not yet in Firebase
                         fbPending.push(o);
-                        // Push missing order to Firebase
                         db.collection('stores').doc(STATE.storeId).collection('orders').doc(o.orderId).set(o)
                           .catch(function(e){ console.warn('Order sync failed:', e); });
                     }
                 });
-                STATE.confirmedOrders.forEach(function(o) {
-                    if (fbIds.indexOf(o.orderId) === -1) {
-                        fbConfirmed.push(o);
-                        db.collection('stores').doc(STATE.storeId).collection('orders').doc(o.orderId).set(o)
-                          .catch(function(e){ console.warn('Order sync failed:', e); });
-                    }
-                });
+                // Don't push confirmed/rejected local orders - Firebase already has correct state
                 STATE.pendingOrders = fbPending;
                 STATE.confirmedOrders = fbConfirmed;
                 saveOrders();
@@ -2891,7 +2887,12 @@ function sendToTelegram(order, callback) {
         order.rejectionReason = prompt('Reason:') || 'No reason';
         STATE.confirmedOrders.push(order); STATE.pendingOrders.splice(idx, 1);
         saveOrders(); logActivity('Reject Order', oid);
-        if (STATE.firebaseOnline) syncToFirebase();
+        // Save directly to Firebase - don't use syncToFirebase (too slow, syncs everything)
+        if (STATE.firebaseOnline && db) {
+            db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid)
+              .set(order, { merge: true })
+              .catch(function(e){ console.warn('Reject save failed:', e); });
+        }
         renderPending(); renderHistory(); updateAdminBadges();
         showToast('Rejected', 'warning');
     }
