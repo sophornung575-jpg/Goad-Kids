@@ -2757,7 +2757,7 @@ function sendToTelegram(order, callback) {
         });
 
         // ── Step 3: If Firebase online → write EVERYTHING atomically first ──
-        if (STATE.firebaseOnline) {
+        if (db) {
             // Show a spinner/lock so admin can't double-click
             showToast('Confirming order...', 'info');
             try {
@@ -2887,11 +2887,15 @@ function sendToTelegram(order, callback) {
         order.rejectionReason = prompt('Reason:') || 'No reason';
         STATE.confirmedOrders.push(order); STATE.pendingOrders.splice(idx, 1);
         saveOrders(); logActivity('Reject Order', oid);
-        // Save directly to Firebase - don't use syncToFirebase (too slow, syncs everything)
-        if (STATE.firebaseOnline && db) {
+        // Save to Firebase directly (use db directly, not STATE.firebaseOnline which may lag)
+        if (db) {
             db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid)
               .set(order, { merge: true })
-              .catch(function(e){ console.warn('Reject save failed:', e); });
+              .then(function(){ console.log('Reject saved to Firebase ✅'); })
+              .catch(function(e){ 
+                  console.warn('Reject Firebase save failed:', e.message);
+                  showToast('Saved locally. Will sync when online.', 'warning');
+              });
         }
         renderPending(); renderHistory(); updateAdminBadges();
         showToast('Rejected', 'warning');
