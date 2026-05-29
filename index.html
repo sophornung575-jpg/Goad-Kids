@@ -20,8 +20,8 @@
     <meta name="keywords" content="kids clothing, children fashion, baby clothes, kids shoes, kids accessories, Goat Kids">
     <link rel="canonical" href="https://sophornung575-jpg.github.io/Goad-Kids">
     <meta charset="UTF-8">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
@@ -1861,6 +1861,15 @@ function sendToTelegram(order, callback) {
     }
     function savePasswords(obj) {
         localStorage.setItem('goatPasswords', JSON.stringify(obj));
+        // Also save to Firebase so all browsers get same passwords
+        if (db && STATE.firebaseOnline) {
+            db.collection('_admin_').doc('credentials').set({
+                fullPass: obj.fullPass,
+                ordersPass: obj.ordersPass,
+                inventoryPass: obj.inventoryPass,
+                updatedAt: new Date().toISOString()
+            }, { merge: true }).catch(function(e){ console.warn('Password sync failed:', e); });
+        }
     }
 
     function completeSetup() {
@@ -2131,7 +2140,21 @@ function sendToTelegram(order, callback) {
             };
             await Promise.race([fetchPromise(), timeoutPromise]);
 
-            // ── STEP 3: Update UI silently with fresh Firebase data ──
+            // ── STEP 3: Load passwords from Firebase ──
+            try {
+                var credDoc = await db.collection('_admin_').doc('credentials').get();
+                if (credDoc.exists) {
+                    var creds = credDoc.data();
+                    var pw = {
+                        fullPass: creds.fullPass || 'admin123',
+                        ordersPass: creds.ordersPass || 'orders123',
+                        inventoryPass: creds.inventoryPass || 'inventory123'
+                    };
+                    localStorage.setItem('goatPasswords', JSON.stringify(pw));
+                }
+            } catch(e) { console.warn('Password load failed:', e); }
+
+            // ── STEP 4: Update UI silently with fresh Firebase data ──
             renderProducts();
             renderInventory();
             renderPending();
