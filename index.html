@@ -20,8 +20,8 @@
     <meta name="keywords" content="kids clothing, children fashion, baby clothes, kids shoes, kids accessories, Goat Kids">
     <link rel="canonical" href="https://sophornung575-jpg.github.io/Goad-Kids">
     <meta charset="UTF-8">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
@@ -2135,7 +2135,22 @@ function sendToTelegram(order, callback) {
             };
             await Promise.race([fetchPromise(), timeoutPromise]);
 
-            // ── STEP 3: Load passwords from Firebase ──
+            // ── STEP 3: Load refunds from Firebase ──
+            try {
+                var refSnap = await db.collection('stores').doc(STATE.storeId).collection('refunds').get();
+                var fbRefunds = [];
+                refSnap.forEach(function(d) { fbRefunds.push(Object.assign({}, d.data(), { refundId: d.id })); });
+                if (fbRefunds.length > 0) {
+                    // Merge with local refunds
+                    var localRefIds = STATE.refundedOrders.map(function(r){ return r.refundId; });
+                    fbRefunds.forEach(function(r) {
+                        if (localRefIds.indexOf(r.refundId) === -1) STATE.refundedOrders.push(r);
+                    });
+                    saveRefunds();
+                }
+            } catch(e) { console.warn('Refunds load failed:', e.message); }
+
+            // ── STEP 4: Load passwords from Firebase ──
             try {
                 var credDoc = await db.collection('_admin_').doc('credentials').get();
                 if (credDoc.exists) {
@@ -3591,7 +3606,17 @@ function sendToTelegram(order, callback) {
         STATE.confirmedOrders.splice(idx, 1);
         saveProducts(); saveOrders(); saveRefunds();
         logActivity('Refund Order', oid + ' - $' + refundAmount.toFixed(2) + ' (' + reason + '). Stock restored.');
-        if (STATE.firebaseOnline) syncToFirebase();
+        // Save refund and updated order to Firebase directly
+        if (db) {
+            // Save refund record
+            db.collection('stores').doc(STATE.storeId).collection('refunds').doc(refundRecord.refundId)
+              .set(refundRecord)
+              .catch(function(e){ console.warn('Refund Firebase save failed:', e.message); });
+            // Update order status in Firebase
+            db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid)
+              .set(order, { merge: true })
+              .catch(function(e){ console.warn('Order refund update failed:', e.message); });
+        }
         renderPending(); renderHistory(); renderRefunds(); renderProducts(); renderInventory(); updateAdminBadges(); renderReports();
         showToast('✅ Refund processed! $' + refundAmount.toFixed(2) + ' - Stock restored', 'success');
         setTimeout(function() { if (confirm('Print refund receipt?')) printRefundReceipt(refundRecord.refundId); }, 300);
