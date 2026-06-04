@@ -903,6 +903,41 @@
         });
     }
 
+    // ── Telegram pending queue: stores messages that failed (e.g. WiFi blocking api.telegram.org) ──
+    var _tgFlushInProgress = false;
+
+    function _queueTelegramMessage(message) {
+        var queue = JSON.parse(localStorage.getItem('goatTelegramQueue') || '[]');
+        queue.push({ message: message, queuedAt: Date.now() });
+        // Keep only last 50 messages to avoid unbounded growth
+        if (queue.length > 50) queue = queue.slice(-50);
+        localStorage.setItem('goatTelegramQueue', JSON.stringify(queue));
+    }
+
+    function _flushTelegramQueue() {
+        if (_tgFlushInProgress) return;
+        var queue = JSON.parse(localStorage.getItem('goatTelegramQueue') || '[]');
+        if (!queue.length) return;
+        _tgFlushInProgress = true;
+        var item = queue[0];
+        _sendTelegramRaw(item.message, function(ok) {
+            _tgFlushInProgress = false;
+            if (ok) {
+                var q = JSON.parse(localStorage.getItem('goatTelegramQueue') || '[]');
+                q.shift();
+                localStorage.setItem('goatTelegramQueue', JSON.stringify(q));
+                console.log('✅ Flushed 1 queued Telegram message, ' + q.length + ' remaining');
+                // Keep flushing if more remain
+                if (q.length > 0) setTimeout(_flushTelegramQueue, 2000);
+            }
+        });
+    }
+
+    // Flush queue automatically whenever network comes back online
+    window.addEventListener('online', function() {
+        setTimeout(_flushTelegramQueue, 3000);
+    });
+
     function _sendTelegramRaw(message, callback) {
         var cfg = getTelegramConfig();
         if (!cfg.botToken || !cfg.chatId) {
@@ -911,12 +946,23 @@
             return;
         }
         var url = 'https://api.telegram.org/bot' + cfg.botToken + '/sendMessage';
-        fetch(url, {
+
+        // 12-second timeout — WiFi can silently hang forever without this
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timeoutId = controller ? setTimeout(function() { controller.abort(); }, 12000) : null;
+
+        var fetchOptions = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: cfg.chatId, text: message, parse_mode: 'HTML' })
+        };
+        if (controller) fetchOptions.signal = controller.signal;
+
+        fetch(url, fetchOptions)
+        .then(function(res) {
+            if (timeoutId) clearTimeout(timeoutId);
+            return res.json();
         })
-        .then(function(res) { return res.json(); })
         .then(function(data) {
             if (data.ok) {
                 console.log('✅ Telegram message sent');
@@ -927,7 +973,11 @@
             }
         })
         .catch(function(err) {
-            console.error('Telegram fetch error:', err);
+            if (timeoutId) clearTimeout(timeoutId);
+            var reason = (err && err.name === 'AbortError') ? 'timeout (WiFi may be blocking Telegram)' : err.message;
+            console.warn('Telegram send failed (' + reason + ') — message queued for retry');
+            // Queue the message so it retries when network improves
+            _queueTelegramMessage(message);
             if (callback) callback(false);
         });
     }
@@ -2809,6 +2859,8 @@ function sendToTelegram(order, callback) {
     async function flushOfflineSyncQueue() {
         var queue = JSON.parse(localStorage.getItem('goatSyncQueue') || '[]');
         if (!queue.length || !STATE.firebaseOnline) return;
+        // Also try to flush any queued Telegram messages
+        _flushTelegramQueue();
         var remaining = [];
         for (var i = 0; i < queue.length; i++) {
             var item = queue[i];
