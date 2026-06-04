@@ -1379,8 +1379,8 @@ function sendToTelegram(order, callback) {
         var statusEl = document.getElementById('scanStatus');
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
         btn.disabled = true;
-        // Preload jsQR immediately for iPhone Safari
-        if (typeof BarcodeDetector === 'undefined') preloadJsQR();
+        // Preload jsQR as fallback for ALL browsers (Android BarcodeDetector can fail silently)
+        preloadJsQR();
 
         navigator.mediaDevices.getUserMedia({
             video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
@@ -1464,10 +1464,26 @@ function sendToTelegram(order, callback) {
                 if (codes.length > 0) {
                     stopLiveCamera();
                     searchBarcode(codes[0].rawValue);
+                } else if (_jsqrReady && typeof jsQR !== 'undefined') {
+                    // BarcodeDetector found nothing — also try jsQR for reliability on Android
+                    var imageData = _scanCtx.getImageData(0, 0, _scanCanvas.width, _scanCanvas.height);
+                    var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
+                    if (code && code.data) {
+                        stopLiveCamera();
+                        searchBarcode(code.data);
+                    } else {
+                        _camTimer = requestAnimationFrame(function(){ scanLiveFrame(video); });
+                    }
                 } else {
                     _camTimer = requestAnimationFrame(function(){ scanLiveFrame(video); });
                 }
             }).catch(function() {
+                // BarcodeDetector threw — fall back to jsQR
+                if (_jsqrReady && typeof jsQR !== 'undefined') {
+                    var imageData = _scanCtx.getImageData(0, 0, _scanCanvas.width, _scanCanvas.height);
+                    var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
+                    if (code && code.data) { stopLiveCamera(); searchBarcode(code.data); return; }
+                }
                 _camTimer = requestAnimationFrame(function(){ scanLiveFrame(video); });
             });
 
@@ -1488,64 +1504,6 @@ function sendToTelegram(order, callback) {
             if (!_jsqrReady) preloadJsQR();
             setTimeout(function() { if (_camActive) scanLiveFrame(video); }, 300);
         }
-    }
-
-    // Photo capture fallback
-    document.addEventListener('change', function(e) {
-        if (e.target && e.target.id === 'barcodeCapture') {
-            scanFromPhoto(e.target);
-        }
-    });
-
-    function scanFromPhoto(input) {
-        if (!input.files || !input.files[0]) return;
-        var resultEl = document.getElementById('barcodeResult');
-        var msgEl = document.getElementById('scanMsg');
-        var label = document.getElementById('cameraLabel');
-        if (label) label.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
-        if (msgEl) msgEl.textContent = 'Processing...';
-
-        var file = input.files[0];
-        var url = URL.createObjectURL(file);
-        var img = new Image();
-        img.onload = function() {
-            if (label) label.innerHTML = '<i class="fas fa-camera"></i> Take Photo to Scan';
-            var maxW = 1200;
-            var canvas = document.createElement('canvas');
-            var ratio = img.naturalWidth > maxW ? maxW / img.naturalWidth : 1;
-            canvas.width = Math.round(img.naturalWidth * ratio);
-            canvas.height = Math.round(img.naturalHeight * ratio);
-            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-            URL.revokeObjectURL(url);
-            input.value = '';
-
-            if (typeof BarcodeDetector !== 'undefined') {
-                new BarcodeDetector({ formats: ['qr_code','ean_13','ean_8','code_128','code_39','upc_a','upc_e'] })
-                .detect(canvas).then(function(codes) {
-                    if (codes.length > 0) {
-                        if (msgEl) msgEl.textContent = '✅ Found: ' + codes[0].rawValue;
-                        searchBarcode(codes[0].rawValue);
-                    } else {
-                        if (msgEl) msgEl.textContent = 'No QR found — try closer with good lighting';
-                    }
-                }).catch(function(e) {
-                    if (msgEl) msgEl.textContent = 'Error: ' + e.message;
-                });
-            } else {
-                if (msgEl) msgEl.textContent = '';
-                resultEl.innerHTML =
-                    '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:1rem;font-size:0.85rem">' +
-                    '<div style="font-weight:700;margin-bottom:0.5rem">📱 iPhone: Use Camera app</div>' +
-                    '<div style="color:#555;line-height:1.7">' +
-                    '1. Open iPhone <b>Camera</b> app<br>' +
-                    '2. Point at the QR code on label<br>' +
-                    '3. Tap the <b>yellow notification</b><br>' +
-                    '4. Copy the value<br>' +
-                    '5. Paste below ↓</div></div>';
-            }
-        };
-        img.onerror = function() { URL.revokeObjectURL(url); input.value = ''; };
-        img.src = url;
     }
 
     function doManualScan() {
@@ -5535,63 +5493,73 @@ function sendToTelegram(order, callback) {
     }
 
 
-    // ── Native camera photo scan ──
-    // Use event delegation so it works even if modal added late
-    document.addEventListener('change', function(e) {
-        if (e.target && e.target.id === 'barcodeCapture') {
-            scanFromPhoto(e.target);
-        }
-    });
+    // ── Native camera photo scan (event delegation — handled above near scanFromPhoto definition) ──
 
     function scanFromPhoto(input) {
         if (!input.files || !input.files[0]) return;
         var resultEl = document.getElementById('barcodeResult');
+        var msgEl = document.getElementById('scanMsg');
         var label = document.getElementById('cameraLabel');
         if (label) label.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
         resultEl.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--gray)"><i class="fas fa-spinner fa-spin"></i> Processing image...</div>';
+
+        // Always ensure jsQR is loaded as fallback (critical for Android when BarcodeDetector fails)
+        preloadJsQR();
 
         var file = input.files[0];
         var url = URL.createObjectURL(file);
         var img = new Image();
         img.onload = function() {
-            if (label) label.innerHTML = '<i class="fas fa-camera"></i> Open Camera';
+            if (label) label.innerHTML = '<i class="fas fa-camera"></i> Take Photo to Scan';
+            var maxW = 1200;
             var canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            var ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
+            var ratio = img.naturalWidth > maxW ? maxW / img.naturalWidth : 1;
+            canvas.width = Math.round(img.naturalWidth * ratio);
+            canvas.height = Math.round(img.naturalHeight * ratio);
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
             URL.revokeObjectURL(url);
             input.value = '';
 
-            // Try BarcodeDetector (Chrome Android / Chrome desktop)
+            function tryJsQR() {
+                if (_jsqrReady && typeof jsQR !== 'undefined') {
+                    var ctx = canvas.getContext('2d');
+                    var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'attemptBoth' });
+                    if (code && code.data) {
+                        if (msgEl) msgEl.textContent = '✅ Found: ' + code.data;
+                        searchBarcode(code.data);
+                    } else {
+                        if (msgEl) msgEl.textContent = 'No QR found — try closer with good lighting';
+                        resultEl.innerHTML = '';
+                    }
+                } else {
+                    // jsQR still loading — retry after short delay
+                    setTimeout(function() { tryJsQR(); }, 300);
+                }
+            }
+
             if (typeof BarcodeDetector !== 'undefined') {
-                new BarcodeDetector({
-                    formats: ['qr_code','ean_13','ean_8','code_128','code_39','upc_a','upc_e']
-                }).detect(canvas).then(function(codes) {
+                new BarcodeDetector({ formats: ['qr_code','ean_13','ean_8','code_128','code_39','upc_a','upc_e'] })
+                .detect(canvas).then(function(codes) {
                     if (codes.length > 0) {
+                        if (msgEl) msgEl.textContent = '✅ Found: ' + codes[0].rawValue;
                         searchBarcode(codes[0].rawValue);
                     } else {
-                        tryZXing(canvas, resultEl);
+                        // BarcodeDetector found nothing — try jsQR as a second attempt (Android fix)
+                        tryJsQR();
                     }
-                }).catch(function() { tryZXing(canvas, resultEl); });
+                }).catch(function() { tryJsQR(); });
             } else {
-                tryZXing(canvas, resultEl);
+                // No BarcodeDetector (iPhone Safari, Firefox) — use jsQR
+                tryJsQR();
             }
         };
         img.onerror = function() {
             URL.revokeObjectURL(url); input.value = '';
-            if (label) label.innerHTML = '<i class="fas fa-camera"></i> Open Camera';
+            if (label) label.innerHTML = '<i class="fas fa-camera"></i> Take Photo to Scan';
             resultEl.innerHTML = '<div style="color:var(--danger);padding:0.75rem;background:#fff5f5;border-radius:8px">Failed to load image. Try again.</div>';
         };
         img.src = url;
-    }
-
-    function tryZXing(canvas, resultEl) {
-        resultEl.innerHTML = '<div style="color:var(--gray);padding:0.75rem;background:#fff8e6;border-radius:8px;font-size:0.85rem">' +
-            '<b>📱 How to scan QR code:</b><br><br>' +
-            '<b>iPhone:</b> Use Camera app → point at QR → tap yellow notification → copy value → paste below<br><br>' +
-            '<b>Android Chrome:</b> Tap 🎥 Webcam button for live scanning<br><br>' +
-            'Or type the code manually below</div>';
     }
 
    </script>
