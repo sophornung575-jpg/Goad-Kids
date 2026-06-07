@@ -20,8 +20,8 @@
     <meta name="keywords" content="kids clothing, children fashion, baby clothes, kids shoes, kids accessories, Goat Kids">
     <link rel="canonical" href="https://sophornung575-jpg.github.io/Goad-Kids">
     <meta charset="UTF-8">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
@@ -3638,16 +3638,31 @@ function sendToTelegram(order, callback) {
         STATE.confirmedOrders.splice(idx, 1);
         saveProducts(); saveOrders(); saveRefunds();
         logActivity('Refund Order', oid + ' - $' + refundAmount.toFixed(2) + ' (' + reason + '). Stock restored.');
-        // Save refund and updated order to Firebase directly
+        // Save refund, updated order, AND restored stock to Firebase
         if (db) {
-            // Save refund record
-            db.collection('stores').doc(STATE.storeId).collection('refunds').doc(refundRecord.refundId)
+            var storeRef = db.collection('stores').doc(STATE.storeId);
+            storeRef.collection('refunds').doc(refundRecord.refundId)
               .set(refundRecord)
               .catch(function(e){ console.warn('Refund Firebase save failed:', e.message); });
-            // Update order status in Firebase
-            db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid)
+            storeRef.collection('orders').doc(oid)
               .set(order, { merge: true })
               .catch(function(e){ console.warn('Order refund update failed:', e.message); });
+            // FIX: Write restored stock back to Firebase so it is not overwritten on next sync
+            for (var ri = 0; ri < order.cart.length; ri++) {
+                (function(cartItem) {
+                    var rProduct = null;
+                    for (var rk = 0; rk < STATE.products.length; rk++) { if (STATE.products[rk].id === cartItem.productId) { rProduct = STATE.products[rk]; break; } }
+                    if (!rProduct) return;
+                    var pRef = storeRef.collection('products').doc(rProduct.id);
+                    if (rProduct.sizes && rProduct.sizes.length) {
+                        pRef.update({ sizes: rProduct.sizes, stock: rProduct.stock })
+                          .catch(function(e){ console.warn('Stock restore Firebase update failed:', e.message); });
+                    } else {
+                        pRef.update({ stock: rProduct.stock })
+                          .catch(function(e){ console.warn('Stock restore Firebase update failed:', e.message); });
+                    }
+                })(order.cart[ri]);
+            }
         }
         renderPending(); renderHistory(); renderRefunds(); renderProducts(); renderInventory(); updateAdminBadges(); renderReports();
         showToast('✅ Refund processed! $' + refundAmount.toFixed(2) + ' - Stock restored', 'success');
