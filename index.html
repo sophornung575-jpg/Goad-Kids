@@ -20,8 +20,8 @@
     <meta name="keywords" content="kids clothing, children fashion, baby clothes, kids shoes, kids accessories, Goat Kids">
     <link rel="canonical" href="https://sophornung575-jpg.github.io/Goad-Kids">
     <meta charset="UTF-8">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
@@ -938,6 +938,13 @@
         setTimeout(_flushTelegramQueue, 3000);
     });
 
+    // Proxy list: tried in order. Direct first, then fallbacks if WiFi blocks api.telegram.org.
+    var _TELEGRAM_PROXIES = [
+        { type: 'direct',  url: 'https://api.telegram.org/bot{TOKEN}/sendMessage' },
+        { type: 'proxy',   url: 'https://corsproxy.io/?url=https://api.telegram.org/bot{TOKEN}/sendMessage' },
+        { type: 'proxy',   url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://api.telegram.org/bot{TOKEN}/sendMessage') }
+    ];
+
     function _sendTelegramRaw(message, callback) {
         var cfg = getTelegramConfig();
         if (!cfg.botToken || !cfg.chatId) {
@@ -945,18 +952,33 @@
             if (callback) callback(false);
             return;
         }
-        var url = 'https://api.telegram.org/bot' + cfg.botToken + '/sendMessage';
+        var body = JSON.stringify({ chat_id: cfg.chatId, text: message, parse_mode: 'HTML' });
+        _trySendWithFallback(cfg.botToken, body, message, 0, callback);
+    }
 
-        // 12-second timeout — WiFi can silently hang forever without this
+    function _trySendWithFallback(token, body, originalMessage, proxyIndex, callback) {
+        if (proxyIndex >= _TELEGRAM_PROXIES.length) {
+            // All proxies exhausted — queue for later
+            console.warn('All Telegram routes failed — message queued for retry');
+            _queueTelegramMessage(originalMessage);
+            if (callback) callback(false);
+            return;
+        }
+
+        var proxy = _TELEGRAM_PROXIES[proxyIndex];
+        var url = proxy.url.replace(/{TOKEN}/g, token);
+
         var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        var timeoutId = controller ? setTimeout(function() { controller.abort(); }, 12000) : null;
+        var timeoutId = controller ? setTimeout(function() { controller.abort(); }, 10000) : null;
 
         var fetchOptions = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: cfg.chatId, text: message, parse_mode: 'HTML' })
+            body: body
         };
         if (controller) fetchOptions.signal = controller.signal;
+
+        console.log('📡 Telegram attempt ' + (proxyIndex + 1) + '/' + _TELEGRAM_PROXIES.length + ' via ' + proxy.type);
 
         fetch(url, fetchOptions)
         .then(function(res) {
@@ -965,20 +987,19 @@
         })
         .then(function(data) {
             if (data.ok) {
-                console.log('✅ Telegram message sent');
+                console.log('✅ Telegram sent via ' + proxy.type + ' (attempt ' + (proxyIndex + 1) + ')');
                 if (callback) callback(true);
             } else {
-                console.error('Telegram API error:', data.description);
+                console.warn('Telegram API rejected (' + data.description + ') — not retrying proxies');
                 if (callback) callback(false);
             }
         })
         .catch(function(err) {
             if (timeoutId) clearTimeout(timeoutId);
-            var reason = (err && err.name === 'AbortError') ? 'timeout (WiFi may be blocking Telegram)' : err.message;
-            console.warn('Telegram send failed (' + reason + ') — message queued for retry');
-            // Queue the message so it retries when network improves
-            _queueTelegramMessage(message);
-            if (callback) callback(false);
+            var reason = (err && err.name === 'AbortError') ? 'timeout' : err.message;
+            console.warn('Telegram route ' + (proxyIndex + 1) + ' failed (' + reason + ') — trying next...');
+            // Try next proxy
+            _trySendWithFallback(token, body, originalMessage, proxyIndex + 1, callback);
         });
     }
 
