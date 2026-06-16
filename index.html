@@ -20,8 +20,8 @@
     <meta name="keywords" content="kids clothing, children fashion, baby clothes, kids shoes, kids accessories, Goat Kids">
     <link rel="canonical" href="https://sophornung575-jpg.github.io/Goad-Kids">
     <meta charset="UTF-8">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
@@ -537,7 +537,8 @@
                     <div class="inv-subnav">
                         <button class="inv-subbtn active" onclick="switchInvTab('products',this)"><i class="fas fa-boxes"></i> Products</button>
                         <button class="inv-subbtn" onclick="switchInvTab('add',this)"><i class="fas fa-plus"></i> Add New</button>
-                        <button class="inv-subbtn" onclick="switchInvTab('settings',this)"><i class="fas fa-cog"></i> Settings</button>
+                        <button class="inv-subbtn" onclick="switchInvTab('transfer',this)"><i class="fas fa-exchange-alt"></i> Transfer <span id="transferBadge" style="display:none;background:var(--danger);color:#fff;border-radius:999px;font-size:0.7rem;padding:1px 6px;margin-left:4px">0</span></button>
+                        <button class="inv-subbtn" onclick="switchInvTab('settings',this)"><i class="fas fa-cog\"></i> Settings</button>
                     </div>
 
                     <!-- PRODUCTS SUB-TAB -->
@@ -634,6 +635,80 @@
                         </div>
                     </div>
 
+                    <!-- TRANSFER SUB-TAB -->
+                    <div id="invTransferTab" class="inv-subtab">
+                        <div class="admin-card" style="margin-bottom:1rem">
+                            <div class="admin-card-header">
+                                <div class="admin-card-title"><i class="fas fa-store" style="color:var(--primary)"></i> Store Context</div>
+                            </div>
+                            <div class="admin-card-body">
+                                <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center">
+                                    <div>
+                                        <small style="color:var(--gray)">Current Store</small>
+                                        <div style="font-weight:700;font-size:1rem" id="transferCurrentStore">—</div>
+                                    </div>
+                                    <div style="flex:1;min-width:160px">
+                                        <small style="color:var(--gray)">My Role</small>
+                                        <div style="font-weight:600;color:var(--primary)" id="transferMyRole">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- REQUEST TRANSFER (Branch requests from Main) -->
+                        <div class="admin-card" style="margin-bottom:1rem" id="transferRequestCard">
+                            <div class="admin-card-header">
+                                <div class="admin-card-title"><i class="fas fa-paper-plane" style="color:var(--info)"></i> Request Stock Transfer</div>
+                            </div>
+                            <div class="admin-card-body">
+                                <p style="font-size:0.83rem;color:var(--gray);margin-bottom:1rem">Request stock from Main Store. Full admin at Main Store must approve.</p>
+                                <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem">
+                                    <div style="flex:2;min-width:180px">
+                                        <label style="font-size:0.8rem;font-weight:600;color:var(--gray-dark)">Product</label>
+                                        <select id="transferProductSelect" class="form-control" onchange="onTransferProductChange()" style="font-size:0.85rem">
+                                            <option value="">— Select product —</option>
+                                        </select>
+                                    </div>
+                                    <div style="flex:1;min-width:120px" id="transferSizeWrap" style="display:none">
+                                        <label style="font-size:0.8rem;font-weight:600;color:var(--gray-dark)">Size</label>
+                                        <select id="transferSizeSelect" class="form-control" style="font-size:0.85rem">
+                                            <option value="">— Size —</option>
+                                        </select>
+                                    </div>
+                                    <div style="flex:1;min-width:80px">
+                                        <label style="font-size:0.8rem;font-weight:600;color:var(--gray-dark)">Qty</label>
+                                        <input type="number" id="transferQtyInput" class="form-control" min="1" value="1" style="font-size:0.85rem">
+                                    </div>
+                                </div>
+                                <div style="margin-bottom:0.75rem">
+                                    <label style="font-size:0.8rem;font-weight:600;color:var(--gray-dark)">Note (optional)</label>
+                                    <input type="text" id="transferNoteInput" class="form-control" placeholder="e.g. urgent restock" style="font-size:0.85rem">
+                                </div>
+                                <button class="btn btn-primary" onclick="submitTransferRequest()"><i class="fas fa-paper-plane"></i> Send Request to Main Store</button>
+                                <div id="transferRequestStatus" style="margin-top:0.75rem;font-size:0.85rem"></div>
+                            </div>
+                        </div>
+
+                        <!-- PENDING APPROVALS (Main Store sees these) -->
+                        <div class="admin-card" id="transferApprovalsCard">
+                            <div class="admin-card-header" style="display:flex;justify-content:space-between;align-items:center">
+                                <div class="admin-card-title"><i class="fas fa-inbox" style="color:var(--warning)"></i> Incoming Transfer Requests</div>
+                                <button class="btn btn-outline btn-small" onclick="loadTransfers()"><i class="fas fa-sync"></i> Refresh</button>
+                            </div>
+                            <div class="admin-card-body" id="transferApprovalsList">
+                                <div style="text-align:center;color:var(--gray);padding:2rem">Loading...</div>
+                            </div>
+                        </div>
+
+                        <!-- TRANSFER HISTORY -->
+                        <div class="admin-card" style="margin-top:1rem">
+                            <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-history" style="color:var(--gray)"></i> Transfer History</div></div>
+                            <div class="admin-card-body" id="transferHistoryList">
+                                <div style="text-align:center;color:var(--gray);padding:1rem">No transfers yet</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- SETTINGS SUB-TAB -->
                     <div id="invSettingsTab" class="inv-subtab">
 
@@ -660,6 +735,28 @@
                             <div class="store-info-grid">
                                 <div class="store-info-item"><small>Store ID</small><div class="store-id-box"><code id="storeIdDisplay">...</code><button class="btn btn-primary btn-small" onclick="copyStoreId()"><i class="fas fa-copy"></i></button></div></div>
                                 <div class="store-info-item"><small>Cloud Sync</small><button class="btn btn-success w-full" onclick="syncToFirebase()"><i class="fas fa-cloud-upload-alt"></i> Sync to Cloud</button></div>
+                                <div class="store-info-item">
+                                    <small>This Store Name</small>
+                                    <div style="display:flex;gap:6px;margin-top:4px">
+                                        <input type="text" id="storeNameInput" class="form-control" placeholder="e.g. Main Store" style="font-size:0.85rem">
+                                        <button class="btn btn-primary btn-small" onclick="saveStoreName()"><i class="fas fa-save"></i></button>
+                                    </div>
+                                </div>
+                                <div class="store-info-item" style="grid-column:1/-1">
+                                    <small style="font-weight:700;color:var(--primary)"><i class="fas fa-exchange-alt"></i> Branch / Partner Store</small>
+                                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+                                        <div>
+                                            <small style="color:var(--gray)">Partner Store ID</small>
+                                            <input type="text" id="partnerStoreIdInput" class="form-control" placeholder="e.g. GOAT-BRANCH" style="font-size:0.83rem;margin-top:2px">
+                                        </div>
+                                        <div>
+                                            <small style="color:var(--gray)">Partner Store Name</small>
+                                            <input type="text" id="partnerStoreNameInput" class="form-control" placeholder="e.g. Branch Store" style="font-size:0.83rem;margin-top:2px">
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-primary btn-small" style="margin-top:8px" onclick="savePartnerStore()"><i class="fas fa-save"></i> Save Partner Store</button>
+                                    <div id="partnerStoreStatus" style="font-size:0.8rem;margin-top:4px"></div>
+                                </div>
                                 <div class="store-info-item" style="grid-column:1/-1">
                                     <small>Firebase Config</small>
                                     <div style="margin-top:6px">
@@ -1090,6 +1187,9 @@ function sendToTelegram(order, callback) {
         filter: { category: 'all', stock: 'all', search: '', priceMin: 0, priceMax: 9999, sortBy: 'default' },
         wishlist: JSON.parse(localStorage.getItem('goatWishlist') || '[]'),
         storeId: localStorage.getItem('goatStoreId') || 'GOAT-1979',
+        storeName: localStorage.getItem('goatStoreName') || 'Main Store',
+        partnerStoreId: localStorage.getItem('goatPartnerStoreId') || '',
+        partnerStoreName: localStorage.getItem('goatPartnerStoreName') || 'Branch Store',
         firebaseOnline: false,
         pendingOrders: [],
         confirmedOrders: [],
@@ -1424,6 +1524,14 @@ function sendToTelegram(order, callback) {
     function updateAdminBadges() {
         document.getElementById('ordersBadge').textContent = STATE.pendingOrders.length + STATE.confirmedOrders.length;
         document.getElementById('inventoryBadge').textContent = STATE.products.length;
+        // Refresh transfer badge in background if full admin and Firebase online
+        if (STATE.adminRole === 'full' && db && STATE.firebaseOnline && STATE.partnerStoreId) {
+            db.collection('transfers').where('fromStoreId', '==', STATE.storeId).where('status', '==', 'pending').get()
+                .then(function(snap) {
+                    var badge = document.getElementById('transferBadge');
+                    if (badge) { if (snap.size > 0) { badge.style.display = 'inline'; badge.textContent = snap.size; } else { badge.style.display = 'none'; } }
+                }).catch(function(){});
+        }
     }
 
     // =============================================
@@ -3102,6 +3210,7 @@ function sendToTelegram(order, callback) {
         if (el) el.classList.add('active');
         if (btn) btn.classList.add('active');
         if (tab === 'products') renderInventory();
+        if (tab === 'transfer') initTransferTab();
         if (tab === 'settings') {
             // Always lock when switching to settings
             lockSettings();
@@ -3958,6 +4067,305 @@ function sendToTelegram(order, callback) {
         }
         dlCSV(csv, 'GOAT_KIDS_Inventory.csv');
         showToast('Exported!', 'success');
+    }
+
+    // =============================================
+    // MULTI-STORE TRANSFER SYSTEM
+    // =============================================
+
+    function saveStoreName() {
+        var v = document.getElementById('storeNameInput').value.trim();
+        if (!v) return;
+        STATE.storeName = v;
+        localStorage.setItem('goatStoreName', v);
+        showToast('Store name saved: ' + v, 'success');
+    }
+
+    function savePartnerStore() {
+        var pid = document.getElementById('partnerStoreIdInput').value.trim();
+        var pname = document.getElementById('partnerStoreNameInput').value.trim();
+        if (!pid || !pname) { showToast('Enter both partner Store ID and Name', 'error'); return; }
+        STATE.partnerStoreId = pid;
+        STATE.partnerStoreName = pname;
+        localStorage.setItem('goatPartnerStoreId', pid);
+        localStorage.setItem('goatPartnerStoreName', pname);
+        var st = document.getElementById('partnerStoreStatus');
+        if (st) { st.style.color = 'var(--success)'; st.textContent = '✅ Partner store saved: ' + pname + ' (' + pid + ')'; }
+        showToast('Partner store saved', 'success');
+    }
+
+    function initTransferTab() {
+        // Show current store context
+        var cs = document.getElementById('transferCurrentStore');
+        var mr = document.getElementById('transferMyRole');
+        if (cs) cs.textContent = (STATE.storeName || STATE.storeId) + ' (' + STATE.storeId + ')';
+        if (mr) mr.textContent = STATE.adminRole === 'full' ? '👑 Full Admin' : '📋 ' + (STATE.adminRole || 'Admin');
+
+        // Populate product dropdown
+        var sel = document.getElementById('transferProductSelect');
+        if (sel) {
+            sel.innerHTML = '<option value="">— Select product —</option>';
+            STATE.products.forEach(function(p) {
+                if (getTotalStock(p) > 0) {
+                    var opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = p.name + ' (stock: ' + getTotalStock(p) + ')';
+                    sel.appendChild(opt);
+                }
+            });
+        }
+
+        // Pre-fill partner store settings
+        var pi = document.getElementById('partnerStoreIdInput');
+        var pn = document.getElementById('partnerStoreNameInput');
+        var sn = document.getElementById('storeNameInput');
+        if (pi) pi.value = STATE.partnerStoreId || '';
+        if (pn) pn.value = STATE.partnerStoreName || '';
+        if (sn) sn.value = STATE.storeName || '';
+
+        loadTransfers();
+    }
+
+    function onTransferProductChange() {
+        var pid = document.getElementById('transferProductSelect').value;
+        var sizeWrap = document.getElementById('transferSizeWrap');
+        var sizeSel = document.getElementById('transferSizeSelect');
+        if (!pid) { sizeWrap.style.display = 'none'; return; }
+        var p = STATE.products.find(function(x){ return x.id === pid; });
+        if (!p) return;
+        if (p.sizes && p.sizes.length > 0) {
+            sizeSel.innerHTML = '<option value="">— Size —</option>';
+            p.sizes.forEach(function(s) {
+                if (s.qty > 0) {
+                    var o = document.createElement('option');
+                    o.value = s.name;
+                    o.textContent = s.name + ' (' + s.qty + ' in stock)';
+                    sizeSel.appendChild(o);
+                }
+            });
+            sizeWrap.style.display = 'block';
+        } else {
+            sizeWrap.style.display = 'none';
+        }
+    }
+
+    async function submitTransferRequest() {
+        if (!STATE.adminRole) { showToast('Admin login required', 'error'); return; }
+        if (!STATE.partnerStoreId) { showToast('Set partner Store ID in Settings first', 'error'); return; }
+        if (!db) { showToast('Firebase offline', 'error'); return; }
+
+        var pid = document.getElementById('transferProductSelect').value;
+        var size = document.getElementById('transferSizeSelect') ? document.getElementById('transferSizeSelect').value : '';
+        var qty = parseInt(document.getElementById('transferQtyInput').value) || 0;
+        var note = document.getElementById('transferNoteInput').value.trim();
+        var status = document.getElementById('transferRequestStatus');
+
+        if (!pid) { showToast('Select a product', 'error'); return; }
+        var p = STATE.products.find(function(x){ return x.id === pid; });
+        if (!p) return;
+        if (p.sizes && p.sizes.length > 0 && !size) { showToast('Select a size', 'error'); return; }
+        if (qty < 1) { showToast('Qty must be at least 1', 'error'); return; }
+
+        // Check requester has enough stock to send (this store is requesting FROM partner)
+        // Actually: Branch requests FROM Main → we check Main's stock later at approval time
+
+        var transfer = {
+            transferId: 'TRF-' + Date.now(),
+            status: 'pending',
+            requestedAt: Date.now(),
+            requestedAtStr: new Date().toLocaleString(),
+            fromStoreId: STATE.partnerStoreId,       // Main Store (source)
+            fromStoreName: STATE.partnerStoreName,
+            toStoreId: STATE.storeId,                 // This store (destination)
+            toStoreName: STATE.storeName || STATE.storeId,
+            productId: pid,
+            productName: p.name,
+            size: size || 'One Size',
+            qty: qty,
+            note: note,
+            requestedBy: STATE.adminRole
+        };
+
+        try {
+            status.style.color = 'var(--gray)'; status.textContent = '⏳ Sending request...';
+            await db.collection('transfers').doc(transfer.transferId).set(transfer);
+            status.style.color = 'var(--success)';
+            status.textContent = '✅ Request sent to ' + STATE.partnerStoreName + '!';
+            document.getElementById('transferProductSelect').value = '';
+            document.getElementById('transferQtyInput').value = '1';
+            document.getElementById('transferNoteInput').value = '';
+            document.getElementById('transferSizeWrap').style.display = 'none';
+            sendTelegramMessage('🔄 <b>TRANSFER REQUEST</b>\n\n' +
+                '📦 Product: ' + p.name + (size ? ' (' + size + ')' : '') + '\n' +
+                '🔢 Qty: ' + qty + '\n' +
+                '📤 From: ' + STATE.partnerStoreName + '\n' +
+                '📥 To: ' + (STATE.storeName || STATE.storeId) + '\n' +
+                (note ? '📝 Note: ' + note : '') + '\n\n' +
+                '⏳ Waiting for approval from Main Store admin.');
+            loadTransfers();
+        } catch(e) {
+            status.style.color = 'var(--danger)'; status.textContent = '❌ Failed: ' + e.message;
+        }
+    }
+
+    async function loadTransfers() {
+        if (!db) return;
+        try {
+            // Load transfers involving this store (either as source or destination)
+            var snap = await db.collection('transfers')
+                .orderBy('requestedAt', 'desc')
+                .limit(50)
+                .get();
+
+            var pending = [], history = [];
+            snap.forEach(function(d) {
+                var t = Object.assign({ transferId: d.id }, d.data());
+                // Show in approvals if: this store is the SOURCE (Main) AND status is pending AND full admin
+                if (t.fromStoreId === STATE.storeId && t.status === 'pending') pending.push(t);
+                // Show in history if this store is involved
+                if ((t.fromStoreId === STATE.storeId || t.toStoreId === STATE.storeId) && t.status !== 'pending') history.push(t);
+            });
+
+            // Update badge
+            var badge = document.getElementById('transferBadge');
+            if (badge) {
+                if (pending.length > 0 && STATE.adminRole === 'full') {
+                    badge.style.display = 'inline'; badge.textContent = pending.length;
+                } else { badge.style.display = 'none'; }
+            }
+
+            renderTransferApprovals(pending);
+            renderTransferHistory(history);
+        } catch(e) {
+            console.warn('Transfer load failed:', e.message);
+        }
+    }
+
+    function renderTransferApprovals(pending) {
+        var el = document.getElementById('transferApprovalsList');
+        if (!el) return;
+        if (!pending.length) {
+            el.innerHTML = '<div style="text-align:center;color:var(--gray);padding:1.5rem">No pending requests</div>';
+            return;
+        }
+        if (STATE.adminRole !== 'full') {
+            el.innerHTML = '<div style="text-align:center;color:var(--gray);padding:1.5rem">⚠️ Full admin required to approve transfers</div>';
+            return;
+        }
+        var html = '';
+        pending.forEach(function(t) {
+            html += '<div style="background:var(--light);border-radius:10px;padding:1rem;margin-bottom:0.75rem;border-left:4px solid var(--warning)">' +
+                '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.5rem">' +
+                '<div>' +
+                '<div style="font-weight:700;font-size:0.95rem">📦 ' + escHtml(t.productName) + (t.size && t.size !== 'One Size' ? ' <span style="color:var(--primary);font-size:0.85rem">(' + escHtml(t.size) + ')</span>' : '') + '</div>' +
+                '<div style="font-size:0.83rem;color:var(--gray-dark);margin-top:2px">Qty: <b>' + t.qty + '</b> &nbsp;|&nbsp; To: <b>' + escHtml(t.toStoreName) + '</b></div>' +
+                (t.note ? '<div style="font-size:0.8rem;color:var(--gray);margin-top:2px">📝 ' + escHtml(t.note) + '</div>' : '') +
+                '<div style="font-size:0.75rem;color:var(--gray);margin-top:4px">' + escHtml(t.requestedAtStr || '') + '</div>' +
+                '</div>' +
+                '<div style="display:flex;gap:6px">' +
+                '<button class="btn btn-success btn-small" onclick="approveTransfer(\'' + t.transferId + '\')"><i class="fas fa-check"></i> Approve</button>' +
+                '<button class="btn btn-outline btn-small" style="color:var(--danger)" onclick="rejectTransfer(\'' + t.transferId + '\')"><i class="fas fa-times"></i> Reject</button>' +
+                '</div></div></div>';
+        });
+        el.innerHTML = html;
+    }
+
+    function renderTransferHistory(history) {
+        var el = document.getElementById('transferHistoryList');
+        if (!el) return;
+        if (!history.length) { el.innerHTML = '<div style="text-align:center;color:var(--gray);padding:1rem">No transfer history yet</div>'; return; }
+        var html = '<table style="width:100%;border-collapse:collapse;font-size:0.83rem"><thead><tr style="background:var(--gray-light)"><th style="padding:6px 8px;text-align:left">Product</th><th style="padding:6px 8px">Qty</th><th style="padding:6px 8px">Direction</th><th style="padding:6px 8px">Status</th><th style="padding:6px 8px">Date</th></tr></thead><tbody>';
+        history.forEach(function(t) {
+            var dir = t.fromStoreId === STATE.storeId ? '→ ' + escHtml(t.toStoreName) : '← ' + escHtml(t.fromStoreName);
+            var sc = t.status === 'approved' ? 'var(--success)' : 'var(--danger)';
+            html += '<tr style="border-bottom:1px solid var(--gray-light)">' +
+                '<td style="padding:6px 8px">' + escHtml(t.productName) + (t.size && t.size !== 'One Size' ? ' <small>(' + escHtml(t.size) + ')</small>' : '') + '</td>' +
+                '<td style="padding:6px 8px;text-align:center">' + t.qty + '</td>' +
+                '<td style="padding:6px 8px;text-align:center;font-size:0.78rem">' + dir + '</td>' +
+                '<td style="padding:6px 8px;text-align:center;color:' + sc + ';font-weight:600">' + t.status + '</td>' +
+                '<td style="padding:6px 8px;color:var(--gray);font-size:0.75rem">' + escHtml(t.requestedAtStr || '') + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        el.innerHTML = html;
+    }
+
+    async function approveTransfer(transferId) {
+        if (STATE.adminRole !== 'full') { showToast('Full admin required', 'error'); return; }
+        if (!confirm('Approve this transfer? Stock will be deducted from this store and added to the requesting store.')) return;
+        if (!db) { showToast('Firebase offline', 'error'); return; }
+        try {
+            var tDoc = await db.collection('transfers').doc(transferId).get();
+            if (!tDoc.exists) { showToast('Transfer not found', 'error'); return; }
+            var t = tDoc.data();
+
+            // Find product in THIS store (source)
+            var p = STATE.products.find(function(x){ return x.id === t.productId; });
+            if (!p) { showToast('Product not found in this store', 'error'); return; }
+
+            // Check stock
+            var availQty;
+            if (p.sizes && p.sizes.length > 0 && t.size !== 'One Size') {
+                var sz = p.sizes.find(function(s){ return s.name === t.size; });
+                availQty = sz ? sz.qty : 0;
+            } else { availQty = p.stock || 0; }
+            if (availQty < t.qty) { showToast('Insufficient stock: only ' + availQty + ' available', 'error'); return; }
+
+            // Deduct from this store
+            if (p.sizes && p.sizes.length > 0 && t.size !== 'One Size') {
+                p.sizes.forEach(function(s){ if (s.name === t.size) s.qty -= t.qty; });
+                p.stock = getTotalStock(p);
+            } else { p.stock = (p.stock || 0) - t.qty; }
+
+            // Add to partner store in Firebase
+            var partnerProductRef = db.collection('stores').doc(t.toStoreId).collection('products').doc(p.id);
+            var partnerSnap = await partnerProductRef.get();
+            var partnerData = partnerSnap.exists ? partnerSnap.data() : Object.assign({}, p, { stock: 0, sizes: (p.sizes||[]).map(function(s){ return Object.assign({}, s, {qty: 0}); }) });
+
+            if (partnerData.sizes && partnerData.sizes.length > 0 && t.size !== 'One Size') {
+                var found = false;
+                partnerData.sizes.forEach(function(s){ if (s.name === t.size) { s.qty += t.qty; found = true; } });
+                if (!found) partnerData.sizes.push({ name: t.size, qty: t.qty });
+                partnerData.stock = partnerData.sizes.reduce(function(a,s){ return a + (s.qty||0); }, 0);
+            } else { partnerData.stock = (partnerData.stock || 0) + t.qty; }
+
+            // Write atomically
+            var batch = db.batch();
+            batch.set(db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id), Object.assign({}, p));
+            batch.set(partnerProductRef, partnerData, { merge: true });
+            batch.update(db.collection('transfers').doc(transferId), {
+                status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
+                approvedAtStr: new Date().toLocaleString()
+            });
+            await batch.commit();
+
+            saveProducts();
+            logActivity('Transfer Approved', t.productName + ' x' + t.qty + ' → ' + t.toStoreName);
+            sendTelegramMessage('✅ <b>TRANSFER APPROVED</b>\n\n' +
+                '📦 ' + t.productName + (t.size && t.size !== 'One Size' ? ' (' + t.size + ')' : '') + '\n' +
+                '🔢 Qty: ' + t.qty + '\n' +
+                '📤 From: ' + (STATE.storeName || STATE.storeId) + '\n' +
+                '📥 To: ' + t.toStoreName + '\n' +
+                '✅ Approved by Full Admin');
+            showToast('Transfer approved! Stock updated.', 'success');
+            renderInventory(); renderProducts();
+            loadTransfers();
+        } catch(e) {
+            showToast('Approve failed: ' + e.message, 'error');
+        }
+    }
+
+    async function rejectTransfer(transferId) {
+        var reason = prompt('Reason for rejection (optional):') || 'Rejected by admin';
+        if (!db) return;
+        try {
+            await db.collection('transfers').doc(transferId).update({
+                status: 'rejected', rejectedAt: Date.now(), rejectedBy: STATE.adminRole,
+                rejectedAtStr: new Date().toLocaleString(), rejectReason: reason
+            });
+            logActivity('Transfer Rejected', transferId);
+            showToast('Transfer rejected', 'info');
+            loadTransfers();
+        } catch(e) { showToast('Reject failed: ' + e.message, 'error'); }
     }
 
     // =============================================
