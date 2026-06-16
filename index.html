@@ -745,6 +745,27 @@
 
                 <!-- REPORTS -->
                 <div id="adminReportsTab" class="admin-tab-content">
+
+                    <!-- REPORT LOCK SCREEN -->
+                    <div id="reportLock" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3rem 1rem;text-align:center">
+                        <div style="background:#fff;border-radius:16px;padding:2rem;max-width:320px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
+                            <div style="font-size:2.5rem;margin-bottom:0.5rem">📊</div>
+                            <h3 style="margin-bottom:0.25rem;color:var(--gray-dark)">Reports Protected</h3>
+                            <p style="font-size:0.85rem;color:var(--gray);margin-bottom:1.5rem">Enter your admin password to view reports</p>
+                            <div style="position:relative;margin-bottom:1rem">
+                                <input type="password" id="reportLockInput" class="form-control" placeholder="Enter password" style="padding-right:2.5rem;text-align:center;letter-spacing:2px" onkeydown="if(event.key==='Enter')unlockReport()">
+                                <button onclick="toggleReportLockVisibility()" style="position:absolute;right:0.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray)" id="reportLockEye"><i class="fas fa-eye"></i></button>
+                            </div>
+                            <div id="reportLockError" style="color:var(--danger);font-size:0.8rem;margin-bottom:0.75rem;min-height:1.2em"></div>
+                            <button class="btn btn-primary w-full" onclick="unlockReport()"><i class="fas fa-unlock"></i> View Reports</button>
+                        </div>
+                    </div>
+
+                    <!-- REPORT CONTENT (hidden until unlocked) -->
+                    <div id="reportContent" style="display:none">
+                    <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem">
+                        <button class="btn btn-outline btn-small" onclick="lockReport()"><i class="fas fa-lock"></i> Lock Reports</button>
+                    </div>
                     <div class="date-filter-container">
                         <span style="font-weight:600;color:var(--dark);font-size:0.9rem"><i class="fas fa-calendar-alt"></i> Filter:</span>
                         <button class="date-filter-btn active" onclick="setDateFilter('today', this)" data-translate="today">Today</button>
@@ -786,7 +807,8 @@
                             </table>
                         </div>
                     </div>
-                </div>
+                    </div><!-- end reportContent -->
+                </div><!-- end adminReportsTab -->
             </div>
         </div>
     </main>
@@ -1389,7 +1411,13 @@ function sendToTelegram(order, callback) {
         else if (tab === 'reports') {
             document.querySelectorAll('.admin-tab')[2].classList.add('active');
             document.getElementById('adminReportsTab').classList.add('active');
-            loadReportData();
+            // Show lock if not already unlocked
+            if (document.getElementById('reportContent').style.display === 'none') {
+                document.getElementById('reportLock').style.display = 'flex';
+                setTimeout(function(){ var i = document.getElementById('reportLockInput'); if(i) i.focus(); }, 100);
+            } else {
+                loadReportData();
+            }
         }
     }
 
@@ -2063,6 +2091,11 @@ function sendToTelegram(order, callback) {
         document.querySelectorAll('.admin-tab')[0].style.display = '';
         document.querySelectorAll('.admin-tab')[1].style.display = '';
         document.querySelectorAll('.admin-tab')[2].style.display = '';
+        // Lock report screen on logout
+        document.getElementById('reportContent').style.display = 'none';
+        document.getElementById('reportLock').style.display = 'flex';
+        var ri = document.getElementById('reportLockInput'); if (ri) ri.value = '';
+        var re = document.getElementById('reportLockError'); if (re) re.textContent = '';
         showTab('store');
         showToast('Logged out', 'info');
     }
@@ -3084,6 +3117,51 @@ function sendToTelegram(order, callback) {
         if (inp) { inp.value = ''; inp.focus(); }
         var err = document.getElementById('settingsLockError');
         if (err) err.textContent = '';
+    }
+
+    function unlockReport() {
+        var inp = document.getElementById('reportLockInput');
+        var err = document.getElementById('reportLockError');
+        var pw = inp ? inp.value.trim() : '';
+        var passwords = getStoredPasswords();
+        // Accept full admin OR orders password
+        if (pw === passwords.fullPass || pw === passwords.ordersPass) {
+            document.getElementById('reportLock').style.display = 'none';
+            document.getElementById('reportContent').style.display = 'block';
+            inp.value = '';
+            if (err) err.textContent = '';
+            loadReportData();
+        } else {
+            if (err) {
+                err.textContent = '❌ Incorrect password';
+                inp.value = '';
+                inp.focus();
+                inp.style.animation = 'none';
+                setTimeout(function(){ inp.style.animation = 'shake 0.3s'; }, 10);
+            }
+        }
+    }
+
+    function lockReport() {
+        document.getElementById('reportContent').style.display = 'none';
+        document.getElementById('reportLock').style.display = 'flex';
+        var inp = document.getElementById('reportLockInput');
+        if (inp) { inp.value = ''; inp.focus(); }
+        var err = document.getElementById('reportLockError');
+        if (err) err.textContent = '';
+    }
+
+    function toggleReportLockVisibility() {
+        var inp = document.getElementById('reportLockInput');
+        var eye = document.getElementById('reportLockEye');
+        if (!inp) return;
+        if (inp.type === 'password') {
+            inp.type = 'text';
+            eye.innerHTML = '<i class="fas fa-eye-slash"></i>';
+        } else {
+            inp.type = 'password';
+            eye.innerHTML = '<i class="fas fa-eye"></i>';
+        }
     }
 
     function unlockSettings() {
