@@ -20,8 +20,8 @@
     <meta name="keywords" content="kids clothing, children fashion, baby clothes, kids shoes, kids accessories, Goat Kids">
     <link rel="canonical" href="https://sophornung575-jpg.github.io/Goad-Kids">
     <meta charset="UTF-8">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
@@ -1402,7 +1402,7 @@ function sendToTelegram(order, callback) {
     }
 
     function saveProducts() {
-        localStorage.setItem('goatProducts', JSON.stringify(STATE.products));
+        localStorage.setItem('goatProducts_' + STATE.storeId, JSON.stringify(STATE.products));
     }
     function saveProductsToFirebase() {
         // Push all products to Firebase - call after bulk changes
@@ -1417,13 +1417,11 @@ function sendToTelegram(order, callback) {
         }
     }
     function saveOrders() {
-        localStorage.setItem('pendingOrders', JSON.stringify(STATE.pendingOrders));
-        // Keep only the latest 50 confirmed orders in localStorage
+        localStorage.setItem('pendingOrders_' + STATE.storeId, JSON.stringify(STATE.pendingOrders));
         var sorted = STATE.confirmedOrders.slice().sort(function(a,b){return (a.timestamp||0)-(b.timestamp||0);});
         if (sorted.length > 50) {
             var overflow = sorted.slice(0, sorted.length - 50);
             STATE.confirmedOrders = sorted.slice(sorted.length - 50);
-            // Silently push overflow to Firebase archive if online
             if (STATE.firebaseOnline && overflow.length) {
                 var batch = db.batch();
                 overflow.forEach(function(o){
@@ -1432,7 +1430,7 @@ function sendToTelegram(order, callback) {
                 batch.commit().catch(function(e){ console.warn('Auto-archive failed:', e); });
             }
         }
-        localStorage.setItem('confirmedOrders', JSON.stringify(STATE.confirmedOrders));
+        localStorage.setItem('confirmedOrders_' + STATE.storeId, JSON.stringify(STATE.confirmedOrders));
     }
 
     function logActivity(action, details) {
@@ -2440,8 +2438,18 @@ function sendToTelegram(order, callback) {
         }
     }
 
-    function loadLocal() { loadProductsLocal(); STATE.pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]'); STATE.confirmedOrders = JSON.parse(localStorage.getItem('confirmedOrders') || '[]'); loadRefunds(); }
-    function loadProductsLocal() { var s = localStorage.getItem('goatProducts'); STATE.products = s ? JSON.parse(s) : []; if (!STATE.products.length) loadSamples(); }
+    function loadLocal() {
+        loadProductsLocal();
+        STATE.pendingOrders = JSON.parse(localStorage.getItem('pendingOrders_' + STATE.storeId) || '[]');
+        STATE.confirmedOrders = JSON.parse(localStorage.getItem('confirmedOrders_' + STATE.storeId) || '[]');
+        loadRefunds();
+    }
+    function loadProductsLocal() {
+        var s = localStorage.getItem('goatProducts_' + STATE.storeId);
+        STATE.products = s ? JSON.parse(s) : [];
+        // Only load sample data for Main Store — Branch starts empty
+        if (!STATE.products.length && STATE.storeId === 'GOAT-1979') loadSamples();
+    }
 
     async function syncToFirebase() {
         if (!STATE.firebaseOnline) {
@@ -4015,8 +4023,8 @@ function sendToTelegram(order, callback) {
         setTimeout(function() { if (confirm('Print refund receipt?')) printRefundReceipt(refundRecord.refundId); }, 300);
     }
 
-    function saveRefunds() { localStorage.setItem('goatRefunds', JSON.stringify(STATE.refundedOrders.slice(-100))); }
-    function loadRefunds() { var saved = localStorage.getItem('goatRefunds'); STATE.refundedOrders = saved ? JSON.parse(saved) : []; }
+    function saveRefunds() { localStorage.setItem('goatRefunds_' + STATE.storeId, JSON.stringify(STATE.refundedOrders.slice(-100))); }
+    function loadRefunds() { var saved = localStorage.getItem('goatRefunds_' + STATE.storeId); STATE.refundedOrders = saved ? JSON.parse(saved) : []; }
 
     function renderRefunds() {
         var container = document.getElementById('refundContainer'); if (!container) return;
