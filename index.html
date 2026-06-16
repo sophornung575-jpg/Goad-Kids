@@ -637,31 +637,46 @@
 
                     <!-- TRANSFER SUB-TAB -->
                     <div id="invTransferTab" class="inv-subtab">
+                        <!-- STORE CONTEXT -->
                         <div class="admin-card" style="margin-bottom:1rem">
                             <div class="admin-card-header">
                                 <div class="admin-card-title"><i class="fas fa-store" style="color:var(--primary)"></i> Store Context</div>
                             </div>
-                            <div class="admin-card-body">
-                                <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center">
-                                    <div>
-                                        <small style="color:var(--gray)">Current Store</small>
-                                        <div style="font-weight:700;font-size:1rem" id="transferCurrentStore">—</div>
+                            <div class="admin-card-body" id="transferContextBody">
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+                                    <div style="background:var(--light);border-radius:8px;padding:0.75rem">
+                                        <small style="color:var(--gray)">This Store</small>
+                                        <div style="font-weight:700;font-size:0.95rem;margin-top:2px" id="transferCurrentStore">—</div>
+                                        <div style="font-size:0.75rem;color:var(--gray);font-family:monospace" id="transferCurrentStoreId">—</div>
                                     </div>
-                                    <div style="flex:1;min-width:160px">
-                                        <small style="color:var(--gray)">My Role</small>
-                                        <div style="font-weight:600;color:var(--primary)" id="transferMyRole">—</div>
+                                    <div style="background:var(--light);border-radius:8px;padding:0.75rem">
+                                        <small style="color:var(--gray)">Partner Store</small>
+                                        <div style="font-weight:700;font-size:0.95rem;margin-top:2px" id="transferPartnerStore">—</div>
+                                        <div style="font-size:0.75rem;color:var(--gray);font-family:monospace" id="transferPartnerStoreId">—</div>
                                     </div>
                                 </div>
+                                <div id="transferRoleAlert" style="margin-top:0.75rem;padding:0.6rem 0.9rem;border-radius:8px;font-size:0.83rem;font-weight:600"></div>
                             </div>
                         </div>
 
-                        <!-- REQUEST TRANSFER (Branch requests from Main) -->
+                        <!-- PENDING APPROVALS — shown first for Main Store full admin -->
+                        <div class="admin-card" id="transferApprovalsCard" style="margin-bottom:1rem;border:2px solid var(--warning)">
+                            <div class="admin-card-header" style="display:flex;justify-content:space-between;align-items:center;background:rgba(236,201,75,0.1)">
+                                <div class="admin-card-title"><i class="fas fa-inbox" style="color:var(--warning)"></i> Incoming Transfer Requests <span id="transferPendingCount" style="font-size:0.8rem;color:var(--warning)"></span></div>
+                                <button class="btn btn-outline btn-small" onclick="loadTransfers()"><i class="fas fa-sync"></i> Refresh</button>
+                            </div>
+                            <div class="admin-card-body" id="transferApprovalsList">
+                                <div style="text-align:center;color:var(--gray);padding:2rem">Loading...</div>
+                            </div>
+                        </div>
+
+                        <!-- REQUEST TRANSFER -->
                         <div class="admin-card" style="margin-bottom:1rem" id="transferRequestCard">
                             <div class="admin-card-header">
                                 <div class="admin-card-title"><i class="fas fa-paper-plane" style="color:var(--info)"></i> Request Stock Transfer</div>
                             </div>
                             <div class="admin-card-body">
-                                <p style="font-size:0.83rem;color:var(--gray);margin-bottom:1rem">Request stock from Main Store. Full admin at Main Store must approve.</p>
+                                <p style="font-size:0.83rem;color:var(--gray);margin-bottom:1rem">Request stock from partner store. The source store full admin must approve.</p>
                                 <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem">
                                     <div style="flex:2;min-width:180px">
                                         <label style="font-size:0.8rem;font-weight:600;color:var(--gray-dark)">Product</label>
@@ -669,7 +684,7 @@
                                             <option value="">— Select product —</option>
                                         </select>
                                     </div>
-                                    <div style="flex:1;min-width:120px" id="transferSizeWrap" style="display:none">
+                                    <div style="flex:1;min-width:120px;display:none" id="transferSizeWrap">
                                         <label style="font-size:0.8rem;font-weight:600;color:var(--gray-dark)">Size</label>
                                         <select id="transferSizeSelect" class="form-control" style="font-size:0.85rem">
                                             <option value="">— Size —</option>
@@ -684,24 +699,13 @@
                                     <label style="font-size:0.8rem;font-weight:600;color:var(--gray-dark)">Note (optional)</label>
                                     <input type="text" id="transferNoteInput" class="form-control" placeholder="e.g. urgent restock" style="font-size:0.85rem">
                                 </div>
-                                <button class="btn btn-primary" onclick="submitTransferRequest()"><i class="fas fa-paper-plane"></i> Send Request to Main Store</button>
+                                <button class="btn btn-primary" onclick="submitTransferRequest()"><i class="fas fa-paper-plane"></i> Send Request to Partner Store</button>
                                 <div id="transferRequestStatus" style="margin-top:0.75rem;font-size:0.85rem"></div>
                             </div>
                         </div>
 
-                        <!-- PENDING APPROVALS (Main Store sees these) -->
-                        <div class="admin-card" id="transferApprovalsCard">
-                            <div class="admin-card-header" style="display:flex;justify-content:space-between;align-items:center">
-                                <div class="admin-card-title"><i class="fas fa-inbox" style="color:var(--warning)"></i> Incoming Transfer Requests</div>
-                                <button class="btn btn-outline btn-small" onclick="loadTransfers()"><i class="fas fa-sync"></i> Refresh</button>
-                            </div>
-                            <div class="admin-card-body" id="transferApprovalsList">
-                                <div style="text-align:center;color:var(--gray);padding:2rem">Loading...</div>
-                            </div>
-                        </div>
-
                         <!-- TRANSFER HISTORY -->
-                        <div class="admin-card" style="margin-top:1rem">
+                        <div class="admin-card" style="margin-top:0.5rem">
                             <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-history" style="color:var(--gray)"></i> Transfer History</div></div>
                             <div class="admin-card-body" id="transferHistoryList">
                                 <div style="text-align:center;color:var(--gray);padding:1rem">No transfers yet</div>
@@ -4095,27 +4099,45 @@ function sendToTelegram(order, callback) {
     }
 
     function initTransferTab() {
-        // Show current store context
+        // Store context
         var cs = document.getElementById('transferCurrentStore');
-        var mr = document.getElementById('transferMyRole');
-        if (cs) cs.textContent = (STATE.storeName || STATE.storeId) + ' (' + STATE.storeId + ')';
-        if (mr) mr.textContent = STATE.adminRole === 'full' ? '👑 Full Admin' : '📋 ' + (STATE.adminRole || 'Admin');
+        var csId = document.getElementById('transferCurrentStoreId');
+        var ps = document.getElementById('transferPartnerStore');
+        var psId = document.getElementById('transferPartnerStoreId');
+        var alert = document.getElementById('transferRoleAlert');
 
-        // Populate product dropdown
+        if (cs) cs.textContent = STATE.storeName || 'This Store';
+        if (csId) csId.textContent = STATE.storeId;
+        if (ps) ps.textContent = STATE.partnerStoreName || '— not set —';
+        if (psId) psId.textContent = STATE.partnerStoreId || 'Go to Settings → Store Info to configure';
+
+        if (!STATE.partnerStoreId && alert) {
+            alert.style.background = 'rgba(245,101,101,0.1)';
+            alert.style.color = 'var(--danger)';
+            alert.innerHTML = '⚠️ Partner store not configured. Go to <b>Settings → Store Info</b> to set the partner Store ID and Name.';
+        } else if (STATE.adminRole === 'full' && alert) {
+            alert.style.background = 'rgba(72,187,120,0.1)';
+            alert.style.color = 'var(--success)';
+            alert.innerHTML = '👑 You are <b>Full Admin</b> — you can approve incoming requests AND send requests to the partner store.';
+        } else if (alert) {
+            alert.style.background = 'rgba(102,126,234,0.1)';
+            alert.style.color = 'var(--primary)';
+            alert.innerHTML = '📋 You can send transfer requests. Only full admin can approve incoming requests.';
+        }
+
+        // Populate product dropdown for request form
         var sel = document.getElementById('transferProductSelect');
         if (sel) {
             sel.innerHTML = '<option value="">— Select product —</option>';
             STATE.products.forEach(function(p) {
-                if (getTotalStock(p) > 0) {
-                    var opt = document.createElement('option');
-                    opt.value = p.id;
-                    opt.textContent = p.name + ' (stock: ' + getTotalStock(p) + ')';
-                    sel.appendChild(opt);
-                }
+                var opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name + ' (stock: ' + getTotalStock(p) + ')';
+                sel.appendChild(opt);
             });
         }
 
-        // Pre-fill partner store settings
+        // Pre-fill settings fields
         var pi = document.getElementById('partnerStoreIdInput');
         var pn = document.getElementById('partnerStoreNameInput');
         var sn = document.getElementById('storeNameInput');
@@ -4209,35 +4231,47 @@ function sendToTelegram(order, callback) {
     }
 
     async function loadTransfers() {
-        if (!db) return;
+        if (!db) {
+            var el = document.getElementById('transferApprovalsList');
+            if (el) el.innerHTML = '<div style="text-align:center;color:var(--gray);padding:1rem">Firebase offline</div>';
+            return;
+        }
         try {
-            // Load transfers involving this store (either as source or destination)
             var snap = await db.collection('transfers')
                 .orderBy('requestedAt', 'desc')
-                .limit(50)
+                .limit(100)
                 .get();
 
             var pending = [], history = [];
             snap.forEach(function(d) {
                 var t = Object.assign({ transferId: d.id }, d.data());
-                // Show in approvals if: this store is the SOURCE (Main) AND status is pending AND full admin
-                if (t.fromStoreId === STATE.storeId && t.status === 'pending') pending.push(t);
-                // Show in history if this store is involved
-                if ((t.fromStoreId === STATE.storeId || t.toStoreId === STATE.storeId) && t.status !== 'pending') history.push(t);
+                // Incoming requests: this store is the SOURCE (fromStoreId) and status is pending
+                if (t.fromStoreId === STATE.storeId && t.status === 'pending') {
+                    pending.push(t);
+                }
+                // History: this store is involved in any completed transfer
+                if ((t.fromStoreId === STATE.storeId || t.toStoreId === STATE.storeId) && t.status !== 'pending') {
+                    history.push(t);
+                }
             });
 
-            // Update badge
+            // Update badge and count label
             var badge = document.getElementById('transferBadge');
-            if (badge) {
-                if (pending.length > 0 && STATE.adminRole === 'full') {
-                    badge.style.display = 'inline'; badge.textContent = pending.length;
-                } else { badge.style.display = 'none'; }
+            var countLabel = document.getElementById('transferPendingCount');
+            if (pending.length > 0 && STATE.adminRole === 'full') {
+                if (badge) { badge.style.display = 'inline'; badge.textContent = pending.length; }
+                if (countLabel) countLabel.textContent = '(' + pending.length + ' pending)';
+            } else {
+                if (badge) badge.style.display = 'none';
+                if (countLabel) countLabel.textContent = '';
             }
 
             renderTransferApprovals(pending);
             renderTransferHistory(history);
         } catch(e) {
             console.warn('Transfer load failed:', e.message);
+            var el = document.getElementById('transferApprovalsList');
+            if (el) el.innerHTML = '<div style="color:var(--danger);padding:1rem">❌ Failed to load: ' + e.message + '</div>';
         }
     }
 
