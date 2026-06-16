@@ -349,7 +349,7 @@
     <div id="storeSelectorScreen" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);z-index:99998;flex-direction:column;align-items:center;justify-content:center;padding:20px">
         <div style="background:#fff;border-radius:20px;padding:2rem;max-width:440px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.2);text-align:center">
             <div style="font-size:3rem;margin-bottom:0.5rem"></div>
-            <h2 style="margin:0 0 0.25rem;color:#2d3748">Which store is this?</h2>
+            <h2 style="margin:0 0 0.25rem;color:#2d3748">Select​​​ the Store/ជ្រើសយលហាង</h2>
             <p style="color:#718096;font-size:0.85rem;margin-bottom:1.5rem">Select once — remembered permanently on this device.</p>
             <div id="storeSelectorList" style="display:grid;gap:0.75rem;margin-bottom:1.25rem;max-height:320px;overflow-y:auto">
                 <div style="text-align:center;color:#718096;padding:1.5rem">
@@ -926,6 +926,7 @@
                         <div class="stat-card orders-stat"><div class="stat-icon"><i class="fas fa-shopping-bag"></i></div><div class="stat-info"><h3 id="reportTotalOrders">0</h3><p data-translate="totalOrders">Total Orders</p></div></div>
                         <div class="stat-card stock-stat"><div class="stat-icon"><i class="fas fa-box"></i></div><div class="stat-info"><h3 id="reportItemsSold">0</h3><p data-translate="itemsSold">Items Sold</p></div></div>
                         <div class="stat-card customers"><div class="stat-icon"><i class="fas fa-users"></i></div><div class="stat-info"><h3 id="reportTotalCustomers">0</h3><p data-translate="customers">Customers</p></div></div>
+                        <div class="stat-card" style="border-left:4px solid var(--danger)"><div class="stat-icon" style="background:rgba(245,101,101,0.1)"><i class="fas fa-undo" style="color:var(--danger)"></i></div><div class="stat-info"><h3 id="reportTotalRefunds" style="color:var(--danger)">$0.00</h3><p>Refunds (<span id="reportRefundCount">0</span>)</p></div></div>
                     </div>
                     <div class="charts-grid">
                         <div class="chart-card"><h3><i class="fas fa-chart-pie" style="color:var(--primary)"></i> <span data-translate="salesByCategory">Sales by Category</span></h3><div class="chart-container"><canvas id="categoryChart"></canvas></div></div>
@@ -3329,17 +3330,38 @@ function sendToTelegram(order, callback) {
         }
     }
 
-    function unlockSettings() {
+    async function unlockSettings() {
         var inp = document.getElementById('settingsLockInput');
         var err = document.getElementById('settingsLockError');
         var pw = inp ? inp.value : '';
         var passwords = getStoredPasswords();
-        // Accept full admin password OR inventory password
-        if (pw === passwords.fullPass || pw === passwords.inventoryPass) {
+        var valid = (pw === passwords.fullPass || pw === passwords.inventoryPass);
+
+        // If local check fails, try Firebase per-store credentials (handles new devices)
+        if (!valid && db && STATE.firebaseOnline) {
+            try {
+                var doc = await db.collection('_admin_').doc(STATE.storeId).get();
+                if (!doc.exists) doc = await db.collection('_admin_').doc('credentials').get();
+                if (doc.exists) {
+                    var d = doc.data();
+                    if (pw === d.fullPass || pw === d.inventoryPass) {
+                        valid = true;
+                        // Update local cache
+                        localStorage.setItem('goatPasswords', JSON.stringify({
+                            fullPass: d.fullPass || passwords.fullPass,
+                            ordersPass: d.ordersPass || passwords.ordersPass,
+                            inventoryPass: d.inventoryPass || passwords.inventoryPass
+                        }));
+                    }
+                }
+            } catch(e) { console.warn('Firebase password check failed:', e); }
+        }
+
+        if (valid) {
             document.getElementById('settingsLock').style.display = 'none';
             document.getElementById('settingsContent').style.display = 'block';
             inp.value = '';
-            // Load branch list for Main Store
+            // Load branch list for Main Store only
             if (STATE.storeId === 'GOAT-1979') loadBranchListAdmin();
             else { var bc = document.getElementById('manageBranchesCard'); if (bc) bc.style.display = 'none'; }
             // Populate Telegram settings
@@ -3815,7 +3837,8 @@ function sendToTelegram(order, callback) {
 
     // =============================================
     // REPORTS — query Firebase directly
-    var _reportData = []; // cache for current query
+    var _reportData = [];
+    var _reportRefunds = [];
 
     async function loadReportData() {
         if (!db || !STATE.firebaseOnline) {
@@ -3833,9 +3856,11 @@ function sendToTelegram(order, callback) {
         document.getElementById('reportTotalOrders').textContent = '...';
         document.getElementById('reportItemsSold').textContent = '...';
         document.getElementById('reportTotalCustomers').textContent = '...';
+        document.getElementById('reportTotalRefunds').textContent = '...';
 
         try {
             var results = [];
+            var refundResults = [];
             // Query active orders from stores/{storeId}/orders
             var activeSnap = await db.collection('stores').doc(STATE.storeId).collection('orders')
                 .where('timestamp', '>=', startTs)
@@ -3850,10 +3875,21 @@ function sendToTelegram(order, callback) {
                 .get();
             archSnap.forEach(function(d) { results.push(Object.assign({}, d.data(), { orderId: d.id })); });
 
+            // Query refunds for the period
+            try {
+                var refSnap = await db.collection('stores').doc(STATE.storeId).collection('refunds')
+                    .where('refundTimestamp', '>=', startTs)
+                    .where('refundTimestamp', '<=', endTs)
+                    .get();
+                refSnap.forEach(function(d) { refundResults.push(Object.assign({}, d.data(), { refundId: d.id })); });
+            } catch(re) { console.warn('Refunds query failed:', re.message); }
+
             _reportData = results;
+            _reportRefunds = refundResults;
         } catch(e) {
             console.warn('Report Firebase query failed:', e.message);
             _reportData = STATE.confirmedOrders.slice();
+            _reportRefunds = STATE.refundedOrders.slice();
         }
         renderReports();
     }
@@ -3874,6 +3910,13 @@ function sendToTelegram(order, callback) {
         var cs = new Set();
         for (var l = 0; l < confirmed.length; l++) { if (confirmed[l].customerPhone || confirmed[l].customerName) cs.add(confirmed[l].customerPhone || confirmed[l].customerName); }
         document.getElementById('reportTotalCustomers').textContent = cs.size;
+        // Refund stats
+        var refTotal = 0;
+        for (var r = 0; r < _reportRefunds.length; r++) { refTotal += _reportRefunds[r].refundAmount || 0; }
+        var refEl = document.getElementById('reportTotalRefunds');
+        var refCnt = document.getElementById('reportRefundCount');
+        if (refEl) refEl.textContent = '$' + refTotal.toFixed(2);
+        if (refCnt) refCnt.textContent = _reportRefunds.length;
     }
 
     function renderCategoryChart() {
@@ -4013,6 +4056,23 @@ function sendToTelegram(order, callback) {
         }
         renderPending(); renderHistory(); renderRefunds(); renderProducts(); renderInventory(); updateAdminBadges(); renderReports();
         showToast('✅ Refund processed! $' + refundAmount.toFixed(2) + ' - Stock restored', 'success');
+
+        // Telegram notification
+        var itemLines = order.cart.map(function(it) {
+            return '  • ' + it.name + (it.size && it.size !== 'One Size' ? ' (' + it.size + ')' : '') + ' x' + it.quantity;
+        }).join('\n');
+        _sendTelegramRaw(
+            '↩️ <b>REFUND PROCESSED</b>\n\n' +
+            '🧾 Order: ' + oid + '\n' +
+            '👤 Customer: ' + (order.customerName || '—') + ' | ' + (order.customerPhone || '—') + '\n' +
+            '💰 Refund Amount: <b>$' + refundAmount.toFixed(2) + '</b> (of $' + order.total.toFixed(2) + ')\n' +
+            '📦 Items:\n' + itemLines + '\n' +
+            '📝 Reason: ' + reason + '\n' +
+            '🏪 Store: ' + (STATE.storeName || STATE.storeId) + '\n' +
+            '🕐 ' + new Date().toLocaleString(),
+            null
+        );
+
         setTimeout(function() { if (confirm('Print refund receipt?')) printRefundReceipt(refundRecord.refundId); }, 300);
     }
 
@@ -4322,7 +4382,7 @@ function sendToTelegram(order, callback) {
         } else if (STATE.adminRole === 'full' && alert) {
             alert.style.background = 'rgba(72,187,120,0.1)';
             alert.style.color = 'var(--success)';
-            alert.innerHTML = 'You are <b>Full Admin</b> — you can approve incoming requests AND send requests to the partner store.';
+            alert.innerHTML = '👑 You are <b>Full Admin</b> — you can approve incoming requests AND send requests to the partner store.';
         } else if (alert) {
             alert.style.background = 'rgba(102,126,234,0.1)';
             alert.style.color = 'var(--primary)';
