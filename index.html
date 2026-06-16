@@ -345,6 +345,49 @@
         </div>
     </div>
 
+    <!-- Store Selector Screen — shown once on first launch if no store chosen yet -->
+    <div id="storeSelectorScreen" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);z-index:99998;flex-direction:column;align-items:center;justify-content:center;padding:20px">
+        <div style="background:#fff;border-radius:20px;padding:2rem;max-width:420px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.2);text-align:center">
+            <div style="font-size:3rem;margin-bottom:0.5rem">🐐</div>
+            <h2 style="margin:0 0 0.25rem;color:#2d3748">Welcome to Goat Kids</h2>
+            <p style="color:#718096;font-size:0.88rem;margin-bottom:2rem">Which store is this device for? This is set <b>once</b> and remembered permanently.</p>
+
+            <div style="display:grid;gap:1rem;margin-bottom:1.5rem">
+                <!-- Main Store Option -->
+                <div id="storeOptionMain" onclick="selectStoreOption('main')" style="border:2px solid #e2e8f0;border-radius:14px;padding:1.25rem;cursor:pointer;transition:all 0.2s;text-align:left">
+                    <div style="display:flex;align-items:center;gap:0.75rem">
+                        <div style="font-size:1.8rem">🏪</div>
+                        <div>
+                            <div style="font-weight:700;font-size:1rem;color:#2d3748">Main Store</div>
+                            <div style="font-size:0.8rem;color:#718096">Primary store — can approve stock transfers</div>
+                            <div style="font-size:0.75rem;color:#a0aec0;font-family:monospace;margin-top:2px">ID: GOAT-1979</div>
+                        </div>
+                        <div id="storeOptionMainCheck" style="margin-left:auto;display:none;color:#667eea;font-size:1.3rem">✅</div>
+                    </div>
+                </div>
+
+                <!-- Branch Store Option -->
+                <div id="storeOptionBranch" onclick="selectStoreOption('branch')" style="border:2px solid #e2e8f0;border-radius:14px;padding:1.25rem;cursor:pointer;transition:all 0.2s;text-align:left">
+                    <div style="display:flex;align-items:center;gap:0.75rem">
+                        <div style="font-size:1.8rem">🏬</div>
+                        <div>
+                            <div style="font-weight:700;font-size:1rem;color:#2d3748">Branch Store</div>
+                            <div style="font-size:0.8rem;color:#718096">Branch location — can request stock transfers</div>
+                            <div style="font-size:0.75rem;color:#a0aec0;font-family:monospace;margin-top:2px">ID: GOAT-BRANCH</div>
+                        </div>
+                        <div id="storeOptionBranchCheck" style="margin-left:auto;display:none;color:#667eea;font-size:1.3rem">✅</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="storeSelectorError" style="color:#e53e3e;font-size:0.83rem;margin-bottom:0.75rem;min-height:1.2em"></div>
+            <button class="btn btn-primary w-full" onclick="confirmStoreSelection()" style="font-size:1rem;padding:0.8rem">
+                <i class="fas fa-check"></i> Confirm & Start
+            </button>
+            <p style="font-size:0.75rem;color:#a0aec0;margin-top:1rem">You can change this later in Inventory → Settings → Store Info</p>
+        </div>
+    </div>
+
 <header id="appRoot">
         <div class="header-container">
             <div class="logo" onclick="showTab('store')"><span>GOAT KIDS</span><span id="adminBadge" class="admin-badge hidden">ADMIN</span></div>
@@ -743,6 +786,7 @@
                                         <button class="btn btn-outline btn-small" style="white-space:nowrap" onclick="changeStoreId()"><i class="fas fa-save"></i> Change</button>
                                     </div>
                                     <div style="font-size:0.75rem;color:var(--warning);margin-top:4px">⚠️ Only change on the Branch device. Main Store keep as GOAT-1979.</div>
+                                    <button class="btn btn-outline btn-small" style="margin-top:8px;color:var(--gray)" onclick="resetStoreSelection()"><i class="fas fa-redo"></i> Reset Store Selection</button>
                                 </div>
                                 <div class="store-info-item"><small>Cloud Sync</small><button class="btn btn-success w-full" onclick="syncToFirebase()"><i class="fas fa-cloud-upload-alt"></i> Sync to Cloud</button></div>
                                 <div class="store-info-item">
@@ -2083,7 +2127,6 @@ function sendToTelegram(order, callback) {
         var json = document.getElementById('setupFirebaseJson').value.trim();
         if (!json) { alert('Please paste your Firebase config JSON'); return; }
         try {
-            // Accept both object literal and JSON
             var cfg = JSON.parse(json);
             if (!cfg.apiKey || !cfg.projectId) {
                 alert('Invalid config: missing apiKey or projectId');
@@ -2106,9 +2149,9 @@ function sendToTelegram(order, callback) {
         };
         localStorage.setItem('goatPasswords', JSON.stringify(pw));
 
-        // 3. Reload to initialize Firebase
-        showToast('Setup complete! Loading app...', 'success');
-        setTimeout(function() { location.reload(); }, 1000);
+        // 3. Show store selector instead of reloading directly
+        document.getElementById('firebaseSetupScreen').style.display = 'none';
+        document.getElementById('storeSelectorScreen').style.display = 'flex';
     }
     function changePassword() {
         var role = document.getElementById('changePwRole').value;
@@ -4088,6 +4131,69 @@ function sendToTelegram(order, callback) {
     // MULTI-STORE TRANSFER SYSTEM
     // =============================================
 
+    function resetStoreSelection() {
+        if (!confirm('This will re-show the Store Selector screen on next reload. Continue?')) return;
+        localStorage.removeItem('goatStoreChosen');
+        showToast('Store selection reset. Reloading...', 'info');
+        setTimeout(function() { location.reload(); }, 800);
+    }
+
+    var _selectedStore = null;
+
+    function selectStoreOption(store) {
+        _selectedStore = store;
+        var mainCard = document.getElementById('storeOptionMain');
+        var branchCard = document.getElementById('storeOptionBranch');
+        var mainCheck = document.getElementById('storeOptionMainCheck');
+        var branchCheck = document.getElementById('storeOptionBranchCheck');
+        if (store === 'main') {
+            mainCard.style.border = '2px solid #667eea';
+            mainCard.style.background = 'rgba(102,126,234,0.05)';
+            branchCard.style.border = '2px solid #e2e8f0';
+            branchCard.style.background = '';
+            mainCheck.style.display = 'block';
+            branchCheck.style.display = 'none';
+        } else {
+            branchCard.style.border = '2px solid #667eea';
+            branchCard.style.background = 'rgba(102,126,234,0.05)';
+            mainCard.style.border = '2px solid #e2e8f0';
+            mainCard.style.background = '';
+            branchCheck.style.display = 'block';
+            mainCheck.style.display = 'none';
+        }
+        document.getElementById('storeSelectorError').textContent = '';
+    }
+
+    function confirmStoreSelection() {
+        if (!_selectedStore) {
+            document.getElementById('storeSelectorError').textContent = '⚠️ Please select a store first.';
+            return;
+        }
+        var storeId, storeName, partnerStoreId, partnerStoreName;
+        if (_selectedStore === 'main') {
+            storeId = 'GOAT-1979';
+            storeName = 'Main Store';
+            partnerStoreId = 'GOAT-BRANCH';
+            partnerStoreName = 'Branch Store';
+        } else {
+            storeId = 'GOAT-BRANCH';
+            storeName = 'Branch Store';
+            partnerStoreId = 'GOAT-1979';
+            partnerStoreName = 'Main Store';
+        }
+        // Save all store config
+        localStorage.setItem('goatStoreId', storeId);
+        localStorage.setItem('goatStoreName', storeName);
+        localStorage.setItem('goatPartnerStoreId', partnerStoreId);
+        localStorage.setItem('goatPartnerStoreName', partnerStoreName);
+        localStorage.setItem('goatStoreChosen', '1');
+
+        // Hide selector and reload to start app
+        document.getElementById('storeSelectorScreen').style.display = 'none';
+        showToast('Store set to ' + storeName + '! Loading...', 'success');
+        setTimeout(function() { location.reload(); }, 800);
+    }
+
     function changeStoreId() {
         var newId = document.getElementById('storeIdEditInput').value.trim().toUpperCase();
         if (!newId) { showToast('Enter a Store ID', 'error'); return; }
@@ -4621,6 +4727,15 @@ function sendToTelegram(order, callback) {
         localStorage.setItem('goatStoreId', sid);
         STATE.storeId = sid;
         document.getElementById('storeIdDisplay').textContent = sid;
+
+        // ── STORE SELECTOR — show on first launch if store not yet chosen ──
+        var storeChosen = localStorage.getItem('goatStoreChosen');
+        var hasFbConfig = localStorage.getItem('goatFirebaseConfig');
+        if (!storeChosen && hasFbConfig) {
+            // Firebase is configured but store not chosen yet — show selector
+            document.getElementById('storeSelectorScreen').style.display = 'flex';
+            return; // pause init until user picks a store
+        }
 
         // Load cart
         STATE.cart = JSON.parse(localStorage.getItem('goatCart') || '[]');
