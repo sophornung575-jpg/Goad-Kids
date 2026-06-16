@@ -726,6 +726,19 @@
                                 <div id="changePwStatus" style="margin-top:0.75rem;font-size:0.85rem"></div>
                             </div>
                         </div>
+                        <!-- Data Export / Import -->
+                        <div class="admin-card">
+                            <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-database" style="color:var(--primary)"></i> Data Backup &amp; Restore</div></div>
+                            <div class="admin-card-body">
+                                <p style="font-size:0.85rem;color:var(--gray);margin-bottom:1rem">Export all Firebase data (products, orders, archived orders) as a JSON backup file, or restore from a previous backup.</p>
+                                <div class="flex gap-2" style="margin-bottom:0.75rem">
+                                    <button class="btn btn-primary" style="flex:1" onclick="exportFirebaseBackup()"><i class="fas fa-download"></i> Export Backup</button>
+                                    <button class="btn btn-outline" style="flex:1" onclick="document.getElementById('importBackupFile').click()"><i class="fas fa-upload"></i> Import Backup</button>
+                                    <input type="file" id="importBackupFile" accept=".json" style="display:none" onchange="importFirebaseBackup(this)">
+                                </div>
+                                <div id="backupStatus" style="font-size:0.85rem;margin-top:0.5rem"></div>
+                            </div>
+                        </div>
                         </div><!-- end settingsContent -->
                     </div>
                 </div>
@@ -2797,6 +2810,7 @@ function sendToTelegram(order, callback) {
         var confirmedOrder = Object.assign({}, order, {
             status: 'confirmed',
             confirmedAt: new Date().toLocaleString(),
+            confirmedTimestamp: Date.now(),
             timestamp: order.timestamp || Date.now()
         });
 
@@ -2969,7 +2983,7 @@ function sendToTelegram(order, callback) {
                     p.stock = getTotalStock(p);
                 }
             }
-            o.status = 'confirmed'; o.confirmedAt = new Date().toLocaleString();
+            o.status = 'confirmed'; o.confirmedAt = new Date().toLocaleString(); o.confirmedTimestamp = Date.now();
             STATE.confirmedOrders.push(o);
         }
         STATE.pendingOrders = [];
@@ -3534,7 +3548,7 @@ function sendToTelegram(order, callback) {
     function getFilteredOrders() {
         var dr = getDateRange(STATE.dateFilter);
         var fc = [], fp = [], fr = [];
-        for (var i = 0; i < STATE.confirmedOrders.length; i++) { var o = STATE.confirmedOrders[i], od = new Date(o.timestamp || Date.now()); if (od >= dr.start && od <= dr.end) { if (o.status === 'confirmed') fc.push(o); else if (o.status === 'rejected') fr.push(o); } }
+        for (var i = 0; i < STATE.confirmedOrders.length; i++) { var o = STATE.confirmedOrders[i], od = new Date(o.confirmedTimestamp || o.timestamp || Date.now()); if (od >= dr.start && od <= dr.end) { if (o.status === 'confirmed') fc.push(o); else if (o.status === 'rejected') fr.push(o); } }
         for (var j = 0; j < STATE.pendingOrders.length; j++) { var po = STATE.pendingOrders[j], pod = new Date(po.timestamp || Date.now()); if (pod >= dr.start && pod <= dr.end) fp.push(po); }
         return { confirmed: fc, pending: fp, rejected: fr };
     }
@@ -3583,7 +3597,7 @@ function sendToTelegram(order, callback) {
         var ctx = document.getElementById('revenueTrendChart'); if (!ctx) return;
         if (STATE.charts.revenueTrendChart) STATE.charts.revenueTrendChart.destroy();
         var filtered = getFilteredOrders(); var rd = {};
-        for (var i = 0; i < filtered.confirmed.length; i++) { var o = filtered.confirmed[i]; if (o.status !== 'confirmed') continue; var od = new Date(o.timestamp || Date.now()), dk = formatDate(od); if (!rd[dk]) rd[dk] = 0; rd[dk] += o.total || 0; }
+        for (var i = 0; i < filtered.confirmed.length; i++) { var o = filtered.confirmed[i]; if (o.status !== 'confirmed') continue; var od = new Date(o.confirmedTimestamp || o.timestamp || Date.now()), dk = formatDate(od); if (!rd[dk]) rd[dk] = 0; rd[dk] += o.total || 0; }
         var dates = Object.keys(rd).sort(function(a, b) { return new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')); });
         STATE.charts.revenueTrendChart = new Chart(ctx, { type: 'line', data: { labels: dates.length ? dates : ['No Data'], datasets: [{ label: 'Revenue ($)', data: dates.length ? dates.map(function(d) { return rd[d]; }) : [0], borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.1)', fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#667eea' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: function(v) { return '$' + v; } } } } } });
     }
@@ -3779,6 +3793,94 @@ function sendToTelegram(order, callback) {
         }
         dlCSV(csv, 'GOAT_KIDS_Inventory.csv');
         showToast('Exported!', 'success');
+    }
+
+    // =============================================
+    // FIREBASE BACKUP EXPORT / IMPORT
+    // =============================================
+    async function exportFirebaseBackup() {
+        var status = document.getElementById('backupStatus');
+        status.style.color = 'var(--gray)';
+        status.textContent = '⏳ Fetching data from Firebase...';
+        try {
+            var backup = { exportedAt: new Date().toISOString(), storeId: STATE.storeId, products: [], orders: [], archivedOrders: [] };
+            if (db) {
+                // Products
+                var pSnap = await db.collection('stores').doc(STATE.storeId).collection('products').get();
+                pSnap.forEach(function(doc) { backup.products.push(Object.assign({ id: doc.id }, doc.data())); });
+                // Orders
+                var oSnap = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
+                oSnap.forEach(function(doc) { backup.orders.push(Object.assign({ id: doc.id }, doc.data())); });
+                // Archived orders
+                var aSnap = await db.collection('archivedOrders').get();
+                aSnap.forEach(function(doc) { backup.archivedOrders.push(Object.assign({ id: doc.id }, doc.data())); });
+            } else {
+                // Fallback: export from local STATE
+                backup.products = STATE.products;
+                backup.orders = STATE.orders;
+                backup.archivedOrders = STATE.archivedOrders || [];
+                backup.note = 'Exported from local state (Firebase offline)';
+            }
+            var json = JSON.stringify(backup, null, 2);
+            var blob = new Blob([json], { type: 'application/json' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            var ts = new Date().toISOString().slice(0,10);
+            a.href = url; a.download = 'goat_kids_backup_' + ts + '.json';
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a); URL.revokeObjectURL(url);
+            status.style.color = 'var(--success)';
+            status.textContent = '✅ Backup downloaded (' + backup.products.length + ' products, ' + backup.orders.length + ' orders)';
+        } catch(e) {
+            status.style.color = 'var(--danger)';
+            status.textContent = '❌ Export failed: ' + e.message;
+        }
+    }
+
+    function importFirebaseBackup(input) {
+        var status = document.getElementById('backupStatus');
+        var file = input.files[0];
+        if (!file) return;
+        input.value = '';
+        if (!confirm('⚠️ This will OVERWRITE all current Firebase data with the backup. Are you sure?')) return;
+        status.style.color = 'var(--gray)';
+        status.textContent = '⏳ Reading backup file...';
+        var reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                var backup = JSON.parse(e.target.result);
+                if (!backup.products || !backup.orders) { throw new Error('Invalid backup file format'); }
+                if (!db) { throw new Error('Firebase is offline — cannot restore'); }
+                status.textContent = '⏳ Restoring products...';
+                var batch = db.batch();
+                var count = 0;
+                for (var i = 0; i < backup.products.length; i++) {
+                    var p = backup.products[i];
+                    var ref = db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id || db.collection('x').doc().id);
+                    var data = Object.assign({}, p); delete data.id;
+                    batch.set(ref, data);
+                    count++;
+                    if (count % 400 === 0) { await batch.commit(); batch = db.batch(); }
+                }
+                status.textContent = '⏳ Restoring orders...';
+                for (var j = 0; j < backup.orders.length; j++) {
+                    var o = backup.orders[j];
+                    var oRef = db.collection('stores').doc(STATE.storeId).collection('orders').doc(o.id || o.orderId || db.collection('x').doc().id);
+                    var oData = Object.assign({}, o); delete oData.id;
+                    batch.set(oRef, oData);
+                    count++;
+                    if (count % 400 === 0) { await batch.commit(); batch = db.batch(); }
+                }
+                await batch.commit();
+                status.style.color = 'var(--success)';
+                status.textContent = '✅ Restore complete! Reloading data...';
+                setTimeout(function() { loadData(); }, 1500);
+            } catch(err) {
+                status.style.color = 'var(--danger)';
+                status.textContent = '❌ Import failed: ' + err.message;
+            }
+        };
+        reader.readAsText(file);
     }
 
     // =============================================
