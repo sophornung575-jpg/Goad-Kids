@@ -347,39 +347,15 @@
 
     <!-- Store Selector Screen — shown once on first launch if no store chosen yet -->
     <div id="storeSelectorScreen" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);z-index:99998;flex-direction:column;align-items:center;justify-content:center;padding:20px">
-        <div style="background:#fff;border-radius:20px;padding:2rem;max-width:420px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.2);text-align:center">
-            <div style="font-size:3rem;margin-bottom:0.5rem">🐐</div>
-            <h2 style="margin:0 0 0.25rem;color:#2d3748">Welcome to Goat Kids</h2>
-            <p style="color:#718096;font-size:0.88rem;margin-bottom:2rem">Which store is this device for? This is set <b>once</b> and remembered permanently.</p>
-
-            <div style="display:grid;gap:1rem;margin-bottom:1.5rem">
-                <!-- Main Store Option -->
-                <div id="storeOptionMain" onclick="selectStoreOption('main')" style="border:2px solid #e2e8f0;border-radius:14px;padding:1.25rem;cursor:pointer;transition:all 0.2s;text-align:left">
-                    <div style="display:flex;align-items:center;gap:0.75rem">
-                        <div style="font-size:1.8rem">🏪</div>
-                        <div>
-                            <div style="font-weight:700;font-size:1rem;color:#2d3748">Main Store</div>
-                            <div style="font-size:0.8rem;color:#718096">Primary store — can approve stock transfers</div>
-                            <div style="font-size:0.75rem;color:#a0aec0;font-family:monospace;margin-top:2px">ID: GOAT-1979</div>
-                        </div>
-                        <div id="storeOptionMainCheck" style="margin-left:auto;display:none;color:#667eea;font-size:1.3rem">✅</div>
-                    </div>
-                </div>
-
-                <!-- Branch Store Option -->
-                <div id="storeOptionBranch" onclick="selectStoreOption('branch')" style="border:2px solid #e2e8f0;border-radius:14px;padding:1.25rem;cursor:pointer;transition:all 0.2s;text-align:left">
-                    <div style="display:flex;align-items:center;gap:0.75rem">
-                        <div style="font-size:1.8rem">🏬</div>
-                        <div>
-                            <div style="font-weight:700;font-size:1rem;color:#2d3748">Branch Store</div>
-                            <div style="font-size:0.8rem;color:#718096">Branch location — can request stock transfers</div>
-                            <div style="font-size:0.75rem;color:#a0aec0;font-family:monospace;margin-top:2px">ID: GOAT-BRANCH</div>
-                        </div>
-                        <div id="storeOptionBranchCheck" style="margin-left:auto;display:none;color:#667eea;font-size:1.3rem">✅</div>
-                    </div>
+        <div style="background:#fff;border-radius:20px;padding:2rem;max-width:440px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.2);text-align:center">
+            <div style="font-size:3rem;margin-bottom:0.5rem"></div>
+            <h2 style="margin:0 0 0.25rem;color:#2d3748">Which store is this?</h2>
+            <p style="color:#718096;font-size:0.85rem;margin-bottom:1.5rem">Select once — remembered permanently on this device.</p>
+            <div id="storeSelectorList" style="display:grid;gap:0.75rem;margin-bottom:1.25rem;max-height:320px;overflow-y:auto">
+                <div style="text-align:center;color:#718096;padding:1.5rem">
+                    <i class="fas fa-spinner fa-spin"></i> Loading stores...
                 </div>
             </div>
-
             <div id="storeSelectorError" style="color:#e53e3e;font-size:0.83rem;margin-bottom:0.75rem;min-height:1.2em"></div>
             <button class="btn btn-primary w-full" onclick="confirmStoreSelection()" style="font-size:1rem;padding:0.8rem">
                 <i class="fas fa-check"></i> Confirm & Start
@@ -832,6 +808,20 @@
                                             <i class="fas fa-trash"></i> Clear Config (shows setup screen)
                                         </button>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Manage Branches (Main Store only) -->
+                        <div class="admin-card" id="manageBranchesCard">
+                            <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-code-branch" style="color:var(--primary)"></i> Manage Branches</div></div>
+                            <div class="admin-card-body">
+                                <p style="font-size:0.83rem;color:var(--gray);margin-bottom:1rem">Create branches here. Each branch device will see this list when setting up for the first time.</p>
+                                <div style="display:flex;gap:8px;margin-bottom:1rem">
+                                    <input type="text" id="newBranchName" class="form-control" placeholder="Branch name e.g. North Branch" style="flex:2">
+                                    <button class="btn btn-primary" onclick="createBranch()"><i class="fas fa-plus"></i> Add</button>
+                                </div>
+                                <div id="branchListAdmin" style="display:grid;gap:0.5rem">
+                                    <div style="text-align:center;color:var(--gray);padding:1rem;font-size:0.85rem">Loading branches...</div>
                                 </div>
                             </div>
                         </div>
@@ -2759,7 +2749,7 @@ function sendToTelegram(order, callback) {
     // =============================================
     function toggleWishlist(pid) {
         var idx = STATE.wishlist.indexOf(pid);
-        if (idx === -1) { STATE.wishlist.push(pid); showToast('Added to wishlist ❤️', 'success'); }
+        if (idx === -1) { STATE.wishlist.push(pid); showToast('Added to wishlist ', 'success'); }
         else { STATE.wishlist.splice(idx, 1); showToast('Removed from wishlist', 'info'); }
         localStorage.setItem('goatWishlist', JSON.stringify(STATE.wishlist));
         updateWishlistBadge();
@@ -3349,6 +3339,9 @@ function sendToTelegram(order, callback) {
             document.getElementById('settingsLock').style.display = 'none';
             document.getElementById('settingsContent').style.display = 'block';
             inp.value = '';
+            // Load branch list for Main Store
+            if (STATE.storeId === 'GOAT-1979') loadBranchListAdmin();
+            else { var bc = document.getElementById('manageBranchesCard'); if (bc) bc.style.display = 'none'; }
             // Populate Telegram settings
             var savedToken = localStorage.getItem('goatTgToken') || '';
             var savedChat = localStorage.getItem('goatTgChatId') || '';
@@ -4146,60 +4139,133 @@ function sendToTelegram(order, callback) {
         setTimeout(function() { location.reload(); }, 800);
     }
 
-    var _selectedStore = null;
+    // =============================================
+    // DYNAMIC STORE SELECTOR & BRANCH MANAGEMENT
+    // =============================================
+    var _selectedStoreData = null;
 
-    function selectStoreOption(store) {
-        _selectedStore = store;
-        var mainCard = document.getElementById('storeOptionMain');
-        var branchCard = document.getElementById('storeOptionBranch');
-        var mainCheck = document.getElementById('storeOptionMainCheck');
-        var branchCheck = document.getElementById('storeOptionBranchCheck');
-        if (store === 'main') {
-            mainCard.style.border = '2px solid #667eea';
-            mainCard.style.background = 'rgba(102,126,234,0.05)';
-            branchCard.style.border = '2px solid #e2e8f0';
-            branchCard.style.background = '';
-            mainCheck.style.display = 'block';
-            branchCheck.style.display = 'none';
-        } else {
-            branchCard.style.border = '2px solid #667eea';
-            branchCard.style.background = 'rgba(102,126,234,0.05)';
-            mainCard.style.border = '2px solid #e2e8f0';
-            mainCard.style.background = '';
-            branchCheck.style.display = 'block';
-            mainCheck.style.display = 'none';
-        }
+    async function loadStoreSelectorList() {
+        var list = document.getElementById('storeSelectorList');
+        if (!list) return;
+        list.innerHTML = '<div style="text-align:center;color:#718096;padding:1.5rem"><i class="fas fa-spinner fa-spin"></i> Loading stores...</div>';
+        var stores = [{ id: 'GOAT-1979', name: 'Main Store', isMain: true }];
+        try {
+            var cfg = localStorage.getItem('goatFirebaseConfig');
+            if (cfg && typeof firebase !== 'undefined') {
+                var snap = await firebase.firestore().collection('_admin_').doc('branches').get();
+                if (snap.exists) {
+                    var branches = snap.data().list || [];
+                    branches.forEach(function(b) { stores.push({ id: b.id, name: b.name, isMain: false }); });
+                }
+            }
+        } catch(e) { console.warn('Branch list load failed:', e.message); }
+        renderStoreSelectorList(stores);
+    }
+
+    function renderStoreSelectorList(stores) {
+        var list = document.getElementById('storeSelectorList');
+        if (!list) return;
+        var html = '';
+        stores.forEach(function(s) {
+            var icon = s.isMain ? '🏪' : '🏬';
+            var desc = s.isMain ? 'Primary store — can approve transfers' : 'Branch location — can request transfers';
+            html += '<div onclick="selectStoreOption(this)" data-id="' + s.id + '" data-name="' + s.name.replace(/"/g,'&quot;') + '" data-main="' + s.isMain + '" ' +
+                'style="border:2px solid #e2e8f0;border-radius:12px;padding:1rem;cursor:pointer;transition:all 0.15s;text-align:left;display:flex;align-items:center;gap:0.75rem">' +
+                '<div style="font-size:1.6rem">' + icon + '</div>' +
+                '<div style="flex:1">' +
+                '<div style="font-weight:700;color:#2d3748">' + s.name + '</div>' +
+                '<div style="font-size:0.78rem;color:#718096">' + desc + '</div>' +
+                '<div style="font-size:0.72rem;color:#a0aec0;font-family:monospace;margin-top:2px">' + s.id + '</div>' +
+                '</div>' +
+                '<div class="store-sel-check" style="display:none;color:#667eea;font-size:1.2rem">✅</div>' +
+                '</div>';
+        });
+        list.innerHTML = html || '<div style="text-align:center;color:#718096;padding:1rem">No stores found</div>';
+    }
+
+    function selectStoreOption(el) {
+        document.querySelectorAll('#storeSelectorList > div').forEach(function(card) {
+            card.style.border = '2px solid #e2e8f0';
+            card.style.background = '';
+            var chk = card.querySelector('.store-sel-check');
+            if (chk) chk.style.display = 'none';
+        });
+        el.style.border = '2px solid #667eea';
+        el.style.background = 'rgba(102,126,234,0.05)';
+        var chk = el.querySelector('.store-sel-check');
+        if (chk) chk.style.display = 'block';
+        _selectedStoreData = {
+            id: el.getAttribute('data-id'),
+            name: el.getAttribute('data-name'),
+            isMain: el.getAttribute('data-main') === 'true'
+        };
         document.getElementById('storeSelectorError').textContent = '';
     }
 
     function confirmStoreSelection() {
-        if (!_selectedStore) {
+        if (!_selectedStoreData) {
             document.getElementById('storeSelectorError').textContent = '⚠️ Please select a store first.';
             return;
         }
-        var storeId, storeName, partnerStoreId, partnerStoreName;
-        if (_selectedStore === 'main') {
-            storeId = 'GOAT-1979';
-            storeName = 'Main Store';
-            partnerStoreId = 'GOAT-BRANCH';
-            partnerStoreName = 'Branch Store';
-        } else {
-            storeId = 'GOAT-BRANCH';
-            storeName = 'Branch Store';
-            partnerStoreId = 'GOAT-1979';
-            partnerStoreName = 'Main Store';
-        }
-        // Save all store config
-        localStorage.setItem('goatStoreId', storeId);
-        localStorage.setItem('goatStoreName', storeName);
-        localStorage.setItem('goatPartnerStoreId', partnerStoreId);
-        localStorage.setItem('goatPartnerStoreName', partnerStoreName);
+        var s = _selectedStoreData;
+        localStorage.setItem('goatStoreId', s.id);
+        localStorage.setItem('goatStoreName', s.name);
         localStorage.setItem('goatStoreChosen', '1');
-
-        // Hide selector and reload to start app
+        if (!s.isMain) {
+            localStorage.setItem('goatPartnerStoreId', 'GOAT-1979');
+            localStorage.setItem('goatPartnerStoreName', 'Main Store');
+        }
         document.getElementById('storeSelectorScreen').style.display = 'none';
-        showToast('Store set to ' + storeName + '! Loading...', 'success');
+        showToast('Store set to ' + s.name + '! Loading...', 'success');
         setTimeout(function() { location.reload(); }, 800);
+    }
+
+    async function createBranch() {
+        if (!db || !STATE.firebaseOnline) { showToast('Firebase offline', 'error'); return; }
+        if (STATE.storeId !== 'GOAT-1979') { showToast('Only Main Store can create branches', 'error'); return; }
+        var name = document.getElementById('newBranchName').value.trim();
+        if (!name) { showToast('Enter a branch name', 'error'); return; }
+        try {
+            var snap = await db.collection('_admin_').doc('branches').get();
+            var existing = snap.exists ? (snap.data().list || []) : [];
+            var slug = name.toUpperCase().replace(/[^A-Z0-9]/g, '-').replace(/-+/g, '-').slice(0, 15);
+            var newId = 'GOAT-' + slug + '-' + Date.now().toString().slice(-4);
+            existing.push({ id: newId, name: name, createdAt: Date.now() });
+            await db.collection('_admin_').doc('branches').set({ list: existing });
+            document.getElementById('newBranchName').value = '';
+            showToast('Branch "' + name + '" created! ID: ' + newId, 'success');
+            loadBranchListAdmin();
+        } catch(e) { showToast('Failed: ' + e.message, 'error'); }
+    }
+
+    async function loadBranchListAdmin() {
+        var el = document.getElementById('branchListAdmin');
+        if (!el) return;
+        if (!db || !STATE.firebaseOnline) { el.innerHTML = '<div style="color:var(--gray);font-size:0.83rem">Firebase offline</div>'; return; }
+        try {
+            var snap = await db.collection('_admin_').doc('branches').get();
+            var branches = snap.exists ? (snap.data().list || []) : [];
+            if (!branches.length) { el.innerHTML = '<div style="text-align:center;color:var(--gray);padding:0.75rem;font-size:0.83rem">No branches yet — add one above</div>'; return; }
+            var html = '';
+            branches.forEach(function(b) {
+                html += '<div style="display:flex;align-items:center;gap:0.5rem;background:var(--light);border-radius:8px;padding:0.6rem 0.75rem">' +
+                    '<div style="flex:1"><div style="font-weight:600;font-size:0.88rem">🏬 ' + escHtml(b.name) + '</div>' +
+                    '<div style="font-size:0.75rem;color:var(--gray);font-family:monospace">' + b.id + '</div></div>' +
+                    '<button class="btn btn-outline btn-small" style="color:var(--danger)" onclick="deleteBranch(\'' + b.id + '\',\'' + b.name.replace(/'/g,"\\'") + '\')"><i class="fas fa-trash"></i></button></div>';
+            });
+            el.innerHTML = html;
+        } catch(e) { el.innerHTML = '<div style="color:var(--danger);font-size:0.83rem">Failed: ' + e.message + '</div>'; }
+    }
+
+    async function deleteBranch(id, name) {
+        if (!confirm('Delete branch "' + name + '"? Existing data is kept in Firebase.')) return;
+        try {
+            var snap = await db.collection('_admin_').doc('branches').get();
+            var list = (snap.exists ? snap.data().list || [] : []).filter(function(b){ return b.id !== id; });
+            await db.collection('_admin_').doc('branches').set({ list: list });
+            showToast('Branch removed', 'info');
+            loadBranchListAdmin();
+        } catch(e) { showToast('Failed: ' + e.message, 'error'); }
     }
 
     function changeStoreId() {
@@ -4256,7 +4322,7 @@ function sendToTelegram(order, callback) {
         } else if (STATE.adminRole === 'full' && alert) {
             alert.style.background = 'rgba(72,187,120,0.1)';
             alert.style.color = 'var(--success)';
-            alert.innerHTML = '👑 You are <b>Full Admin</b> — you can approve incoming requests AND send requests to the partner store.';
+            alert.innerHTML = 'You are <b>Full Admin</b> — you can approve incoming requests AND send requests to the partner store.';
         } else if (alert) {
             alert.style.background = 'rgba(102,126,234,0.1)';
             alert.style.color = 'var(--primary)';
@@ -4740,9 +4806,9 @@ function sendToTelegram(order, callback) {
         var storeChosen = localStorage.getItem('goatStoreChosen');
         var hasFbConfig = localStorage.getItem('goatFirebaseConfig');
         if (!storeChosen && hasFbConfig) {
-            // Firebase is configured but store not chosen yet — show selector
             document.getElementById('storeSelectorScreen').style.display = 'flex';
-            return; // pause init until user picks a store
+            loadStoreSelectorList();
+            return;
         }
 
         // Load cart
