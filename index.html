@@ -20,8 +20,8 @@
     <meta name="keywords" content="kids clothing, children fashion, baby clothes, kids shoes, kids accessories, Goat Kids">
     <link rel="canonical" href="https://sophornung575-jpg.github.io/Goad-Kids">
     <meta charset="UTF-8">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
@@ -1235,12 +1235,89 @@
         });
     }
 
+    // ── Telegram media group proxies (sendMediaGroup endpoint — multiple photos in one album) ──
+    var _TELEGRAM_GROUP_PROXIES = [
+        { type: 'direct', url: 'https://api.telegram.org/bot{TOKEN}/sendMediaGroup' },
+        { type: 'proxy',  url: 'https://corsproxy.io/?url=https://api.telegram.org/bot{TOKEN}/sendMediaGroup' },
+        { type: 'proxy',  url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://api.telegram.org/bot{TOKEN}/sendMediaGroup') }
+    ];
+
+    // Send up to 10 photos as an album. Caption goes on the FIRST photo only (Telegram requirement).
+    // Falls back to text-only message if the album send fails entirely.
+    function _sendTelegramMediaGroup(imageUrls, caption, fallbackMessage, callback) {
+        var cfg = getTelegramConfig();
+        if (!cfg.botToken || !cfg.chatId) {
+            console.warn('Telegram not configured.');
+            if (callback) callback(false);
+            return;
+        }
+        // Dedupe and cap at 10 (Telegram's max per album)
+        var seen = {}; var urls = [];
+        imageUrls.forEach(function(u) { if (u && !seen[u]) { seen[u] = true; urls.push(u); } });
+        urls = urls.slice(0, 10);
+
+        if (!urls.length) {
+            // No images at all — just send as text
+            _sendTelegramRaw(fallbackMessage, callback);
+            return;
+        }
+        if (urls.length === 1) {
+            // Single image — use sendPhoto instead, simpler and equally effective
+            _sendTelegramPhoto(urls[0], caption, callback);
+            return;
+        }
+
+        var media = urls.map(function(url, idx) {
+            var item = { type: 'photo', media: url };
+            if (idx === 0) { item.caption = caption; item.parse_mode = 'HTML'; }
+            return item;
+        });
+        var body = JSON.stringify({ chat_id: cfg.chatId, media: media });
+        _tryGroupWithFallback(cfg.botToken, body, fallbackMessage, 0, callback);
+    }
+
+    function _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex, callback) {
+        if (proxyIndex >= _TELEGRAM_GROUP_PROXIES.length) {
+            console.warn('All Telegram media group routes failed — sending as text instead');
+            _sendTelegramRaw(fallbackMessage, callback);
+            return;
+        }
+        var proxy = _TELEGRAM_GROUP_PROXIES[proxyIndex];
+        var url = proxy.url.replace(/{TOKEN}/g, token);
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timeoutId = controller ? setTimeout(function() { controller.abort(); }, 15000) : null;
+        var fetchOptions = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body };
+        if (controller) fetchOptions.signal = controller.signal;
+
+        console.log('📡 Telegram media group attempt ' + (proxyIndex + 1) + '/' + _TELEGRAM_GROUP_PROXIES.length + ' via ' + proxy.type);
+
+        fetch(url, fetchOptions)
+        .then(function(res) { if (timeoutId) clearTimeout(timeoutId); return res.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                console.log('✅ Telegram media group sent via ' + proxy.type);
+                if (callback) callback(true);
+            } else {
+                console.warn('Telegram media group rejected (' + data.description + ') — trying next route');
+                _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex + 1, callback);
+            }
+        })
+        .catch(function(err) {
+            if (timeoutId) clearTimeout(timeoutId);
+            var reason = (err && err.name === 'AbortError') ? 'timeout' : err.message;
+            console.warn('Telegram media group route ' + (proxyIndex + 1) + ' failed (' + reason + ') — trying next...');
+            _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex + 1, callback);
+        });
+    }
+
 function sendToTelegram(order, callback) {
     var itemsText = '';
+    var imageUrls = [];
     for (var i = 0; i < order.cart.length; i++) {
         var it = order.cart[i];
         var sub = it.subtotal || (it.price * it.quantity) || 0;
         itemsText += '• ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ') - $' + sub.toFixed(2) + '\n';
+        if (it.image) imageUrls.push(it.image);
     }
 
     var message = '🛍️ <b>NEW ORDER: ' + order.orderId + '</b>\n\n' +
@@ -1255,8 +1332,67 @@ function sendToTelegram(order, callback) {
         '💵 TOTAL: $' + (order.total || 0).toFixed(2) + '\n\n' +
         '📝 Notes: ' + (order.customerNotes || 'None');
 
-    _sendTelegramRaw(message, callback);
+    _sendTelegramMediaGroup(imageUrls, message, message, callback);
 }
+
+    // ── Telegram photo proxies (sendPhoto endpoint, same fallback pattern as text) ──
+    var _TELEGRAM_PHOTO_PROXIES = [
+        { type: 'direct', url: 'https://api.telegram.org/bot{TOKEN}/sendPhoto' },
+        { type: 'proxy',  url: 'https://corsproxy.io/?url=https://api.telegram.org/bot{TOKEN}/sendPhoto' },
+        { type: 'proxy',  url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://api.telegram.org/bot{TOKEN}/sendPhoto') }
+    ];
+
+    // Send a photo with caption. Falls back to text-only message if the photo send fails entirely.
+    function _sendTelegramPhoto(imageUrl, caption, callback) {
+        var cfg = getTelegramConfig();
+        if (!cfg.botToken || !cfg.chatId) {
+            console.warn('Telegram not configured.');
+            if (callback) callback(false);
+            return;
+        }
+        if (!imageUrl) {
+            // No image available — just send as text
+            _sendTelegramRaw(caption, callback);
+            return;
+        }
+        var body = JSON.stringify({ chat_id: cfg.chatId, photo: imageUrl, caption: caption, parse_mode: 'HTML' });
+        _tryPhotoWithFallback(cfg.botToken, body, caption, 0, callback);
+    }
+
+    function _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex, callback) {
+        if (proxyIndex >= _TELEGRAM_PHOTO_PROXIES.length) {
+            // All photo routes failed — fall back to a text-only message so the notification still arrives
+            console.warn('All Telegram photo routes failed — sending as text instead');
+            _sendTelegramRaw(fallbackCaption, callback);
+            return;
+        }
+        var proxy = _TELEGRAM_PHOTO_PROXIES[proxyIndex];
+        var url = proxy.url.replace(/{TOKEN}/g, token);
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timeoutId = controller ? setTimeout(function() { controller.abort(); }, 12000) : null;
+        var fetchOptions = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body };
+        if (controller) fetchOptions.signal = controller.signal;
+
+        console.log('📡 Telegram photo attempt ' + (proxyIndex + 1) + '/' + _TELEGRAM_PHOTO_PROXIES.length + ' via ' + proxy.type);
+
+        fetch(url, fetchOptions)
+        .then(function(res) { if (timeoutId) clearTimeout(timeoutId); return res.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                console.log('✅ Telegram photo sent via ' + proxy.type);
+                if (callback) callback(true);
+            } else {
+                console.warn('Telegram photo rejected (' + data.description + ') — trying next route');
+                _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex + 1, callback);
+            }
+        })
+        .catch(function(err) {
+            if (timeoutId) clearTimeout(timeoutId);
+            var reason = (err && err.name === 'AbortError') ? 'timeout' : err.message;
+            console.warn('Telegram photo route ' + (proxyIndex + 1) + ' failed (' + reason + ') — trying next...');
+            _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex + 1, callback);
+        });
+    }
     // =============================================
     // STATE
     // =============================================
@@ -2794,7 +2930,7 @@ function sendToTelegram(order, callback) {
     // =============================================
     function toggleWishlist(pid) {
         var idx = STATE.wishlist.indexOf(pid);
-        if (idx === -1) { STATE.wishlist.push(pid); showToast('Added to wishlist ', 'success'); }
+        if (idx === -1) { STATE.wishlist.push(pid); showToast('Added to wishlist ❤️', 'success'); }
         else { STATE.wishlist.splice(idx, 1); showToast('Removed from wishlist', 'info'); }
         localStorage.setItem('goatWishlist', JSON.stringify(STATE.wishlist));
         updateWishlistBadge();
@@ -3129,9 +3265,9 @@ function sendToTelegram(order, callback) {
             if (lsProduct) {
                 var lsTotal = getTotalStock(lsProduct);
                 if (lsTotal <= 3 && lsTotal > 0) {
-                    _sendTelegramRaw('⚠️ <b>LOW STOCK ALERT</b>\n' + lsProduct.name + ' has only <b>' + lsTotal + '</b> items left!', null);
+                    _sendTelegramPhoto((lsProduct.images && lsProduct.images[0]) || '', '⚠️ <b>LOW STOCK ALERT</b>\n' + lsProduct.name + ' has only <b>' + lsTotal + '</b> items left!', null);
                 } else if (lsTotal === 0) {
-                    _sendTelegramRaw('🚫 <b>OUT OF STOCK</b>\n' + lsProduct.name + ' is now out of stock!', null);
+                    _sendTelegramPhoto((lsProduct.images && lsProduct.images[0]) || '', '🚫 <b>OUT OF STOCK</b>\n' + lsProduct.name + ' is now out of stock!', null);
                 }
             }
         }
@@ -4106,17 +4242,16 @@ function sendToTelegram(order, callback) {
         var itemLines = order.cart.map(function(it) {
             return '  • ' + it.name + (it.size && it.size !== 'One Size' ? ' (' + it.size + ')' : '') + ' x' + it.quantity;
         }).join('\n');
-        _sendTelegramRaw(
-            '↩️ <b>REFUND PROCESSED</b>\n\n' +
+        var refundCaption = '↩️ <b>REFUND PROCESSED</b>\n\n' +
             '🧾 Order: ' + oid + '\n' +
             '👤 Customer: ' + (order.customerName || '—') + ' | ' + (order.customerPhone || '—') + '\n' +
             '💰 Refund Amount: <b>$' + refundAmount.toFixed(2) + '</b> (of $' + order.total.toFixed(2) + ')\n' +
             '📦 Items:\n' + itemLines + '\n' +
             '📝 Reason: ' + reason + '\n' +
             '🏪 Store: ' + (STATE.storeName || STATE.storeId) + '\n' +
-            '🕐 ' + new Date().toLocaleString(),
-            null
-        );
+            '🕐 ' + new Date().toLocaleString();
+        var refundImages = order.cart.map(function(it) { return it.image; }).filter(Boolean);
+        _sendTelegramMediaGroup(refundImages, refundCaption, refundCaption, null);
 
         setTimeout(function() { if (confirm('Print refund receipt?')) printRefundReceipt(refundRecord.refundId); }, 300);
     }
@@ -4272,7 +4407,7 @@ function sendToTelegram(order, callback) {
         if (!list) return;
         var html = '';
         stores.forEach(function(s) {
-            var icon = s.isMain ? '' : '';
+            var icon = s.isMain ? '🏪' : '🏬';
             var desc = s.isMain ? 'Primary store — can approve transfers' : 'Branch location — can request transfers';
             html += '<div onclick="selectStoreOption(this)" data-id="' + s.id + '" data-name="' + s.name.replace(/"/g,'&quot;') + '" data-main="' + s.isMain + '" ' +
                 'style="border:2px solid #e2e8f0;border-radius:12px;padding:1rem;cursor:pointer;transition:all 0.15s;text-align:left;display:flex;align-items:center;gap:0.75rem">' +
@@ -4501,7 +4636,8 @@ function sendToTelegram(order, callback) {
             }
 
             logActivity('Branch Stock Adjusted', label + ': ' + oldQty + ' → ' + newQty + ' @ ' + _branchStockCurrentName);
-            _sendTelegramRaw(
+            _sendTelegramPhoto(
+                (p.images && p.images[0]) || '',
                 '🔧 <b>BRANCH STOCK ADJUSTED</b>\n\n' +
                 '🏬 Branch: ' + _branchStockCurrentName + '\n' +
                 '📦 ' + label + '\n' +
@@ -4727,13 +4863,17 @@ function sendToTelegram(order, callback) {
             clearTransferProductSelection();
             document.getElementById('transferQtyInput').value = '1';
             document.getElementById('transferNoteInput').value = '';
-            _sendTelegramRaw('🔄 <b>TRANSFER REQUEST</b>\n\n' +
+            _sendTelegramPhoto(
+                (p.images && p.images[0]) || '',
+                '🔄 <b>TRANSFER REQUEST</b>\n\n' +
                 '📦 Product: ' + p.name + (size ? ' (' + size + ')' : '') + '\n' +
                 '🔢 Qty: ' + qty + '\n' +
                 '📤 From: ' + STATE.partnerStoreName + '\n' +
                 '📥 To: ' + (STATE.storeName || STATE.storeId) + '\n' +
                 (note ? '📝 Note: ' + note : '') + '\n\n' +
-                '⏳ Waiting for approval from Main Store admin.', null);
+                '⏳ Waiting for approval from Main Store admin.',
+                null
+            );
             loadTransfers();
         } catch(e) {
             status.style.color = 'var(--danger)'; status.textContent = '❌ Failed: ' + e.message;
@@ -4886,12 +5026,16 @@ function sendToTelegram(order, callback) {
 
             saveProducts();
             logActivity('Transfer Approved', t.productName + ' x' + t.qty + ' → ' + t.toStoreName);
-            _sendTelegramRaw('✅ <b>TRANSFER APPROVED</b>\n\n' +
+            _sendTelegramPhoto(
+                t.productImage || (p.images && p.images[0]) || '',
+                '✅ <b>TRANSFER APPROVED</b>\n\n' +
                 '📦 ' + t.productName + (t.size && t.size !== 'One Size' ? ' (' + t.size + ')' : '') + '\n' +
                 '🔢 Qty: ' + t.qty + '\n' +
                 '📤 From: ' + (STATE.storeName || STATE.storeId) + '\n' +
                 '📥 To: ' + t.toStoreName + '\n' +
-                '✅ Approved by Full Admin', null);
+                '✅ Approved by Full Admin',
+                null
+            );
             showToast('Transfer approved! Stock updated.', 'success');
             renderInventory(); renderProducts();
             loadTransfers();
@@ -4904,12 +5048,25 @@ function sendToTelegram(order, callback) {
         var reason = prompt('Reason for rejection (optional):') || 'Rejected by admin';
         if (!db) return;
         try {
+            var tDoc = await db.collection('transfers').doc(transferId).get();
+            var t = tDoc.exists ? tDoc.data() : null;
             await db.collection('transfers').doc(transferId).update({
                 status: 'rejected', rejectedAt: Date.now(), rejectedBy: STATE.adminRole,
                 rejectedAtStr: new Date().toLocaleString(), rejectReason: reason
             });
             logActivity('Transfer Rejected', transferId);
             showToast('Transfer rejected', 'info');
+            if (t) {
+                _sendTelegramPhoto(
+                    t.productImage || '',
+                    '❌ <b>TRANSFER REJECTED</b>\n\n' +
+                    '📦 ' + (t.productName || '') + (t.size && t.size !== 'One Size' ? ' (' + t.size + ')' : '') + '\n' +
+                    '🔢 Qty: ' + (t.qty || 0) + '\n' +
+                    '📥 Requested by: ' + (t.toStoreName || '') + '\n' +
+                    '📝 Reason: ' + reason,
+                    null
+                );
+            }
             loadTransfers();
         } catch(e) { showToast('Reject failed: ' + e.message, 'error'); }
     }
