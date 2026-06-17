@@ -663,19 +663,36 @@
                                 <div class="admin-card-title"><i class="fas fa-store" style="color:var(--primary)"></i> Store Context</div>
                             </div>
                             <div class="admin-card-body" id="transferContextBody">
-                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem">
                                     <div style="background:var(--light);border-radius:8px;padding:0.75rem">
-                                        <small style="color:var(--gray)">This Store</small>
+                                        <small style="color:var(--gray)">This Device</small>
                                         <div style="font-weight:700;font-size:0.95rem;margin-top:2px" id="transferCurrentStore">—</div>
                                         <div style="font-size:0.75rem;color:var(--gray);font-family:monospace" id="transferCurrentStoreId">—</div>
                                     </div>
                                     <div style="background:var(--light);border-radius:8px;padding:0.75rem">
-                                        <small style="color:var(--gray)">Partner Store</small>
+                                        <small style="color:var(--gray)">Default Partner</small>
                                         <div style="font-weight:700;font-size:0.95rem;margin-top:2px" id="transferPartnerStore">—</div>
                                         <div style="font-size:0.75rem;color:var(--gray);font-family:monospace" id="transferPartnerStoreId">—</div>
                                     </div>
                                 </div>
-                                <div id="transferRoleAlert" style="margin-top:0.75rem;padding:0.6rem 0.9rem;border-radius:8px;font-size:0.83rem;font-weight:600"></div>
+                                <div id="transferRoleAlert" style="margin-bottom:0.75rem;padding:0.6rem 0.9rem;border-radius:8px;font-size:0.83rem;font-weight:600"></div>
+
+                                <!-- From / To selector for this request -->
+                                <div style="border-top:1px dashed var(--gray-light);padding-top:0.75rem">
+                                    <label style="font-size:0.8rem;font-weight:600;color:var(--gray-dark);margin-bottom:0.4rem;display:block">Transfer Direction for this request</label>
+                                    <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
+                                        <div style="flex:1;min-width:160px">
+                                            <small style="color:var(--gray)">From (source)</small>
+                                            <select id="transferFromStoreSelect" class="form-control" style="font-size:0.85rem" onchange="onTransferDirectionChange()"></select>
+                                        </div>
+                                        <div style="color:var(--primary);font-size:1.2rem;padding-top:1.2rem"><i class="fas fa-arrow-right"></i></div>
+                                        <div style="flex:1;min-width:160px">
+                                            <small style="color:var(--gray)">To (destination)</small>
+                                            <select id="transferToStoreSelect" class="form-control" style="font-size:0.85rem" onchange="onTransferDirectionChange()"></select>
+                                        </div>
+                                    </div>
+                                    <div id="transferDirectionWarning" style="font-size:0.78rem;color:var(--danger);margin-top:0.4rem"></div>
+                                </div>
                             </div>
                         </div>
 
@@ -4698,7 +4715,9 @@ function sendToTelegram(order, callback) {
         showToast('Partner store saved', 'success');
     }
 
-    function initTransferTab() {
+    var _allStoresList = []; // [{id, name}] cache for From/To dropdowns
+
+    async function initTransferTab() {
         // Store context
         var cs = document.getElementById('transferCurrentStore');
         var csId = document.getElementById('transferCurrentStoreId');
@@ -4714,11 +4733,11 @@ function sendToTelegram(order, callback) {
         if (!STATE.partnerStoreId && alert) {
             alert.style.background = 'rgba(245,101,101,0.1)';
             alert.style.color = 'var(--danger)';
-            alert.innerHTML = '⚠️ Partner store not configured. Go to <b>Settings → Store Info</b> to set the partner Store ID and Name.';
+            alert.innerHTML = '⚠️ Default partner not configured. Go to <b>Settings → Store Info</b> to set one, or just pick From/To below for this request.';
         } else if (STATE.adminRole === 'full' && alert) {
             alert.style.background = 'rgba(72,187,120,0.1)';
             alert.style.color = 'var(--success)';
-            alert.innerHTML = '👑 You are <b>Full Admin</b> — you can approve incoming requests AND send requests to the partner store.';
+            alert.innerHTML = '👑 You are <b>Full Admin</b> — you can approve incoming requests AND send requests between any two stores.';
         } else if (alert) {
             alert.style.background = 'rgba(102,126,234,0.1)';
             alert.style.color = 'var(--primary)';
@@ -4737,7 +4756,48 @@ function sendToTelegram(order, callback) {
         if (pn) pn.value = STATE.partnerStoreName || '';
         if (sn) sn.value = STATE.storeName || '';
 
+        await populateTransferDirectionSelectors();
         loadTransfers();
+    }
+
+    async function populateTransferDirectionSelectors() {
+        var fromSel = document.getElementById('transferFromStoreSelect');
+        var toSel = document.getElementById('transferToStoreSelect');
+        if (!fromSel || !toSel) return;
+
+        // Build full store list: Main Store + all branches from Firebase
+        var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
+        try {
+            if (db) {
+                var snap = await db.collection('_admin_').doc('branches').get();
+                if (snap.exists) {
+                    (snap.data().list || []).forEach(function(b) { stores.push({ id: b.id, name: b.name }); });
+                }
+            }
+        } catch(e) { console.warn('Store list load failed:', e.message); }
+        _allStoresList = stores;
+
+        var optsHtml = stores.map(function(s) { return '<option value="' + s.id + '">' + escHtml(s.name) + ' (' + s.id + ')</option>'; }).join('');
+        fromSel.innerHTML = optsHtml;
+        toSel.innerHTML = optsHtml;
+
+        // Sensible defaults: From = partner (if set, else first store that isn't this one), To = this store
+        var defaultFrom = STATE.partnerStoreId || (stores.find(function(s){ return s.id !== STATE.storeId; }) || {}).id || stores[0].id;
+        fromSel.value = defaultFrom;
+        toSel.value = STATE.storeId;
+        onTransferDirectionChange();
+    }
+
+    function onTransferDirectionChange() {
+        var fromSel = document.getElementById('transferFromStoreSelect');
+        var toSel = document.getElementById('transferToStoreSelect');
+        var warn = document.getElementById('transferDirectionWarning');
+        if (!fromSel || !toSel || !warn) return;
+        if (fromSel.value === toSel.value) {
+            warn.textContent = '⚠️ From and To cannot be the same store.';
+        } else {
+            warn.textContent = '';
+        }
     }
 
     // =============================================
@@ -4919,8 +4979,18 @@ function sendToTelegram(order, callback) {
 
     async function submitTransferRequest() {
         if (!STATE.adminRole) { showToast('Admin login required', 'error'); return; }
-        if (!STATE.partnerStoreId) { showToast('Set partner Store ID in Settings first', 'error'); return; }
         if (!db) { showToast('Firebase offline', 'error'); return; }
+
+        var fromSel = document.getElementById('transferFromStoreSelect');
+        var toSel = document.getElementById('transferToStoreSelect');
+        var fromStoreId = fromSel ? fromSel.value : STATE.partnerStoreId;
+        var toStoreId = toSel ? toSel.value : STATE.storeId;
+
+        if (!fromStoreId || !toStoreId) { showToast('Select both From and To stores', 'error'); return; }
+        if (fromStoreId === toStoreId) { showToast('From and To cannot be the same store', 'error'); return; }
+
+        var fromStoreName = (_allStoresList.find(function(s){ return s.id === fromStoreId; }) || {}).name || fromStoreId;
+        var toStoreName = (_allStoresList.find(function(s){ return s.id === toStoreId; }) || {}).name || toStoreId;
 
         // If there's a product currently selected but not yet added, add it automatically
         if (document.getElementById('transferProductSelect').value) {
@@ -4948,10 +5018,10 @@ function sendToTelegram(order, callback) {
                     status: 'pending',
                     requestedAt: Date.now(),
                     requestedAtStr: new Date().toLocaleString(),
-                    fromStoreId: STATE.partnerStoreId,
-                    fromStoreName: STATE.partnerStoreName,
-                    toStoreId: STATE.storeId,
-                    toStoreName: STATE.storeName || STATE.storeId,
+                    fromStoreId: fromStoreId,
+                    fromStoreName: fromStoreName,
+                    toStoreId: toStoreId,
+                    toStoreName: toStoreName,
                     productId: it.productId,
                     productName: it.productName,
                     productImage: it.productImage,
@@ -4968,15 +5038,15 @@ function sendToTelegram(order, callback) {
             await batch.commit();
 
             status.style.color = 'var(--success)';
-            status.textContent = '✅ Request sent to ' + STATE.partnerStoreName + ' (' + _transferCart.length + ' item' + (_transferCart.length>1?'s':'') + ')!';
+            status.textContent = '✅ Request sent: ' + fromStoreName + ' → ' + toStoreName + ' (' + _transferCart.length + ' item' + (_transferCart.length>1?'s':'') + ')!';
 
             // One Telegram message for the whole request
             var caption = '🔄 <b>TRANSFER REQUEST</b> (' + _transferCart.length + ' item' + (_transferCart.length>1?'s':'') + ')\n\n' +
                 '📦 Items:\n' + itemLines.join('\n') + '\n\n' +
-                '📤 From: ' + STATE.partnerStoreName + '\n' +
-                '📥 To: ' + (STATE.storeName || STATE.storeId) + '\n' +
+                '📤 From: ' + fromStoreName + '\n' +
+                '📥 To: ' + toStoreName + '\n' +
                 (note ? '📝 Note: ' + note + '\n' : '') +
-                '\n⏳ Waiting for approval from Main Store admin.';
+                '\n⏳ Waiting for approval from ' + fromStoreName + ' admin.';
             _sendTelegramMediaGroup(imageUrls, caption, caption, null);
 
             _transferCart = [];
