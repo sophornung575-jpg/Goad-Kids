@@ -20,8 +20,8 @@
     <meta name="keywords" content="kids clothing, children fashion, baby clothes, kids shoes, kids accessories, Goat Kids">
     <link rel="canonical" href="https://sophornung575-jpg.github.io/Goad-Kids">
     <meta charset="UTF-8">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
@@ -348,7 +348,7 @@
     <!-- Store Selector Screen — shown once on first launch if no store chosen yet -->
     <div id="storeSelectorScreen" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);z-index:99998;flex-direction:column;align-items:center;justify-content:center;padding:20px">
         <div style="background:#fff;border-radius:20px;padding:2rem;max-width:440px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.2);text-align:center">
-            <div style="font-size:3rem;margin-bottom:0.5rem"></div>
+            <div style="font-size:3rem;margin-bottom:0.5rem">🐐</div>
             <h2 style="margin:0 0 0.25rem;color:#2d3748">Which store is this?</h2>
             <p style="color:#718096;font-size:0.85rem;margin-bottom:1.5rem">Select once — remembered permanently on this device.</p>
             <div id="storeSelectorList" style="display:grid;gap:0.75rem;margin-bottom:1.25rem;max-height:320px;overflow-y:auto">
@@ -716,17 +716,17 @@
                                     </div>
                                 </div>
 
-                                <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem">
-                                    <div style="flex:1;min-width:120px;display:none" id="transferSizeWrap">
-                                        <label style="font-size:0.8rem;font-weight:600;color:var(--gray-dark)">Size</label>
-                                        <select id="transferSizeSelect" class="form-control" style="font-size:0.85rem">
-                                            <option value="">— Size —</option>
-                                        </select>
-                                    </div>
-                                    <div style="flex:1;min-width:80px">
-                                        <label style="font-size:0.8rem;font-weight:600;color:var(--gray-dark)">Qty</label>
-                                        <input type="number" id="transferQtyInput" class="form-control" min="1" value="1" style="font-size:0.85rem">
-                                    </div>
+                                <!-- Multi-size qty grid (shown for products with sizes) -->
+                                <div id="transferSizeGridWrap" style="display:none;margin-bottom:0.75rem">
+                                    <label style="font-size:0.8rem;font-weight:600;color:var(--gray-dark)">Sizes &amp; Quantities</label>
+                                    <div id="transferSizeGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:0.5rem;margin-top:0.4rem"></div>
+                                    <div style="font-size:0.75rem;color:var(--gray);margin-top:0.4rem">Enter quantity for each size you want, leave 0 to skip</div>
+                                </div>
+
+                                <!-- Single qty input (shown for products with NO sizes) -->
+                                <div id="transferSingleQtyWrap" style="display:none;margin-bottom:0.75rem;max-width:140px">
+                                    <label style="font-size:0.8rem;font-weight:600;color:var(--gray-dark)">Qty</label>
+                                    <input type="number" id="transferQtyInput" class="form-control" min="1" value="1" style="font-size:0.85rem">
                                 </div>
 
                                 <button class="btn btn-outline w-full" onclick="addItemToTransferCart()" style="margin-bottom:1rem"><i class="fas fa-cart-plus"></i> Add to Request</button>
@@ -4794,7 +4794,9 @@ function sendToTelegram(order, callback) {
         document.getElementById('transferProductSearch').value = '';
         document.getElementById('transferProductPicker').style.display = 'none';
         document.getElementById('transferSelectedPreview').style.display = 'none';
-        document.getElementById('transferSizeWrap').style.display = 'none';
+        document.getElementById('transferSizeGridWrap').style.display = 'none';
+        document.getElementById('transferSingleQtyWrap').style.display = 'none';
+        document.getElementById('transferSizeGrid').innerHTML = '';
     }
 
     // Close picker when clicking outside
@@ -4808,24 +4810,29 @@ function sendToTelegram(order, callback) {
 
     function onTransferProductChange() {
         var pid = document.getElementById('transferProductSelect').value;
-        var sizeWrap = document.getElementById('transferSizeWrap');
-        var sizeSel = document.getElementById('transferSizeSelect');
-        if (!pid) { sizeWrap.style.display = 'none'; return; }
+        var gridWrap = document.getElementById('transferSizeGridWrap');
+        var grid = document.getElementById('transferSizeGrid');
+        var singleWrap = document.getElementById('transferSingleQtyWrap');
+        if (!pid) { gridWrap.style.display = 'none'; singleWrap.style.display = 'none'; return; }
         var p = STATE.products.find(function(x){ return x.id === pid; });
         if (!p) return;
+
         if (p.sizes && p.sizes.length > 0) {
-            sizeSel.innerHTML = '<option value="">— Size —</option>';
+            var html = '';
             p.sizes.forEach(function(s) {
-                if (s.qty > 0) {
-                    var o = document.createElement('option');
-                    o.value = s.name;
-                    o.textContent = s.name + ' (' + s.qty + ' in stock)';
-                    sizeSel.appendChild(o);
-                }
+                var disabled = s.qty <= 0;
+                html += '<div style="text-align:center;border:1px solid var(--gray-light);border-radius:8px;padding:0.5rem 0.4rem;' + (disabled ? 'opacity:0.4' : '') + '">' +
+                    '<div style="font-weight:600;font-size:0.82rem;margin-bottom:2px">' + escHtml(s.name) + '</div>' +
+                    '<div style="font-size:0.7rem;color:var(--gray);margin-bottom:4px">stock: ' + s.qty + '</div>' +
+                    '<input type="number" min="0" max="' + s.qty + '" value="0" ' + (disabled ? 'disabled' : '') + ' data-size="' + escHtml(s.name) + '" class="transfer-size-qty-input" style="width:100%;padding:4px;border:1px solid var(--gray-light);border-radius:6px;text-align:center;font-size:0.85rem">' +
+                    '</div>';
             });
-            sizeWrap.style.display = 'block';
+            grid.innerHTML = html;
+            gridWrap.style.display = 'block';
+            singleWrap.style.display = 'none';
         } else {
-            sizeWrap.style.display = 'none';
+            gridWrap.style.display = 'none';
+            singleWrap.style.display = 'block';
         }
     }
 
@@ -4836,35 +4843,45 @@ function sendToTelegram(order, callback) {
 
     function addItemToTransferCart() {
         var pid = document.getElementById('transferProductSelect').value;
-        var size = document.getElementById('transferSizeSelect') ? document.getElementById('transferSizeSelect').value : '';
-        var qty = parseInt(document.getElementById('transferQtyInput').value) || 0;
-
         if (!pid) { showToast('Select a product', 'error'); return; }
         var p = STATE.products.find(function(x){ return x.id === pid; });
         if (!p) return;
-        if (p.sizes && p.sizes.length > 0 && !size) { showToast('Select a size', 'error'); return; }
-        if (qty < 1) { showToast('Qty must be at least 1', 'error'); return; }
 
-        var finalSize = size || 'One Size';
+        var addedCount = 0;
 
-        // If same product+size already in cart, just bump the qty instead of duplicating
-        var existing = _transferCart.find(function(it) { return it.productId === pid && it.size === finalSize; });
-        if (existing) {
-            existing.qty += qty;
-        } else {
-            _transferCart.push({
-                productId: pid,
-                productName: p.name,
-                productImage: (p.images && p.images[0]) || '',
-                size: finalSize,
-                qty: qty
+        if (p.sizes && p.sizes.length > 0) {
+            // Multi-size grid: read every size input with qty > 0
+            var inputs = document.querySelectorAll('.transfer-size-qty-input');
+            inputs.forEach(function(inp) {
+                var qty = parseInt(inp.value) || 0;
+                if (qty < 1) return;
+                var sizeName = inp.getAttribute('data-size');
+                var maxQty = parseInt(inp.getAttribute('max')) || 0;
+                if (qty > maxQty) qty = maxQty;
+                if (qty < 1) return;
+
+                var existing = _transferCart.find(function(it) { return it.productId === pid && it.size === sizeName; });
+                if (existing) { existing.qty += qty; } else {
+                    _transferCart.push({ productId: pid, productName: p.name, productImage: (p.images && p.images[0]) || '', size: sizeName, qty: qty });
+                }
+                addedCount++;
             });
+            if (!addedCount) { showToast('Enter a quantity for at least one size', 'error'); return; }
+        } else {
+            // Single qty (no sizes)
+            var qty = parseInt(document.getElementById('transferQtyInput').value) || 0;
+            if (qty < 1) { showToast('Qty must be at least 1', 'error'); return; }
+            var existing2 = _transferCart.find(function(it) { return it.productId === pid && it.size === 'One Size'; });
+            if (existing2) { existing2.qty += qty; } else {
+                _transferCart.push({ productId: pid, productName: p.name, productImage: (p.images && p.images[0]) || '', size: 'One Size', qty: qty });
+            }
+            addedCount = 1;
         }
 
         clearTransferProductSelection();
         document.getElementById('transferQtyInput').value = '1';
         renderTransferCart();
-        showToast('Added to request', 'success');
+        showToast(addedCount > 1 ? (addedCount + ' sizes added to request') : 'Added to request', 'success');
     }
 
     function renderTransferCart() {
