@@ -20,8 +20,8 @@
     <meta name="keywords" content="kids clothing, children fashion, baby clothes, kids shoes, kids accessories, Goat Kids">
     <link rel="canonical" href="https://sophornung575-jpg.github.io/Goad-Kids">
     <meta charset="UTF-8">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
@@ -1582,6 +1582,59 @@ function sendToTelegram(order, callback) {
     function hasStock(p) { return getTotalStock(p) > 0; }
     function isLowStock(p) { var t = getTotalStock(p); return t > 0 && t <= 3; }
 
+    // =============================================
+    // CROSS-BRANCH STOCK (customer-facing) — shows total stock across ALL stores
+    // =============================================
+    var _networkStockCache = { byProductId: {}, fetchedAt: 0, storeNames: {} };
+    var NETWORK_STOCK_TTL = 60000; // refresh at most once per 60s
+
+    async function refreshNetworkStock(force) {
+        if (!db) return _networkStockCache;
+        var now = Date.now();
+        if (!force && (now - _networkStockCache.fetchedAt) < NETWORK_STOCK_TTL) {
+            return _networkStockCache; // still fresh, skip refetch
+        }
+        try {
+            // Get list of all stores (Main + branches)
+            var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
+            var branchSnap = await db.collection('_admin_').doc('branches').get();
+            if (branchSnap.exists) {
+                (branchSnap.data().list || []).forEach(function(b) { stores.push({ id: b.id, name: b.name }); });
+            }
+
+            var byProductId = {};
+            var storeNames = {};
+            stores.forEach(function(s) { storeNames[s.id] = s.name; });
+
+            // Fetch products from every store in parallel
+            await Promise.all(stores.map(async function(s) {
+                try {
+                    var snap = await db.collection('stores').doc(s.id).collection('products').get();
+                    snap.forEach(function(doc) {
+                        var data = doc.data();
+                        var stock = (data.sizes && data.sizes.length)
+                            ? data.sizes.reduce(function(a, sz){ return a + (sz.qty||0); }, 0)
+                            : (data.stock || 0);
+                        if (!byProductId[doc.id]) byProductId[doc.id] = [];
+                        byProductId[doc.id].push({ storeId: s.id, storeName: s.name, stock: stock, sizes: data.sizes || null });
+                    });
+                } catch(e) { console.warn('Network stock fetch failed for ' + s.id + ':', e.message); }
+            }));
+
+            _networkStockCache = { byProductId: byProductId, fetchedAt: now, storeNames: storeNames };
+        } catch(e) {
+            console.warn('Network stock refresh failed:', e.message);
+        }
+        return _networkStockCache;
+    }
+
+    // Returns { total, branches: [{storeId, storeName, stock}] } for a product, using cache
+    function getNetworkStock(productId) {
+        var entries = _networkStockCache.byProductId[productId] || [];
+        var total = entries.reduce(function(a, e){ return a + e.stock; }, 0);
+        return { total: total, branches: entries };
+    }
+
     // FIX #5: Returns the available qty for a specific size minus what's already in cart
     function getAvailableSizeQty(product, sizeName) {
         if (!product.sizes || !product.sizes.length) return product.stock || 0;
@@ -2935,6 +2988,11 @@ function sendToTelegram(order, callback) {
                 sz += '</div></div>';
             }
             var inWish = STATE.wishlist.indexOf(p.id) !== -1;
+            var netInfo = getNetworkStock(p.id);
+            var netHtml = '';
+            if (netInfo.branches.length > 1) {
+                netHtml = '<div class="network-stock-hint" onclick="event.stopPropagation();openProductDetail(\'' + p.id + '\')" style="font-size:0.75rem;color:var(--primary);cursor:pointer;margin-top:2px"><i class="fas fa-store-alt"></i> ' + netInfo.total + ' total across ' + netInfo.branches.length + ' stores</div>';
+            }
             var card = '<div class="product-card">' +
                 '<div class="product-image-container" onclick="openProductDetail(\'' + p.id + '\')">' +
                 '<img src="' + allImages[0] + '" class="product-main-image" loading="lazy" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400\'">' +
@@ -2946,6 +3004,7 @@ function sendToTelegram(order, callback) {
                 '<h3 class="product-title">' + p.name + '</h3>' +
                 '<div class="product-price">$' + p.price.toFixed(2) + '</div>' +
                 '<div class="product-stock ' + sc + '"><i class="fas ' + (total > 0 ? 'fa-check-circle' : 'fa-times-circle') + '"></i> ' + st + ' (' + total + ')</div>' +
+                netHtml +
                 sz +
                 '<div class="product-actions"><button class="btn btn-primary btn-add-to-cart" onclick="event.stopPropagation();addToCart(\'' + p.id + '\')" ' + (!hasStock(p) ? 'disabled' : '') + '><i class="fas fa-cart-plus"></i> Add</button>' +
                 '<button class="btn btn-outline btn-small" onclick="openProductDetail(\'' + p.id + '\')" title="View Details"><i class="fas fa-eye"></i></button>' +
@@ -2954,6 +3013,15 @@ function sendToTelegram(order, callback) {
             h += card;
         }
         g.innerHTML = h;
+
+        // Background refresh of network stock — only re-render if the fetch actually ran (cache was stale)
+        var cacheAgeBefore = Date.now() - _networkStockCache.fetchedAt;
+        if (cacheAgeBefore >= NETWORK_STOCK_TTL || _networkStockCache.fetchedAt === 0) {
+            refreshNetworkStock().then(function() {
+                var stillOnStoreTab = document.getElementById('productGrid');
+                if (stillOnStoreTab) renderProducts();
+            });
+        }
     }
 
     function clearFilters() {
@@ -3048,6 +3116,22 @@ function sendToTelegram(order, callback) {
         var stockClass = total > 10 ? 'in-stock' : (total > 0 ? 'low-stock' : 'out-of-stock');
         var stockText = total > 10 ? 'In Stock (' + total + ')' : (total > 0 ? 'Low Stock (' + total + ')' : 'Out of Stock');
 
+        // Cross-branch stock breakdown
+        var netInfo = getNetworkStock(pid);
+        var branchHtml = '';
+        if (netInfo.branches.length > 1) {
+            branchHtml = '<div style="margin:0.75rem 0;background:var(--light);border-radius:10px;padding:0.75rem">' +
+                '<div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem"><i class="fas fa-store-alt" style="color:var(--primary)"></i> Available across ' + netInfo.branches.length + ' stores (total: ' + netInfo.total + ')</div>' +
+                '<div style="display:grid;gap:4px">';
+            netInfo.branches.sort(function(a,b){ return b.stock - a.stock; }).forEach(function(b) {
+                var dotColor = b.stock > 0 ? 'var(--success)' : 'var(--danger)';
+                branchHtml += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.82rem;padding:3px 0">' +
+                    '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + dotColor + ';margin-right:6px"></span>' + escHtml(b.storeName) + '</span>' +
+                    '<span style="font-weight:600">' + b.stock + '</span></div>';
+            });
+            branchHtml += '</div></div>';
+        }
+
         document.getElementById('productDetailModal').innerHTML =
             '<div class="modal" style="max-width:700px;width:95%">' +
             '<div class="modal-header"><h3>' + p.name + '</h3><button class="modal-close" onclick="closeProductDetail()">&times;</button></div>' +
@@ -3055,7 +3139,8 @@ function sendToTelegram(order, callback) {
             '<div><img id="pdMainImg" src="' + allImages[0] + '" style="width:100%;height:280px;object-fit:cover;border-radius:var(--radius-lg);cursor:zoom-in" onclick="openLightbox(this.src)" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=600\'">' + imagesHtml + '</div>' +
             '<div><span class="product-category ' + getCategoryDisplay(p.category) + '">' + p.category + '</span>' +
             '<div style="font-size:1.8rem;font-weight:700;color:var(--primary);margin:0.5rem 0">$' + p.price.toFixed(2) + '</div>' +
-            '<div class="product-stock ' + stockClass + '" style="margin-bottom:0.5rem"><i class="fas ' + (total > 0 ? 'fa-check-circle' : 'fa-times-circle') + '"></i> ' + stockText + '</div>' +
+            '<div class="product-stock ' + stockClass + '" style="margin-bottom:0.5rem"><i class="fas ' + (total > 0 ? 'fa-check-circle' : 'fa-times-circle') + '"></i> ' + stockText + ' (this store)</div>' +
+            branchHtml +
             sizesHtml +
             '<div style="display:flex;gap:0.5rem;margin-top:1rem">' +
             '<button class="btn btn-primary btn-large" onclick="addToCart(\'' + pid + '\');closeProductDetail()" style="flex:1" ' + (!hasStock(p) ? 'disabled' : '') + '><i class="fas fa-cart-plus"></i> Add to Cart</button>' +
@@ -3065,6 +3150,16 @@ function sendToTelegram(order, callback) {
         document.getElementById('productDetailModal').classList.remove('hidden');
         // Sync size selection with main product card
         document.getElementById('productDetailModal').querySelector('.modal').addEventListener('click', function(e){e.stopPropagation();});
+
+        // Refresh network stock if stale, then update breakdown without closing modal
+        var cacheAge = Date.now() - _networkStockCache.fetchedAt;
+        if (cacheAge >= NETWORK_STOCK_TTL || _networkStockCache.fetchedAt === 0) {
+            refreshNetworkStock().then(function() {
+                if (document.getElementById('productDetailModal').classList.contains('active')) {
+                    openProductDetail(pid); // re-render with fresh data, same product still open
+                }
+            });
+        }
     }
     function selectPdSize(el, pid, size) {
         var opts = el.closest('#pdSizeOptions').querySelectorAll('.size-option');
