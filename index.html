@@ -20,8 +20,8 @@
     <meta name="keywords" content="kids clothing, children fashion, baby clothes, kids shoes, kids accessories, Goat Kids">
     <link rel="canonical" href="https://sophornung575-jpg.github.io/Goad-Kids">
     <meta charset="UTF-8">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
@@ -348,7 +348,7 @@
     <!-- Store Selector Screen — shown once on first launch if no store chosen yet -->
     <div id="storeSelectorScreen" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);z-index:99998;flex-direction:column;align-items:center;justify-content:center;padding:20px">
         <div style="background:#fff;border-radius:20px;padding:2rem;max-width:440px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.2);text-align:center">
-            <div style="font-size:3rem;margin-bottom:0.5rem"></div>
+            <div style="font-size:3rem;margin-bottom:0.5rem">🐐</div>
             <h2 style="margin:0 0 0.25rem;color:#2d3748">Which store is this?</h2>
             <p style="color:#718096;font-size:0.85rem;margin-bottom:1.5rem">Select once — remembered permanently on this device.</p>
             <div id="storeSelectorList" style="display:grid;gap:0.75rem;margin-bottom:1.25rem;max-height:320px;overflow-y:auto">
@@ -1211,6 +1211,12 @@
         { type: 'proxy',   url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://api.telegram.org/bot{TOKEN}/sendMessage') }
     ];
 
+    // Prepends a store identifier line to every Telegram message so multi-branch notifications are distinguishable
+    function _withStoreTag(message) {
+        var label = STATE.storeName || STATE.storeId || 'Unknown Store';
+        return '🏬 <b>[' + label + ']</b>\n' + message;
+    }
+
     function _sendTelegramRaw(message, callback) {
         var cfg = getTelegramConfig();
         if (!cfg.botToken || !cfg.chatId) {
@@ -1218,6 +1224,7 @@
             if (callback) callback(false);
             return;
         }
+        message = _withStoreTag(message);
         var body = JSON.stringify({ chat_id: cfg.chatId, text: message, parse_mode: 'HTML' });
         _trySendWithFallback(cfg.botToken, body, message, 0, callback);
     }
@@ -1303,7 +1310,7 @@
 
         var media = urls.map(function(url, idx) {
             var item = { type: 'photo', media: url };
-            if (idx === 0) { item.caption = caption; item.parse_mode = 'HTML'; }
+            if (idx === 0) { item.caption = _withStoreTag(caption); item.parse_mode = 'HTML'; }
             return item;
         });
         var body = JSON.stringify({ chat_id: cfg.chatId, media: media });
@@ -1389,7 +1396,8 @@ function sendToTelegram(order, callback) {
             _sendTelegramRaw(caption, callback);
             return;
         }
-        var body = JSON.stringify({ chat_id: cfg.chatId, photo: imageUrl, caption: caption, parse_mode: 'HTML' });
+        var taggedCaption = _withStoreTag(caption);
+        var body = JSON.stringify({ chat_id: cfg.chatId, photo: imageUrl, caption: taggedCaption, parse_mode: 'HTML' });
         _tryPhotoWithFallback(cfg.botToken, body, caption, 0, callback);
     }
 
@@ -5123,11 +5131,17 @@ function sendToTelegram(order, callback) {
             el.innerHTML = '<div style="text-align:center;color:var(--gray);padding:1.5rem">⚠️ Full admin required to approve transfers</div>';
             return;
         }
-        var html = '';
+        var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;padding-bottom:0.6rem;border-bottom:1px solid var(--gray-light)">' +
+            '<label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;cursor:pointer"><input type="checkbox" id="transferSelectAll" onchange="toggleSelectAllTransfers(this)"> Select All (' + pending.length + ')</label>' +
+            '<div id="transferBulkActions" style="display:none;gap:6px">' +
+            '<button class="btn btn-success btn-small" onclick="bulkApproveTransfers()"><i class="fas fa-check-double"></i> Approve Selected (<span id="transferSelCount">0</span>)</button>' +
+            '<button class="btn btn-outline btn-small" style="color:var(--danger)" onclick="bulkRejectTransfers()"><i class="fas fa-times"></i> Reject Selected</button>' +
+            '</div></div>';
         pending.forEach(function(t) {
             html += '<div style="background:var(--light);border-radius:10px;padding:1rem;margin-bottom:0.75rem;border-left:4px solid var(--warning)">' +
                 '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.5rem">' +
-                '<div style="display:flex;gap:0.6rem;flex:1;min-width:200px">' +
+                '<div style="display:flex;gap:0.6rem;flex:1;min-width:200px;align-items:flex-start">' +
+                '<input type="checkbox" class="transfer-select-cb" value="' + t.transferId + '" onchange="onTransferCheckboxChange()" style="margin-top:4px">' +
                 (t.productImage ? '<img src="' + escHtml(t.productImage) + '" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0">' : '') +
                 '<div>' +
                 '<div style="font-weight:700;font-size:0.95rem">📦 ' + escHtml(t.productName) + (t.size && t.size !== 'One Size' ? ' <span style="color:var(--primary);font-size:0.85rem">(' + escHtml(t.size) + ')</span>' : '') + '</div>' +
@@ -5141,6 +5155,22 @@ function sendToTelegram(order, callback) {
                 '</div></div></div>';
         });
         el.innerHTML = html;
+    }
+
+    function onTransferCheckboxChange() {
+        var checked = document.querySelectorAll('.transfer-select-cb:checked');
+        var bulkBar = document.getElementById('transferBulkActions');
+        var countEl = document.getElementById('transferSelCount');
+        if (countEl) countEl.textContent = checked.length;
+        if (bulkBar) bulkBar.style.display = checked.length > 0 ? 'flex' : 'none';
+        var selectAll = document.getElementById('transferSelectAll');
+        var all = document.querySelectorAll('.transfer-select-cb');
+        if (selectAll) selectAll.checked = all.length > 0 && checked.length === all.length;
+    }
+
+    function toggleSelectAllTransfers(cb) {
+        document.querySelectorAll('.transfer-select-cb').forEach(function(c) { c.checked = cb.checked; });
+        onTransferCheckboxChange();
     }
 
     function renderTransferHistory(history) {
@@ -5228,6 +5258,132 @@ function sendToTelegram(order, callback) {
             loadTransfers();
         } catch(e) {
             showToast('Approve failed: ' + e.message, 'error');
+        }
+    }
+
+    async function bulkApproveTransfers() {
+        var checked = Array.from(document.querySelectorAll('.transfer-select-cb:checked')).map(function(c){ return c.value; });
+        if (!checked.length) { showToast('Select at least one request', 'error'); return; }
+        if (STATE.adminRole !== 'full') { showToast('Full admin required', 'error'); return; }
+        if (!confirm('Approve ' + checked.length + ' selected transfer(s)? Stock will be deducted from this store and added to the destination store(s).')) return;
+        if (!db) { showToast('Firebase offline', 'error'); return; }
+
+        var succeeded = [];
+        var failed = [];
+
+        showToast('Processing ' + checked.length + ' transfer(s)...', 'info');
+
+        // Process sequentially to avoid stock-check race conditions on the same product
+        for (var i = 0; i < checked.length; i++) {
+            var transferId = checked[i];
+            try {
+                var tDoc = await db.collection('transfers').doc(transferId).get();
+                if (!tDoc.exists) { failed.push({ id: transferId, reason: 'Not found' }); continue; }
+                var t = tDoc.data();
+
+                var p = STATE.products.find(function(x){ return x.id === t.productId; });
+                if (!p) { failed.push({ id: transferId, name: t.productName, reason: 'Product not found in this store' }); continue; }
+
+                var availQty;
+                if (p.sizes && p.sizes.length > 0 && t.size !== 'One Size') {
+                    var sz = p.sizes.find(function(s){ return s.name === t.size; });
+                    availQty = sz ? sz.qty : 0;
+                } else { availQty = p.stock || 0; }
+                if (availQty < t.qty) { failed.push({ id: transferId, name: t.productName, reason: 'Insufficient stock (' + availQty + ' available)' }); continue; }
+
+                if (p.sizes && p.sizes.length > 0 && t.size !== 'One Size') {
+                    p.sizes.forEach(function(s){ if (s.name === t.size) s.qty -= t.qty; });
+                    p.stock = getTotalStock(p);
+                } else { p.stock = (p.stock || 0) - t.qty; }
+
+                var partnerProductRef = db.collection('stores').doc(t.toStoreId).collection('products').doc(p.id);
+                var partnerSnap = await partnerProductRef.get();
+                var partnerData = partnerSnap.exists ? partnerSnap.data() : Object.assign({}, p, { stock: 0, sizes: (p.sizes||[]).map(function(s){ return Object.assign({}, s, {qty: 0}); }) });
+
+                if (partnerData.sizes && partnerData.sizes.length > 0 && t.size !== 'One Size') {
+                    var found = false;
+                    partnerData.sizes.forEach(function(s){ if (s.name === t.size) { s.qty += t.qty; found = true; } });
+                    if (!found) partnerData.sizes.push({ name: t.size, qty: t.qty });
+                    partnerData.stock = partnerData.sizes.reduce(function(a,s){ return a + (s.qty||0); }, 0);
+                } else { partnerData.stock = (partnerData.stock || 0) + t.qty; }
+
+                var batch = db.batch();
+                batch.set(db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id), Object.assign({}, p));
+                batch.set(partnerProductRef, partnerData, { merge: true });
+                batch.update(db.collection('transfers').doc(transferId), {
+                    status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
+                    approvedAtStr: new Date().toLocaleString()
+                });
+                await batch.commit();
+
+                logActivity('Transfer Approved', t.productName + ' x' + t.qty + ' → ' + t.toStoreName);
+                succeeded.push(t);
+            } catch(e) {
+                failed.push({ id: transferId, reason: e.message });
+            }
+        }
+
+        saveProducts();
+
+        // One Telegram message summarizing the whole batch
+        if (succeeded.length) {
+            var itemLines = succeeded.map(function(t) {
+                return '  • ' + t.productName + (t.size && t.size !== 'One Size' ? ' (' + t.size + ')' : '') + ' x' + t.qty + ' → ' + t.toStoreName;
+            });
+            var imageUrls = succeeded.map(function(t) { return t.productImage; }).filter(Boolean);
+            var caption = '✅ <b>TRANSFERS APPROVED</b> (' + succeeded.length + ' item' + (succeeded.length>1?'s':'') + ')\n\n' +
+                '📦 Items:\n' + itemLines.join('\n') + '\n\n' +
+                '✅ Approved by Full Admin';
+            _sendTelegramMediaGroup(imageUrls, caption, caption, null);
+        }
+
+        if (failed.length) {
+            showToast(succeeded.length + ' approved, ' + failed.length + ' failed (check console)', 'error');
+            console.warn('Bulk approve failures:', failed);
+        } else {
+            showToast(succeeded.length + ' transfer(s) approved!', 'success');
+        }
+
+        renderInventory(); renderProducts();
+        loadTransfers();
+    }
+
+    async function bulkRejectTransfers() {
+        var checked = Array.from(document.querySelectorAll('.transfer-select-cb:checked')).map(function(c){ return c.value; });
+        if (!checked.length) { showToast('Select at least one request', 'error'); return; }
+        var reason = prompt('Reason for rejecting ' + checked.length + ' request(s) (optional):') || 'Rejected by admin';
+        if (!db) return;
+
+        var rejected = [];
+        try {
+            var batch = db.batch();
+            for (var i = 0; i < checked.length; i++) {
+                var transferId = checked[i];
+                var tDoc = await db.collection('transfers').doc(transferId).get();
+                if (tDoc.exists) rejected.push(tDoc.data());
+                batch.update(db.collection('transfers').doc(transferId), {
+                    status: 'rejected', rejectedAt: Date.now(), rejectedBy: STATE.adminRole,
+                    rejectedAtStr: new Date().toLocaleString(), rejectReason: reason
+                });
+            }
+            await batch.commit();
+            logActivity('Bulk Transfer Rejected', checked.length + ' items: ' + reason);
+
+            if (rejected.length) {
+                var itemLines = rejected.map(function(t) {
+                    return '  • ' + (t.productName||'') + (t.size && t.size !== 'One Size' ? ' (' + t.size + ')' : '') + ' x' + (t.qty||0) + ' for ' + (t.toStoreName||'');
+                });
+                var imageUrls = rejected.map(function(t) { return t.productImage; }).filter(Boolean);
+                var caption = '❌ <b>TRANSFERS REJECTED</b> (' + rejected.length + ' item' + (rejected.length>1?'s':'') + ')\n\n' +
+                    '📦 Items:\n' + itemLines.join('\n') + '\n\n' +
+                    '📝 Reason: ' + reason;
+                _sendTelegramMediaGroup(imageUrls, caption, caption, null);
+            }
+
+            showToast(checked.length + ' transfer(s) rejected', 'info');
+            loadTransfers();
+        } catch(e) {
+            showToast('Bulk reject failed: ' + e.message, 'error');
         }
     }
 
