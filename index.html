@@ -20,8 +20,8 @@
     <meta name="keywords" content="kids clothing, children fashion, baby clothes, kids shoes, kids accessories, Goat Kids">
     <link rel="canonical" href="https://sophornung575-jpg.github.io/Goad-Kids">
     <meta charset="UTF-8">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
@@ -5081,10 +5081,13 @@ function sendToTelegram(order, callback) {
         var defaultFrom = STATE.partnerStoreId || (stores.find(function(s){ return s.id !== STATE.storeId; }) || {}).id || stores[0].id;
         fromSel.value = defaultFrom;
         toSel.value = STATE.storeId;
-        onTransferDirectionChange();
+        await onTransferDirectionChange();
     }
 
-    function onTransferDirectionChange() {
+    var _transferFromStoreProducts = []; // products of the currently selected "From" store
+    var _transferFromStoreId = '';
+
+    async function onTransferDirectionChange() {
         var fromSel = document.getElementById('transferFromStoreSelect');
         var toSel = document.getElementById('transferToStoreSelect');
         var warn = document.getElementById('transferDirectionWarning');
@@ -5094,6 +5097,36 @@ function sendToTelegram(order, callback) {
         } else {
             warn.textContent = '';
         }
+
+        // Clear any in-progress selection since the product list source is changing
+        clearTransferProductSelection();
+        _transferCart = [];
+        renderTransferCart();
+
+        // Fetch the actual product list of the selected "From" store — this is the store
+        // that will fulfill the request, so the picker MUST show ITS inventory, not this device's.
+        var fromId = fromSel.value;
+        if (!fromId || !db) { _transferFromStoreProducts = []; _transferFromStoreId = ''; return; }
+
+        var pickerStatus = document.getElementById('transferProductSearch');
+        if (pickerStatus) pickerStatus.placeholder = '🔍 Loading ' + fromSel.options[fromSel.selectedIndex].text + ' products...';
+
+        try {
+            if (fromId === STATE.storeId) {
+                // Source is this device's own store — use local STATE directly, no fetch needed
+                _transferFromStoreProducts = STATE.products;
+            } else {
+                var snap = await db.collection('stores').doc(fromId).collection('products').get();
+                var list = [];
+                snap.forEach(function(d) { list.push(Object.assign({ id: d.id }, d.data())); });
+                _transferFromStoreProducts = list;
+            }
+            _transferFromStoreId = fromId;
+        } catch(e) {
+            console.warn('Failed to load products for From store ' + fromId + ':', e.message);
+            _transferFromStoreProducts = [];
+        }
+        if (pickerStatus) pickerStatus.placeholder = '🔍 Search product by name...';
     }
 
     // =============================================
@@ -5107,12 +5140,19 @@ function sendToTelegram(order, callback) {
     function filterTransferProductPicker() {
         var search = (document.getElementById('transferProductSearch').value || '').toLowerCase();
         var picker = document.getElementById('transferProductPicker');
-        var matches = STATE.products.filter(function(p) {
+
+        if (!_transferFromStoreId) {
+            picker.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--gray);font-size:0.85rem">⚠️ Select a "From" store above first</div>';
+            picker.style.display = 'block';
+            return;
+        }
+
+        var matches = _transferFromStoreProducts.filter(function(p) {
             return !search || p.name.toLowerCase().indexOf(search) !== -1;
         }).slice(0, 30);
 
         if (!matches.length) {
-            picker.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--gray);font-size:0.85rem">No products found</div>';
+            picker.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--gray);font-size:0.85rem">No products found in this store</div>';
         } else {
             var html = '';
             matches.forEach(function(p) {
@@ -5130,7 +5170,7 @@ function sendToTelegram(order, callback) {
     }
 
     function pickTransferProduct(pid) {
-        var p = STATE.products.find(function(x){ return x.id === pid; });
+        var p = _transferFromStoreProducts.find(function(x){ return x.id === pid; });
         if (!p) return;
         document.getElementById('transferProductSelect').value = pid;
         document.getElementById('transferProductSearch').value = '';
@@ -5170,7 +5210,7 @@ function sendToTelegram(order, callback) {
         var grid = document.getElementById('transferSizeGrid');
         var singleWrap = document.getElementById('transferSingleQtyWrap');
         if (!pid) { gridWrap.style.display = 'none'; singleWrap.style.display = 'none'; return; }
-        var p = STATE.products.find(function(x){ return x.id === pid; });
+        var p = _transferFromStoreProducts.find(function(x){ return x.id === pid; });
         if (!p) return;
 
         if (p.sizes && p.sizes.length > 0) {
@@ -5200,7 +5240,7 @@ function sendToTelegram(order, callback) {
     function addItemToTransferCart() {
         var pid = document.getElementById('transferProductSelect').value;
         if (!pid) { showToast('Select a product', 'error'); return; }
-        var p = STATE.products.find(function(x){ return x.id === pid; });
+        var p = _transferFromStoreProducts.find(function(x){ return x.id === pid; });
         if (!p) return;
 
         var addedCount = 0;
@@ -5480,9 +5520,16 @@ function sendToTelegram(order, callback) {
             if (!tDoc.exists) { showToast('Transfer not found', 'error'); return; }
             var t = tDoc.data();
 
-            // Find product in THIS store (source)
-            var p = STATE.products.find(function(x){ return x.id === t.productId; });
-            if (!p) { showToast('Product not found in this store', 'error'); return; }
+            // Fetch the product LIVE from Firebase (this store, since approval only happens on the source store) —
+            // never trust STATE.products here, it can be stale if the page has been open a while or another
+            // device changed stock in the meantime.
+            var pRef = db.collection('stores').doc(STATE.storeId).collection('products').doc(t.productId);
+            var pSnap = await pRef.get();
+            if (!pSnap.exists) {
+                showToast('Product "' + (t.productName||t.productId) + '" no longer exists in this store — cannot approve', 'error');
+                return;
+            }
+            var p = Object.assign({ id: t.productId }, pSnap.data());
 
             // Check stock
             var availQty;
@@ -5490,7 +5537,7 @@ function sendToTelegram(order, callback) {
                 var sz = p.sizes.find(function(s){ return s.name === t.size; });
                 availQty = sz ? sz.qty : 0;
             } else { availQty = p.stock || 0; }
-            if (availQty < t.qty) { showToast('Insufficient stock: only ' + availQty + ' available', 'error'); return; }
+            if (availQty < t.qty) { showToast('Insufficient stock: only ' + availQty + ' available (size: ' + t.size + ')', 'error'); return; }
 
             // Deduct from this store
             if (p.sizes && p.sizes.length > 0 && t.size !== 'One Size') {
@@ -5512,7 +5559,7 @@ function sendToTelegram(order, callback) {
 
             // Write atomically
             var batch = db.batch();
-            batch.set(db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id), Object.assign({}, p));
+            batch.set(pRef, Object.assign({}, p), { merge: true });
             batch.set(partnerProductRef, partnerData, { merge: true });
             batch.update(db.collection('transfers').doc(transferId), {
                 status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
@@ -5520,7 +5567,10 @@ function sendToTelegram(order, callback) {
             });
             await batch.commit();
 
-            saveProducts();
+            // Keep local STATE.products in sync too, if this product happens to be tracked locally
+            var localP = STATE.products.find(function(x){ return x.id === p.id; });
+            if (localP) { localP.sizes = p.sizes; localP.stock = p.stock; saveProducts(); }
+
             logActivity('Transfer Approved', t.productName + ' x' + t.qty + ' → ' + t.toStoreName);
             _sendTelegramPhoto(
                 t.productImage || (p.images && p.images[0]) || '',
@@ -5560,15 +5610,18 @@ function sendToTelegram(order, callback) {
                 if (!tDoc.exists) { failed.push({ id: transferId, reason: 'Not found' }); continue; }
                 var t = tDoc.data();
 
-                var p = STATE.products.find(function(x){ return x.id === t.productId; });
-                if (!p) { failed.push({ id: transferId, name: t.productName, reason: 'Product not found in this store' }); continue; }
+                // Fetch the product LIVE from Firebase — never trust stale STATE.products during bulk approval
+                var pRef = db.collection('stores').doc(STATE.storeId).collection('products').doc(t.productId);
+                var pSnap = await pRef.get();
+                if (!pSnap.exists) { failed.push({ id: transferId, name: t.productName, reason: 'Product no longer exists in this store' }); continue; }
+                var p = Object.assign({ id: t.productId }, pSnap.data());
 
                 var availQty;
                 if (p.sizes && p.sizes.length > 0 && t.size !== 'One Size') {
                     var sz = p.sizes.find(function(s){ return s.name === t.size; });
                     availQty = sz ? sz.qty : 0;
                 } else { availQty = p.stock || 0; }
-                if (availQty < t.qty) { failed.push({ id: transferId, name: t.productName, reason: 'Insufficient stock (' + availQty + ' available)' }); continue; }
+                if (availQty < t.qty) { failed.push({ id: transferId, name: t.productName, reason: 'Insufficient stock (' + availQty + ' available, size: ' + t.size + ')' }); continue; }
 
                 if (p.sizes && p.sizes.length > 0 && t.size !== 'One Size') {
                     p.sizes.forEach(function(s){ if (s.name === t.size) s.qty -= t.qty; });
@@ -5587,13 +5640,17 @@ function sendToTelegram(order, callback) {
                 } else { partnerData.stock = (partnerData.stock || 0) + t.qty; }
 
                 var batch = db.batch();
-                batch.set(db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id), Object.assign({}, p));
+                batch.set(pRef, Object.assign({}, p), { merge: true });
                 batch.set(partnerProductRef, partnerData, { merge: true });
                 batch.update(db.collection('transfers').doc(transferId), {
                     status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
                     approvedAtStr: new Date().toLocaleString()
                 });
                 await batch.commit();
+
+                // Keep local STATE.products in sync too, if tracked locally
+                var localP = STATE.products.find(function(x){ return x.id === p.id; });
+                if (localP) { localP.sizes = p.sizes; localP.stock = p.stock; }
 
                 logActivity('Transfer Approved', t.productName + ' x' + t.qty + ' → ' + t.toStoreName);
                 succeeded.push(t);
