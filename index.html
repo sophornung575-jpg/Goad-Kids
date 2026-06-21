@@ -5469,6 +5469,7 @@ function sendToTelegram(order, callback) {
                 '<div style="font-size:0.75rem;color:var(--gray);margin-top:4px">' + escHtml(t.requestedAtStr || '') + '</div>' +
                 '</div></div>' +
                 '<div style="display:flex;gap:6px">' +
+                '<button class="btn btn-outline btn-small" onclick="diagnoseTransfer(\'' + t.transferId + '\')" title="Check why this might be blocked"><i class="fas fa-search"></i></button>' +
                 '<button class="btn btn-success btn-small" onclick="approveTransfer(\'' + t.transferId + '\')"><i class="fas fa-check"></i> Approve</button>' +
                 '<button class="btn btn-outline btn-small" style="color:var(--danger)" onclick="rejectTransfer(\'' + t.transferId + '\')"><i class="fas fa-times"></i> Reject</button>' +
                 '</div></div></div>';
@@ -5720,6 +5721,84 @@ function sendToTelegram(order, callback) {
             loadTransfers();
         } catch(e) {
             showToast('Bulk reject failed: ' + e.message, 'error');
+        }
+    }
+
+    async function diagnoseTransfer(transferId) {
+        if (!db) { showToast('Firebase offline', 'error'); return; }
+        try {
+            var tDoc = await db.collection('transfers').doc(transferId).get();
+            if (!tDoc.exists) { alert('❌ This transfer request no longer exists in Firebase.'); return; }
+            var t = tDoc.data();
+
+            var lines = [];
+            lines.push('🔍 DIAGNOSIS: ' + t.productName + (t.size && t.size !== 'One Size' ? ' (' + t.size + ')' : ''));
+            lines.push('');
+            lines.push('Requested qty: ' + t.qty);
+            lines.push('From store: ' + (t.fromStoreName||'') + ' (' + t.fromStoreId + ')');
+            lines.push('To store: ' + (t.toStoreName||'') + ' (' + t.toStoreId + ')');
+            lines.push('Product ID referenced: ' + t.productId);
+            lines.push('');
+
+            // Check if product exists in the FROM store
+            var pSnap = await db.collection('stores').doc(t.fromStoreId).collection('products').doc(t.productId).get();
+            if (!pSnap.exists) {
+                lines.push('❌ PROBLEM FOUND: This exact product ID does NOT exist in ' + t.fromStoreName + '.');
+                lines.push('');
+                lines.push('This usually happens when the product was added independently in two different');
+                lines.push('stores (each store generates its own random ID), so the request points to an ID');
+                lines.push('that only exists on the requesting side, not the source side.');
+                lines.push('');
+
+                // Try to find a similarly-named product in the FROM store, to suggest a fix
+                var allSnap = await db.collection('stores').doc(t.fromStoreId).collection('products').get();
+                var similar = null;
+                allSnap.forEach(function(d) {
+                    var data = d.data();
+                    if (data.name && data.name.trim().toLowerCase() === (t.productName||'').trim().toLowerCase()) {
+                        similar = Object.assign({ id: d.id }, data);
+                    }
+                });
+                if (similar) {
+                    var simStock = (similar.sizes && similar.sizes.length) ? similar.sizes.reduce(function(a,s){return a+(s.qty||0);},0) : (similar.stock||0);
+                    lines.push('✅ GOOD NEWS: A product with the SAME NAME exists in ' + t.fromStoreName + ':');
+                    lines.push('   ID: ' + similar.id + ' | Stock: ' + simStock);
+                    lines.push('');
+                    lines.push('👉 FIX: Reject this request, then create a NEW request using the product');
+                    lines.push('   picker (search "' + t.productName + '") — it will now correctly use this');
+                    lines.push('   store\'s real product list.');
+                } else {
+                    lines.push('⚠️ No product with this exact name exists in ' + t.fromStoreName + ' at all.');
+                    lines.push('👉 FIX: Reject this request — the product needs to be added to ' + t.fromStoreName + ' first.');
+                }
+            } else {
+                var p = pSnap.data();
+                var stock = (p.sizes && p.sizes.length) ? p.sizes.reduce(function(a,s){return a+(s.qty||0);},0) : (p.stock||0);
+                lines.push('✅ Product exists in ' + t.fromStoreName + '. Stock: ' + stock);
+                if (p.sizes && p.sizes.length && t.size !== 'One Size') {
+                    var sz = p.sizes.find(function(s){ return s.name === t.size; });
+                    if (!sz) {
+                        lines.push('❌ PROBLEM FOUND: Size "' + t.size + '" does not exist on this product.');
+                        lines.push('   Available sizes: ' + p.sizes.map(function(s){return s.name+' ('+s.qty+')';}).join(', '));
+                    } else if (sz.qty < t.qty) {
+                        lines.push('❌ PROBLEM FOUND: Not enough stock for size "' + t.size + '".');
+                        lines.push('   Available: ' + sz.qty + ', Requested: ' + t.qty);
+                        lines.push('👉 FIX: Reject, or ask requester to lower the quantity to ' + sz.qty + ' or less.');
+                    } else {
+                        lines.push('✅ Size "' + t.size + '" has ' + sz.qty + ' available — this should approve fine.');
+                    }
+                } else if (stock < t.qty) {
+                    lines.push('❌ PROBLEM FOUND: Not enough total stock.');
+                    lines.push('   Available: ' + stock + ', Requested: ' + t.qty);
+                    lines.push('👉 FIX: Reject, or ask requester to lower the quantity to ' + stock + ' or less.');
+                } else {
+                    lines.push('✅ Everything looks fine — this should approve without issues.');
+                }
+            }
+
+            alert(lines.join('\n'));
+        } catch(e) {
+            alert('Diagnosis failed: ' + e.message);
         }
     }
 
