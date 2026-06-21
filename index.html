@@ -20,8 +20,8 @@
     <meta name="keywords" content="kids clothing, children fashion, baby clothes, kids shoes, kids accessories, Goat Kids">
     <link rel="canonical" href="https://sophornung575-jpg.github.io/Goad-Kids">
     <meta charset="UTF-8">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
@@ -2698,6 +2698,86 @@ function sendToTelegram(order, callback) {
         setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 3000);
     }
 
+    // =============================================
+    // ONE-OFF FIX TOOL: re-deduct stock for an order that was confirmed but never deducted
+    // Safe to run multiple times on the same order — it checks order.stockDeducted flag first.
+    // Usage from browser console: fixOrderStockDeduction('ORD-1782026855281')
+    // =============================================
+    async function fixOrderStockDeduction(orderId) {
+        if (!db) { console.error('Firebase offline — cannot fix'); return; }
+        try {
+            var orderDoc = await db.collection('stores').doc(STATE.storeId).collection('orders').doc(orderId).get();
+            if (!orderDoc.exists) {
+                // Check archived orders too
+                orderDoc = await db.collection('archivedOrders').doc(orderId).get();
+            }
+            if (!orderDoc.exists) { console.error('Order not found: ' + orderId); showToast('Order not found', 'error'); return; }
+
+            var order = orderDoc.data();
+            if (order.stockDeducted) {
+                console.warn('Order ' + orderId + ' already marked as stock-deducted. Skipping to avoid double-deduction.');
+                showToast('Already deducted — no action taken', 'info');
+                return;
+            }
+            if (order.status !== 'confirmed') {
+                console.warn('Order status is "' + order.status + '", not "confirmed". Skipping.');
+                showToast('Order is not confirmed — no action taken', 'error');
+                return;
+            }
+
+            console.log('📋 Order ' + orderId + ' items:');
+            var plan = [];
+            for (var i = 0; i < order.cart.length; i++) {
+                var item = order.cart[i];
+                var p = STATE.products.find(function(x){ return x.id === item.productId; });
+                if (!p) { console.warn('  ⚠️ Product not found locally: ' + item.name + ' — skipping this item'); continue; }
+                var currentQty, afterQty;
+                if (p.sizes && p.sizes.length) {
+                    var sz = p.sizes.find(function(s){ return s.name === item.size; });
+                    currentQty = sz ? sz.qty : 0;
+                    afterQty = Math.max(0, currentQty - item.quantity);
+                } else {
+                    currentQty = p.stock || 0;
+                    afterQty = Math.max(0, currentQty - item.quantity);
+                }
+                console.log('  • ' + item.name + (item.size ? ' (' + item.size + ')' : '') + ' x' + item.quantity + '  →  current: ' + currentQty + ', will become: ' + afterQty);
+                plan.push({ product: p, item: item, currentQty: currentQty, afterQty: afterQty });
+            }
+
+            if (!plan.length) { console.warn('Nothing to deduct — no matching products found.'); return; }
+
+            if (!confirm('Apply stock deduction for ' + orderId + '?\n\n' + plan.map(function(x){ return x.item.name + (x.item.size?' ('+x.item.size+')':'') + ': ' + x.currentQty + ' → ' + x.afterQty; }).join('\n') + '\n\nThis writes directly to Firebase.')) {
+                console.log('Cancelled by user.');
+                return;
+            }
+
+            var batch = db.batch();
+            plan.forEach(function(x) {
+                var p = x.product, item = x.item;
+                if (p.sizes && p.sizes.length) {
+                    p.sizes.forEach(function(s){ if (s.name === item.size) s.qty = x.afterQty; });
+                    p.stock = getTotalStock(p);
+                    batch.update(db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id), { sizes: p.sizes, stock: p.stock });
+                } else {
+                    p.stock = x.afterQty;
+                    batch.update(db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id), { stock: p.stock });
+                }
+            });
+            // Mark order so this can never run twice
+            batch.update(orderDoc.ref, { stockDeducted: true, stockDeductedFixedAt: Date.now() });
+
+            await batch.commit();
+            saveProducts();
+            logActivity('Manual Stock Fix', orderId);
+            console.log('✅ Stock deduction applied and order marked as stockDeducted.');
+            showToast('Stock fixed for ' + orderId, 'success');
+            renderInventory(); renderProducts();
+        } catch(e) {
+            console.error('Fix failed:', e);
+            showToast('Fix failed: ' + e.message, 'error');
+        }
+    }
+
     function showActivityLog() {
         var html = '<div class="modal-overlay active" id="activityLogModal"><div class="modal"><div class="modal-header"><h3><i class="fas fa-history"></i> Activity Log</h3><button class="modal-close" onclick="document.getElementById(\'activityLogModal\').remove()">&times;</button></div><div style="max-height:400px;overflow-y:auto">';
         if (!STATE.activityLog.length) { html += '<p style="text-align:center;color:var(--gray);padding:2rem">No activity yet</p>'; }
@@ -3250,7 +3330,8 @@ function sendToTelegram(order, callback) {
             status: 'confirmed',
             confirmedAt: new Date().toLocaleString(),
             confirmedTimestamp: Date.now(),
-            timestamp: order.timestamp || Date.now()
+            timestamp: order.timestamp || Date.now(),
+            stockDeducted: true
         });
 
         // ── Step 3: If Firebase online → write EVERYTHING atomically first ──
@@ -3407,29 +3488,93 @@ function sendToTelegram(order, callback) {
         showToast('Rejected', 'warning');
     }
 
-    function confirmAll() {
+    async function confirmAll() {
         if (!STATE.pendingOrders.length) { showToast('No pending', 'warning'); return; }
         if (!confirm('Confirm ALL ' + STATE.pendingOrders.length + ' orders?')) return;
         var orders = STATE.pendingOrders.slice();
+
+        // ── Step 1: Validate stock for every order BEFORE touching anything ──
         for (var i = 0; i < orders.length; i++) {
             var o = orders[i];
             for (var j = 0; j < o.cart.length; j++) {
-                var it = o.cart[j], p = null;
-                for (var k = 0; k < STATE.products.length; k++) { if (STATE.products[k].id === it.productId) { p = STATE.products[k]; break; } }
-                if (p) {
-                    if (p.sizes && p.sizes.length) { for (var l = 0; l < p.sizes.length; l++) { if (p.sizes[l].name === it.size) { p.sizes[l].qty = Math.max(0, p.sizes[l].qty - it.quantity); break; } } }
-                    // FIX #6: Recalculate from sizes
-                    p.stock = getTotalStock(p);
+                var it = o.cart[j], p = STATE.products.find(function(x){ return x.id === it.productId; });
+                if (!p) { showToast('Product not found: ' + it.name + ' (order ' + o.orderId + ')', 'error'); return; }
+                if (p.sizes && p.sizes.length) {
+                    var sz = p.sizes.find(function(s){ return s.name === it.size; });
+                    if (!sz || sz.qty < it.quantity) { showToast('Not enough stock: ' + it.name + ' (' + it.size + ') for order ' + o.orderId, 'error'); return; }
+                } else if ((p.stock || 0) < it.quantity) {
+                    showToast('Not enough stock: ' + it.name + ' for order ' + o.orderId, 'error'); return;
                 }
             }
-            o.status = 'confirmed'; o.confirmedAt = new Date().toLocaleString(); o.confirmedTimestamp = Date.now();
-            STATE.confirmedOrders.push(o);
         }
+
+        // ── Step 2: Build all stock updates in memory (don't apply yet) ──
+        var stockUpdates = []; // { product, newSizes, newStock }
+        var confirmedOrders = [];
+        for (var k = 0; k < orders.length; k++) {
+            var ord = orders[k];
+            for (var m = 0; m < ord.cart.length; m++) {
+                var item = ord.cart[m], pr = STATE.products.find(function(x){ return x.id === item.productId; });
+                if (!pr) continue;
+                var existingUpdate = stockUpdates.find(function(u){ return u.product.id === pr.id; });
+                var workingProduct = existingUpdate ? existingUpdate.workingCopy : JSON.parse(JSON.stringify(pr));
+                if (workingProduct.sizes && workingProduct.sizes.length) {
+                    workingProduct.sizes.forEach(function(s){ if (s.name === item.size) s.qty = Math.max(0, s.qty - item.quantity); });
+                    workingProduct.stock = workingProduct.sizes.reduce(function(t,s){return t+s.qty;}, 0);
+                } else {
+                    workingProduct.stock = Math.max(0, (workingProduct.stock||0) - item.quantity);
+                }
+                if (!existingUpdate) {
+                    stockUpdates.push({ product: pr, workingCopy: workingProduct });
+                } else {
+                    existingUpdate.workingCopy = workingProduct;
+                }
+            }
+            confirmedOrders.push(Object.assign({}, ord, {
+                status: 'confirmed', confirmedAt: new Date().toLocaleString(),
+                confirmedTimestamp: Date.now(), timestamp: ord.timestamp || Date.now(),
+                stockDeducted: true
+            }));
+        }
+
+        // ── Step 3: If Firebase online → write everything atomically in chunks of 400 (Firestore batch limit) ──
+        if (db && STATE.firebaseOnline) {
+            try {
+                var storeRef = db.collection('stores').doc(STATE.storeId);
+                var ops = [];
+                stockUpdates.forEach(function(u) {
+                    ops.push({ ref: storeRef.collection('products').doc(u.product.id), data: u.workingCopy.sizes ? { sizes: u.workingCopy.sizes, stock: u.workingCopy.stock } : { stock: u.workingCopy.stock } });
+                });
+                confirmedOrders.forEach(function(co) {
+                    ops.push({ ref: storeRef.collection('orders').doc(co.orderId), data: co });
+                });
+                for (var c = 0; c < ops.length; c += 400) {
+                    var batch = db.batch();
+                    ops.slice(c, c + 400).forEach(function(op) { batch.set(op.ref, op.data, { merge: true }); });
+                    await batch.commit();
+                }
+            } catch (e) {
+                showToast('Firebase sync failed — orders NOT confirmed. Try again.', 'error');
+                console.error('confirmAll batch failed:', e);
+                return; // stop — local state untouched
+            }
+        }
+
+        // ── Step 4: Firebase succeeded (or offline) → apply to local state ──
+        stockUpdates.forEach(function(u) {
+            if (u.workingCopy.sizes) u.product.sizes = u.workingCopy.sizes;
+            u.product.stock = u.workingCopy.stock;
+        });
+        confirmedOrders.forEach(function(co) { STATE.confirmedOrders.push(co); });
         STATE.pendingOrders = [];
+
         saveProducts(); saveOrders(); logActivity('Confirm All', orders.length + ' orders');
-        if (STATE.firebaseOnline) syncToFirebase();
         renderPending(); renderHistory(); renderProducts(); renderInventory(); updateAdminBadges();
         showToast(orders.length + ' confirmed!', 'success');
+
+        if (!STATE.firebaseOnline) {
+            showToast('⚠️ Offline — confirmed locally. Sync to Cloud when back online.', 'warning');
+        }
     }
 
     function renderPending(searchQ) {
