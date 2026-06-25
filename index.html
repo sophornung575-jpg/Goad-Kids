@@ -1,4 +1,4 @@
-iu<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <!-- Open Graph / Social Media Preview -->
@@ -20,8 +20,8 @@ iu<!DOCTYPE html>
     <meta name="keywords" content="kids clothing, children fashion, baby clothes, kids shoes, kids accessories, Goat Kids">
     <link rel="canonical" href="https://sophornung575-jpg.github.io/Goad-Kids">
     <meta charset="UTF-8">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
@@ -348,7 +348,7 @@ iu<!DOCTYPE html>
     <!-- Store Selector Screen — shown once on first launch if no store chosen yet -->
     <div id="storeSelectorScreen" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);z-index:99998;flex-direction:column;align-items:center;justify-content:center;padding:20px">
         <div style="background:#fff;border-radius:20px;padding:2rem;max-width:440px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.2);text-align:center">
-            <div style="font-size:3rem;margin-bottom:0.5rem"></div>
+            <div style="font-size:3rem;margin-bottom:0.5rem">🐐</div>
             <h2 style="margin:0 0 0.25rem;color:#2d3748">Which store is this?</h2>
             <p style="color:#718096;font-size:0.85rem;margin-bottom:1.5rem">Select once — remembered permanently on this device.</p>
             <div id="storeSelectorList" style="display:grid;gap:0.75rem;margin-bottom:1.25rem;max-height:320px;overflow-y:auto">
@@ -695,6 +695,9 @@ iu<!DOCTYPE html>
                                         </div>
                                     </div>
                                     <div id="transferDirectionWarning" style="font-size:0.78rem;color:var(--danger);margin-top:0.4rem"></div>
+                                </div>
+                                <div style="border-top:1px dashed var(--gray-light);padding-top:0.75rem;margin-top:0.75rem">
+                                    <button class="btn btn-outline btn-small w-full" onclick="showAllTransfersDiagnostic()"><i class="fas fa-stethoscope"></i> Don't see an expected request? Check here</button>
                                 </div>
                             </div>
                         </div>
@@ -5721,6 +5724,89 @@ function sendToTelegram(order, callback) {
             loadTransfers();
         } catch(e) {
             showToast('Bulk reject failed: ' + e.message, 'error');
+        }
+    }
+
+    // Global diagnostic: find ALL transfers system-wide and report store ID mismatches.
+    // Use this when a transfer doesn't appear as "incoming" on the store that should approve it.
+    // Run from browser console: diagnoseAllTransfers()
+    async function showAllTransfersDiagnostic() {
+        if (!db) { showToast('Firebase offline', 'error'); return; }
+        try {
+            var snap;
+            try {
+                snap = await db.collection('transfers').where('status', '==', 'pending').orderBy('requestedAt', 'desc').limit(50).get();
+            } catch(idxErr) {
+                snap = await db.collection('transfers').where('status', '==', 'pending').limit(50).get();
+            }
+
+            var storeMap = { 'GOAT-1979': 'Main Store' };
+            var bSnap = await db.collection('_admin_').doc('branches').get();
+            if (bSnap.exists) { (bSnap.data().list||[]).forEach(function(b){ storeMap[b.id] = b.name; }); }
+
+            var lines = [];
+            lines.push('This device\'s Store ID: "' + STATE.storeId + '" (' + (STATE.storeName||'') + ')');
+            lines.push('═══════════════════════════════════');
+
+            if (snap.empty) {
+                lines.push('No pending transfer requests exist anywhere in the system right now.');
+            } else {
+                snap.forEach(function(d) {
+                    var t = d.data();
+                    var matches = t.fromStoreId === STATE.storeId;
+                    lines.push((matches ? '✅ SHOULD SHOW HERE' : '⬜ belongs elsewhere') + '');
+                    lines.push('  ' + t.productName + ' x' + t.qty + (t.size && t.size !== 'One Size' ? ' (' + t.size + ')' : ''));
+                    lines.push('  From: "' + t.fromStoreId + '" (' + (storeMap[t.fromStoreId] || t.fromStoreName || '⚠️ unknown store') + ')');
+                    lines.push('  To:   "' + t.toStoreId + '" (' + (storeMap[t.toStoreId] || t.toStoreName || '⚠️ unknown store') + ')');
+                    lines.push('');
+                });
+                lines.push('═══════════════════════════════════');
+                lines.push('A request only appears as "Incoming" on a device when its "From" Store ID');
+                lines.push('matches that device\'s own Store ID EXACTLY. If you expected to see something');
+                lines.push('above marked ✅ but it isn\'t — double check this device is using the correct');
+                lines.push('Store ID in Settings → Store Info.');
+            }
+
+            alert(lines.join('\n'));
+        } catch(e) {
+            showToast('Diagnostic failed: ' + e.message, 'error');
+        }
+    }
+
+    async function diagnoseAllTransfers() {
+        if (!db) { console.error('Firebase offline'); return; }
+        try {
+            var snap;
+            try {
+                snap = await db.collection('transfers').where('status', '==', 'pending').orderBy('requestedAt', 'desc').limit(50).get();
+            } catch(idxErr) {
+                console.warn('Indexed query failed (likely missing Firestore index), retrying without sort...');
+                snap = await db.collection('transfers').where('status', '==', 'pending').limit(50).get();
+            }
+            console.log('🔍 This device thinks its own Store ID is: "' + STATE.storeId + '" (' + (STATE.storeName||'') + ')');
+            console.log('─────────────────────────────────────────');
+            if (snap.empty) { console.log('No pending transfers found system-wide.'); return; }
+
+            // Build the known store list so we can show friendly names
+            var storeMap = { 'GOAT-1979': 'Main Store' };
+            var bSnap = await db.collection('_admin_').doc('branches').get();
+            if (bSnap.exists) { (bSnap.data().list||[]).forEach(function(b){ storeMap[b.id] = b.name; }); }
+
+            snap.forEach(function(d) {
+                var t = d.data();
+                var matchesThisDevice = t.fromStoreId === STATE.storeId;
+                console.log(
+                    (matchesThisDevice ? '✅' : '⬜') + ' [' + d.id + ']  ' + t.productName + ' x' + t.qty +
+                    '\n   From: "' + t.fromStoreId + '" (' + (storeMap[t.fromStoreId] || t.fromStoreName || 'UNKNOWN — not in branch list!') + ')' +
+                    '\n   To:   "' + t.toStoreId + '" (' + (storeMap[t.toStoreId] || t.toStoreName || 'UNKNOWN') + ')' +
+                    (matchesThisDevice ? '\n   👉 This device SHOULD see this as an incoming request.' : '')
+                );
+            });
+            console.log('─────────────────────────────────────────');
+            console.log('If a transfer\'s "From" ID does not match this device\'s Store ID exactly (character-for-character),');
+            console.log('it will NOT show up here as an incoming request — even if the names look the same.');
+        } catch(e) {
+            console.error('Diagnosis failed:', e);
         }
     }
 
