@@ -796,7 +796,10 @@
                                     </select>
                                 </div>
                                 <div style="display:flex;gap:0.5rem;margin-bottom:1rem">
-                                    <input type="text" id="branchStockSearch" class="form-control" placeholder="Search product..." oninput="renderBranchStockList()" style="flex:1;font-size:0.85rem">
+                                    <input type="text" id="branchStockSearch" class="form-control" placeholder="Search product..." oninput="renderBranchStockList()" style="flex:2;font-size:0.85rem">
+                                    <select id="branchStockSizeFilter" class="form-control" onchange="renderBranchStockList()" style="flex:1;min-width:110px;font-size:0.85rem">
+                                        <option value="">All Sizes</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -4794,6 +4797,7 @@ function sendToTelegram(order, callback) {
                 });
 
                 _branchStockData = Object.values(merged).sort(function(a,b){ return a.name.localeCompare(b.name); });
+                populateBranchStockSizeFilter();
                 renderBranchStockListAll();
             } catch(e) {
                 container.innerHTML = '<div style="color:var(--danger);padding:1rem">❌ Failed to load: ' + e.message + '</div>';
@@ -4811,20 +4815,48 @@ function sendToTelegram(order, callback) {
             snap.forEach(function(d) { products.push(Object.assign({ id: d.id }, d.data())); });
             products.sort(function(a,b){ return a.name.localeCompare(b.name); });
             _branchStockData = products;
+            populateBranchStockSizeFilter();
             renderBranchStockList();
         } catch(e) {
             container.innerHTML = '<div style="color:var(--danger);padding:1rem">❌ Failed to load: ' + e.message + '</div>';
         }
     }
 
+    function populateBranchStockSizeFilter() {
+        var filterSel = document.getElementById('branchStockSizeFilter');
+        if (!filterSel) return;
+        var currentVal = filterSel.value;
+        var sizesFound = {};
+        _branchStockData.forEach(function(p) {
+            var sizeList = p.combinedSizes || p.sizes; // All-Branches mode uses combinedSizes, single-branch uses sizes
+            if (sizeList && sizeList.length) {
+                sizeList.forEach(function(s) { if (s.name) sizesFound[s.name] = true; });
+            }
+        });
+        var sortedSizes = Object.keys(sizesFound).sort();
+        filterSel.innerHTML = '<option value="">All Sizes</option>' +
+            sortedSizes.map(function(s) { return '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>'; }).join('');
+        // Restore previous selection if it still exists in the new list
+        if (currentVal && sortedSizes.indexOf(currentVal) !== -1) filterSel.value = currentVal;
+    }
+
     function renderBranchStockListAll() {
         var container = document.getElementById('branchStockListContainer');
         if (!container) return;
         var search = (document.getElementById('branchStockSearch').value || '').toLowerCase();
-        var filtered = _branchStockData.filter(function(p) { return !search || p.name.toLowerCase().indexOf(search) !== -1; });
+        var sizeFilter = document.getElementById('branchStockSizeFilter').value;
+        var filtered = _branchStockData.filter(function(p) {
+            if (search && p.name.toLowerCase().indexOf(search) === -1) return false;
+            if (sizeFilter) {
+                if (!p.combinedSizes || !p.combinedSizes.length) return false;
+                if (!p.combinedSizes.some(function(s){ return s.name === sizeFilter; })) return false;
+            }
+            return true;
+        });
 
         if (!filtered.length) {
-            container.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">No products found' + (search ? ' for "' + escHtml(search) + '"' : '') + '</div>';
+            var noMatchMsg = 'No products found' + (search ? ' for "' + escHtml(search) + '"' : '') + (sizeFilter ? ' with size "' + escHtml(sizeFilter) + '"' : '');
+            container.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">' + noMatchMsg + '</div>';
             return;
         }
 
@@ -4850,7 +4882,9 @@ function sendToTelegram(order, callback) {
                 html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:0.6rem;padding-top:0.6rem;border-top:1px dashed var(--gray-light)">';
                 p.combinedSizes.forEach(function(sz) {
                     var szColor = sz.qty === 0 ? 'var(--danger)' : (sz.qty <= 5 ? 'var(--warning)' : 'var(--gray-dark)');
-                    html += '<div style="text-align:center;background:#fff;border:1px solid var(--gray-light);border-radius:6px;padding:4px 8px;min-width:50px">' +
+                    var isMatch = sizeFilter && sz.name === sizeFilter;
+                    var bs = isMatch ? 'border:2px solid var(--primary);box-shadow:0 0 0 2px rgba(102,126,234,0.15)' : 'border:1px solid var(--gray-light)';
+                    html += '<div style="text-align:center;background:#fff;' + bs + ';border-radius:6px;padding:4px 8px;min-width:50px">' +
                         '<div style="font-size:0.7rem;color:var(--gray)">' + escHtml(sz.name) + '</div>' +
                         '<div style="font-weight:700;font-size:0.85rem;color:' + szColor + '">' + sz.qty + '</div></div>';
                 });
@@ -4869,7 +4903,9 @@ function sendToTelegram(order, callback) {
                     html += '<div style="display:flex;gap:4px;flex-wrap:wrap">';
                     s.sizes.forEach(function(sz) {
                         var c = sz.qty === 0 ? 'var(--danger)' : 'var(--gray-dark)';
-                        html += '<span style="background:var(--light);border-radius:5px;padding:2px 7px;color:' + c + '">' + escHtml(sz.name) + ': <b>' + (sz.qty||0) + '</b></span>';
+                        var isMatch2 = sizeFilter && sz.name === sizeFilter;
+                        var sizeSpanStyle = isMatch2 ? 'background:rgba(102,126,234,0.15);border:1.5px solid var(--primary)' : 'background:var(--light)';
+                        html += '<span style="' + sizeSpanStyle + ';border-radius:5px;padding:2px 7px;color:' + c + '">' + escHtml(sz.name) + ': <b>' + (sz.qty||0) + '</b></span>';
                     });
                     html += '</div>';
                 } else {
@@ -4888,10 +4924,19 @@ function sendToTelegram(order, callback) {
         if (!container) return;
         if (_branchStockIsAllMode) { renderBranchStockListAll(); return; }
         var search = (document.getElementById('branchStockSearch').value || '').toLowerCase();
-        var filtered = _branchStockData.filter(function(p) { return !search || p.name.toLowerCase().indexOf(search) !== -1; });
+        var sizeFilter = document.getElementById('branchStockSizeFilter').value;
+        var filtered = _branchStockData.filter(function(p) {
+            if (search && p.name.toLowerCase().indexOf(search) === -1) return false;
+            if (sizeFilter) {
+                if (!p.sizes || !p.sizes.length) return false;
+                if (!p.sizes.some(function(s){ return s.name === sizeFilter; })) return false;
+            }
+            return true;
+        });
 
         if (!filtered.length) {
-            container.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">No products found' + (search ? ' for "' + escHtml(search) + '"' : ' in this branch') + '</div>';
+            var noMatchMsg2 = 'No products found' + (search ? ' for "' + escHtml(search) + '"' : '') + (sizeFilter ? ' with size "' + escHtml(sizeFilter) + '"' : ' in this branch');
+            container.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">' + noMatchMsg2 + '</div>';
             return;
         }
 
@@ -4909,7 +4954,9 @@ function sendToTelegram(order, callback) {
             if (p.sizes && p.sizes.length) {
                 html += '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">';
                 p.sizes.forEach(function(s) {
-                    html += '<div onclick="openBranchStockEdit(\'' + p.id + '\',\'' + escHtml(s.name) + '\')" style="cursor:pointer;text-align:center;background:#fff;border:1px solid var(--gray-light);border-radius:6px;padding:4px 8px;min-width:50px">' +
+                    var isMatch = sizeFilter && s.name === sizeFilter;
+                    var borderStyle = isMatch ? 'border:2px solid var(--primary);box-shadow:0 0 0 2px rgba(102,126,234,0.15)' : 'border:1px solid var(--gray-light)';
+                    html += '<div onclick="openBranchStockEdit(\'' + p.id + '\',\'' + escHtml(s.name) + '\')" style="cursor:pointer;text-align:center;background:#fff;' + borderStyle + ';border-radius:6px;padding:4px 8px;min-width:50px">' +
                         '<div style="font-size:0.7rem;color:var(--gray)">' + escHtml(s.name) + '</div>' +
                         '<div style="font-weight:700;font-size:0.85rem;color:' + (s.qty===0?'var(--danger)':'var(--gray-dark)') + '">' + (s.qty||0) + '</div></div>';
                 });
