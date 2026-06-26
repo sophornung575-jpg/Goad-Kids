@@ -795,11 +795,14 @@
                                         <option value="">— Select a branch —</option>
                                     </select>
                                 </div>
-                                <div style="display:flex;gap:0.5rem;margin-bottom:1rem">
+                                <div style="display:flex;gap:0.5rem;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
                                     <input type="text" id="branchStockSearch" class="form-control" placeholder="Search product..." oninput="renderBranchStockList()" style="flex:2;font-size:0.85rem">
                                     <select id="branchStockSizeFilter" class="form-control" onchange="renderBranchStockList()" style="flex:1;min-width:110px;font-size:0.85rem">
                                         <option value="">All Sizes</option>
                                     </select>
+                                    <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;color:var(--gray-dark);white-space:nowrap;cursor:pointer">
+                                        <input type="checkbox" id="branchStockInStockOnly" onchange="renderBranchStockList()"> In stock only
+                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -4845,17 +4848,22 @@ function sendToTelegram(order, callback) {
         if (!container) return;
         var search = (document.getElementById('branchStockSearch').value || '').toLowerCase();
         var sizeFilter = document.getElementById('branchStockSizeFilter').value;
+        var inStockOnly = document.getElementById('branchStockInStockOnly').checked;
         var filtered = _branchStockData.filter(function(p) {
             if (search && p.name.toLowerCase().indexOf(search) === -1) return false;
             if (sizeFilter) {
                 if (!p.combinedSizes || !p.combinedSizes.length) return false;
-                if (!p.combinedSizes.some(function(s){ return s.name === sizeFilter; })) return false;
+                var sz = p.combinedSizes.find(function(s){ return s.name === sizeFilter; });
+                if (!sz) return false;
+                if (inStockOnly && (sz.qty || 0) <= 0) return false; // combined qty for that size must be > 0
+            } else if (inStockOnly) {
+                if ((p.totalStock || 0) <= 0) return false; // no size selected — combined total must be > 0
             }
             return true;
         });
 
         if (!filtered.length) {
-            var noMatchMsg = 'No products found' + (search ? ' for "' + escHtml(search) + '"' : '') + (sizeFilter ? ' with size "' + escHtml(sizeFilter) + '"' : '');
+            var noMatchMsg = 'No products found' + (search ? ' for "' + escHtml(search) + '"' : '') + (sizeFilter ? ' with size "' + escHtml(sizeFilter) + '"' : '') + (inStockOnly ? ' in stock' : '');
             container.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">' + noMatchMsg + '</div>';
             return;
         }
@@ -4925,17 +4933,23 @@ function sendToTelegram(order, callback) {
         if (_branchStockIsAllMode) { renderBranchStockListAll(); return; }
         var search = (document.getElementById('branchStockSearch').value || '').toLowerCase();
         var sizeFilter = document.getElementById('branchStockSizeFilter').value;
+        var inStockOnly = document.getElementById('branchStockInStockOnly').checked;
         var filtered = _branchStockData.filter(function(p) {
             if (search && p.name.toLowerCase().indexOf(search) === -1) return false;
             if (sizeFilter) {
                 if (!p.sizes || !p.sizes.length) return false;
-                if (!p.sizes.some(function(s){ return s.name === sizeFilter; })) return false;
+                var sz = p.sizes.find(function(s){ return s.name === sizeFilter; });
+                if (!sz) return false;
+                if (inStockOnly && (sz.qty || 0) <= 0) return false; // specific size must be in stock
+            } else if (inStockOnly) {
+                var total = (p.sizes && p.sizes.length) ? p.sizes.reduce(function(a,s){return a+(s.qty||0);},0) : (p.stock||0);
+                if (total <= 0) return false; // no size selected — total stock must be > 0
             }
             return true;
         });
 
         if (!filtered.length) {
-            var noMatchMsg2 = 'No products found' + (search ? ' for "' + escHtml(search) + '"' : '') + (sizeFilter ? ' with size "' + escHtml(sizeFilter) + '"' : ' in this branch');
+            var noMatchMsg2 = 'No products found' + (search ? ' for "' + escHtml(search) + '"' : '') + (sizeFilter ? ' with size "' + escHtml(sizeFilter) + '"' : '') + (inStockOnly ? ' in stock' : '') + (!search && !sizeFilter && !inStockOnly ? ' in this branch' : '');
             container.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">' + noMatchMsg2 + '</div>';
             return;
         }
