@@ -20,8 +20,8 @@
     <meta name="keywords" content="kids clothing, children fashion, baby clothes, kids shoes, kids accessories, Goat Kids">
     <link rel="canonical" href="https://sophornung575-jpg.github.io/Goad-Kids">
     <meta charset="UTF-8">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22></text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐐</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <meta name="description" content="GOAT KIDS - Premium Children's Clothing Store">
     <meta name="theme-color" content="#667eea">
@@ -348,7 +348,7 @@
     <!-- Store Selector Screen — shown once on first launch if no store chosen yet -->
     <div id="storeSelectorScreen" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);z-index:99998;flex-direction:column;align-items:center;justify-content:center;padding:20px">
         <div style="background:#fff;border-radius:20px;padding:2rem;max-width:440px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.2);text-align:center">
-            <div style="font-size:3rem;margin-bottom:0.5rem"></div>
+            <div style="font-size:3rem;margin-bottom:0.5rem">🐐</div>
             <h2 style="margin:0 0 0.25rem;color:#2d3748">Which store is this?</h2>
             <p style="color:#718096;font-size:0.85rem;margin-bottom:1.5rem">Select once — remembered permanently on this device.</p>
             <div id="storeSelectorList" style="display:grid;gap:0.75rem;margin-bottom:1.25rem;max-height:320px;overflow-y:auto">
@@ -1004,7 +1004,14 @@
                         <span style="color:var(--gray)">to</span>
                         <input type="date" id="customEndDate" class="custom-date-input" onchange="setCustomDateRange()">
                         <span class="report-date-range" id="reportDateRange">Today</span>
+                        <span id="reportAllBranchesWrap" style="display:none;align-items:center;gap:6px;margin-left:auto">
+                            <span class="date-filter-separator">|</span>
+                            <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;font-weight:600;color:var(--primary);cursor:pointer">
+                                <input type="checkbox" id="reportAllBranchesToggle" onchange="loadReportData()"> <i class="fas fa-store-alt"></i> All Branches Combined
+                            </label>
+                        </span>
                     </div>
+                    <div id="reportScopeLabel" style="display:none;font-size:0.8rem;color:var(--gray);margin:-0.75rem 0 1rem 0.25rem"></div>
                     <div class="reports-grid">
                         <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-dollar-sign"></i></div><div class="stat-info"><h3 id="reportTotalRevenue">$0.00</h3><p data-translate="totalRevenue">Total Revenue</p></div></div>
                         <div class="stat-card orders-stat"><div class="stat-icon"><i class="fas fa-shopping-bag"></i></div><div class="stat-info"><h3 id="reportTotalOrders">0</h3><p data-translate="totalOrders">Total Orders</p></div></div>
@@ -1030,6 +1037,20 @@
                                     <th style="padding:0.6rem 0.8rem">Revenue</th>
                                 </tr></thead>
                                 <tbody id="customerBreakdownList"><tr><td colspan="4" style="text-align:center;color:var(--gray);padding:1rem">No data</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="chart-card" id="storeBreakdownCard" style="margin-top:1.5rem;display:none">
+                        <h3><i class="fas fa-store-alt" style="color:var(--primary)"></i> Revenue by Store</h3>
+                        <div style="overflow-x:auto">
+                            <table style="width:100%;border-collapse:collapse;font-size:0.88rem">
+                                <thead><tr style="background:var(--gray-light);text-align:left">
+                                    <th style="padding:0.6rem 0.8rem">Store</th>
+                                    <th style="padding:0.6rem 0.8rem">Orders</th>
+                                    <th style="padding:0.6rem 0.8rem">Customers</th>
+                                    <th style="padding:0.6rem 0.8rem">Revenue</th>
+                                </tr></thead>
+                                <tbody id="storeBreakdownList"><tr><td colspan="4" style="text-align:center;color:var(--gray);padding:1rem">No data</td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -1644,7 +1665,7 @@ function sendToTelegram(order, callback) {
             if (STATE.firebaseOnline && overflow.length) {
                 var batch = db.batch();
                 overflow.forEach(function(o){
-                    batch.set(db.collection('archivedOrders').doc(o.orderId), Object.assign({}, o, { archivedAt: Date.now() }));
+                    batch.set(db.collection('archivedOrders').doc(o.orderId), Object.assign({}, o, { archivedAt: Date.now(), storeId: STATE.storeId }));
                 });
                 batch.commit().catch(function(e){ console.warn('Auto-archive failed:', e); });
             }
@@ -3796,7 +3817,7 @@ function sendToTelegram(order, callback) {
             var batch = db.batch();
             toArchive.forEach(function(o) {
                 var ref = db.collection('archivedOrders').doc(o.orderId);
-                batch.set(ref, Object.assign({}, o, { archivedAt: Date.now() }));
+                batch.set(ref, Object.assign({}, o, { archivedAt: Date.now(), storeId: STATE.storeId }));
             });
             await batch.commit();
             var archivedIds = toArchive.map(function(o){return o.orderId;});
@@ -4218,9 +4239,18 @@ function sendToTelegram(order, callback) {
     var _reportRefunds = [];
 
     async function loadReportData() {
+        // Show/hide the All Branches toggle — Main Store full admin only
+        var toggleWrap = document.getElementById('reportAllBranchesWrap');
+        if (toggleWrap) toggleWrap.style.display = (STATE.storeId === 'GOAT-1979' && STATE.adminRole === 'full') ? 'flex' : 'none';
+
+        var allBranchesMode = document.getElementById('reportAllBranchesToggle') && document.getElementById('reportAllBranchesToggle').checked && STATE.storeId === 'GOAT-1979';
+        var scopeLabel = document.getElementById('reportScopeLabel');
+
         if (!db || !STATE.firebaseOnline) {
             // fallback to local STATE
             _reportData = STATE.confirmedOrders.slice();
+            _reportRefunds = STATE.refundedOrders.slice();
+            if (scopeLabel) scopeLabel.style.display = 'none';
             renderReports();
             return;
         }
@@ -4236,33 +4266,81 @@ function sendToTelegram(order, callback) {
         document.getElementById('reportTotalRefunds').textContent = '...';
 
         try {
-            var results = [];
-            var refundResults = [];
-            // Query active orders from stores/{storeId}/orders
-            var activeSnap = await db.collection('stores').doc(STATE.storeId).collection('orders')
-                .where('timestamp', '>=', startTs)
-                .where('timestamp', '<=', endTs)
-                .get();
-            activeSnap.forEach(function(d) { results.push(Object.assign({}, d.data(), { orderId: d.id })); });
+            if (allBranchesMode) {
+                // Build full store list: Main Store + every branch
+                var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
+                var bSnap = await db.collection('_admin_').doc('branches').get();
+                if (bSnap.exists) { (bSnap.data().list || []).forEach(function(b) { stores.push({ id: b.id, name: b.name }); }); }
 
-            // Query archived orders
-            var archSnap = await db.collection('archivedOrders')
-                .where('timestamp', '>=', startTs)
-                .where('timestamp', '<=', endTs)
-                .get();
-            archSnap.forEach(function(d) { results.push(Object.assign({}, d.data(), { orderId: d.id })); });
+                if (scopeLabel) { scopeLabel.style.display = 'block'; scopeLabel.innerHTML = '<i class="fas fa-info-circle"></i> Showing combined data from ' + stores.length + ' store(s): ' + stores.map(function(s){return escHtml(s.name);}).join(', '); }
 
-            // Query refunds for the period
-            try {
-                var refSnap = await db.collection('stores').doc(STATE.storeId).collection('refunds')
-                    .where('refundTimestamp', '>=', startTs)
-                    .where('refundTimestamp', '<=', endTs)
+                var allOrders = [];
+                var allRefunds = [];
+
+                await Promise.all(stores.map(async function(s) {
+                    try {
+                        var activeSnap = await db.collection('stores').doc(s.id).collection('orders')
+                            .where('timestamp', '>=', startTs).where('timestamp', '<=', endTs).get();
+                        activeSnap.forEach(function(d) { allOrders.push(Object.assign({}, d.data(), { orderId: d.id, _sourceStoreId: s.id, _sourceStoreName: s.name })); });
+                    } catch(e) { console.warn('Order fetch failed for ' + s.id + ':', e.message); }
+
+                    try {
+                        var refSnap = await db.collection('stores').doc(s.id).collection('refunds')
+                            .where('refundTimestamp', '>=', startTs).where('refundTimestamp', '<=', endTs).get();
+                        refSnap.forEach(function(d) { allRefunds.push(Object.assign({}, d.data(), { refundId: d.id, _sourceStoreId: s.id, _sourceStoreName: s.name })); });
+                    } catch(re) { console.warn('Refunds fetch failed for ' + s.id + ':', re.message); }
+                }));
+
+                // Archived orders — filter by storeId since this collection is shared across all stores
+                try {
+                    var archSnap = await db.collection('archivedOrders')
+                        .where('timestamp', '>=', startTs).where('timestamp', '<=', endTs).get();
+                    var storeIdSet = {}; stores.forEach(function(s){ storeIdSet[s.id] = s.name; });
+                    archSnap.forEach(function(d) {
+                        var data = d.data();
+                        var ownerId = data.storeId || 'GOAT-1979'; // legacy archived orders may not have storeId
+                        if (storeIdSet[ownerId]) {
+                            allOrders.push(Object.assign({}, data, { orderId: d.id, _sourceStoreId: ownerId, _sourceStoreName: storeIdSet[ownerId] }));
+                        }
+                    });
+                } catch(e) { console.warn('Archived orders fetch failed:', e.message); }
+
+                _reportData = allOrders;
+                _reportRefunds = allRefunds;
+            } else {
+                if (scopeLabel) scopeLabel.style.display = 'none';
+                var results = [];
+                var refundResults = [];
+                // Query active orders from stores/{storeId}/orders
+                var activeSnap2 = await db.collection('stores').doc(STATE.storeId).collection('orders')
+                    .where('timestamp', '>=', startTs)
+                    .where('timestamp', '<=', endTs)
                     .get();
-                refSnap.forEach(function(d) { refundResults.push(Object.assign({}, d.data(), { refundId: d.id })); });
-            } catch(re) { console.warn('Refunds query failed:', re.message); }
+                activeSnap2.forEach(function(d) { results.push(Object.assign({}, d.data(), { orderId: d.id })); });
 
-            _reportData = results;
-            _reportRefunds = refundResults;
+                // Query archived orders — only this store's own (filter by storeId field)
+                var archSnap2 = await db.collection('archivedOrders')
+                    .where('timestamp', '>=', startTs)
+                    .where('timestamp', '<=', endTs)
+                    .get();
+                archSnap2.forEach(function(d) {
+                    var data = d.data();
+                    var ownerId = data.storeId || 'GOAT-1979'; // legacy archived orders may not have storeId
+                    if (ownerId === STATE.storeId) results.push(Object.assign({}, data, { orderId: d.id }));
+                });
+
+                // Query refunds for the period
+                try {
+                    var refSnap2 = await db.collection('stores').doc(STATE.storeId).collection('refunds')
+                        .where('refundTimestamp', '>=', startTs)
+                        .where('refundTimestamp', '<=', endTs)
+                        .get();
+                    refSnap2.forEach(function(d) { refundResults.push(Object.assign({}, d.data(), { refundId: d.id })); });
+                } catch(re) { console.warn('Refunds query failed:', re.message); }
+
+                _reportData = results;
+                _reportRefunds = refundResults;
+            }
         } catch(e) {
             console.warn('Report Firebase query failed:', e.message);
             _reportData = STATE.confirmedOrders.slice();
@@ -4275,7 +4353,37 @@ function sendToTelegram(order, callback) {
         return _reportData.filter(function(o) { return o.status === 'confirmed'; });
     }
 
-    function renderReports() { updateReportStats(); renderCategoryChart(); renderTopItemsChart(); renderRevenueTrendChart(); renderStockChart(); renderTopItemsList(); renderCustomerBreakdown(); }
+    function renderStoreBreakdown() {
+        var card = document.getElementById('storeBreakdownCard');
+        var el = document.getElementById('storeBreakdownList');
+        if (!card || !el) return;
+
+        var allBranchesMode = document.getElementById('reportAllBranchesToggle') && document.getElementById('reportAllBranchesToggle').checked && STATE.storeId === 'GOAT-1979';
+        if (!allBranchesMode) { card.style.display = 'none'; return; }
+        card.style.display = 'block';
+
+        var confirmed = getReportConfirmed();
+        var byStore = {};
+        for (var i = 0; i < confirmed.length; i++) {
+            var o = confirmed[i];
+            var sid = o._sourceStoreId || STATE.storeId;
+            var sname = o._sourceStoreName || STATE.storeName || sid;
+            if (!byStore[sid]) byStore[sid] = { name: sname, revenue: 0, orders: 0, customers: new Set() };
+            byStore[sid].revenue += o.total || 0;
+            byStore[sid].orders++;
+            if (o.customerPhone || o.customerName) byStore[sid].customers.add(o.customerPhone || o.customerName);
+        }
+        var storeIds = Object.keys(byStore).sort(function(a,b){ return byStore[b].revenue - byStore[a].revenue; });
+        if (!storeIds.length) { el.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>'; return; }
+        var html = '';
+        storeIds.forEach(function(sid) {
+            var s = byStore[sid];
+            html += '<tr><td style="font-weight:600"><i class="fas fa-store" style="color:var(--primary);margin-right:6px"></i>' + escHtml(s.name) + '</td><td>' + s.orders + '</td><td>' + s.customers.size + '</td><td>$' + s.revenue.toFixed(2) + '</td></tr>';
+        });
+        el.innerHTML = html;
+    }
+
+    function renderReports() { updateReportStats(); renderCategoryChart(); renderTopItemsChart(); renderRevenueTrendChart(); renderStockChart(); renderTopItemsList(); renderCustomerBreakdown(); renderStoreBreakdown(); }
 
     function updateReportStats() {
         var confirmed = getReportConfirmed();
