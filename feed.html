@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Goat Kids — Facebook Product Feed</title>
+<style>
+  body { font-family: sans-serif; max-width: 700px; margin: 3rem auto; padding: 0 1.5rem; color: #333; }
+  h1 { color: #667eea; }
+  .status { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0; font-size: 0.9rem; }
+  .status.ok { border-color: #48bb78; background: #f0fff4; }
+  .status.err { border-color: #f56565; background: #fff5f5; }
+  .btn { display: inline-block; padding: 0.6rem 1.25rem; background: #667eea; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9rem; text-decoration: none; margin: 0.5rem 0.25rem 0.5rem 0; }
+  .btn:hover { background: #5a67d8; }
+  .btn-outline { background: #fff; color: #667eea; border: 1px solid #667eea; }
+  pre { background: #2d3748; color: #e2e8f0; padding: 1rem; border-radius: 8px; overflow-x: auto; font-size: 0.8rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 1rem; }
+  th { background: #edf2f7; padding: 0.5rem 0.75rem; text-align: left; }
+  td { padding: 0.45rem 0.75rem; border-bottom: 1px solid #e2e8f0; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; }
+  .in { background: #c6f6d5; color: #276749; }
+  #log { font-size: 0.82rem; color: #718096; margin-top: 0.5rem; min-height: 1.5rem; }
+</style>
+</head>
+<body>
+
+<h1>🐐 Goat Kids — Facebook Product Feed</h1>
+<p style="color:#718096">Fetches live product catalog across all branches from Firebase and generates a Facebook-compatible XML product feed.</p>
+
+<div class="status" id="statusBox">⏳ Reading Firebase config...</div>
+<div id="controls" style="display:none">
+  <button class="btn" onclick="generateAndDownload()">⬇️ Download feed.xml</button>
+  <button class="btn btn-outline" onclick="previewXML()">👁 Preview XML</button>
+  <button class="btn btn-outline" onclick="showProductTable()">📋 Preview Products</button>
+  <p style="font-size:0.82rem;color:#718096;margin-top:0.5rem">
+    <strong>Feed URL for Facebook:</strong> Upload <code>feed.xml</code> to your GitHub Pages repo, then paste that URL in Facebook Commerce Manager → Catalogue → Data Sources.
+  </p>
+</div>
+<div id="log"></div>
+<div id="preview"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+var BRAND_NAME = 'Goat Kids';
+var CURRENCY   = 'USD';
+var CONDITION  = 'new';
+
+// ── The public URL of your store (used as the product link) ─────────────
+// Facebook requires each product to have a valid URL it can visit.
+// We use your GitHub Pages main app URL as the product link.
+var STORE_URL = 'https://sophornung575-jpg.github.io/Goad-Kids/goat_kids_v3_multistore.html';
+
+var db = null;
+
+function log(msg) { document.getElementById('log').textContent = msg; }
+function setStatus(msg, type) {
+    var el = document.getElementById('statusBox');
+    el.textContent = msg;
+    el.className = 'status' + (type ? ' ' + type : '');
+}
+
+(function initFirebase() {
+    var cfg = null;
+    try { cfg = JSON.parse(localStorage.getItem('goatFirebaseConfig')); } catch(e) {}
+    if (!cfg || !cfg.apiKey) {
+        cfg = {
+            apiKey: "AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU",
+            authDomain: "goat-kids-store.firebaseapp.com",
+            projectId: "goat-kids-store",
+            storageBucket: "goat-kids-store.firebasestorage.app"
+        };
+    }
+    try {
+        if (!firebase.apps.length) firebase.initializeApp(cfg);
+        db = firebase.firestore();
+        setStatus('✅ Firebase connected — ready to generate feed.', 'ok');
+        document.getElementById('controls').style.display = 'block';
+        showProductTable();
+    } catch(e) {
+        setStatus('❌ Firebase init failed: ' + e.message, 'err');
+    }
+})();
+
+async function fetchAllProducts() {
+    log('Fetching branch list...');
+    var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
+    try {
+        var bSnap = await db.collection('_admin_').doc('branches').get();
+        if (bSnap.exists) {
+            (bSnap.data().list || []).forEach(function(b) { stores.push({ id: b.id, name: b.name }); });
+        }
+    } catch(e) { console.warn('Branch list load failed:', e.message); }
+
+    log('Fetching products from ' + stores.length + ' store(s)...');
+
+    var byName = {};
+    await Promise.all(stores.map(async function(s) {
+        try {
+            var snap = await db.collection('stores').doc(s.id).collection('products').get();
+            snap.forEach(function(doc) {
+                var p = Object.assign({ id: doc.id }, doc.data());
+                var key = (p.name || '').trim().toLowerCase();
+                if (!key) return;
+                if (!byName[key]) {
+                    byName[key] = {
+                        id: p.id, name: p.name, price: p.price || 0,
+                        category: p.category || '', images: p.images || [],
+                        sizes: p.sizes ? JSON.parse(JSON.stringify(p.sizes)) : null,
+                        stock: 0, description: p.description || p.name
+                    };
+                } else {
+                    if ((!byName[key].images || !byName[key].images.length) && p.images && p.images.length) {
+                        byName[key].images = p.images;
+                    }
+                }
+                if (p.sizes && p.sizes.length) {
+                    if (!byName[key].sizes || !byName[key].sizes.length) {
+                        byName[key].sizes = p.sizes.map(function(sz){ return Object.assign({}, sz); });
+                    } else {
+                        p.sizes.forEach(function(sz) {
+                            var ex = byName[key].sizes.find(function(x){ return x.name === sz.name; });
+                            if (ex) ex.qty = (ex.qty || 0) + (sz.qty || 0);
+                            else byName[key].sizes.push(Object.assign({}, sz));
+                        });
+                    }
+                }
+                var stk = (p.sizes && p.sizes.length)
+                    ? p.sizes.reduce(function(a,sz){ return a+(sz.qty||0); }, 0)
+                    : (p.stock || 0);
+                byName[key].stock += stk;
+            });
+        } catch(e) { console.warn('Product fetch failed for', s.id, e); }
+    }));
+
+    var result = Object.values(byName).filter(function(p){ return p.stock > 0; });
+    log('Found ' + result.length + ' in-stock product(s) across all stores.');
+    return result;
+}
+
+function escXML(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function buildXML(products) {
+    var now = new Date().toISOString();
+    var lines = [];
+    lines.push('<?xml version="1.0" encoding="UTF-8"?>');
+    lines.push('<!-- Generated: ' + now + ' | Products: ' + products.length + ' | ' + BRAND_NAME + ' -->');
+    lines.push('<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0">');
+    lines.push('<channel>');
+    lines.push('  <title>' + escXML(BRAND_NAME) + '</title>');
+    lines.push('  <link>' + escXML(STORE_URL) + '</link>');
+    lines.push('  <description>Children\'s clothing — ' + escXML(BRAND_NAME) + '</description>');
+    lines.push('');
+
+    products.forEach(function(p) {
+        var image = (p.images && p.images[0]) || '';
+        var price = (p.price || 0).toFixed(2) + ' ' + CURRENCY;
+        // Each product links directly to the store page — Facebook needs a valid URL
+        var productLink = STORE_URL + '#' + encodeURIComponent(p.name);
+
+        if (p.sizes && p.sizes.length > 0) {
+            p.sizes.forEach(function(sz) {
+                if ((sz.qty || 0) <= 0) return;
+                var variantId = p.id + '_' + sz.name.replace(/\s+/g,'_');
+                lines.push('  <item>');
+                lines.push('    <g:id>' + escXML(variantId) + '</g:id>');
+                lines.push('    <g:item_group_id>' + escXML(p.id) + '</g:item_group_id>');
+                lines.push('    <title>' + escXML(p.name + ' - Size ' + sz.name) + '</title>');
+                lines.push('    <description>' + escXML(p.description || p.name) + '</description>');
+                lines.push('    <link>' + escXML(productLink) + '</link>');
+                if (image) lines.push('    <g:image_link>' + escXML(image) + '</g:image_link>');
+                lines.push('    <g:availability>in stock</g:availability>');
+                lines.push('    <g:price>' + escXML(price) + '</g:price>');
+                lines.push('    <g:brand>' + escXML(BRAND_NAME) + '</g:brand>');
+                lines.push('    <g:condition>' + CONDITION + '</g:condition>');
+                lines.push('    <g:google_product_category>Apparel &amp; Accessories &gt; Clothing &gt; Baby &amp; Toddler Clothing</g:google_product_category>');
+                if (p.category) lines.push('    <g:product_type>' + escXML(p.category) + '</g:product_type>');
+                lines.push('    <g:size>' + escXML(sz.name) + '</g:size>');
+                lines.push('    <g:gender>unisex</g:gender>');
+                lines.push('    <g:age_group>kids</g:age_group>');
+                lines.push('    <g:quantity_to_sell_on_facebook>' + (sz.qty || 0) + '</g:quantity_to_sell_on_facebook>');
+                lines.push('  </item>');
+                lines.push('');
+            });
+        } else {
+            lines.push('  <item>');
+            lines.push('    <g:id>' + escXML(p.id) + '</g:id>');
+            lines.push('    <title>' + escXML(p.name) + '</title>');
+            lines.push('    <description>' + escXML(p.description || p.name) + '</description>');
+            lines.push('    <link>' + escXML(productLink) + '</link>');
+            if (image) lines.push('    <g:image_link>' + escXML(image) + '</g:image_link>');
+            lines.push('    <g:availability>in stock</g:availability>');
+            lines.push('    <g:price>' + escXML(price) + '</g:price>');
+            lines.push('    <g:brand>' + escXML(BRAND_NAME) + '</g:brand>');
+            lines.push('    <g:condition>' + CONDITION + '</g:condition>');
+            lines.push('    <g:google_product_category>Apparel &amp; Accessories &gt; Clothing &gt; Baby &amp; Toddler Clothing</g:google_product_category>');
+            if (p.category) lines.push('    <g:product_type>' + escXML(p.category) + '</g:product_type>');
+            lines.push('    <g:gender>unisex</g:gender>');
+            lines.push('    <g:age_group>kids</g:age_group>');
+            lines.push('    <g:quantity_to_sell_on_facebook>' + (p.stock || 0) + '</g:quantity_to_sell_on_facebook>');
+            lines.push('  </item>');
+            lines.push('');
+        }
+    });
+
+    lines.push('</channel>');
+    lines.push('</rss>');
+    return lines.join('\n');
+}
+
+async function generateAndDownload() {
+    setStatus('⏳ Fetching products from Firebase...', '');
+    document.getElementById('preview').innerHTML = '';
+    try {
+        var products = await fetchAllProducts();
+        var xml = buildXML(products);
+        var blob = new Blob([xml], { type: 'application/xml' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a'); a.href = url; a.download = 'feed.xml';
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+        setStatus('✅ feed.xml downloaded — ' + products.length + ' in-stock product(s).', 'ok');
+        log('Upload feed.xml to GitHub Pages, then use that URL in Facebook Commerce Manager.');
+    } catch(e) { setStatus('❌ Failed: ' + e.message, 'err'); }
+}
+
+async function previewXML() {
+    setStatus('⏳ Fetching products...', '');
+    document.getElementById('preview').innerHTML = '';
+    try {
+        var products = await fetchAllProducts();
+        var xml = buildXML(products);
+        setStatus('✅ ' + products.length + ' in-stock product(s) — XML preview below:', 'ok');
+        var escaped = xml.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        document.getElementById('preview').innerHTML = '<pre>' + escaped.substring(0,8000) + (xml.length>8000?'\n\n...(truncated — download full file)':'') + '</pre>';
+    } catch(e) { setStatus('❌ Failed: ' + e.message, 'err'); }
+}
+
+async function showProductTable() {
+    setStatus('⏳ Fetching products from Firebase...', '');
+    document.getElementById('preview').innerHTML = '';
+    try {
+        var products = await fetchAllProducts();
+        setStatus('✅ ' + products.length + ' in-stock product(s) found across all stores.', 'ok');
+        var html = '<table><thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Sizes (in stock)</th></tr></thead><tbody>';
+        products.forEach(function(p) {
+            var img = (p.images && p.images[0]) ? '<img src="' + p.images[0] + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px">' : '—';
+            var sizes = p.sizes && p.sizes.length
+                ? p.sizes.filter(function(s){return(s.qty||0)>0;}).map(function(s){return s.name+':<b>'+s.qty+'</b>';}).join(', ')
+                : '—';
+            html += '<tr><td>' + img + '</td><td>' + p.name + '</td><td>' + (p.category||'—') + '</td><td>$' + (p.price||0).toFixed(2) + '</td><td><span class="badge in">' + p.stock + '</span></td><td style="font-size:0.78rem">' + sizes + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        document.getElementById('preview').innerHTML = html;
+    } catch(e) { setStatus('❌ Failed: ' + e.message, 'err'); }
+}
+</script>
+</body>
+</html>
