@@ -5785,10 +5785,31 @@ function sendToTelegram(order, callback) {
                 p.stock = getTotalStock(p);
             } else { p.stock = (p.stock || 0) - t.qty; }
 
-            // Add to partner store in Firebase
-            var partnerProductRef = db.collection('stores').doc(t.toStoreId).collection('products').doc(p.id);
-            var partnerSnap = await partnerProductRef.get();
-            var partnerData = partnerSnap.exists ? partnerSnap.data() : Object.assign({}, p, { stock: 0, sizes: (p.sizes||[]).map(function(s){ return Object.assign({}, s, {qty: 0}); }) });
+            // Add to partner/destination store in Firebase
+            // IMPORTANT: search by product NAME in the destination store — product IDs may differ
+            // between stores since each store generates its own IDs independently.
+            var partnerProductRef = null;
+            var partnerData = null;
+
+            // First try to find an existing product with the same name in the destination store
+            try {
+                var destSnap = await db.collection('stores').doc(t.toStoreId).collection('products')
+                    .where('name', '==', p.name).limit(1).get();
+                if (!destSnap.empty) {
+                    // Found existing product by name — use its document reference
+                    var destDoc = destSnap.docs[0];
+                    partnerProductRef = destDoc.ref;
+                    partnerData = destDoc.data();
+                }
+            } catch(e) { console.warn('Name-based product lookup failed, falling back to ID match:', e.message); }
+
+            // If not found by name, fall back to same ID (may create new doc if it doesn't exist)
+            if (!partnerProductRef) {
+                partnerProductRef = db.collection('stores').doc(t.toStoreId).collection('products').doc(p.id);
+                var partnerSnap = await partnerProductRef.get();
+                partnerData = partnerSnap.exists ? partnerSnap.data()
+                    : Object.assign({}, p, { stock: 0, sizes: (p.sizes||[]).map(function(s){ return Object.assign({}, s, {qty: 0}); }) });
+            }
 
             if (partnerData.sizes && partnerData.sizes.length > 0 && t.size !== 'One Size') {
                 var found = false;
@@ -5868,9 +5889,23 @@ function sendToTelegram(order, callback) {
                     p.stock = getTotalStock(p);
                 } else { p.stock = (p.stock || 0) - t.qty; }
 
-                var partnerProductRef = db.collection('stores').doc(t.toStoreId).collection('products').doc(p.id);
-                var partnerSnap = await partnerProductRef.get();
-                var partnerData = partnerSnap.exists ? partnerSnap.data() : Object.assign({}, p, { stock: 0, sizes: (p.sizes||[]).map(function(s){ return Object.assign({}, s, {qty: 0}); }) });
+                var partnerProductRef = null;
+                var partnerData = null;
+                try {
+                    var destSnap2 = await db.collection('stores').doc(t.toStoreId).collection('products')
+                        .where('name', '==', p.name).limit(1).get();
+                    if (!destSnap2.empty) {
+                        var destDoc2 = destSnap2.docs[0];
+                        partnerProductRef = destDoc2.ref;
+                        partnerData = destDoc2.data();
+                    }
+                } catch(e2) { console.warn('Name lookup failed in bulk approve:', e2.message); }
+                if (!partnerProductRef) {
+                    partnerProductRef = db.collection('stores').doc(t.toStoreId).collection('products').doc(p.id);
+                    var partnerSnap = await partnerProductRef.get();
+                    partnerData = partnerSnap.exists ? partnerSnap.data()
+                        : Object.assign({}, p, { stock: 0, sizes: (p.sizes||[]).map(function(s){ return Object.assign({}, s, {qty: 0}); }) });
+                }
 
                 if (partnerData.sizes && partnerData.sizes.length > 0 && t.size !== 'One Size') {
                     var found = false;
