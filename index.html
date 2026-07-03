@@ -2771,6 +2771,120 @@ function sendToTelegram(order, callback) {
     }
 
     // =============================================
+    // TRANSFER STOCK RECONCILIATION TOOL
+    // Checks all approved transfers and corrects stock mismatches caused by bulk approve bug.
+    // Run from browser console: reconcileTransferStock()
+    // To fix a specific product: reconcileTransferStock('Cutie Dresses_154')
+    // =============================================
+    async function reconcileTransferStock(filterName) {
+        if (!db) { console.error('Firebase offline'); return; }
+        console.log('🔍 Loading all approved transfers...');
+
+        try {
+            // Get all approved transfers
+            var snap = await db.collection('transfers').where('status', '==', 'approved').get();
+            var transfers = [];
+            snap.forEach(function(d) { transfers.push(Object.assign({ transferId: d.id }, d.data())); });
+            console.log('Found ' + transfers.length + ' approved transfers total.');
+
+            if (filterName) {
+                transfers = transfers.filter(function(t) {
+                    return t.productName && t.productName.toLowerCase().indexOf(filterName.toLowerCase()) !== -1;
+                });
+                console.log('Filtered to ' + transfers.length + ' transfers matching "' + filterName + '"');
+            }
+
+            if (!transfers.length) { console.log('No matching transfers found.'); return; }
+
+            // Group by (fromStoreId + productName + productId) to calculate total deducted per store
+            var storeProductDeductions = {}; // key: storeId|productId → { storeName, productName, productId, sizes: {sizeName: totalQty}, totalQty }
+            var storeProductAdditions  = {}; // key: storeId|productName → same
+
+            transfers.forEach(function(t) {
+                // Source deduction
+                var srcKey = t.fromStoreId + '|' + t.productId;
+                if (!storeProductDeductions[srcKey]) {
+                    storeProductDeductions[srcKey] = { storeId: t.fromStoreId, storeName: t.fromStoreName, productId: t.productId, productName: t.productName, sizes: {}, totalQty: 0 };
+                }
+                if (t.size && t.size !== 'One Size') {
+                    storeProductDeductions[srcKey].sizes[t.size] = (storeProductDeductions[srcKey].sizes[t.size] || 0) + t.qty;
+                }
+                storeProductDeductions[srcKey].totalQty += t.qty;
+
+                // Destination addition
+                var dstKey = t.toStoreId + '|' + t.productName;
+                if (!storeProductAdditions[dstKey]) {
+                    storeProductAdditions[dstKey] = { storeId: t.toStoreId, storeName: t.toStoreName, productName: t.productName, sizes: {}, totalQty: 0 };
+                }
+                if (t.size && t.size !== 'One Size') {
+                    storeProductAdditions[dstKey].sizes[t.size] = (storeProductAdditions[dstKey].sizes[t.size] || 0) + t.qty;
+                }
+                storeProductAdditions[dstKey].totalQty += t.qty;
+            });
+
+            // Now fetch actual current stock from Firebase and compare
+            console.log('\n📊 RECONCILIATION REPORT:');
+            console.log('═══════════════════════════════════════════════════════');
+            var corrections = [];
+
+            // Check source stores (products that were deducted FROM)
+            for (var srcKey in storeProductDeductions) {
+                var entry = storeProductDeductions[srcKey];
+                try {
+                    var pSnap = await db.collection('stores').doc(entry.storeId).collection('products').doc(entry.productId).get();
+                    if (!pSnap.exists) { console.log('⚠️  ' + entry.storeName + ' | ' + entry.productName + ' — product not found (may have been moved)'); continue; }
+                    var pData = pSnap.data();
+
+                    if (Object.keys(entry.sizes).length > 0) {
+                        // Check per-size
+                        Object.keys(entry.sizes).forEach(function(sizeName) {
+                            var totalDeducted = entry.sizes[sizeName];
+                            var sz = (pData.sizes || []).find(function(s){ return s.name === sizeName; });
+                            var currentQty = sz ? (sz.qty || 0) : 0;
+                            console.log('📦 ' + entry.storeName + ' | ' + entry.productName + ' (Size ' + sizeName + ') — Total deducted from transfers: ' + totalDeducted + ' | Current stock: ' + currentQty);
+                        });
+                    } else {
+                        var currentStock = pData.stock || 0;
+                        console.log('📦 ' + entry.storeName + ' | ' + entry.productName + ' — Total deducted: ' + entry.totalQty + ' | Current stock: ' + currentStock);
+                    }
+                } catch(e) { console.warn('Failed to check', entry.productName, e.message); }
+            }
+
+            console.log('\n💡 To manually fix a specific product\'s stock, use:');
+            console.log('   fixBranchStock("STORE-ID", "product-doc-id", "SizeName", newQty)');
+            console.log('\nExample:');
+            console.log('   fixBranchStock("GOAT-1979", "p1771234567890", "90", 15)');
+            console.log('═══════════════════════════════════════════════════════');
+        } catch(e) {
+            console.error('Reconciliation failed:', e);
+        }
+    }
+
+    // Direct stock correction tool — set a specific size qty directly
+    // Usage: fixBranchStock('GOAT-1979', 'p1771234567890', '90', 15)
+    // For products without sizes: fixBranchStock('GOAT-1979', 'p1771234567890', null, 15)
+    async function fixBranchStock(storeId, productId, sizeName, newQty) {
+        if (!db) { console.error('Firebase offline'); return; }
+        if (!confirm('Set stock for product ' + productId + (sizeName ? ' Size ' + sizeName : '') + ' in store ' + storeId + ' to ' + newQty + '?\n\nThis writes directly to Firebase.')) return;
+        try {
+            var pRef = db.collection('stores').doc(storeId).collection('products').doc(productId);
+            var pSnap = await pRef.get();
+            if (!pSnap.exists) { console.error('Product not found'); return; }
+            var p = pSnap.data();
+            if (sizeName && p.sizes && p.sizes.length) {
+                p.sizes.forEach(function(s){ if (s.name === sizeName) s.qty = newQty; });
+                p.stock = p.sizes.reduce(function(a,s){ return a+(s.qty||0); }, 0);
+                await pRef.update({ sizes: p.sizes, stock: p.stock });
+            } else {
+                await pRef.update({ stock: newQty });
+            }
+            console.log('✅ Stock updated successfully.');
+            logActivity('Manual Stock Correction', productId + (sizeName?' Size '+sizeName:'') + ' → ' + newQty + ' in ' + storeId);
+            renderInventory(); renderProducts();
+        } catch(e) { console.error('Fix failed:', e); }
+    }
+
+    // =============================================
     // ONE-OFF FIX TOOL: re-deduct stock for an order that was confirmed but never deducted
     // Safe to run multiple times on the same order — it checks order.stockDeducted flag first.
     // Usage from browser console: fixOrderStockDeduction('ORD-1782026855281')
@@ -8340,4 +8454,121 @@ function sendToTelegram(order, callback) {
         </div>
     </div>
 </body>
-</html>
+</html><script>
+// =============================================
+// AUTO REPAIR: Fix bulk transfer stock mismatch from 03/07/2026 14:47
+// Run from browser console: repairTransferMismatch()
+// This deducts the MISSING amounts from Main Store that weren't applied due to the bulk approve bug.
+// SAFE TO RUN ONCE ONLY — checks current stock before deducting.
+// =============================================
+async function repairTransferMismatch() {
+    if (!db) { alert('Firebase offline'); return; }
+    if (STATE.storeId !== 'GOAT-1979') { alert('Must be run on Main Store device (GOAT-1979)'); return; }
+
+    // Exact amounts that SHOULD have been deducted from Main Store per the transfer records
+    var REQUIRED_DEDUCTIONS = {
+        'Cutie Dresses_100':  { '100': 1 },
+        'Cutie Dresses_106':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_111':  { '90':2,'100':2,'110':2,'120':2,'130':2,'140':2 },
+        'Cutie Dresses_128':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_148':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_158':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_160':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_161':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_162':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_163':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_164':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_165':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_166':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_167':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Girl Set_016':       { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 }
+    };
+
+    var productNames = Object.keys(REQUIRED_DEDUCTIONS);
+    console.log('🔍 Loading ' + productNames.length + ' products from Main Store Firebase...');
+
+    // Load all affected products by name
+    var productDocs = {}; // name → {ref, data}
+    for (var i = 0; i < productNames.length; i++) {
+        var name = productNames[i];
+        try {
+            var snap = await db.collection('stores').doc('GOAT-1979').collection('products')
+                .where('name', '==', name).limit(1).get();
+            if (!snap.empty) {
+                var doc = snap.docs[0];
+                productDocs[name] = { ref: doc.ref, data: JSON.parse(JSON.stringify(doc.data())) };
+            } else {
+                console.warn('⚠️  Product not found in Main Store:', name);
+            }
+        } catch(e) { console.warn('Failed to load:', name, e.message); }
+    }
+
+    // Build preview of what will be changed
+    var preview = [];
+    var issues = [];
+    for (var name in REQUIRED_DEDUCTIONS) {
+        var doc = productDocs[name];
+        if (!doc) { issues.push(name + ' — NOT FOUND'); continue; }
+        var deductions = REQUIRED_DEDUCTIONS[name];
+        for (var size in deductions) {
+            var deductAmt = deductions[size];
+            var sz = (doc.data.sizes || []).find(function(s){ return s.name === size; });
+            var currentQty = sz ? (sz.qty || 0) : 0;
+            var newQty = currentQty - deductAmt;
+            if (newQty < 0) {
+                issues.push(name + ' Size ' + size + ': current=' + currentQty + ', need to deduct=' + deductAmt + ' → WOULD GO NEGATIVE');
+            } else {
+                preview.push(name + ' Size ' + size + ': ' + currentQty + ' → ' + newQty + ' (deduct ' + deductAmt + ')');
+            }
+        }
+    }
+
+    console.log('\n📋 PREVIEW — changes to be applied:');
+    preview.forEach(function(p){ console.log('  ✅ ' + p); });
+    if (issues.length) {
+        console.warn('\n⚠️  ISSUES (will be skipped):');
+        issues.forEach(function(i){ console.warn('  ❌ ' + i); });
+    }
+
+    var msg = 'Apply ' + preview.length + ' stock corrections to Main Store (GOAT-1979)?\n\n' +
+        preview.slice(0,10).join('\n') + (preview.length > 10 ? '\n...and ' + (preview.length-10) + ' more' : '') +
+        (issues.length ? '\n\n⚠️ ' + issues.length + ' item(s) will be SKIPPED (see console).' : '') +
+        '\n\nThis corrects the bulk transfer bug from 03/07/2026.';
+
+    if (!confirm(msg)) { console.log('Cancelled.'); return; }
+
+    // Apply corrections and write in one batch
+    var batch = db.batch();
+    var corrected = 0;
+    for (var name in REQUIRED_DEDUCTIONS) {
+        var doc = productDocs[name];
+        if (!doc) continue;
+        var deductions = REQUIRED_DEDUCTIONS[name];
+        var changed = false;
+        for (var size in deductions) {
+            var deductAmt = deductions[size];
+            var sz = (doc.data.sizes || []).find(function(s){ return s.name === size; });
+            if (!sz) continue;
+            var newQty = (sz.qty || 0) - deductAmt;
+            if (newQty < 0) continue; // skip negatives
+            sz.qty = newQty;
+            changed = true;
+            corrected++;
+        }
+        if (changed) {
+            doc.data.stock = (doc.data.sizes || []).reduce(function(a,s){ return a+(s.qty||0); }, 0);
+            batch.set(doc.ref, doc.data, { merge: true });
+        }
+    }
+
+    try {
+        await batch.commit();
+        console.log('✅ ' + corrected + ' size corrections applied successfully!');
+        alert('✅ Done! ' + corrected + ' stock corrections applied to Main Store.\n\nCheck your inventory to confirm.');
+        if (typeof renderInventory === 'function') { renderInventory(); renderProducts(); }
+    } catch(e) {
+        console.error('❌ Batch write failed:', e);
+        alert('❌ Failed: ' + e.message);
+    }
+}
+</script>
