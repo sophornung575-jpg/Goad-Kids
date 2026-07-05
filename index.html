@@ -499,8 +499,22 @@
                     <div class="cart-summary hidden" id="cartSummary">
                         <div class="cart-totals">
                             <div class="cart-total-row"><span data-translate="subtotal">Subtotal</span><span id="cartSubtotal">$0.00</span></div>
+                            <!-- Admin-only discount controls -->
+                            <div id="adminDiscountPanel" class="hidden" style="background:var(--light);border-radius:8px;padding:0.6rem 0.75rem;margin:0.4rem 0;border:1px dashed var(--warning)">
+                                <div style="font-size:0.78rem;font-weight:600;color:var(--warning);margin-bottom:0.4rem">🏷️ Admin Discount</div>
+                                <div style="display:flex;gap:6px;align-items:center">
+                                    <select id="discountType" class="form-control" style="font-size:0.82rem;padding:0.3rem 0.5rem;flex:1" onchange="applyDiscount()">
+                                        <option value="none">No Discount</option>
+                                        <option value="percent">% Off</option>
+                                        <option value="fixed">Fixed $ Off</option>
+                                    </select>
+                                    <input type="number" id="discountValue" class="form-control" min="0" step="0.01" placeholder="0" style="font-size:0.82rem;padding:0.3rem 0.5rem;width:80px" oninput="applyDiscount()">
+                                </div>
+                                <div id="discountNote" style="font-size:0.75rem;color:var(--gray);margin-top:4px"></div>
+                            </div>
+                            <div id="discountRow" class="cart-total-row hidden" style="color:var(--success)"><span>Discount</span><span id="cartDiscount">-$0.00</span></div>
                             <div class="cart-total-row"><span data-translate="shipping">Shipping</span><span id="cartShipping">$0.00</span></div>
-                            <div class="cart-total-row"><span data-translate="total">Total</span><span id="cartTotal">$0.00</span></div>
+                            <div class="cart-total-row" style="font-size:1.1rem;font-weight:700;border-top:2px solid var(--gray-light);padding-top:0.5rem;margin-top:0.25rem"><span data-translate="total">Total</span><span id="cartTotal">$0.00</span></div>
                         </div>
                         <h3 style="margin-top:1.5rem"><i class="fas fa-map-marker-alt"></i> <span data-translate="deliveryInfo">Delivery Information</span></h3>
                         <div class="form-group">
@@ -1441,6 +1455,7 @@ function sendToTelegram(order, callback) {
         '💳 Payment: Cash on Delivery\n\n' +
         'ITEMS:\n' + itemsText + '\n' +
         '💰 Subtotal: $' + (order.subtotal || 0).toFixed(2) + '\n' +
+        (order.discount > 0 ? '🏷️ Discount: -$' + (order.discount || 0).toFixed(2) + (order.discountType === 'percent' ? ' (' + order.discountValue + '% off)' : '') + '\n' : '') +
         '🚚 Shipping Fee: $' + (order.shipping || 0).toFixed(2) + '\n' +
         '💵 TOTAL: $' + (order.total || 0).toFixed(2) + '\n\n' +
         '📝 Notes: ' + (order.customerNotes || 'None');
@@ -1722,6 +1737,40 @@ function sendToTelegram(order, callback) {
         localStorage.setItem('goatActivityLog', JSON.stringify(STATE.activityLog));
     }
 
+    function getDiscountAmount(sub) {
+        var type = document.getElementById('discountType');
+        var val = parseFloat(document.getElementById('discountValue').value) || 0;
+        if (!type || type.value === 'none' || val <= 0) return 0;
+        if (type.value === 'percent') return Math.min(sub, sub * val / 100);
+        if (type.value === 'fixed') return Math.min(sub, val);
+        return 0;
+    }
+
+    function applyDiscount() {
+        var sub = 0;
+        for (var i = 0; i < STATE.cart.length; i++) sub += STATE.cart[i].price * STATE.cart[i].quantity;
+        var disc = getDiscountAmount(sub);
+        var type = document.getElementById('discountType').value;
+        var val = parseFloat(document.getElementById('discountValue').value) || 0;
+
+        // Update discount note
+        var note = document.getElementById('discountNote');
+        if (type === 'percent' && val > 0) note.textContent = val + '% off → -$' + disc.toFixed(2);
+        else if (type === 'fixed' && val > 0) note.textContent = 'Fixed discount → -$' + disc.toFixed(2);
+        else note.textContent = '';
+
+        // Show/hide discount row
+        var discRow = document.getElementById('discountRow');
+        var discEl = document.getElementById('cartDiscount');
+        if (disc > 0) {
+            discRow.classList.remove('hidden');
+            discEl.textContent = '-$' + disc.toFixed(2);
+        } else {
+            discRow.classList.add('hidden');
+        }
+        updateShipping();
+    }
+
     function updateShipping() {
         var loc = document.getElementById('shippingLocation'), sh = 0;
         if (loc && loc.value === 'phnompenh') sh = 1.50;
@@ -1729,9 +1778,27 @@ function sendToTelegram(order, callback) {
         STATE.shippingFee = sh;
         var sub = 0;
         for (var i = 0; i < STATE.cart.length; i++) sub += STATE.cart[i].price * STATE.cart[i].quantity;
-        var total = sub + sh;
+        var disc = getDiscountAmount(sub);
+        var total = sub - disc + sh;
         document.getElementById('cartShipping').textContent = '$' + sh.toFixed(2);
         document.getElementById('cartTotal').textContent = '$' + total.toFixed(2);
+    }
+
+    // Show admin discount panel when admin is active on store tab
+    function updateDiscountPanelVisibility() {
+        var panel = document.getElementById('adminDiscountPanel');
+        if (!panel) return;
+        if (STATE.adminRole === 'full' || STATE.adminRole === 'view') {
+            panel.classList.remove('hidden');
+        } else {
+            panel.classList.add('hidden');
+            // Reset discount when admin logs out
+            var dtype = document.getElementById('discountType');
+            var dval = document.getElementById('discountValue');
+            if (dtype) dtype.value = 'none';
+            if (dval) dval.value = '';
+            applyDiscount();
+        }
     }
 
     function forceSaveStock() { saveProducts(); if (STATE.firebaseOnline) syncToFirebase(); showToast('Saved!', 'success'); renderInventory(); }
@@ -1783,7 +1850,10 @@ function sendToTelegram(order, callback) {
         var sub = 0;
         for (var j = 0; j < savedCart.length; j++) sub += savedCart[j].price * savedCart[j].quantity;
         var sh = STATE.shippingFee || 0;
-        var total = sub + sh;
+        var disc = getDiscountAmount(sub);
+        var total = sub - disc + sh;
+        var discountType = document.getElementById('discountType') ? document.getElementById('discountType').value : 'none';
+        var discountValue = parseFloat(document.getElementById('discountValue') ? document.getElementById('discountValue').value : 0) || 0;
         var oid = 'ORD-' + Date.now();
         var order = {
             orderId: oid, timestamp: Date.now(), orderDate: new Date().toLocaleString(),
@@ -1791,7 +1861,9 @@ function sendToTelegram(order, callback) {
             customerPhone: ph, customerAddress: ad, customerCity: ci,
             customerNotes: document.getElementById('customerNotes').value.trim(),
             paymentMethod: 'cod', storeId: STATE.storeId,
-            cart: savedCart, subtotal: sub, shipping: sh, total: total
+            cart: savedCart, subtotal: sub, shipping: sh,
+            discount: disc, discountType: discountType, discountValue: discountValue,
+            total: total
         };
 
         // FIX #7: Only clear cart AFTER Telegram send attempt, not before
@@ -2510,6 +2582,7 @@ function sendToTelegram(order, callback) {
         addLoginRecord(name, role, true);
         // Refresh all admin views after login
         renderPending(); renderHistory(); renderInventory(); updateAdminBadges();
+        updateDiscountPanelVisibility();
         document.getElementById('adminBadge').classList.remove('hidden');
         document.getElementById('adminBadge').textContent = role === 'full' ? 'ADMIN' : (role === 'orders' ? 'ORDERS' : 'STOCK');
         document.getElementById('adminNavLink').classList.remove('hidden');
@@ -2528,6 +2601,7 @@ function sendToTelegram(order, callback) {
     function adminLogout() {
         STATE.isAdmin = false; STATE.adminRole = '';
         localStorage.removeItem('goatAdmin'); localStorage.removeItem('goatAdminRole');
+        updateDiscountPanelVisibility();
         document.getElementById('adminBadge').classList.add('hidden');
         document.getElementById('adminNavLink').classList.add('hidden');
         document.getElementById('adminNavLinkMobile').classList.add('hidden');
@@ -4127,6 +4201,9 @@ function sendToTelegram(order, callback) {
         html += items;
         html += '<hr class="dash">';
         html += '<div class="row"><span class="lbl">Subtotal</span><span>$' + (order.subtotal||0).toFixed(2) + '</span></div>';
+        if (order.discount > 0) {
+            html += '<div class="row" style="color:var(--success)"><span class="lbl">Discount' + (order.discountType==='percent'?' ('+order.discountValue+'% off)':'') + '</span><span>-$' + (order.discount||0).toFixed(2) + '</span></div>';
+        }
         html += '<div class="row"><span class="lbl">Shipping fee</span><span>$' + (order.shipping||0).toFixed(2) + '</span></div>';
         html += '<hr class="solid">';
         html += '<div class="row tot"><span>TOTAL</span><span>$' + (order.total||0).toFixed(2) + '</span></div>';
