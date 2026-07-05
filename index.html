@@ -4197,7 +4197,127 @@ function sendToTelegram(order, callback) {
         html += '}else{saveImg();}}';
 
         html += '<\/scr' + 'ipt>';
-        html += '</body></html>';
+        html += '<script>
+
+// =============================================
+// AUTO REPAIR: Fix bulk transfer stock mismatch from 03/07/2026 14:47
+// Run from browser console: repairTransferMismatch()
+// This deducts the MISSING amounts from Main Store that weren't applied due to the bulk approve bug.
+// SAFE TO RUN ONCE ONLY — checks current stock before deducting.
+// =============================================
+async function repairTransferMismatch() {
+    if (!db) { alert('Firebase offline'); return; }
+    if (STATE.storeId !== 'GOAT-1979') { alert('Must be run on Main Store device (GOAT-1979)'); return; }
+
+    // Exact amounts that SHOULD have been deducted from Main Store per the transfer records
+    var REQUIRED_DEDUCTIONS = {
+        'Cutie Dresses_100':  { '100': 1 },
+        'Cutie Dresses_106':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_111':  { '90':2,'100':2,'110':2,'120':2,'130':2,'140':2 },
+        'Cutie Dresses_128':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_148':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_158':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_160':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_161':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_162':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_163':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_164':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_165':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_166':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Cutie Dresses_167':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
+        'Girl Set_016':       { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 }
+    };
+
+    var productNames = Object.keys(REQUIRED_DEDUCTIONS);
+    console.log('🔍 Loading ' + productNames.length + ' products from Main Store Firebase...');
+
+    // Load all affected products by name
+    var productDocs = {}; // name → {ref, data}
+    for (var i = 0; i < productNames.length; i++) {
+        var name = productNames[i];
+        try {
+            var snap = await db.collection('stores').doc('GOAT-1979').collection('products')
+                .where('name', '==', name).limit(1).get();
+            if (!snap.empty) {
+                var doc = snap.docs[0];
+                productDocs[name] = { ref: doc.ref, data: JSON.parse(JSON.stringify(doc.data())) };
+            } else {
+                console.warn('⚠️  Product not found in Main Store:', name);
+            }
+        } catch(e) { console.warn('Failed to load:', name, e.message); }
+    }
+
+    // Build preview of what will be changed
+    var preview = [];
+    var issues = [];
+    for (var name in REQUIRED_DEDUCTIONS) {
+        var doc = productDocs[name];
+        if (!doc) { issues.push(name + ' — NOT FOUND'); continue; }
+        var deductions = REQUIRED_DEDUCTIONS[name];
+        for (var size in deductions) {
+            var deductAmt = deductions[size];
+            var sz = (doc.data.sizes || []).find(function(s){ return s.name === size; });
+            var currentQty = sz ? (sz.qty || 0) : 0;
+            var newQty = currentQty - deductAmt;
+            if (newQty < 0) {
+                issues.push(name + ' Size ' + size + ': current=' + currentQty + ', need to deduct=' + deductAmt + ' → WOULD GO NEGATIVE');
+            } else {
+                preview.push(name + ' Size ' + size + ': ' + currentQty + ' → ' + newQty + ' (deduct ' + deductAmt + ')');
+            }
+        }
+    }
+
+    console.log('\n📋 PREVIEW — changes to be applied:');
+    preview.forEach(function(p){ console.log('  ✅ ' + p); });
+    if (issues.length) {
+        console.warn('\n⚠️  ISSUES (will be skipped):');
+        issues.forEach(function(i){ console.warn('  ❌ ' + i); });
+    }
+
+    var msg = 'Apply ' + preview.length + ' stock corrections to Main Store (GOAT-1979)?\n\n' +
+        preview.slice(0,10).join('\n') + (preview.length > 10 ? '\n...and ' + (preview.length-10) + ' more' : '') +
+        (issues.length ? '\n\n⚠️ ' + issues.length + ' item(s) will be SKIPPED (see console).' : '') +
+        '\n\nThis corrects the bulk transfer bug from 03/07/2026.';
+
+    if (!confirm(msg)) { console.log('Cancelled.'); return; }
+
+    // Apply corrections and write in one batch
+    var batch = db.batch();
+    var corrected = 0;
+    for (var name in REQUIRED_DEDUCTIONS) {
+        var doc = productDocs[name];
+        if (!doc) continue;
+        var deductions = REQUIRED_DEDUCTIONS[name];
+        var changed = false;
+        for (var size in deductions) {
+            var deductAmt = deductions[size];
+            var sz = (doc.data.sizes || []).find(function(s){ return s.name === size; });
+            if (!sz) continue;
+            var newQty = (sz.qty || 0) - deductAmt;
+            if (newQty < 0) continue; // skip negatives
+            sz.qty = newQty;
+            changed = true;
+            corrected++;
+        }
+        if (changed) {
+            doc.data.stock = (doc.data.sizes || []).reduce(function(a,s){ return a+(s.qty||0); }, 0);
+            batch.set(doc.ref, doc.data, { merge: true });
+        }
+    }
+
+    try {
+        await batch.commit();
+        console.log('✅ ' + corrected + ' size corrections applied successfully!');
+        alert('✅ Done! ' + corrected + ' stock corrections applied to Main Store.\n\nCheck your inventory to confirm.');
+        if (typeof renderInventory === 'function') { renderInventory(); renderProducts(); }
+    } catch(e) {
+        console.error('❌ Batch write failed:', e);
+        alert('❌ Failed: ' + e.message);
+    }
+}
+
+</script>
+</body></html>';
         return html;
     }
     // FIX #14: Try popup, fall back to blob URL new tab if blocked
@@ -8483,122 +8603,139 @@ function sendToTelegram(order, callback) {
             </div>
         </div>
     </div>
-</body>
-</html><script>
-// =============================================
-// AUTO REPAIR: Fix bulk transfer stock mismatch from 03/07/2026 14:47
-// Run from browser console: repairTransferMismatch()
-// This deducts the MISSING amounts from Main Store that weren't applied due to the bulk approve bug.
-// SAFE TO RUN ONCE ONLY — checks current stock before deducting.
-// =============================================
-async function repairTransferMismatch() {
-    if (!db) { alert('Firebase offline'); return; }
-    if (STATE.storeId !== 'GOAT-1979') { alert('Must be run on Main Store device (GOAT-1979)'); return; }
-
-    // Exact amounts that SHOULD have been deducted from Main Store per the transfer records
-    var REQUIRED_DEDUCTIONS = {
-        'Cutie Dresses_100':  { '100': 1 },
-        'Cutie Dresses_106':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
-        'Cutie Dresses_111':  { '90':2,'100':2,'110':2,'120':2,'130':2,'140':2 },
-        'Cutie Dresses_128':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
-        'Cutie Dresses_148':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
-        'Cutie Dresses_158':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
-        'Cutie Dresses_160':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
-        'Cutie Dresses_161':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
-        'Cutie Dresses_162':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
-        'Cutie Dresses_163':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
-        'Cutie Dresses_164':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
-        'Cutie Dresses_165':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
-        'Cutie Dresses_166':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
-        'Cutie Dresses_167':  { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 },
-        'Girl Set_016':       { '90':1,'100':1,'110':1,'120':1,'130':1,'140':1 }
-    };
-
-    var productNames = Object.keys(REQUIRED_DEDUCTIONS);
-    console.log('🔍 Loading ' + productNames.length + ' products from Main Store Firebase...');
-
-    // Load all affected products by name
-    var productDocs = {}; // name → {ref, data}
-    for (var i = 0; i < productNames.length; i++) {
-        var name = productNames[i];
-        try {
-            var snap = await db.collection('stores').doc('GOAT-1979').collection('products')
-                .where('name', '==', name).limit(1).get();
-            if (!snap.empty) {
-                var doc = snap.docs[0];
-                productDocs[name] = { ref: doc.ref, data: JSON.parse(JSON.stringify(doc.data())) };
-            } else {
-                console.warn('⚠️  Product not found in Main Store:', name);
-            }
-        } catch(e) { console.warn('Failed to load:', name, e.message); }
-    }
-
-    // Build preview of what will be changed
-    var preview = [];
-    var issues = [];
-    for (var name in REQUIRED_DEDUCTIONS) {
-        var doc = productDocs[name];
-        if (!doc) { issues.push(name + ' — NOT FOUND'); continue; }
-        var deductions = REQUIRED_DEDUCTIONS[name];
-        for (var size in deductions) {
-            var deductAmt = deductions[size];
-            var sz = (doc.data.sizes || []).find(function(s){ return s.name === size; });
-            var currentQty = sz ? (sz.qty || 0) : 0;
-            var newQty = currentQty - deductAmt;
-            if (newQty < 0) {
-                issues.push(name + ' Size ' + size + ': current=' + currentQty + ', need to deduct=' + deductAmt + ' → WOULD GO NEGATIVE');
-            } else {
-                preview.push(name + ' Size ' + size + ': ' + currentQty + ' → ' + newQty + ' (deduct ' + deductAmt + ')');
-            }
-        }
-    }
-
-    console.log('\n📋 PREVIEW — changes to be applied:');
-    preview.forEach(function(p){ console.log('  ✅ ' + p); });
-    if (issues.length) {
-        console.warn('\n⚠️  ISSUES (will be skipped):');
-        issues.forEach(function(i){ console.warn('  ❌ ' + i); });
-    }
-
-    var msg = 'Apply ' + preview.length + ' stock corrections to Main Store (GOAT-1979)?\n\n' +
-        preview.slice(0,10).join('\n') + (preview.length > 10 ? '\n...and ' + (preview.length-10) + ' more' : '') +
-        (issues.length ? '\n\n⚠️ ' + issues.length + ' item(s) will be SKIPPED (see console).' : '') +
-        '\n\nThis corrects the bulk transfer bug from 03/07/2026.';
-
-    if (!confirm(msg)) { console.log('Cancelled.'); return; }
-
-    // Apply corrections and write in one batch
-    var batch = db.batch();
-    var corrected = 0;
-    for (var name in REQUIRED_DEDUCTIONS) {
-        var doc = productDocs[name];
-        if (!doc) continue;
-        var deductions = REQUIRED_DEDUCTIONS[name];
-        var changed = false;
-        for (var size in deductions) {
-            var deductAmt = deductions[size];
-            var sz = (doc.data.sizes || []).find(function(s){ return s.name === size; });
-            if (!sz) continue;
-            var newQty = (sz.qty || 0) - deductAmt;
-            if (newQty < 0) continue; // skip negatives
-            sz.qty = newQty;
-            changed = true;
-            corrected++;
-        }
-        if (changed) {
-            doc.data.stock = (doc.data.sizes || []).reduce(function(a,s){ return a+(s.qty||0); }, 0);
-            batch.set(doc.ref, doc.data, { merge: true });
-        }
-    }
-
+<script>
+// Run from console: checkDuplicateProducts('Cutie Dresses_106')
+async function checkDuplicateProducts(name) {
+    if (!db) { console.error('Firebase offline'); return; }
+    var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
     try {
-        await batch.commit();
-        console.log('✅ ' + corrected + ' size corrections applied successfully!');
-        alert('✅ Done! ' + corrected + ' stock corrections applied to Main Store.\n\nCheck your inventory to confirm.');
-        if (typeof renderInventory === 'function') { renderInventory(); renderProducts(); }
-    } catch(e) {
-        console.error('❌ Batch write failed:', e);
-        alert('❌ Failed: ' + e.message);
+        var bSnap = await db.collection('_admin_').doc('branches').get();
+        if (bSnap.exists) (bSnap.data().list||[]).forEach(function(b){ stores.push({id:b.id,name:b.name}); });
+    } catch(e) {}
+    
+    console.log('🔍 Checking "' + name + '" across all stores...\n');
+    for (var i = 0; i < stores.length; i++) {
+        var s = stores[i];
+        var snap = await db.collection('stores').doc(s.id).collection('products')
+            .where('name','==',name).get();
+        if (snap.empty) {
+            console.log('📭 ' + s.name + ' (' + s.id + '): not found');
+        } else {
+            snap.forEach(function(doc) {
+                var d = doc.data();
+                var stock = (d.sizes&&d.sizes.length) ? d.sizes.reduce(function(a,s){return a+(s.qty||0);},0) : (d.stock||0);
+                var sizes = (d.sizes&&d.sizes.length) ? d.sizes.map(function(s){return s.name+':'+s.qty;}).join(', ') : 'no sizes, stock='+stock;
+                console.log('📦 ' + s.name + ' | doc ID: ' + doc.id + ' | total: ' + stock + ' | ' + sizes);
+            });
+        }
     }
 }
+
+// Merge duplicates for a product: keeps the first doc, adds stock from all others, deletes the rest
+// Run: mergeDuplicates('GOAT-1979', 'Cutie Dresses_106')
+async function mergeDuplicates(storeId, productName) {
+    if (!db) { console.error('Firebase offline'); return; }
+    var snap = await db.collection('stores').doc(storeId).collection('products')
+        .where('name','==',productName).get();
+    if (snap.size <= 1) { console.log('No duplicates found for "' + productName + '" in ' + storeId); return; }
+    
+    console.log('Found ' + snap.size + ' docs for "' + productName + '". Merging...');
+    var docs = [];
+    snap.forEach(function(d){ docs.push({id:d.id, ref:d.ref, data:JSON.parse(JSON.stringify(d.data()))}); });
+    
+    // Sort: prefer the one with more stock as the "primary"
+    docs.sort(function(a,b){
+        var aStock = (a.data.sizes&&a.data.sizes.length)?a.data.sizes.reduce(function(x,s){return x+(s.qty||0);},0):(a.data.stock||0);
+        var bStock = (b.data.sizes&&b.data.sizes.length)?b.data.sizes.reduce(function(x,s){return x+(s.qty||0);},0):(b.data.stock||0);
+        return bStock - aStock;
+    });
+    
+    var primary = docs[0];
+    var rest = docs.slice(1);
+    
+    // Show what will be merged
+    docs.forEach(function(d,i){
+        var stock = (d.data.sizes&&d.data.sizes.length)?d.data.sizes.reduce(function(x,s){return x+(s.qty||0);},0):(d.data.stock||0);
+        console.log((i===0?'✅ KEEP: ':'❌ MERGE+DELETE: ') + d.id + ' | stock: ' + stock);
+    });
+    
+    if (!confirm('Merge ' + rest.length + ' duplicate(s) into primary doc "' + primary.id + '" and delete them?\n\nProduct: ' + productName)) return;
+    
+    // Accumulate stock from all docs into primary
+    if (primary.data.sizes && primary.data.sizes.length) {
+        rest.forEach(function(d){
+            (d.data.sizes||[]).forEach(function(sz){
+                var pSz = primary.data.sizes.find(function(s){return s.name===sz.name;});
+                if (pSz) pSz.qty += (sz.qty||0);
+                else primary.data.sizes.push(Object.assign({},sz));
+            });
+        });
+        primary.data.stock = primary.data.sizes.reduce(function(a,s){return a+(s.qty||0);},0);
+    } else {
+        rest.forEach(function(d){ primary.data.stock = (primary.data.stock||0) + (d.data.stock||0); });
+    }
+    
+    var batch = db.batch();
+    batch.set(primary.ref, primary.data, {merge:true});
+    rest.forEach(function(d){ batch.delete(d.ref); });
+    await batch.commit();
+    
+    console.log('✅ Merged! Primary doc ' + primary.id + ' now has stock: ' + primary.data.stock);
+    alert('✅ Merged ' + rest.length + ' duplicate(s) for "' + productName + '". Check inventory to confirm.');
+    if (typeof renderInventory==='function') { renderInventory(); renderProducts(); }
+}
+
+// Fix all duplicates in a store at once
+// Run: mergeAllDuplicates('GOAT-1979')
+async function mergeAllDuplicates(storeId) {
+    if (!db) { console.error('Firebase offline'); return; }
+    console.log('🔍 Scanning ' + storeId + ' for duplicates...');
+    var snap = await db.collection('stores').doc(storeId).collection('products').get();
+    var byName = {};
+    snap.forEach(function(d){ 
+        var n = (d.data().name||'').trim().toLowerCase();
+        if (!byName[n]) byName[n] = [];
+        byName[n].push({id:d.id,ref:d.ref,data:JSON.parse(JSON.stringify(d.data()))});
+    });
+    var dupes = Object.entries(byName).filter(function(e){return e[1].length>1;});
+    if (!dupes.length) { console.log('✅ No duplicates found in ' + storeId); return; }
+    
+    console.log('Found ' + dupes.length + ' product(s) with duplicates:');
+    dupes.forEach(function(e){ console.log('  • ' + e[1][0].data.name + ' (' + e[1].length + ' docs)'); });
+    
+    if (!confirm('Merge all ' + dupes.length + ' duplicate product(s) in ' + storeId + '?\n\nThis will keep the doc with the most stock and delete the rest.')) return;
+    
+    var batch = db.batch();
+    var fixedCount = 0;
+    dupes.forEach(function(e){
+        var docs = e[1].sort(function(a,b){
+            var aS = (a.data.sizes&&a.data.sizes.length)?a.data.sizes.reduce(function(x,s){return x+(s.qty||0);},0):(a.data.stock||0);
+            var bS = (b.data.sizes&&b.data.sizes.length)?b.data.sizes.reduce(function(x,s){return x+(s.qty||0);},0):(b.data.stock||0);
+            return bS-aS;
+        });
+        var primary = docs[0];
+        var rest = docs.slice(1);
+        if (primary.data.sizes&&primary.data.sizes.length) {
+            rest.forEach(function(d){
+                (d.data.sizes||[]).forEach(function(sz){
+                    var pSz = primary.data.sizes.find(function(s){return s.name===sz.name;});
+                    if (pSz) pSz.qty += (sz.qty||0);
+                    else primary.data.sizes.push(Object.assign({},sz));
+                });
+            });
+            primary.data.stock = primary.data.sizes.reduce(function(a,s){return a+(s.qty||0);},0);
+        } else {
+            rest.forEach(function(d){ primary.data.stock = (primary.data.stock||0)+(d.data.stock||0); });
+        }
+        batch.set(primary.ref, primary.data, {merge:true});
+        rest.forEach(function(d){ batch.delete(d.ref); });
+        fixedCount += rest.length;
+    });
+    await batch.commit();
+    console.log('✅ Merged ' + fixedCount + ' duplicate doc(s) across ' + dupes.length + ' product(s).');
+    alert('✅ Done! Merged ' + fixedCount + ' duplicate doc(s). Check inventory to confirm.');
+    if (typeof renderInventory==='function') { renderInventory(); renderProducts(); }
+}
 </script>
+</body>
+</html>
