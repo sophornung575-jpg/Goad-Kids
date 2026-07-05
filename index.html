@@ -6542,6 +6542,125 @@ function sendToTelegram(order, callback) {
     }
 
     // =============================================
+    // DUPLICATE PRODUCT MERGE TOOLS
+    // Usage from browser console:
+    //   checkDuplicateProducts('Cutie Dresses_106')  — see all docs across stores
+    //   mergeDuplicates('GOAT-271-ID', 'Cutie Dresses_106')  — merge one product in one store
+    //   mergeAllDuplicates('GOAT-271-ID')  — merge ALL duplicate products in a store
+    // =============================================
+    async function checkDuplicateProducts(name) {
+        if (!db) { console.error('Firebase offline'); return; }
+        var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
+        try {
+            var bSnap = await db.collection('_admin_').doc('branches').get();
+            if (bSnap.exists) (bSnap.data().list||[]).forEach(function(b){ stores.push({id:b.id,name:b.name}); });
+        } catch(e) {}
+        console.log('🔍 Checking "' + name + '" across all stores...\n');
+        for (var i = 0; i < stores.length; i++) {
+            var s = stores[i];
+            try {
+                var snap = await db.collection('stores').doc(s.id).collection('products').where('name','==',name).get();
+                if (snap.empty) {
+                    console.log('📭 ' + s.name + ' (' + s.id + '): not found');
+                } else {
+                    snap.forEach(function(doc) {
+                        var d = doc.data();
+                        var stock = (d.sizes&&d.sizes.length) ? d.sizes.reduce(function(a,sz){return a+(sz.qty||0);},0) : (d.stock||0);
+                        var sizes = (d.sizes&&d.sizes.length) ? d.sizes.map(function(sz){return sz.name+':'+sz.qty;}).join(', ') : 'no sizes, stock='+stock;
+                        console.log((snap.size>1?'⚠️ DUPLICATE ':'✅ ') + s.name + ' | doc: ' + doc.id + ' | total: ' + stock + ' | ' + sizes);
+                    });
+                }
+            } catch(e) { console.warn('Failed for', s.id, e.message); }
+        }
+    }
+
+    async function mergeDuplicates(storeId, productName) {
+        if (!db) { console.error('Firebase offline'); return; }
+        var snap = await db.collection('stores').doc(storeId).collection('products').where('name','==',productName).get();
+        if (snap.size <= 1) { console.log('No duplicates for "' + productName + '" in ' + storeId); return; }
+        console.log('Found ' + snap.size + ' docs for "' + productName + '" — merging...');
+        var docs = [];
+        snap.forEach(function(d){ docs.push({id:d.id,ref:d.ref,data:JSON.parse(JSON.stringify(d.data()))}); });
+        // Keep doc with highest total stock as primary
+        docs.sort(function(a,b){
+            var aS=(a.data.sizes&&a.data.sizes.length)?a.data.sizes.reduce(function(x,s){return x+(s.qty||0);},0):(a.data.stock||0);
+            var bS=(b.data.sizes&&b.data.sizes.length)?b.data.sizes.reduce(function(x,s){return x+(s.qty||0);},0):(b.data.stock||0);
+            return bS-aS;
+        });
+        var primary = docs[0], rest = docs.slice(1);
+        docs.forEach(function(d,i){
+            var st=(d.data.sizes&&d.data.sizes.length)?d.data.sizes.reduce(function(x,s){return x+(s.qty||0);},0):(d.data.stock||0);
+            console.log((i===0?'✅ KEEP: ':'❌ MERGE+DELETE: ') + d.id + ' | stock: ' + st);
+        });
+        if (!confirm('Merge ' + rest.length + ' duplicate(s) of "' + productName + '" in store ' + storeId + '?\n\nAll stock will be added into the primary doc, duplicates deleted.')) return;
+        // Accumulate all sizes into primary
+        rest.forEach(function(d){
+            if (primary.data.sizes && primary.data.sizes.length) {
+                (d.data.sizes||[]).forEach(function(sz){
+                    var pSz = primary.data.sizes.find(function(s){return s.name===sz.name;});
+                    if (pSz) pSz.qty += (sz.qty||0);
+                    else primary.data.sizes.push(Object.assign({},sz));
+                });
+                primary.data.stock = primary.data.sizes.reduce(function(a,s){return a+(s.qty||0);},0);
+            } else {
+                primary.data.stock = (primary.data.stock||0) + (d.data.stock||0);
+            }
+        });
+        var batch = db.batch();
+        batch.set(primary.ref, primary.data, {merge:true});
+        rest.forEach(function(d){ batch.delete(d.ref); });
+        await batch.commit();
+        var finalStock = (primary.data.sizes&&primary.data.sizes.length)?primary.data.sizes.reduce(function(a,s){return a+(s.qty||0);},0):(primary.data.stock||0);
+        console.log('✅ Done! "' + productName + '" now has 1 doc with total stock: ' + finalStock);
+        alert('✅ Merged! "' + productName + '" → 1 doc, total stock: ' + finalStock);
+        renderInventory(); renderProducts();
+    }
+
+    async function mergeAllDuplicates(storeId) {
+        if (!db) { console.error('Firebase offline'); return; }
+        console.log('🔍 Scanning ' + storeId + ' for duplicate products...');
+        var snap = await db.collection('stores').doc(storeId).collection('products').get();
+        var byName = {};
+        snap.forEach(function(d){
+            var n = (d.data().name||'').trim().toLowerCase();
+            if (!byName[n]) byName[n] = [];
+            byName[n].push({id:d.id,ref:d.ref,data:JSON.parse(JSON.stringify(d.data()))});
+        });
+        var dupes = Object.entries(byName).filter(function(e){return e[1].length>1;});
+        if (!dupes.length) { console.log('✅ No duplicates found in ' + storeId); alert('✅ No duplicates found!'); return; }
+        console.log('Found ' + dupes.length + ' product(s) with duplicates:');
+        dupes.forEach(function(e){ console.log('  • ' + e[1][0].data.name + ' (' + e[1].length + ' docs)'); });
+        if (!confirm('Merge all ' + dupes.length + ' duplicate product(s) in ' + storeId + '?\n\n' + dupes.map(function(e){return e[1][0].data.name+' ('+e[1].length+' docs)';}).join('\n'))) return;
+        var batch = db.batch();
+        var fixed = 0;
+        dupes.forEach(function(e){
+            var docs = e[1].sort(function(a,b){
+                var aS=(a.data.sizes&&a.data.sizes.length)?a.data.sizes.reduce(function(x,s){return x+(s.qty||0);},0):(a.data.stock||0);
+                var bS=(b.data.sizes&&b.data.sizes.length)?b.data.sizes.reduce(function(x,s){return x+(s.qty||0);},0):(b.data.stock||0);
+                return bS-aS;
+            });
+            var primary = docs[0], rest = docs.slice(1);
+            rest.forEach(function(d){
+                if (primary.data.sizes&&primary.data.sizes.length) {
+                    (d.data.sizes||[]).forEach(function(sz){
+                        var pSz=primary.data.sizes.find(function(s){return s.name===sz.name;});
+                        if (pSz) pSz.qty+=(sz.qty||0);
+                        else primary.data.sizes.push(Object.assign({},sz));
+                    });
+                    primary.data.stock=primary.data.sizes.reduce(function(a,s){return a+(s.qty||0);},0);
+                } else { primary.data.stock=(primary.data.stock||0)+(d.data.stock||0); }
+            });
+            batch.set(primary.ref, primary.data, {merge:true});
+            rest.forEach(function(d){ batch.delete(d.ref); });
+            fixed += rest.length;
+        });
+        await batch.commit();
+        console.log('✅ Merged ' + fixed + ' duplicate doc(s) across ' + dupes.length + ' product(s).');
+        alert('✅ Done! Merged ' + fixed + ' duplicate doc(s) across ' + dupes.length + ' product(s).\nCheck inventory to confirm.');
+        renderInventory(); renderProducts();
+    }
+
+    // =============================================
     // INITIALIZATION
     // =============================================
     document.addEventListener('DOMContentLoaded', async function() {
