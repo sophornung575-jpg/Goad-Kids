@@ -2748,7 +2748,7 @@ function sendToTelegram(order, callback) {
         try {
             for (var i = 0; i < STATE.products.length; i++) {
                 var p = STATE.products[i];
-                await db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({ name: p.name, price: p.price, stock: p.stock, category: p.category, images: p.images || [], sizes: p.sizes || [], active: true, updatedAt: new Date().toISOString() }, { merge: true });
+                await db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({ name: p.name, slug: p.slug || makeSlug(p.name), price: p.price, stock: p.stock, category: p.category, images: p.images || [], sizes: p.sizes || [], active: true, updatedAt: new Date().toISOString() }, { merge: true });
             }
             // Delete products that were deleted locally
             var deleted = JSON.parse(localStorage.getItem('goatDeletedProducts') || '[]');
@@ -3020,6 +3020,12 @@ function sendToTelegram(order, callback) {
         document.getElementById('newProductSizes').innerHTML = h;
     }
 
+    // Stable cross-store product identifier derived from name
+    // Same product name always produces same slug regardless of store
+    function makeSlug(name) {
+        return (name || '').trim().toLowerCase().replace(/\s+/g, '_');
+    }
+
     function addProduct() {
         var n = document.getElementById('productName').value.trim();
         var pr = parseFloat(document.getElementById('productPrice').value);
@@ -3029,7 +3035,7 @@ function sendToTelegram(order, callback) {
         var imgs = STATE.newProductImages.length ? STATE.newProductImages.slice() : ['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'];
         var t = 0;
         for (var i = 0; i < STATE.newProductSizes.length; i++) { t += STATE.newProductSizes[i].qty; }
-        STATE.products.push({ id: 'p' + Date.now(), name: n, price: pr, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice(), addedAt: Date.now(), active: true });
+        STATE.products.push({ id: 'p' + Date.now(), name: n, slug: makeSlug(n), price: pr, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice(), addedAt: Date.now(), active: true });
         saveProducts();
         logActivity('Add Product', n + ' ($' + pr + ')');
         if (STATE.firebaseOnline) syncToFirebase();
@@ -3130,6 +3136,7 @@ function sendToTelegram(order, callback) {
         for (var i = 0; i < STATE.products.length; i++) { if (STATE.products[i].id === pid) { p = STATE.products[i]; break; } }
         if (!p) return;
         p.name = document.getElementById('editProductName').value.trim() || p.name;
+        p.slug = makeSlug(p.name); // always keep slug in sync with name
         p.category = document.getElementById('editProductCategory').value;
         p.price = parseFloat(document.getElementById('editProductPrice').value);
         p.images = STATE.editProductImages.slice();
@@ -3150,7 +3157,7 @@ function sendToTelegram(order, callback) {
         // Push to Firebase immediately
         if (STATE.firebaseOnline && db) {
             db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({
-                name: p.name, price: p.price, stock: p.stock, category: p.category,
+                name: p.name, slug: p.slug, price: p.price, stock: p.stock, category: p.category,
                 images: p.images || [], sizes: p.sizes || [], active: true,
                 updatedAt: new Date().toISOString()
             }, { merge: true }).catch(function(e){ console.warn('Edit save failed:', e); });
@@ -5906,40 +5913,51 @@ function sendToTelegram(order, callback) {
                 p.stock = getTotalStock(p);
             } else { p.stock = (p.stock || 0) - t.qty; }
 
-            // Add to destination store — ALWAYS search by name first to avoid creating duplicate docs
+            // Add to destination store — look up by slug (stable cross-store key), then name, then ID
             var destProductRef = null;
             var destData = null;
-            try {
-                // Try exact name match first
-                var destSnap = await db.collection('stores').doc(t.toStoreId).collection('products')
-                    .where('name', '==', p.name).limit(1).get();
-                if (!destSnap.empty) {
-                    destProductRef = destSnap.docs[0].ref;
-                    destData = JSON.parse(JSON.stringify(destSnap.docs[0].data()));
-                }
-            } catch(e) { console.warn('Name-based dest lookup failed:', e.message); }
+            var productSlug = p.slug || makeSlug(p.name);
 
+            // 1. Slug match (most reliable — same product name always same slug)
+            var slugSnap = await db.collection('stores').doc(t.toStoreId).collection('products')
+                .where('slug', '==', productSlug).limit(1).get();
+            if (!slugSnap.empty) {
+                destProductRef = slugSnap.docs[0].ref;
+                destData = JSON.parse(JSON.stringify(slugSnap.docs[0].data()));
+            }
+
+            // 2. Name match fallback (for products without slug yet)
             if (!destProductRef) {
-                // Also try by source productId in case it was previously transferred with same ID
-                try {
-                    var byIdSnap = await db.collection('stores').doc(t.toStoreId).collection('products').doc(t.productId).get();
-                    if (byIdSnap.exists) {
-                        destProductRef = byIdSnap.ref;
-                        destData = JSON.parse(JSON.stringify(byIdSnap.data()));
-                    }
-                } catch(e2) { console.warn('ID-based dest lookup failed:', e2.message); }
+                var nameSnap = await db.collection('stores').doc(t.toStoreId).collection('products')
+                    .where('name', '==', p.name).limit(1).get();
+                if (!nameSnap.empty) {
+                    destProductRef = nameSnap.docs[0].ref;
+                    destData = JSON.parse(JSON.stringify(nameSnap.docs[0].data()));
+                }
+            }
+
+            // 3. ID match fallback
+            if (!destProductRef) {
+                var byIdSnap = await db.collection('stores').doc(t.toStoreId).collection('products').doc(t.productId).get();
+                if (byIdSnap.exists) {
+                    destProductRef = byIdSnap.ref;
+                    destData = JSON.parse(JSON.stringify(byIdSnap.data()));
+                }
             }
 
             if (!destProductRef) {
-                // Product genuinely doesn't exist in destination yet — create with a FRESH auto-generated ID
-                // NEVER reuse the source store's product ID — that caused the duplicate bug
+                // Genuinely new product in destination — fresh auto-generated ID, never reuse source ID
                 destProductRef = db.collection('stores').doc(t.toStoreId).collection('products').doc();
                 destData = Object.assign({}, p, {
+                    slug: productSlug,
                     stock: 0,
                     sizes: (p.sizes||[]).map(function(s){ return Object.assign({}, s, {qty: 0}); })
                 });
-                console.log('Creating new product doc in destination store with fresh ID:', destProductRef.id);
+                console.log('ℹ️ Creating new product in destination with fresh ID:', destProductRef.id);
             }
+
+            // Ensure slug is set on destination product for future transfers
+            if (!destData.slug) destData.slug = productSlug;
 
             if (destData.sizes && destData.sizes.length > 0 && t.size !== 'One Size') {
                 var found = false;
@@ -6028,32 +6046,53 @@ function sendToTelegram(order, callback) {
             var t = transfers[k];
             var destKey = t.toStoreId + '|' + t.productName;
             if (destProductCache[destKey]) continue;
-            try {
-                // Try name match first
-                var destSnap = await db.collection('stores').doc(t.toStoreId).collection('products')
+
+            var srcP2 = sourceProductCache[t.productId];
+            var productSlug2 = (srcP2 && srcP2.slug) ? srcP2.slug : makeSlug(t.productName);
+
+            // 1. Slug match (primary — stable cross-store key)
+            var slugSnap2 = await db.collection('stores').doc(t.toStoreId).collection('products')
+                .where('slug', '==', productSlug2).limit(1).get();
+            if (!slugSnap2.empty) {
+                var sd = slugSnap2.docs[0];
+                destProductCache[destKey] = { ref: sd.ref, data: JSON.parse(JSON.stringify(sd.data())) };
+            }
+
+            // 2. Name match fallback (products without slug yet)
+            if (!destProductCache[destKey]) {
+                var nameSnap2 = await db.collection('stores').doc(t.toStoreId).collection('products')
                     .where('name', '==', t.productName).limit(1).get();
-                if (!destSnap.empty) {
-                    var dd = destSnap.docs[0];
-                    destProductCache[destKey] = { ref: dd.ref, data: JSON.parse(JSON.stringify(dd.data())) };
-                } else {
-                    // Try by original productId (may exist if was previously transferred with same ID)
-                    var byIdRef = db.collection('stores').doc(t.toStoreId).collection('products').doc(t.productId);
-                    var byIdSnap2 = await byIdRef.get();
-                    if (byIdSnap2.exists) {
-                        destProductCache[destKey] = { ref: byIdRef, data: JSON.parse(JSON.stringify(byIdSnap2.data())) };
-                    } else {
-                        // Genuinely new — create with FRESH auto-generated ID, never reuse source ID
-                        var srcP = sourceProductCache[t.productId];
-                        if (srcP) {
-                            var newRef = db.collection('stores').doc(t.toStoreId).collection('products').doc(); // fresh ID
-                            destProductCache[destKey] = {
-                                ref: newRef,
-                                data: Object.assign({}, srcP, { stock: 0, sizes: (srcP.sizes||[]).map(function(s){ return Object.assign({}, s, {qty:0}); }) })
-                            };
-                        }
-                    }
+                if (!nameSnap2.empty) {
+                    var nd = nameSnap2.docs[0];
+                    destProductCache[destKey] = { ref: nd.ref, data: JSON.parse(JSON.stringify(nd.data())) };
                 }
-            } catch(e) { console.warn('Failed to load dest product:', destKey, e); }
+            }
+
+            // 3. ID match fallback
+            if (!destProductCache[destKey]) {
+                var byIdRef2 = db.collection('stores').doc(t.toStoreId).collection('products').doc(t.productId);
+                var byIdSnap3 = await byIdRef2.get();
+                if (byIdSnap3.exists) {
+                    destProductCache[destKey] = { ref: byIdRef2, data: JSON.parse(JSON.stringify(byIdSnap3.data())) };
+                }
+            }
+
+            // 4. Genuinely new — fresh auto-generated ID, never reuse source ID
+            if (!destProductCache[destKey]) {
+                if (srcP2) {
+                    var newRef2 = db.collection('stores').doc(t.toStoreId).collection('products').doc();
+                    destProductCache[destKey] = {
+                        ref: newRef2,
+                        data: Object.assign({}, srcP2, { slug: productSlug2, stock: 0, sizes: (srcP2.sizes||[]).map(function(s){ return Object.assign({}, s, {qty:0}); }) })
+                    };
+                    console.log('ℹ️ New product in destination with fresh ID:', newRef2.id);
+                }
+            }
+
+            // Ensure slug is set on destination product for future transfers
+            if (destProductCache[destKey] && !destProductCache[destKey].data.slug) {
+                destProductCache[destKey].data.slug = productSlug2;
+            }
         }
 
         // ── Step 4: Apply ALL deductions/additions in memory ──
@@ -6539,6 +6578,50 @@ function sendToTelegram(order, callback) {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#x27;');
+    }
+
+    // =============================================
+    // SLUG MIGRATION — run once to add slug field to all existing products
+    // Usage: migrateAllSlugs()
+    // =============================================
+    async function migrateAllSlugs() {
+        if (!db) { console.error('Firebase offline'); return; }
+        var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
+        try {
+            var bSnap = await db.collection('_admin_').doc('branches').get();
+            if (bSnap.exists) (bSnap.data().list||[]).forEach(function(b){ stores.push({id:b.id,name:b.name}); });
+        } catch(e) {}
+
+        var totalFixed = 0;
+        var totalSkipped = 0;
+
+        for (var i = 0; i < stores.length; i++) {
+            var s = stores[i];
+            console.log('📦 Migrating slugs for: ' + s.name + ' (' + s.id + ')...');
+            try {
+                var snap = await db.collection('stores').doc(s.id).collection('products').get();
+                var batch = db.batch();
+                var batchCount = 0;
+                snap.forEach(function(doc) {
+                    var d = doc.data();
+                    if (!d.slug && d.name) {
+                        batch.update(doc.ref, { slug: makeSlug(d.name) });
+                        batchCount++;
+                        totalFixed++;
+                    } else {
+                        totalSkipped++;
+                    }
+                });
+                if (batchCount > 0) {
+                    await batch.commit();
+                    console.log('  ✅ ' + batchCount + ' products updated with slug');
+                } else {
+                    console.log('  ✅ All products already have slugs');
+                }
+            } catch(e) { console.warn('  ❌ Failed for ' + s.name + ':', e.message); }
+        }
+        console.log('\n✅ Migration complete! ' + totalFixed + ' products updated, ' + totalSkipped + ' already had slugs.');
+        alert('✅ Slug migration complete!\n' + totalFixed + ' products updated across all stores.\nTransfers will now use slugs for reliable matching.');
     }
 
     // =============================================
