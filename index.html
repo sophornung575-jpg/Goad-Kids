@@ -497,22 +497,24 @@
                         <div class="hidden" id="cartItemsList"></div>
                     </div>
                     <div class="cart-summary hidden" id="cartSummary">
+                        <!-- Admin-only discount panel — hidden from customers -->
+                        <div id="adminDiscountPanel" class="hidden" style="background:#fffbeb;border-radius:10px;padding:0.75rem 1rem;margin-bottom:1rem;border:1.5px dashed var(--warning)">
+                            <div style="font-size:0.82rem;font-weight:700;color:var(--warning);margin-bottom:0.5rem">🏷️ Admin Discount</div>
+                            <div style="font-size:0.78rem;color:var(--gray);margin-bottom:0.5rem">Select items below then set discount:</div>
+                            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                                <select id="discountType" class="form-control" style="font-size:0.82rem;padding:0.3rem 0.5rem;flex:1;min-width:110px" onchange="applyDiscount()">
+                                    <option value="none">No Discount</option>
+                                    <option value="percent">% Off</option>
+                                    <option value="fixed">Fixed $ Off</option>
+                                </select>
+                                <input type="number" id="discountValue" class="form-control" min="0" step="0.01" placeholder="Amount" style="font-size:0.82rem;padding:0.3rem 0.5rem;width:90px" oninput="applyDiscount()">
+                                <button class="btn btn-outline btn-small" onclick="toggleSelectAllDiscountItems()" style="font-size:0.78rem;white-space:nowrap">Select All</button>
+                            </div>
+                            <div id="discountNote" style="font-size:0.78rem;color:var(--success);font-weight:600;margin-top:6px"></div>
+                        </div>
                         <div class="cart-totals">
                             <div class="cart-total-row"><span data-translate="subtotal">Subtotal</span><span id="cartSubtotal">$0.00</span></div>
-                            <!-- Admin-only discount controls -->
-                            <div id="adminDiscountPanel" class="hidden" style="background:var(--light);border-radius:8px;padding:0.6rem 0.75rem;margin:0.4rem 0;border:1px dashed var(--warning)">
-                                <div style="font-size:0.78rem;font-weight:600;color:var(--warning);margin-bottom:0.4rem">🏷️ Admin Discount</div>
-                                <div style="display:flex;gap:6px;align-items:center">
-                                    <select id="discountType" class="form-control" style="font-size:0.82rem;padding:0.3rem 0.5rem;flex:1" onchange="applyDiscount()">
-                                        <option value="none">No Discount</option>
-                                        <option value="percent">% Off</option>
-                                        <option value="fixed">Fixed $ Off</option>
-                                    </select>
-                                    <input type="number" id="discountValue" class="form-control" min="0" step="0.01" placeholder="0" style="font-size:0.82rem;padding:0.3rem 0.5rem;width:80px" oninput="applyDiscount()">
-                                </div>
-                                <div id="discountNote" style="font-size:0.75rem;color:var(--gray);margin-top:4px"></div>
-                            </div>
-                            <div id="discountRow" class="cart-total-row hidden" style="color:var(--success)"><span>Discount</span><span id="cartDiscount">-$0.00</span></div>
+                            <div id="discountRow" class="cart-total-row hidden" style="color:var(--success)"><span id="discountLabel">Discount</span><span id="cartDiscount">-$0.00</span></div>
                             <div class="cart-total-row"><span data-translate="shipping">Shipping</span><span id="cartShipping">$0.00</span></div>
                             <div class="cart-total-row" style="font-size:1.1rem;font-weight:700;border-top:2px solid var(--gray-light);padding-top:0.5rem;margin-top:0.25rem"><span data-translate="total">Total</span><span id="cartTotal">$0.00</span></div>
                         </div>
@@ -1737,55 +1739,122 @@ function sendToTelegram(order, callback) {
         localStorage.setItem('goatActivityLog', JSON.stringify(STATE.activityLog));
     }
 
-    function getDiscountAmount(sub) {
-        var typeEl = document.getElementById('discountType');
-        var valEl = document.getElementById('discountValue');
-        if (!typeEl || !valEl) return 0;
-        var type = typeEl.value;
-        var val = parseFloat(valEl.value) || 0;
-        if (type === 'none' || val <= 0) return 0;
-        if (type === 'percent') return Math.min(sub, sub * val / 100);
-        if (type === 'fixed') return Math.min(sub, val);
-        return 0;
+    function onDiscountItemCheck() {
+        var cbs = document.querySelectorAll('.discount-item-cb');
+        cbs.forEach(function(cb) {
+            var idx = parseInt(cb.getAttribute('data-idx'));
+            if (STATE.cart[idx]) STATE.cart[idx].discountSelected = cb.checked;
+        });
+        applyDiscount();
+    }
+
+    function toggleSelectAllDiscountItems() {
+        var cbs = document.querySelectorAll('.discount-item-cb');
+        var anyUnchecked = Array.from(cbs).some(function(cb){ return !cb.checked; });
+        cbs.forEach(function(cb) {
+            cb.checked = anyUnchecked;
+            var idx = parseInt(cb.getAttribute('data-idx'));
+            if (STATE.cart[idx]) STATE.cart[idx].discountSelected = anyUnchecked;
+        });
+        applyDiscount();
     }
 
     function applyDiscount() {
-        var sub = 0;
-        for (var i = 0; i < STATE.cart.length; i++) sub += STATE.cart[i].price * STATE.cart[i].quantity;
-        var disc = getDiscountAmount(sub);
         var typeEl = document.getElementById('discountType');
         var valEl = document.getElementById('discountValue');
         if (!typeEl || !valEl) return;
         var type = typeEl.value;
         var val = parseFloat(valEl.value) || 0;
 
+        // Apply discount per selected item
+        STATE.cart.forEach(function(item) {
+            if (item.discountSelected && type !== 'none' && val > 0) {
+                var itemTotal = item.price * item.quantity;
+                if (type === 'percent') item.discountAmt = Math.min(itemTotal, itemTotal * val / 100);
+                else if (type === 'fixed') item.discountAmt = Math.min(itemTotal, val);
+            } else {
+                item.discountAmt = 0;
+            }
+        });
+
+        // Update note
+        var selectedCount = STATE.cart.filter(function(it){ return it.discountSelected; }).length;
+        var totalDisc = STATE.cart.reduce(function(a,it){ return a+(it.discountAmt||0); },0);
         var note = document.getElementById('discountNote');
         if (note) {
-            if (type === 'percent' && val > 0) note.textContent = val + '% off → -$' + disc.toFixed(2);
-            else if (type === 'fixed' && val > 0) note.textContent = 'Fixed $' + val.toFixed(2) + ' off → -$' + disc.toFixed(2);
+            if (type !== 'none' && val > 0 && selectedCount > 0)
+                note.textContent = selectedCount + ' item(s) selected · -$' + totalDisc.toFixed(2) + ' total discount';
+            else if (selectedCount === 0 && type !== 'none' && val > 0)
+                note.textContent = 'Select items above to apply discount';
             else note.textContent = '';
+            note.style.color = (selectedCount > 0 && totalDisc > 0) ? 'var(--success)' : 'var(--warning)';
         }
 
+        // Re-render cart items to show strikethrough prices
+        var l = document.getElementById('cartItemsList');
+        if (l) {
+            var isAdmin = !!STATE.adminRole;
+            var h = '';
+            for (var i = 0; i < STATE.cart.length; i++) {
+                var it = STATE.cart[i];
+                var tt = it.price * it.quantity;
+                var discAmt = it.discountAmt || 0;
+                var finalPrice = Math.max(0, tt - discAmt);
+                var checked = it.discountSelected ? 'checked' : '';
+                h += '<div class="cart-item">';
+                if (isAdmin) h += '<div style="display:flex;align-items:center;padding-right:6px"><input type="checkbox" class="discount-item-cb" data-idx="' + i + '" ' + checked + ' onchange="onDiscountItemCheck()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--warning)"></div>';
+                h += '<img src="' + it.image + '" class="cart-item-image" onerror="this.src='https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100'">' +
+                    '<div style="flex:1"><div class="cart-item-name">' + it.name + '</div>' +
+                    '<div style="color:var(--gray);font-size:0.85rem">Size: ' + it.size + '</div>';
+                if (discAmt > 0) {
+                    h += '<div style="font-size:0.82rem"><s style="color:var(--gray)">$' + tt.toFixed(2) + '</s> <span style="color:var(--success);font-weight:700">$' + finalPrice.toFixed(2) + '</span> <span style="font-size:0.75rem;background:#d4edda;color:#155724;border-radius:4px;padding:1px 5px">-$' + discAmt.toFixed(2) + '</span></div>';
+                } else {
+                    h += '<div class="cart-item-price">$' + it.price.toFixed(2) + ' each</div>';
+                }
+                h += '<div class="cart-item-quantity"><button class="quantity-btn" onclick="updQty(' + i + ',' + (it.quantity-1) + ')">-</button><span>' + it.quantity + '</span><button class="quantity-btn" onclick="updQty(' + i + ',' + (it.quantity+1) + ')">+</button></div></div>' +
+                    '<div class="cart-item-total" style="' + (discAmt>0?'color:var(--success)':'') + '">$' + finalPrice.toFixed(2) + '</div>' +
+                    '<button class="remove-item" onclick="remCart(' + i + ')"><i class="fas fa-trash"></i></button></div>';
+            }
+            l.innerHTML = h;
+        }
+        recalcCartTotals();
+    }
+
+    function recalcCartTotals() {
+        var sub = 0, totalDisc = 0;
+        STATE.cart.forEach(function(it) { sub += it.price * it.quantity; totalDisc += it.discountAmt || 0; });
+        var sh = STATE.shippingFee || 0;
+        var total = sub - totalDisc + sh;
+        var subEl = document.getElementById('cartSubtotal');
+        if (subEl) subEl.textContent = '$' + sub.toFixed(2);
         var discRow = document.getElementById('discountRow');
         var discEl = document.getElementById('cartDiscount');
+        var discLabel = document.getElementById('discountLabel');
         if (discRow && discEl) {
-            if (disc > 0) { discRow.classList.remove('hidden'); discEl.textContent = '-$' + disc.toFixed(2); }
-            else { discRow.classList.add('hidden'); }
+            if (totalDisc > 0) {
+                discRow.classList.remove('hidden');
+                discEl.textContent = '-$' + totalDisc.toFixed(2);
+                var typeEl = document.getElementById('discountType');
+                var valEl = document.getElementById('discountValue');
+                if (discLabel && typeEl && valEl) {
+                    var type = typeEl.value, val = parseFloat(valEl.value)||0;
+                    discLabel.textContent = 'Discount' + (type==='percent'?' ('+val+'% off)':type==='fixed'?' (-$'+val.toFixed(2)+'/item)':'');
+                }
+            } else { discRow.classList.add('hidden'); }
         }
-        updateShipping();
+        var shEl = document.getElementById('cartShipping');
+        if (shEl) shEl.textContent = '$' + sh.toFixed(2);
+        var totEl = document.getElementById('cartTotal');
+        if (totEl) totEl.textContent = '$' + total.toFixed(2);
     }
 
     function updateShipping() {
-        var loc = document.getElementById('shippingLocation'), sh = 0;
+        var loc = document.getElementById('shippingLocation');
+        var sh = 0;
         if (loc && loc.value === 'phnompenh') sh = 1.50;
         else if (loc && loc.value === 'province') sh = 2.00;
         STATE.shippingFee = sh;
-        var sub = 0;
-        for (var i = 0; i < STATE.cart.length; i++) sub += STATE.cart[i].price * STATE.cart[i].quantity;
-        var disc = getDiscountAmount(sub);
-        var total = sub - disc + sh;
-        document.getElementById('cartShipping').textContent = '$' + sh.toFixed(2);
-        document.getElementById('cartTotal').textContent = '$' + total.toFixed(2);
+        recalcCartTotals();
     }
 
     // Show admin discount panel when admin is active on store tab
@@ -1853,7 +1922,7 @@ function sendToTelegram(order, callback) {
         var sub = 0;
         for (var j = 0; j < savedCart.length; j++) sub += savedCart[j].price * savedCart[j].quantity;
         var sh = STATE.shippingFee || 0;
-        var disc = getDiscountAmount(sub);
+        var disc = savedCart.reduce(function(a,it){ return a+(it.discountAmt||0); }, 0);
         var total = sub - disc + sh;
         var discountType = document.getElementById('discountType') ? document.getElementById('discountType').value : 'none';
         var discountValue = parseFloat(document.getElementById('discountValue') ? document.getElementById('discountValue').value : 0) || 0;
@@ -3480,23 +3549,41 @@ function sendToTelegram(order, callback) {
         if (!STATE.cart.length) { e.classList.remove('hidden'); l.classList.add('hidden'); s.classList.add('hidden'); return; }
         e.classList.add('hidden'); l.classList.remove('hidden'); s.classList.remove('hidden');
         updateDiscountPanelVisibility();
+        var isAdmin = !!STATE.adminRole;
         var h = '';
         for (var i = 0; i < STATE.cart.length; i++) {
-            var it = STATE.cart[i], tt = it.price * it.quantity;
-            h += '<div class="cart-item">' +
-                '<img src="' + it.image + '" class="cart-item-image" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100\'">' +
-                '<div><div class="cart-item-name">' + it.name + '</div>' +
-                '<div style="color:var(--gray);font-size:0.85rem">Size: ' + it.size + '</div>' +
-                '<div class="cart-item-price">$' + it.price.toFixed(2) + ' each</div>' +
-                '<div class="cart-item-quantity"><button class="quantity-btn" onclick="updQty(' + i + ',' + (it.quantity - 1) + ')">-</button><span>' + it.quantity + '</span><button class="quantity-btn" onclick="updQty(' + i + ',' + (it.quantity + 1) + ')">+</button></div></div>' +
-                '<div class="cart-item-total">$' + tt.toFixed(2) + '</div>' +
-                '<button class="remove-item" onclick="remCart(' + i + ')"><i class="fas fa-trash"></i></button></div>';
+            var it = STATE.cart[i];
+            var tt = it.price * it.quantity;
+            var discAmt = it.discountAmt || 0; // per-item discount amount
+            var finalPrice = Math.max(0, tt - discAmt);
+            var checked = it.discountSelected ? 'checked' : '';
+            h += '<div class="cart-item" id="cart-item-' + i + '" style="position:relative">';
+            // Checkbox for discount selection — admin only
+            if (isAdmin) {
+                h += '<div style="display:flex;align-items:center;padding-right:6px">' +
+                    '<input type="checkbox" class="discount-item-cb" data-idx="' + i + '" ' + checked + ' onchange="onDiscountItemCheck()" ' +
+                    'style="width:16px;height:16px;cursor:pointer;accent-color:var(--warning)">' +
+                    '</div>';
+            }
+            h += '<img src="' + it.image + '" class="cart-item-image" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100\'">' +
+                '<div style="flex:1">' +
+                '<div class="cart-item-name">' + it.name + '</div>' +
+                '<div style="color:var(--gray);font-size:0.85rem">Size: ' + it.size + '</div>';
+            if (discAmt > 0) {
+                h += '<div style="font-size:0.82rem"><s style="color:var(--gray)">$' + tt.toFixed(2) + '</s> ' +
+                    '<span style="color:var(--success);font-weight:700">$' + finalPrice.toFixed(2) + '</span> ' +
+                    '<span style="font-size:0.75rem;background:#d4edda;color:#155724;border-radius:4px;padding:1px 5px">-$' + discAmt.toFixed(2) + '</span></div>';
+            } else {
+                h += '<div class="cart-item-price">$' + it.price.toFixed(2) + ' each</div>';
+            }
+            h += '<div class="cart-item-quantity"><button class="quantity-btn" onclick="updQty(' + i + ',' + (it.quantity - 1) + ')">-</button><span>' + it.quantity + '</span><button class="quantity-btn" onclick="updQty(' + i + ',' + (it.quantity + 1) + ')">+</button></div>' +
+                '</div>' +
+                '<div class="cart-item-total" style="' + (discAmt > 0 ? 'color:var(--success)' : '') + '">$' + finalPrice.toFixed(2) + '</div>' +
+                '<button class="remove-item" onclick="remCart(' + i + ')"><i class="fas fa-trash"></i></button>' +
+                '</div>';
         }
         l.innerHTML = h;
-        var sub = 0;
-        for (var j = 0; j < STATE.cart.length; j++) { sub += STATE.cart[j].price * STATE.cart[j].quantity; }
-        document.getElementById('cartSubtotal').textContent = '$' + sub.toFixed(2);
-        updateShipping();
+        recalcCartTotals();
     }
 
     function updQty(i, q) {
