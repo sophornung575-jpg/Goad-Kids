@@ -1738,11 +1738,14 @@ function sendToTelegram(order, callback) {
     }
 
     function getDiscountAmount(sub) {
-        var type = document.getElementById('discountType');
-        var val = parseFloat(document.getElementById('discountValue').value) || 0;
-        if (!type || type.value === 'none' || val <= 0) return 0;
-        if (type.value === 'percent') return Math.min(sub, sub * val / 100);
-        if (type.value === 'fixed') return Math.min(sub, val);
+        var typeEl = document.getElementById('discountType');
+        var valEl = document.getElementById('discountValue');
+        if (!typeEl || !valEl) return 0;
+        var type = typeEl.value;
+        var val = parseFloat(valEl.value) || 0;
+        if (type === 'none' || val <= 0) return 0;
+        if (type === 'percent') return Math.min(sub, sub * val / 100);
+        if (type === 'fixed') return Math.min(sub, val);
         return 0;
     }
 
@@ -1750,23 +1753,24 @@ function sendToTelegram(order, callback) {
         var sub = 0;
         for (var i = 0; i < STATE.cart.length; i++) sub += STATE.cart[i].price * STATE.cart[i].quantity;
         var disc = getDiscountAmount(sub);
-        var type = document.getElementById('discountType').value;
-        var val = parseFloat(document.getElementById('discountValue').value) || 0;
+        var typeEl = document.getElementById('discountType');
+        var valEl = document.getElementById('discountValue');
+        if (!typeEl || !valEl) return;
+        var type = typeEl.value;
+        var val = parseFloat(valEl.value) || 0;
 
-        // Update discount note
         var note = document.getElementById('discountNote');
-        if (type === 'percent' && val > 0) note.textContent = val + '% off → -$' + disc.toFixed(2);
-        else if (type === 'fixed' && val > 0) note.textContent = 'Fixed discount → -$' + disc.toFixed(2);
-        else note.textContent = '';
+        if (note) {
+            if (type === 'percent' && val > 0) note.textContent = val + '% off → -$' + disc.toFixed(2);
+            else if (type === 'fixed' && val > 0) note.textContent = 'Fixed $' + val.toFixed(2) + ' off → -$' + disc.toFixed(2);
+            else note.textContent = '';
+        }
 
-        // Show/hide discount row
         var discRow = document.getElementById('discountRow');
         var discEl = document.getElementById('cartDiscount');
-        if (disc > 0) {
-            discRow.classList.remove('hidden');
-            discEl.textContent = '-$' + disc.toFixed(2);
-        } else {
-            discRow.classList.add('hidden');
+        if (discRow && discEl) {
+            if (disc > 0) { discRow.classList.remove('hidden'); discEl.textContent = '-$' + disc.toFixed(2); }
+            else { discRow.classList.add('hidden'); }
         }
         updateShipping();
     }
@@ -1788,11 +1792,10 @@ function sendToTelegram(order, callback) {
     function updateDiscountPanelVisibility() {
         var panel = document.getElementById('adminDiscountPanel');
         if (!panel) return;
-        if (STATE.adminRole === 'full' || STATE.adminRole === 'view') {
+        if (STATE.adminRole) { // show for any logged-in admin role
             panel.classList.remove('hidden');
         } else {
             panel.classList.add('hidden');
-            // Reset discount when admin logs out
             var dtype = document.getElementById('discountType');
             var dval = document.getElementById('discountValue');
             if (dtype) dtype.value = 'none';
