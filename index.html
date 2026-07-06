@@ -3506,9 +3506,12 @@ function sendToTelegram(order, callback) {
             var iType = it.discountType || 'none';
             var iVal  = it.discountValue || '';
 
-            h += '<div class="cart-item" style="flex-wrap:wrap;gap:0.5rem">' +
+            h += '<div class="cart-item" style="align-items:flex-start">' +
+                // Left: image
                 '<img src="' + it.image + '" class="cart-item-image" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100\'">' +
-                '<div style="flex:1;min-width:120px">' +
+
+                // Middle: name, size, price, qty
+                '<div style="flex:1;min-width:0">' +
                 '<div class="cart-item-name">' + it.name + '</div>' +
                 '<div style="color:var(--gray);font-size:0.85rem">Size: ' + it.size + '</div>';
 
@@ -3526,28 +3529,29 @@ function sendToTelegram(order, callback) {
                 '<button class="quantity-btn" onclick="updQty(' + i + ',' + (it.quantity-1) + ')">-</button>' +
                 '<span>' + it.quantity + '</span>' +
                 '<button class="quantity-btn" onclick="updQty(' + i + ',' + (it.quantity+1) + ')">+</button>' +
-                '</div>';
+                '</div>' +
+                '</div>' +
 
-            // Per-item discount controls — admin only
+                // Right: total + delete + discount controls (admin only)
+                '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">' +
+                '<div class="cart-item-total" style="' + (discAmt>0?'color:var(--success)':'') + '">$' + finalPrice.toFixed(2) + '</div>' +
+                '<button class="remove-item" onclick="remCart(' + i + ')"><i class="fas fa-trash"></i></button>';
+
+            // Discount controls stacked on right side — admin only
             if (isAdmin) {
-                h += '<div style="display:flex;gap:4px;align-items:center;margin-top:6px;flex-wrap:wrap">' +
-                    '<select class="form-control" style="font-size:0.75rem;padding:2px 4px;flex:1;min-width:90px;border-color:var(--warning)" onchange="setItemDiscount(' + i + ',this.value,null)">' +
+                h += '<div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;align-items:flex-end">' +
+                    '<select style="font-size:0.72rem;padding:2px 4px;width:82px;border:1px solid var(--warning);border-radius:5px;outline:none;background:#fffbeb" onchange="setItemDiscount(' + i + ',this.value,null)">' +
                     '<option value="none"' + (iType==='none'?' selected':'') + '>No discount</option>' +
                     '<option value="percent"' + (iType==='percent'?' selected':'') + '>% Off</option>' +
                     '<option value="fixed"' + (iType==='fixed'?' selected':'') + '>$ Off</option>' +
                     '</select>' +
                     '<input type="number" min="0" step="0.01" placeholder="0" value="' + iVal + '" ' +
-                    'style="font-size:0.75rem;padding:2px 6px;width:60px;border:1px solid var(--warning);border-radius:6px;outline:none" ' +
+                    'style="font-size:0.72rem;padding:2px 5px;width:82px;border:1px solid var(--warning);border-radius:5px;outline:none;text-align:right;background:#fffbeb" ' +
                     'oninput="setItemDiscount(' + i + ',null,this.value)">' +
                     '</div>';
             }
 
-            h += '</div>' +
-                '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
-                '<div class="cart-item-total" style="' + (discAmt>0?'color:var(--success)':'') + '">$' + finalPrice.toFixed(2) + '</div>' +
-                '<button class="remove-item" onclick="remCart(' + i + ')"><i class="fas fa-trash"></i></button>' +
-                '</div>' +
-                '</div>';
+            h += '</div></div>';
         }
         l.innerHTML = h;
         recalcCartTotals();
