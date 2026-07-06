@@ -1813,18 +1813,23 @@ function sendToTelegram(order, callback) {
 
 
     // Show admin discount panel when admin is active on store tab
+    var _updatingDiscountPanel = false;
     function updateDiscountPanelVisibility() {
         var panel = document.getElementById('adminDiscountPanel');
-        if (!panel) return;
-        if (STATE.adminRole) { // show for any logged-in admin role
-            panel.classList.remove('hidden');
+        if (STATE.adminRole) {
+            if (panel) panel.classList.remove('hidden');
         } else {
-            panel.classList.add('hidden');
-            var dtype = document.getElementById('discountType');
-            var dval = document.getElementById('discountValue');
-            if (dtype) dtype.value = 'none';
-            if (dval) dval.value = '';
-            applyDiscount();
+            if (panel) panel.classList.add('hidden');
+            STATE.cart.forEach(function(it) {
+                it.discountAmt = 0; it.discountType = 'none';
+                it.discountValue = 0; it.discountSelected = false;
+            });
+        }
+        // Re-render cart so discount controls appear/disappear — guard against infinite loop
+        if (!_updatingDiscountPanel && STATE.cart.length) {
+            _updatingDiscountPanel = true;
+            renderCart();
+            _updatingDiscountPanel = false;
         }
     }
 
@@ -2607,9 +2612,8 @@ function sendToTelegram(order, callback) {
         STATE.isAdmin = true; STATE.adminRole = role;
         localStorage.setItem('goatAdmin', 'true'); localStorage.setItem('goatAdminRole', role);
         addLoginRecord(name, role, true);
-        // Refresh all admin views after login
         renderPending(); renderHistory(); renderInventory(); updateAdminBadges();
-        updateDiscountPanelVisibility();
+        updateDiscountPanelVisibility(); // also re-renders cart if items present
         document.getElementById('adminBadge').classList.remove('hidden');
         document.getElementById('adminBadge').textContent = role === 'full' ? 'ADMIN' : (role === 'orders' ? 'ORDERS' : 'STOCK');
         document.getElementById('adminNavLink').classList.remove('hidden');
