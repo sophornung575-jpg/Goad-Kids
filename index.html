@@ -3935,11 +3935,13 @@ function sendToTelegram(order, callback) {
             if (o.cart && o.cart.length) {
                 for (var j = 0; j < o.cart.length; j++) {
                     var it = o.cart[j];
-                    itemsSummary += it.quantity + '× ' + it.name + ' (' + (it.size||'?') + ')  ';
+                    var itDisc = it.discountAmt || 0;
+                    itemsSummary += it.quantity + '× ' + it.name + ' (' + (it.size||'?') + ')' + (itDisc > 0 ? ' 🏷️-$'+itDisc.toFixed(2) : '') + '  ';
                 }
             }
+            var discBadge = (o.discount > 0) ? ' <span style="font-size:0.72rem;background:#d4edda;color:#276749;border-radius:4px;padding:1px 5px;margin-left:4px">-$' + o.discount.toFixed(2) + '</span>' : '';
             h += '<div class="order-card-mini">' +
-                '<div class="oc-head"><div class="oc-id">⏳ ' + escHtml(o.orderId) + '<br><span style="font-weight:400;color:var(--gray)">' + escHtml(o.orderDate||'') + '</span></div><div class="oc-total">$' + (o.total||0).toFixed(2) + '</div></div>' +
+                '<div class="oc-head"><div class="oc-id">⏳ ' + escHtml(o.orderId) + '<br><span style="font-weight:400;color:var(--gray)">' + escHtml(o.orderDate||'') + '</span></div><div class="oc-total">$' + (o.total||0).toFixed(2) + discBadge + '</div></div>' +
                 '<div class="oc-info">👤 ' + escHtml(o.customerName||'N/A') + ' · 📞 ' + escHtml(o.customerPhone||'') + '<br>📍 ' + escHtml((o.customerAddress||'') + (o.customerCity ? ', '+o.customerCity : '')) + '<br>🚚 ' + escHtml(o.shippingMethod||'N/A') + (o.customerNotes ? ' · 📝 ' + escHtml(o.customerNotes) : '') + '</div>' +
                 '<div class="oc-items">' + escHtml(itemsSummary) + '</div>' +
                 '<div class="oc-actions"><button class="btn btn-success" onclick="confirmOrder(\'' + o.orderId + '\')"><i class="fas fa-check"></i> Confirm</button><button class="btn btn-danger" onclick="rejectOrder(\'' + o.orderId + '\')"><i class="fas fa-times"></i> Reject</button></div>' +
@@ -4157,12 +4159,14 @@ function sendToTelegram(order, callback) {
             if (o.cart && o.cart.length) {
                 for (var j = 0; j < Math.min(o.cart.length, 3); j++) {
                     var it = o.cart[j];
-                    itemsSummary += it.quantity + '× ' + it.name + ' (' + (it.size||'?') + ')  ';
+                    var itDisc = it.discountAmt || 0;
+                    itemsSummary += it.quantity + '× ' + it.name + ' (' + (it.size||'?') + ')' + (itDisc > 0 ? ' 🏷️-$'+itDisc.toFixed(2) : '') + '  ';
                 }
                 if (o.cart.length > 3) itemsSummary += '+' + (o.cart.length-3) + ' more';
             }
+            var discBadge2 = (o.discount > 0) ? ' <span style="font-size:0.72rem;background:#d4edda;color:#276749;border-radius:4px;padding:1px 5px;margin-left:4px">-$' + o.discount.toFixed(2) + '</span>' : '';
             h += '<div class="order-card-mini ' + (o.status||'') + '">' +
-                '<div class="oc-head"><div class="oc-id">' + (ok ? '✅' : '❌') + ' ' + escHtml(o.orderId) + '<br><span style="font-weight:400;color:var(--gray)">' + escHtml(o.orderDate||o.confirmedAt||'') + '</span></div><div class="oc-total">$' + (o.total||0).toFixed(2) + '</div></div>' +
+                '<div class="oc-head"><div class="oc-id">' + (ok ? '✅' : '❌') + ' ' + escHtml(o.orderId) + '<br><span style="font-weight:400;color:var(--gray)">' + escHtml(o.orderDate||o.confirmedAt||'') + '</span></div><div class="oc-total">$' + (o.total||0).toFixed(2) + discBadge2 + '</div></div>' +
                 '<div class="oc-info">👤 ' + escHtml(o.customerName||'N/A') + ' · 📞 ' + escHtml(o.customerPhone||'') + '</div>' +
                 '<div class="oc-items">' + escHtml(itemsSummary) + '</div>' +
                 (ok ? '<div class="oc-actions"><button class="btn btn-receipt" onclick="printReceipt(\'' + o.orderId + '\')"><i class="fas fa-print"></i> Print</button><button class="btn btn-danger" onclick="refundOrder(\'' + o.orderId + '\')"><i class="fas fa-undo"></i> Refund</button></div>' : '') +
@@ -4192,7 +4196,17 @@ function sendToTelegram(order, callback) {
             for (var j = 0; j < order.cart.length; j++) {
                 var it = order.cart[j];
                 var itT = (it.subtotal != null ? it.subtotal : (it.price * it.quantity)) || 0;
-                items += '<div style="margin:1mm 0"><div class="inm">' + it.name + ' <span class="isz">(' + (it.size||'N/A') + ')</span></div><div class="ir"><span>' + it.quantity + ' x $' + it.price.toFixed(2) + '</span><span><b>$' + itT.toFixed(2) + '</b></span></div></div>';
+                var itDisc = it.discountAmt || 0;
+                var itFinal = Math.max(0, itT - itDisc);
+                items += '<div style="margin:1mm 0">' +
+                    '<div class="inm">' + it.name + ' <span class="isz">(' + (it.size||'N/A') + ')</span></div>' +
+                    '<div class="ir"><span>' + it.quantity + ' x $' + it.price.toFixed(2) + '</span>';
+                if (itDisc > 0) {
+                    items += '<span><s style="color:#aaa;font-size:8pt">$' + itT.toFixed(2) + '</s> <b style="color:#2f855a">$' + itFinal.toFixed(2) + '</b> <span style="font-size:7pt;background:#c6f6d5;color:#276749;border-radius:3px;padding:0 3px">-$' + itDisc.toFixed(2) + '</span></span>';
+                } else {
+                    items += '<span><b>$' + itT.toFixed(2) + '</b></span>';
+                }
+                items += '</div></div>';
             }
         }
         openPrintWindow(buildReceiptHTML(order, smt, items), 'Receipt_' + oid);
@@ -4264,7 +4278,8 @@ function sendToTelegram(order, callback) {
         html += '<hr class="dash">';
         html += '<div class="row"><span class="lbl">Subtotal</span><span>$' + (order.subtotal||0).toFixed(2) + '</span></div>';
         if (order.discount > 0) {
-            html += '<div class="row" style="color:var(--success)"><span class="lbl">Discount' + (order.discountType==='percent'?' ('+order.discountValue+'% off)':'') + '</span><span>-$' + (order.discount||0).toFixed(2) + '</span></div>';
+            var discCount = (order.cart||[]).filter(function(it){ return (it.discountAmt||0) > 0; }).length;
+            html += '<div class="row" style="color:#2f855a"><span class="lbl">Discount (' + discCount + ' item' + (discCount>1?'s':'') + ')</span><span>-$' + (order.discount||0).toFixed(2) + '</span></div>';
         }
         html += '<div class="row"><span class="lbl">Shipping fee</span><span>$' + (order.shipping||0).toFixed(2) + '</span></div>';
         html += '<hr class="solid">';
