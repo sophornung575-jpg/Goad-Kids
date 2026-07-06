@@ -3506,52 +3506,52 @@ function sendToTelegram(order, callback) {
             var iType = it.discountType || 'none';
             var iVal  = it.discountValue || '';
 
-            h += '<div class="cart-item" style="align-items:flex-start">' +
-                // Left: image
-                '<img src="' + it.image + '" class="cart-item-image" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100\'">' +
+            h += '<div class="cart-item" style="align-items:stretch;gap:0;padding:0;border-radius:12px;overflow:hidden">' +
 
-                // Middle: name, size, price, qty
-                '<div style="flex:1;min-width:0">' +
-                '<div class="cart-item-name">' + it.name + '</div>' +
-                '<div style="color:var(--gray);font-size:0.85rem">Size: ' + it.size + '</div>';
-
-            if (discAmt > 0) {
-                h += '<div style="font-size:0.82rem">' +
-                    '<s style="color:var(--gray)">$' + tt.toFixed(2) + '</s> ' +
-                    '<span style="color:var(--success);font-weight:700">$' + finalPrice.toFixed(2) + '</span> ' +
-                    '<span style="font-size:0.72rem;background:#d4edda;color:#155724;border-radius:4px;padding:1px 5px">-$' + discAmt.toFixed(2) + '</span>' +
-                    '</div>';
-            } else {
-                h += '<div class="cart-item-price">$' + it.price.toFixed(2) + ' each</div>';
-            }
-
-            h += '<div class="cart-item-quantity" style="margin-top:4px">' +
-                '<button class="quantity-btn" onclick="updQty(' + i + ',' + (it.quantity-1) + ')">-</button>' +
-                '<span>' + it.quantity + '</span>' +
-                '<button class="quantity-btn" onclick="updQty(' + i + ',' + (it.quantity+1) + ')">+</button>' +
+            // ── LEFT COLUMN: image + name + size + qty ──
+            '<div style="display:flex;flex:1;gap:0.6rem;padding:0.75rem;min-width:0">' +
+                '<img src="' + it.image + '" class="cart-item-image" style="flex-shrink:0" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100\'">' +
+                '<div style="display:flex;flex-direction:column;justify-content:space-between;min-width:0;flex:1">' +
+                    '<div>' +
+                        '<div class="cart-item-name" style="font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + it.name + '</div>' +
+                        '<div style="color:var(--gray);font-size:0.78rem;margin-top:1px">Size: ' + it.size + '</div>' +
+                    '</div>' +
+                    '<div class="cart-item-quantity" style="margin-top:6px">' +
+                        '<button class="quantity-btn" onclick="updQty(' + i + ',' + (it.quantity-1) + ')">-</button>' +
+                        '<span>' + it.quantity + '</span>' +
+                        '<button class="quantity-btn" onclick="updQty(' + i + ',' + (it.quantity+1) + ')">+</button>' +
+                    '</div>' +
                 '</div>' +
-                '</div>' +
+            '</div>' +
 
-                // Right: total + delete + discount controls (admin only)
-                '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">' +
-                '<div class="cart-item-total" style="' + (discAmt>0?'color:var(--success)':'') + '">$' + finalPrice.toFixed(2) + '</div>' +
-                '<button class="remove-item" onclick="remCart(' + i + ')"><i class="fas fa-trash"></i></button>';
+            // ── RIGHT COLUMN: price + discount + delete ──
+            '<div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;padding:0.75rem 0.75rem 0.75rem 0.5rem;border-left:1px solid var(--gray-light);flex-shrink:0;min-width:100px">' +
+                '<div style="text-align:right">' +
+                    (discAmt > 0
+                        ? '<div style="font-size:0.75rem;color:var(--gray);text-decoration:line-through">$' + tt.toFixed(2) + '</div>' +
+                          '<div style="font-weight:700;color:var(--success);font-size:0.95rem">$' + finalPrice.toFixed(2) + '</div>' +
+                          '<div style="font-size:0.7rem;background:#d4edda;color:#155724;border-radius:4px;padding:1px 5px;display:inline-block;margin-top:1px">-$' + discAmt.toFixed(2) + '</div>'
+                        : '<div class="cart-item-total" style="font-size:0.95rem">$' + finalPrice.toFixed(2) + '</div>'
+                    );
 
-            // Discount controls stacked on right side — admin only
+            // Discount controls — admin only
             if (isAdmin) {
-                h += '<div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;align-items:flex-end">' +
-                    '<select style="font-size:0.72rem;padding:2px 4px;width:82px;border:1px solid var(--warning);border-radius:5px;outline:none;background:#fffbeb" onchange="setItemDiscount(' + i + ',this.value,null)">' +
-                    '<option value="none"' + (iType==='none'?' selected':'') + '>No discount</option>' +
-                    '<option value="percent"' + (iType==='percent'?' selected':'') + '>% Off</option>' +
-                    '<option value="fixed"' + (iType==='fixed'?' selected':'') + '>$ Off</option>' +
-                    '</select>' +
-                    '<input type="number" min="0" step="0.01" placeholder="0" value="' + iVal + '" ' +
-                    'style="font-size:0.72rem;padding:2px 5px;width:82px;border:1px solid var(--warning);border-radius:5px;outline:none;text-align:right;background:#fffbeb" ' +
-                    'oninput="setItemDiscount(' + i + ',null,this.value)">' +
-                    '</div>';
+                h +=    '<div style="display:flex;flex-direction:column;gap:3px;margin-top:6px;align-items:flex-end">' +
+                            '<select style="font-size:0.7rem;padding:2px 3px;width:86px;border:1px solid var(--warning);border-radius:5px;background:#fffbeb;color:#92400e" onchange="setItemDiscount(' + i + ',this.value,null)">' +
+                                '<option value="none"' + (iType==='none'?' selected':'') + '>No discount</option>' +
+                                '<option value="percent"' + (iType==='percent'?' selected':'') + '>% Off</option>' +
+                                '<option value="fixed"' + (iType==='fixed'?' selected':'') + '>$ Off</option>' +
+                            '</select>' +
+                            '<input type="number" min="0" step="0.01" placeholder="Amount" value="' + iVal + '" ' +
+                                'style="font-size:0.7rem;padding:2px 5px;width:86px;border:1px solid var(--warning);border-radius:5px;text-align:right;background:#fffbeb;color:#92400e" ' +
+                                'oninput="setItemDiscount(' + i + ',null,this.value)">' +
+                        '</div>';
             }
 
-            h += '</div></div>';
+            h +=    '</div>' +
+                    '<button class="remove-item" onclick="remCart(' + i + ')" style="margin-top:8px"><i class="fas fa-trash"></i></button>' +
+                '</div>' +
+            '</div>';
         }
         l.innerHTML = h;
         recalcCartTotals();
