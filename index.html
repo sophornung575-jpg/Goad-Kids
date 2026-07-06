@@ -1732,9 +1732,7 @@ function sendToTelegram(order, callback) {
     function setItemDiscount(idx, newType, newValue) {
         var item = STATE.cart[idx];
         if (!item) return;
-        // Update type if provided
         if (newType !== null) item.discountType = newType;
-        // Update value if provided
         if (newValue !== null) item.discountValue = parseFloat(newValue) || 0;
 
         var type = item.discountType || 'none';
@@ -1749,17 +1747,27 @@ function sendToTelegram(order, callback) {
             item.discountAmt = Math.min(itemTotal, val);
         }
 
-        // Re-render just this item's price display without full re-render (preserves input focus)
-        var tt = itemTotal;
         var discAmt = item.discountAmt || 0;
-        var finalPrice = Math.max(0, tt - discAmt);
+        var finalPrice = Math.max(0, itemTotal - discAmt);
 
-        // Update price display text only
+        // Update just the price display for this item without full re-render (preserves input focus)
+        var priceEl = document.getElementById('item-price-' + idx);
+        var totalEl = document.getElementById('item-total-' + idx);
+        if (priceEl) {
+            if (discAmt > 0) {
+                priceEl.innerHTML = '<s style="color:#aaa;font-size:0.78rem">$' + itemTotal.toFixed(2) + '</s> ' +
+                    '<span style="color:var(--success);font-weight:700">$' + finalPrice.toFixed(2) + '</span> ' +
+                    '<span style="font-size:0.7rem;background:#d4edda;color:#155724;border-radius:4px;padding:1px 5px">-$' + discAmt.toFixed(2) + '</span>';
+            } else {
+                priceEl.innerHTML = '$' + item.price.toFixed(2) + ' each';
+            }
+        }
+        if (totalEl) {
+            totalEl.textContent = '$' + finalPrice.toFixed(2);
+            totalEl.style.color = discAmt > 0 ? 'var(--success)' : '';
+        }
+
         recalcCartTotals();
-
-        // Update just the price line and total for this item without full re-render
-        // Find item's total element by re-rendering
-        renderCart();
     }
 
     function recalcCartTotals() {
@@ -3508,13 +3516,19 @@ function sendToTelegram(order, callback) {
 
             h += '<div class="cart-item" style="align-items:stretch;gap:0;padding:0;border-radius:12px;overflow:hidden">' +
 
-            // ── LEFT COLUMN: image + name + size + qty ──
+            // ── LEFT: image + name + size + qty ──
             '<div style="display:flex;flex:1;gap:0.6rem;padding:0.75rem;min-width:0">' +
                 '<img src="' + it.image + '" class="cart-item-image" style="flex-shrink:0" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100\'">' +
                 '<div style="display:flex;flex-direction:column;justify-content:space-between;min-width:0;flex:1">' +
                     '<div>' +
                         '<div class="cart-item-name" style="font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + it.name + '</div>' +
                         '<div style="color:var(--gray);font-size:0.78rem;margin-top:1px">Size: ' + it.size + '</div>' +
+                        // Price display — targeted by ID
+                        '<div id="item-price-' + i + '" style="font-size:0.82rem;margin-top:2px">' +
+                        (discAmt > 0
+                            ? '<s style="color:#aaa;font-size:0.78rem">$' + tt.toFixed(2) + '</s> <span style="color:var(--success);font-weight:700">$' + finalPrice.toFixed(2) + '</span> <span style="font-size:0.7rem;background:#d4edda;color:#155724;border-radius:4px;padding:1px 5px">-$' + discAmt.toFixed(2) + '</span>'
+                            : '$' + it.price.toFixed(2) + ' each'
+                        ) + '</div>' +
                     '</div>' +
                     '<div class="cart-item-quantity" style="margin-top:6px">' +
                         '<button class="quantity-btn" onclick="updQty(' + i + ',' + (it.quantity-1) + ')">-</button>' +
@@ -3524,34 +3538,29 @@ function sendToTelegram(order, callback) {
                 '</div>' +
             '</div>' +
 
-            // ── RIGHT COLUMN: price + discount + delete ──
-            '<div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;padding:0.75rem 0.75rem 0.75rem 0.5rem;border-left:1px solid var(--gray-light);flex-shrink:0;min-width:100px">' +
+            // ── RIGHT: total + discount controls + delete ──
+            '<div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;padding:0.75rem;border-left:1px solid var(--gray-light);flex-shrink:0;min-width:' + (isAdmin ? '110px' : '80px') + '">' +
                 '<div style="text-align:right">' +
-                    (discAmt > 0
-                        ? '<div style="font-size:0.75rem;color:var(--gray);text-decoration:line-through">$' + tt.toFixed(2) + '</div>' +
-                          '<div style="font-weight:700;color:var(--success);font-size:0.95rem">$' + finalPrice.toFixed(2) + '</div>' +
-                          '<div style="font-size:0.7rem;background:#d4edda;color:#155724;border-radius:4px;padding:1px 5px;display:inline-block;margin-top:1px">-$' + discAmt.toFixed(2) + '</div>'
-                        : '<div class="cart-item-total" style="font-size:0.95rem">$' + finalPrice.toFixed(2) + '</div>'
-                    );
+                    '<div id="item-total-' + i + '" class="cart-item-total" style="font-size:0.95rem;' + (discAmt > 0 ? 'color:var(--success)' : '') + '">$' + finalPrice.toFixed(2) + '</div>';
 
-            // Discount controls — admin only
+            // Discount controls — admin only, stacked below total
             if (isAdmin) {
-                h +=    '<div style="display:flex;flex-direction:column;gap:3px;margin-top:6px;align-items:flex-end">' +
-                            '<select style="font-size:0.7rem;padding:2px 3px;width:86px;border:1px solid var(--warning);border-radius:5px;background:#fffbeb;color:#92400e" onchange="setItemDiscount(' + i + ',this.value,null)">' +
-                                '<option value="none"' + (iType==='none'?' selected':'') + '>No discount</option>' +
-                                '<option value="percent"' + (iType==='percent'?' selected':'') + '>% Off</option>' +
-                                '<option value="fixed"' + (iType==='fixed'?' selected':'') + '>$ Off</option>' +
-                            '</select>' +
-                            '<input type="number" min="0" step="0.01" placeholder="Amount" value="' + iVal + '" ' +
-                                'style="font-size:0.7rem;padding:2px 5px;width:86px;border:1px solid var(--warning);border-radius:5px;text-align:right;background:#fffbeb;color:#92400e" ' +
-                                'oninput="setItemDiscount(' + i + ',null,this.value)">' +
-                        '</div>';
+                h += '<div style="display:flex;flex-direction:column;gap:3px;margin-top:6px;align-items:flex-end">' +
+                    '<select style="font-size:0.7rem;padding:2px 4px;width:100px;border:1px solid var(--warning);border-radius:5px;background:#fffbeb;color:#92400e" ' +
+                    'onchange="setItemDiscount(' + i + ',this.value,null)">' +
+                    '<option value="none"' + (iType==='none'?' selected':'') + '>No discount</option>' +
+                    '<option value="percent"' + (iType==='percent'?' selected':'') + '>% Off</option>' +
+                    '<option value="fixed"' + (iType==='fixed'?' selected':'') + '>$ Off</option>' +
+                    '</select>' +
+                    '<input type="number" min="0" step="0.01" placeholder="Amount" value="' + iVal + '" ' +
+                    'style="font-size:0.7rem;padding:2px 5px;width:100px;border:1px solid var(--warning);border-radius:5px;text-align:right;background:#fffbeb;color:#92400e" ' +
+                    'oninput="setItemDiscount(' + i + ',null,this.value)">' +
+                    '</div>';
             }
 
-            h +=    '</div>' +
-                    '<button class="remove-item" onclick="remCart(' + i + ')" style="margin-top:8px"><i class="fas fa-trash"></i></button>' +
-                '</div>' +
-            '</div>';
+            h += '</div>' +
+                '<button class="remove-item" onclick="remCart(' + i + ')" style="margin-top:8px"><i class="fas fa-trash"></i></button>' +
+            '</div></div>';
         }
         l.innerHTML = h;
         recalcCartTotals();
