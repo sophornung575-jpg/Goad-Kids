@@ -1221,6 +1221,19 @@
                     <button class="btn btn-success btn-small" onclick="addEditSize()"><i class="fas fa-plus"></i> Add</button>
                 </div>
             </div>
+            <div class="form-group">
+                <label>Revision Reason <span style="color:var(--gray);font-weight:400;font-size:0.8rem">(required for stock changes)</span></label>
+                <select id="editRevisionReason" class="form-control">
+                    <option value="">— Select reason —</option>
+                    <option value="Stock count correction">Stock count correction</option>
+                    <option value="Damaged / lost items">Damaged / lost items</option>
+                    <option value="New stock received">New stock received</option>
+                    <option value="Transfer adjustment">Transfer adjustment</option>
+                    <option value="Price update">Price update only (no stock change)</option>
+                    <option value="Other">Other</option>
+                </select>
+                <input type="text" id="editRevisionReasonCustom" class="form-control" placeholder="Add detail (optional)..." style="margin-top:6px;font-size:0.85rem">
+            </div>
             <button class="btn btn-primary w-full btn-large" onclick="saveEditProduct()"><i class="fas fa-save"></i> Save Changes</button>
         </div>
     </div>
@@ -3232,6 +3245,10 @@ function sendToTelegram(order, callback) {
         document.getElementById('editProductName').value = p.name;
         document.getElementById('editProductCategory').value = p.category;
         document.getElementById('editProductPrice').value = p.price;
+        var reasonEl = document.getElementById('editRevisionReason');
+        var customEl = document.getElementById('editRevisionReasonCustom');
+        if (reasonEl) reasonEl.value = '';
+        if (customEl) customEl.value = '';
         STATE.editProductImages = (p.images || []).slice();
         renderEditImagePreviews();
         STATE._editSizes = p.sizes ? p.sizes.map(function(s){ return {name:s.name, qty:s.qty}; }) : [];
@@ -3285,12 +3302,17 @@ function sendToTelegram(order, callback) {
         var p = null;
         for (var i = 0; i < STATE.products.length; i++) { if (STATE.products[i].id === pid) { p = STATE.products[i]; break; } }
         if (!p) return;
+
+        // Capture old stock for comparison
+        var oldSizes = p.sizes ? p.sizes.map(function(s){ return Object.assign({}, s); }) : [];
+        var oldStock = p.stock || 0;
+
         p.name = document.getElementById('editProductName').value.trim() || p.name;
-        p.slug = makeSlug(p.name); // always keep slug in sync with name
+        p.slug = makeSlug(p.name);
         p.category = document.getElementById('editProductCategory').value;
         p.price = parseFloat(document.getElementById('editProductPrice').value);
         p.images = STATE.editProductImages.slice();
-        // Read sizes from STATE._editSizes (supports add/rename/delete)
+
         if (STATE._editSizes && STATE._editSizes.length) {
             var nameInputs = document.querySelectorAll('.edit-size-name');
             var qtyInputs = document.querySelectorAll('.edit-size-qty');
@@ -3300,11 +3322,35 @@ function sendToTelegram(order, callback) {
             }
             p.sizes = STATE._editSizes.slice();
         }
-        // Always recalculate stock from sizes
         p.stock = getTotalStock(p);
+
+        // Check if stock changed
+        var stockChanged = p.stock !== oldStock;
+        if (!stockChanged && p.sizes) {
+            for (var k = 0; k < p.sizes.length; k++) {
+                var oldSz = oldSizes.find(function(s){ return s.name === p.sizes[k].name; });
+                if (!oldSz || oldSz.qty !== p.sizes[k].qty) { stockChanged = true; break; }
+            }
+        }
+
+        // Get revision reason
+        var reasonEl = document.getElementById('editRevisionReason');
+        var customEl = document.getElementById('editRevisionReasonCustom');
+        var reason = reasonEl ? reasonEl.value : '';
+        var custom = customEl ? customEl.value.trim() : '';
+        if (custom) reason = reason ? reason + ' — ' + custom : custom;
+
+        // Require reason if stock changed
+        if (stockChanged && !reason) {
+            showToast('Please select a revision reason for stock changes', 'error');
+            if (reasonEl) reasonEl.focus();
+            return;
+        }
+
         saveProducts();
-        logActivity('Edit Product', p.name + ' (Stock:' + p.stock + ')');
-        // Push to Firebase immediately
+        var logNote = p.name + ' (Stock: ' + oldStock + ' → ' + p.stock + ')' + (reason ? ' | Reason: ' + reason : '');
+        logActivity('Edit Product', logNote);
+
         if (STATE.firebaseOnline && db) {
             db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({
                 name: p.name, slug: p.slug, price: p.price, stock: p.stock, category: p.category,
@@ -3312,6 +3358,21 @@ function sendToTelegram(order, callback) {
                 updatedAt: new Date().toISOString()
             }, { merge: true }).catch(function(e){ console.warn('Edit save failed:', e); });
         }
+
+        // Send Telegram if stock changed
+        if (stockChanged) {
+            var sizeLines = (p.sizes || []).map(function(s){ return '  ' + s.name + ': ' + s.qty; }).join('\n');
+            var msg = '📦 <b>STOCK REVISED</b>\n\n' +
+                '🏷️ ' + p.name + '\n' +
+                '📊 Total: ' + oldStock + ' → <b>' + p.stock + '</b>\n' +
+                (sizeLines ? '📐 Sizes:\n' + sizeLines + '\n' : '') +
+                '📝 Reason: ' + (reason || 'Not specified') + '\n' +
+                '🏪 ' + (STATE.storeName || STATE.storeId) + '\n' +
+                '🕐 ' + new Date().toLocaleString();
+            var img = (p.images && p.images[0]) ? [p.images[0]] : [];
+            _sendTelegramMediaGroup(img, msg, msg, null);
+        }
+
         closeEditModal(); renderProducts(); renderInventory(); updateAdminBadges();
         showToast('"' + p.name + '" updated!', 'success');
     }
@@ -3372,7 +3433,6 @@ function sendToTelegram(order, callback) {
                 sz +
                 '<div class="product-actions"><button class="btn btn-primary btn-add-to-cart" onclick="event.stopPropagation();addToCart(\'' + p.id + '\')" ' + (!hasStock(p) ? 'disabled' : '') + '><i class="fas fa-cart-plus"></i> Add</button>' +
                 '<button class="btn btn-outline btn-small" onclick="openProductDetail(\'' + p.id + '\')" title="View Details"><i class="fas fa-eye"></i></button>' +
-                '<button class="btn btn-outline btn-small" style="color:#0084ff;border-color:#0084ff" onclick="event.stopPropagation();shareToMessenger(\'' + p.id + '\')" title="Share on Messenger"><i class="fab fa-facebook-messenger"></i></button>' +
                 '</div>' +
                 '</div></div>';
             h += card;
@@ -3894,29 +3954,40 @@ function sendToTelegram(order, callback) {
         for (var i = 0; i < STATE.pendingOrders.length; i++) { if (STATE.pendingOrders[i].orderId === oid) { idx = i; break; } }
         if (idx < 0) return;
         var order = STATE.pendingOrders[idx];
-        order.status = 'rejected'; order.rejectedAt = new Date().toLocaleString();
-        order.rejectionReason = prompt('Reason:') || 'No reason';
-        STATE.confirmedOrders.push(order); STATE.pendingOrders.splice(idx, 1);
-        saveOrders(); logActivity('Reject Order', oid);
-        // Save to Firebase directly
+        var reason = prompt('Cancellation reason:', 'Item out of stock');
+        if (!reason && reason !== '') return; // user pressed Cancel on prompt
+        if (!reason) reason = 'No reason provided';
+        order.status = 'rejected';
+        order.rejectedAt = new Date().toLocaleString();
+        order.rejectionReason = reason;
+        STATE.confirmedOrders.push(order);
+        STATE.pendingOrders.splice(idx, 1);
+        saveOrders();
+        logActivity('Cancel Order', oid + ' — ' + reason);
 
         if (db) {
-            var path = 'stores/' + STATE.storeId + '/orders/' + oid;
             db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid)
-              .set(order, { merge: true })
-              .then(function(){
-                  showToast('Order rejected & saved ✅', 'success');
-              })
-              .catch(function(e){ 
-                  console.error('[REJECT] ❌ Firebase save failed:', e.code, e.message);
-                  showToast('Firebase error: ' + e.message, 'error');
-              });
-        } else {
-            console.error('[REJECT] db is null - Firebase not initialized');
-            showToast('Firebase not connected!', 'error');
+                .set(order, { merge: true })
+                .catch(function(e){ console.error('[REJECT] Firebase save failed:', e.message); });
         }
+
         renderPending(); renderHistory(); updateAdminBadges();
-        showToast('Rejected', 'warning');
+        showToast('Order cancelled', 'warning');
+
+        // Send Telegram cancellation message
+        var itemLines = (order.cart || []).map(function(it) {
+            return '  • ' + it.name + (it.size && it.size !== 'One Size' ? ' (' + it.size + ')' : '') + ' x' + it.quantity;
+        }).join('\n');
+        var msg = '❌ <b>ORDER CANCELLED</b>\n\n' +
+            '🧾 Order: ' + oid + '\n' +
+            '👤 ' + (order.customerName || '—') + ' | 📞 ' + (order.customerPhone || '—') + '\n' +
+            '📦 Items:\n' + itemLines + '\n' +
+            '💰 Total: $' + (order.total || 0).toFixed(2) + '\n' +
+            '📝 Reason: ' + reason + '\n' +
+            '🏪 ' + (STATE.storeName || STATE.storeId) + '\n' +
+            '🕐 ' + new Date().toLocaleString();
+        var images = (order.cart || []).map(function(it){ return it.image; }).filter(Boolean);
+        _sendTelegramMediaGroup(images, msg, msg, null);
     }
 
     async function confirmAll() {
