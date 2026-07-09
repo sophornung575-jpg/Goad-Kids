@@ -59,14 +59,9 @@
         try {
             firebase.initializeApp(firebaseConfig);
             db = firebase.firestore();
-            // Enable multi-tab persistence — allows multiple tabs/windows to share the same cache
-            db.enablePersistence({ synchronizeTabs: true }).catch(function(err) {
-                if (err.code === 'unimplemented') {
-                    console.warn('Persistence not supported in this browser — using memory cache');
-                } else if (err.code !== 'failed-precondition') {
-                    console.warn('Persistence error:', err);
-                }
-            });
+            // Note: enablePersistence causes multi-tab conflicts — relying on Firebase's
+            // built-in connection handling instead. localStorage serves as our offline cache.
+
         } catch(e) {
             console.error('Firebase init error:', e);
             db = null;
@@ -7542,6 +7537,25 @@ function sendToTelegram(order, callback) {
     // INITIALIZATION
     // =============================================
     document.addEventListener('DOMContentLoaded', async function() {
+
+        // Global image error handler — retries once, then shows placeholder
+        document.addEventListener('error', function(e) {
+            var img = e.target;
+            if (img.tagName !== 'IMG') return;
+            if (img.dataset.retried) return; // already retried
+            if (img.src && img.src.indexOf('unsplash.com') !== -1) return; // already placeholder
+            img.dataset.retried = '1';
+            // Retry after 1 second (handles HTTP2 transient errors)
+            var originalSrc = img.src;
+            setTimeout(function() {
+                img.src = '';
+                img.src = originalSrc + (originalSrc.indexOf('?') === -1 ? '?r=1' : '&r=1');
+                img.onerror = function() {
+                    img.src = 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=200';
+                };
+            }, 1000);
+        }, true); // capture phase to catch all images
+
         // Mobile menu toggle
         document.getElementById('mobileMenuBtn').addEventListener('click', function() {
             var nav = document.getElementById('mobileNav');
