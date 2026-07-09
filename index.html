@@ -5080,7 +5080,7 @@ function sendToTelegram(order, callback) {
         _refundState = { order: null, idx: -1 };
     }
 
-    function confirmRefund() {
+    async function confirmRefund() {
         var order = _refundState.order;
         var idx = _refundState.idx;
         if (!order) return;
@@ -5200,17 +5200,50 @@ function sendToTelegram(order, callback) {
                 .catch(function(e){ console.warn('Refund Firebase save failed:', e.message); });
             storeRef.collection('orders').doc(order.orderId).set(order, { merge: true })
                 .catch(function(e){ console.warn('Order refund update failed:', e.message); });
-            // Restore stock in Firebase
-            refundItems.forEach(function(refItem) {
-                var rProduct = STATE.products.find(function(p){ return p.id === refItem.productId || p.name === refItem.name; });
-                if (!rProduct) return;
-                var pRef = storeRef.collection('products').doc(rProduct.id);
-                if (rProduct.sizes && rProduct.sizes.length) {
-                    pRef.update({ sizes: rProduct.sizes, stock: rProduct.stock }).catch(function(e){ console.warn(e); });
-                } else {
-                    pRef.update({ stock: rProduct.stock }).catch(function(e){ console.warn(e); });
+        // Restore stock in Firebase — fetch fresh from Firestore to avoid stale local STATE
+        var restorePromises = refundItems.map(function(refItem) {
+            return new Promise(async function(resolve) {
+                try {
+                    // Try local STATE first
+                    var rProduct = STATE.products.find(function(p){ return p.id === refItem.productId || p.name === refItem.name; });
+
+                    // If not in local STATE, fetch from Firebase
+                    if (!rProduct) {
+                        var snap = await storeRef.collection('products').where('name', '==', refItem.name).limit(1).get();
+                        if (!snap.empty) {
+                            rProduct = Object.assign({ id: snap.docs[0].id }, snap.docs[0].data());
+                        }
+                    }
+                    if (!rProduct) { console.warn('Product not found for stock restore:', refItem.name); resolve(); return; }
+
+                    var pRef = storeRef.collection('products').doc(rProduct.id);
+
+                    if (rProduct.sizes && rProduct.sizes.length) {
+                        // Apply restore to sizes
+                        var found = false;
+                        rProduct.sizes.forEach(function(s) {
+                            if (s.name === refItem.size) { s.qty += refItem.quantity; found = true; }
+                        });
+                        if (!found) rProduct.sizes.push({ name: refItem.size, qty: refItem.quantity });
+                        var newTotal = rProduct.sizes.reduce(function(a,s){ return a+(s.qty||0); }, 0);
+                        await pRef.update({ sizes: rProduct.sizes, stock: newTotal });
+                        // Also update local STATE if present
+                        var localP = STATE.products.find(function(p){ return p.id === rProduct.id; });
+                        if (localP) { localP.sizes = rProduct.sizes; localP.stock = newTotal; }
+                    } else {
+                        var newStock = (rProduct.stock || 0) + refItem.quantity;
+                        await pRef.update({ stock: newStock });
+                        var localP2 = STATE.products.find(function(p){ return p.id === rProduct.id; });
+                        if (localP2) localP2.stock = newStock;
+                    }
+                    console.log('✅ Stock restored in Firebase:', refItem.name, 'Size', refItem.size, '+' + refItem.quantity);
+                } catch(e) {
+                    console.warn('Stock restore failed for', refItem.name, ':', e.message);
                 }
+                resolve();
             });
+        });
+        await Promise.all(restorePromises);
         }
 
         closeRefundModal();
