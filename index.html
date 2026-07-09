@@ -2757,15 +2757,17 @@ function sendToTelegram(order, callback) {
     // =============================================
     async function checkFirebase() {
         if (!db) {
-            showStatus('No Firebase config', 'offline');
+            showStatus('Firebase SDK not loaded', 'offline');
             STATE.firebaseOnline = false;
+            console.error('Firebase db is null — SDK may not have loaded. Check network/CDN.');
             return Promise.resolve();
         }
-        showStatus('Checking...', 'offline');
+        showStatus('Connecting...', 'offline');
+        // Use 12s timeout on mobile — SDK needs time to establish connection
+        var timeout = /Android|iPhone|iPad/i.test(navigator.userAgent) ? 12000 : 8000;
         try {
-            // Short 5-second timeout so mobile doesn't hang
             var timeoutPromise = new Promise(function(_, reject) {
-                setTimeout(function() { reject(new Error('timeout')); }, 5000);
+                setTimeout(function() { reject(new Error('timeout')); }, timeout);
             });
             await Promise.race([
                 db.collection('stores').doc('GOAT-1979').get(),
@@ -2774,23 +2776,72 @@ function sendToTelegram(order, callback) {
             STATE.firebaseOnline = true;
             showStatus('Connected', 'online');
             document.getElementById('syncBtn').disabled = false;
+            // Remove warning banner if it was showing
+            var warn = document.getElementById('localDataWarning');
+            if (warn) warn.remove();
             await flushOfflineSyncQueue();
         } catch (e) {
             STATE.firebaseOnline = false;
             var errMsg = e.message || 'unknown error';
-            // Show specific error in status
             if (errMsg === 'timeout') {
-                showStatus('Offline (timeout)', 'offline');
+                showStatus('Slow connection — retrying...', 'offline');
+                // Auto-retry once after 5 more seconds on mobile
+                setTimeout(function() {
+                    checkFirebase().then(function() {
+                        if (STATE.firebaseOnline) loadData();
+                    });
+                }, 5000);
             } else if (errMsg.indexOf('permission') !== -1 || errMsg.indexOf('PERMISSION') !== -1) {
-                showStatus('Offline (rules blocked)', 'offline');
-                console.error('Firestore rules blocking connection. Check rules allow GOAT-1979 path.');
+                showStatus('Firebase rules blocked', 'offline');
+                console.error('Firestore rules blocking connection.');
+            } else if (errMsg.indexOf('Failed to fetch') !== -1 || errMsg.indexOf('network') !== -1) {
+                showStatus('No internet', 'offline');
             } else {
-                showStatus('Offline: ' + errMsg.substring(0, 30), 'offline');
+                showStatus('Firebase error', 'offline');
             }
             console.error('Firebase connection error:', errMsg);
             document.getElementById('syncBtn').disabled = true;
         }
         setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 2000);
+    }
+
+    // Run from browser console on any device to diagnose connection issues
+    // Usage: diagnoseConnection()
+    async function diagnoseConnection() {
+        console.log('🔍 FIREBASE CONNECTION DIAGNOSTIC');
+        console.log('Device:', navigator.userAgent);
+        console.log('Online:', navigator.onLine);
+        console.log('db object:', db ? '✅ loaded' : '❌ NULL — SDK failed to load');
+        console.log('STATE.firebaseOnline:', STATE.firebaseOnline);
+        console.log('Firebase config:', localStorage.getItem('goatFirebaseConfig') ? '✅ stored' : '❌ missing');
+
+        if (!navigator.onLine) { console.error('❌ Device has no internet connection'); return; }
+        if (!db) { console.error('❌ Firebase SDK not loaded — check CDN connection'); return; }
+
+        // Test basic Firestore read
+        console.log('Testing Firestore read...');
+        var start = Date.now();
+        try {
+            await db.collection('stores').doc('GOAT-1979').get();
+            console.log('✅ Firestore read OK in', Date.now()-start, 'ms');
+        } catch(e) {
+            console.error('❌ Firestore read failed:', e.message);
+            if (e.message.indexOf('permission') !== -1) {
+                console.error('→ Firestore RULES are blocking the read. Check Firebase Console → Firestore → Rules');
+            } else if (e.message.indexOf('Failed to fetch') !== -1) {
+                console.error('→ Network blocked. VPN or firewall may be blocking Firebase domains.');
+            }
+        }
+
+        // Test if Firebase domains are reachable
+        console.log('Testing Firebase domain reachability...');
+        try {
+            var r = await fetch('https://firestore.googleapis.com/', { mode: 'no-cors', signal: AbortSignal.timeout(5000) });
+            console.log('✅ firestore.googleapis.com reachable');
+        } catch(e) {
+            console.error('❌ firestore.googleapis.com NOT reachable — network/firewall issue');
+        }
+        console.log('Diagnostic complete. Share above with developer.');
     }
 
     async function loadData() {
