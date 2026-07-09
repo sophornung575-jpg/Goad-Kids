@@ -2850,126 +2850,109 @@ function sendToTelegram(order, callback) {
         renderProducts();
         renderInventory();
 
-        // ── STEP 2: Try Firebase in background with a timeout ──
+        // ── STEP 2: Load from Firebase (no artificial timeout — Firebase handles its own with persistence cache) ──
         if (!STATE.firebaseOnline) {
             return;
         }
         try {
-            var timeoutPromise = new Promise(function(_, reject) {
-                setTimeout(function() { reject(new Error('Firebase timeout')); }, 15000); // 15s for slow connections
+            var s = await db.collection('stores').doc(STATE.storeId).collection('products').get();
+            var p = [];
+            s.forEach(function(d) {
+                var dt = d.data();
+                p.push(Object.assign({}, dt, {
+                    id: d.id,
+                    name: dt.name || '',
+                    slug: dt.slug || makeSlug(dt.name || ''),
+                    price: dt.price || 0,
+                    stock: dt.stock || 0,
+                    category: dt.category || '',
+                    images: dt.images || [],
+                    sizes: dt.sizes || [],
+                    addedAt: dt.addedAt || 0,
+                    active: dt.active !== false
+                }));
             });
-            var fetchPromise = async function() {
-                var s = await db.collection('stores').doc(STATE.storeId).collection('products').get();
-                var p = [];
-                s.forEach(function(d) {
-                    var dt = d.data();
-                    // Preserve ALL fields from Firebase — don't strip unknown fields
-                    p.push(Object.assign({}, dt, {
-                        id: d.id,
-                        name: dt.name || '',
-                        slug: dt.slug || makeSlug(dt.name || ''),
-                        price: dt.price || 0,
-                        stock: dt.stock || 0,
-                        category: dt.category || '',
-                        images: dt.images || [],
-                        sizes: dt.sizes || [],
-                        addedAt: dt.addedAt || 0,
-                        active: dt.active !== false
-                    }));
-                });
-                // Firebase is source of truth - always use Firebase products
-                if (p.length) { STATE.products = p; saveProducts(); }
-                // Clear deleted list after successful Firebase sync (products are already gone from Firebase)
-                localStorage.setItem('goatDeletedProducts', '[]');
+            if (p.length) { STATE.products = p; saveProducts(); }
+            localStorage.setItem('goatDeletedProducts', '[]');
 
-                var os = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
-                var fbPending = [], fbConfirmed = [];
-                os.forEach(function(d) {
-                    var dt = d.data();
-                    var o = Object.assign({}, dt, { orderId: d.id });
-                    if (dt.status === 'confirmed' || dt.status === 'refunded' ||
-                        dt.status === 'partial_refund' || dt.status === 'rejected') {
-                        fbConfirmed.push(o);
-                    } else {
-                        o.status = 'pending';
-                        fbPending.push(o);
-                    }
-                });
-                // Firebase is source of truth for orders
-                // Only keep local pending orders that Firebase doesn't know about yet
-                // (placed while offline - they have no Firebase record)
-                var fbIds = fbPending.concat(fbConfirmed).map(function(o){ return o.orderId; });
-                STATE.pendingOrders.forEach(function(o) {
-                    if (fbIds.indexOf(o.orderId) === -1 && o.status === 'pending') {
-                        // Only push truly new pending orders not yet in Firebase
-                        fbPending.push(o);
-                        db.collection('stores').doc(STATE.storeId).collection('orders').doc(o.orderId).set(o)
-                          .catch(function(e){ console.warn('Order sync failed:', e); });
-                    }
-                });
-                // Don't push confirmed/rejected local orders - Firebase already has correct state
-                STATE.pendingOrders = fbPending;
-                STATE.confirmedOrders = fbConfirmed;
-                saveOrders();
-            };
-            await Promise.race([fetchPromise(), timeoutPromise]);
+            var os = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
+            var fbPending = [], fbConfirmed = [];
+            os.forEach(function(d) {
+                var dt = d.data();
+                var o = Object.assign({}, dt, { orderId: d.id });
+                if (dt.status === 'confirmed' || dt.status === 'refunded' ||
+                    dt.status === 'partial_refund' || dt.status === 'rejected') {
+                    fbConfirmed.push(o);
+                } else {
+                    o.status = 'pending';
+                    fbPending.push(o);
+                }
+            });
+            var fbIds = fbPending.concat(fbConfirmed).map(function(o){ return o.orderId; });
+            STATE.pendingOrders.forEach(function(o) {
+                if (fbIds.indexOf(o.orderId) === -1 && o.status === 'pending') {
+                    fbPending.push(o);
+                    db.collection('stores').doc(STATE.storeId).collection('orders').doc(o.orderId).set(o)
+                        .catch(function(e){ console.warn('Order sync failed:', e); });
+                }
+            });
+            STATE.pendingOrders = fbPending;
+            STATE.confirmedOrders = fbConfirmed;
+            saveOrders();
 
-            // ── STEP 3: Load refunds from Firebase ──
+            // ── STEP 3: Load refunds ──
             try {
                 var refSnap = await db.collection('stores').doc(STATE.storeId).collection('refunds').get();
                 var fbRefunds = [];
-                refSnap.forEach(function(d) { fbRefunds.push(Object.assign({}, d.data(), { refundId: d.id })); });
+                refSnap.forEach(function(d){ fbRefunds.push(Object.assign({}, d.data(), { refundId: d.id })); });
                 if (fbRefunds.length > 0) {
-                    // Merge with local refunds
                     var localRefIds = STATE.refundedOrders.map(function(r){ return r.refundId; });
-                    fbRefunds.forEach(function(r) {
+                    fbRefunds.forEach(function(r){
                         if (localRefIds.indexOf(r.refundId) === -1) STATE.refundedOrders.push(r);
                     });
                     saveRefunds();
                 }
             } catch(e) { console.warn('Refunds load failed:', e.message); }
 
-            // ── STEP 4: Load passwords from Firebase (per store) ──
+            // ── STEP 4: Load passwords ──
             try {
                 var credDoc = await db.collection('_admin_').doc(STATE.storeId).get();
-                if (!credDoc.exists) {
-                    // Fallback: try legacy shared credentials doc for backward compat
-                    credDoc = await db.collection('_admin_').doc('credentials').get();
-                }
+                if (!credDoc.exists) credDoc = await db.collection('_admin_').doc('credentials').get();
                 if (credDoc.exists) {
                     var creds = credDoc.data();
-                    var pw = {
+                    localStorage.setItem('goatPasswords', JSON.stringify({
                         fullPass: creds.fullPass || 'admin123',
                         ordersPass: creds.ordersPass || 'orders123',
                         inventoryPass: creds.inventoryPass || 'inventory123'
-                    };
-                    localStorage.setItem('goatPasswords', JSON.stringify(pw));
+                    }));
                 }
             } catch(e) { console.warn('Password load failed:', e); }
 
-            // ── STEP 4: Update UI silently with fresh Firebase data ──
+            // ── STEP 5: Update UI with fresh data ──
             renderProducts();
             renderInventory();
             renderPending();
             renderHistory();
             updateAdminBadges();
             showStatus('Synced', 'online');
-            // Remove local data warning banner if Firebase succeeded
+            // Remove warning banner — Firebase loaded successfully
             var warn = document.getElementById('localDataWarning');
             if (warn) warn.remove();
             setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 3000);
-        } catch (e) {
-            // Firebase timed out or failed — localStorage data already showing, no blank page
+
+        } catch(e) {
             console.warn('Firebase load failed, using local data:', e.message);
             showStatus('Using local data', 'offline');
-            // Show persistent warning banner so admin knows data may be stale
-            var existing = document.getElementById('localDataWarning');
-            if (!existing) {
-                var banner = document.createElement('div');
-                banner.id = 'localDataWarning';
-                banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:0.82rem;z-index:9999;cursor:pointer';
-                banner.innerHTML = '⚠️ <b>Using cached data</b> — Firebase unavailable. Stock may be outdated. <span style="text-decoration:underline" onclick="loadData()">Tap to retry</span>';
-                document.body.prepend(banner);
+            // Only show banner if truly offline — not just slow
+            if (!navigator.onLine || e.message.indexOf('Failed to fetch') !== -1 || e.message.indexOf('network') !== -1) {
+                var existing = document.getElementById('localDataWarning');
+                if (!existing) {
+                    var banner = document.createElement('div');
+                    banner.id = 'localDataWarning';
+                    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:0.82rem;z-index:9999;cursor:pointer';
+                    banner.innerHTML = '⚠️ <b>No internet</b> — Showing cached data. <span style="text-decoration:underline" onclick="loadData()">Tap to retry</span>';
+                    document.body.prepend(banner);
+                }
             }
             setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 3000);
         }
