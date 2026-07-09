@@ -1785,10 +1785,24 @@ function sendToTelegram(order, callback) {
     }
 
     function logActivity(action, details) {
-        var entry = { action: action, details: details, time: new Date().toLocaleString(), timestamp: Date.now(), user: STATE.adminRole || 'system' };
+        var entry = {
+            action: action,
+            details: details,
+            time: new Date().toLocaleString(),
+            timestamp: Date.now(),
+            user: STATE.adminRole || 'system',
+            storeId: STATE.storeId || '',
+            storeName: STATE.storeName || STATE.storeId || ''
+        };
+        // Keep local copy
         STATE.activityLog.unshift(entry);
         if (STATE.activityLog.length > 200) STATE.activityLog = STATE.activityLog.slice(0, 200);
         localStorage.setItem('goatActivityLog', JSON.stringify(STATE.activityLog));
+        // Save to Firebase for cross-device shared log
+        if (db) {
+            db.collection('activityLogs').add(entry)
+                .catch(function(e){ console.warn('Log Firebase save failed:', e.message); });
+        }
     }
 
     // Per-item discount — called when admin changes type or value on a cart item
@@ -3127,18 +3141,194 @@ function sendToTelegram(order, callback) {
         }
     }
 
-    function showActivityLog() {
-        var html = '<div class="modal-overlay active" id="activityLogModal"><div class="modal"><div class="modal-header"><h3><i class="fas fa-history"></i> Activity Log</h3><button class="modal-close" onclick="document.getElementById(\'activityLogModal\').remove()">&times;</button></div><div style="max-height:400px;overflow-y:auto">';
-        if (!STATE.activityLog.length) { html += '<p style="text-align:center;color:var(--gray);padding:2rem">No activity yet</p>'; }
-        else {
-            for (var i = 0; i < Math.min(STATE.activityLog.length, 100); i++) {
-                var log = STATE.activityLog[i];
-                var icon = log.action.indexOf('Delete') >= 0 ? '🗑️' : (log.action.indexOf('Edit') >= 0 ? '✏️' : (log.action.indexOf('Confirm') >= 0 ? '✅' : '📝'));
-                html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;border-bottom:1px solid var(--gray-light)"><div>' + icon + ' <strong>' + log.action + '</strong> - ' + log.details + '</div><small>' + log.time + '</small></div>';
+    async function showActivityLog() {
+        // Show modal immediately with loading state
+        var existing = document.getElementById('activityLogModal');
+        if (existing) existing.remove();
+        document.body.insertAdjacentHTML('beforeend',
+            '<div class="modal-overlay active" id="activityLogModal">' +
+            '<div class="modal" style="max-width:680px;width:96%">' +
+            '<div class="modal-header">' +
+            '<h3 style="margin:0"><i class="fas fa-history"></i> Activity Log</h3>' +
+            '<button class="modal-close" onclick="document.getElementById(\'activityLogModal\').remove()">&times;</button>' +
+            '</div>' +
+            '<div class="modal-body" style="padding:0.75rem">' +
+            // Filters
+            '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:0.75rem">' +
+            '<input type="text" id="logSearch" placeholder="🔍 Search..." class="form-control" style="flex:1;min-width:140px;font-size:0.82rem" oninput="filterActivityLog()">' +
+            '<select id="logActionFilter" class="form-control" style="font-size:0.82rem;width:140px" onchange="filterActivityLog()">' +
+            '<option value="">All Actions</option>' +
+            '<option value="Confirm Order">Orders</option>' +
+            '<option value="Refund">Refunds</option>' +
+            '<option value="Transfer">Transfers</option>' +
+            '<option value="Edit Product">Stock Changes</option>' +
+            '<option value="Cancel">Cancellations</option>' +
+            '<option value="Login">Logins</option>' +
+            '</select>' +
+            '<select id="logStoreFilter" class="form-control" style="font-size:0.82rem;width:120px" onchange="filterActivityLog()">' +
+            '<option value="">All Stores</option>' +
+            '</select>' +
+            '</div>' +
+            // Export buttons
+            '<div style="display:flex;gap:6px;margin-bottom:0.75rem">' +
+            '<button class="btn btn-outline btn-small" onclick="exportActivityLog(\'csv\')"><i class="fas fa-file-csv"></i> Export CSV</button>' +
+            '<button class="btn btn-outline btn-small" onclick="exportActivityLog(\'json\')"><i class="fas fa-file-code"></i> Export JSON</button>' +
+            '<button class="btn btn-outline btn-small" onclick="loadActivityLog()" style="margin-left:auto"><i class="fas fa-sync"></i> Refresh</button>' +
+            '</div>' +
+            '<div id="logCount" style="font-size:0.78rem;color:var(--gray);margin-bottom:6px"></div>' +
+            '<div id="activityLogList" style="max-height:420px;overflow-y:auto;font-size:0.82rem">' +
+            '<div style="text-align:center;padding:2rem;color:var(--gray)"><i class="fas fa-spinner fa-spin"></i> Loading logs from Firebase...</div>' +
+            '</div>' +
+            '<button class="btn btn-danger btn-small" style="margin-top:0.75rem;width:100%" onclick="clearActivityLog()"><i class="fas fa-trash"></i> Clear All Logs</button>' +
+            '</div></div></div>');
+
+        await loadActivityLog();
+    }
+
+    var _allLogs = [];
+
+    async function loadActivityLog() {
+        var listEl = document.getElementById('activityLogList');
+        var storeFilter = document.getElementById('logStoreFilter');
+        if (!listEl) return;
+
+        listEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--gray)"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+        var logs = [];
+        // Load from Firebase
+        if (db) {
+            try {
+                var snap = await db.collection('activityLogs')
+                    .orderBy('timestamp', 'desc')
+                    .limit(500)
+                    .get();
+                snap.forEach(function(d){ logs.push(Object.assign({ _id: d.id }, d.data())); });
+            } catch(e) {
+                console.warn('Firebase log load failed:', e.message);
             }
         }
-        html += '</div><button class="btn btn-danger btn-small w-full mt-4" onclick="if(confirm(\'Clear all?\')){STATE.activityLog=[];localStorage.setItem(\'goatActivityLog\',\'[]\');document.getElementById(\'activityLogModal\').remove();showToast(\'Cleared\',\'info\')}"><i class="fas fa-trash"></i> Clear Log</button></div></div>';
-        document.body.insertAdjacentHTML('beforeend', html);
+
+        // Merge with local logs (fill gaps if Firebase is missing some)
+        if (!logs.length) logs = STATE.activityLog.slice();
+
+        _allLogs = logs;
+
+        // Populate store filter
+        if (storeFilter) {
+            var stores = [...new Set(logs.map(function(l){ return l.storeName||l.storeId||''; }).filter(Boolean))];
+            storeFilter.innerHTML = '<option value="">All Stores</option>' +
+                stores.map(function(s){ return '<option value="' + s + '">' + s + '</option>'; }).join('');
+        }
+
+        filterActivityLog();
+    }
+
+    function filterActivityLog() {
+        var listEl = document.getElementById('activityLogList');
+        var countEl = document.getElementById('logCount');
+        if (!listEl) return;
+
+        var search = (document.getElementById('logSearch')||{}).value || '';
+        var actionF = (document.getElementById('logActionFilter')||{}).value || '';
+        var storeF  = (document.getElementById('logStoreFilter')||{}).value || '';
+
+        var filtered = _allLogs.filter(function(log) {
+            var matchSearch = !search ||
+                (log.action||'').toLowerCase().includes(search.toLowerCase()) ||
+                (log.details||'').toLowerCase().includes(search.toLowerCase());
+            var matchAction = !actionF || (log.action||'').includes(actionF);
+            var matchStore  = !storeF  || (log.storeName||log.storeId||'').includes(storeF);
+            return matchSearch && matchAction && matchStore;
+        });
+
+        if (countEl) countEl.textContent = filtered.length + ' of ' + _allLogs.length + ' entries';
+
+        if (!filtered.length) {
+            listEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--gray)">No matching logs found</div>';
+            return;
+        }
+
+        var actionIcons = {
+            'Confirm': '✅', 'Refund': '↩️', 'Cancel': '❌', 'Reject': '❌',
+            'Transfer': '📦', 'Edit': '✏️', 'Delete': '🗑️', 'Login': '🔑',
+            'Stock': '📊', 'Add': '➕', 'Sync': '🔄', 'Bulk': '📦'
+        };
+
+        var h = '';
+        filtered.forEach(function(log) {
+            var icon = '📝';
+            Object.keys(actionIcons).forEach(function(k){
+                if ((log.action||'').includes(k)) icon = actionIcons[k];
+            });
+            var storeTag = log.storeName ? '<span style="font-size:0.7rem;background:var(--light);border-radius:4px;padding:1px 5px;margin-left:4px;color:var(--gray)">' + log.storeName + '</span>' : '';
+            var userTag = log.user ? '<span style="font-size:0.7rem;color:var(--primary)">@' + log.user + '</span> ' : '';
+            h += '<div style="padding:6px 8px;border-bottom:1px solid var(--gray-light);display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
+                '<div style="flex:1;min-width:0">' +
+                    icon + ' ' + userTag +
+                    '<b>' + escHtml(log.action||'') + '</b>' + storeTag +
+                    '<div style="color:var(--gray-dark);font-size:0.78rem;margin-top:1px;word-break:break-word">' + escHtml(log.details||'') + '</div>' +
+                '</div>' +
+                '<div style="font-size:0.72rem;color:var(--gray);white-space:nowrap;flex-shrink:0">' + escHtml(log.time||'') + '</div>' +
+            '</div>';
+        });
+        listEl.innerHTML = h;
+    }
+
+    function exportActivityLog(format) {
+        var search = (document.getElementById('logSearch')||{}).value || '';
+        var actionF = (document.getElementById('logActionFilter')||{}).value || '';
+        var storeF  = (document.getElementById('logStoreFilter')||{}).value || '';
+        var data = _allLogs.filter(function(log) {
+            var matchSearch = !search || (log.action||'').toLowerCase().includes(search.toLowerCase()) || (log.details||'').toLowerCase().includes(search.toLowerCase());
+            var matchAction = !actionF || (log.action||'').includes(actionF);
+            var matchStore  = !storeF  || (log.storeName||log.storeId||'').includes(storeF);
+            return matchSearch && matchAction && matchStore;
+        });
+
+        var blob, filename;
+        if (format === 'csv') {
+            var rows = [['Time', 'Action', 'Details', 'User', 'Store'].join(',')];
+            data.forEach(function(log) {
+                rows.push([
+                    '"' + (log.time||'').replace(/"/g,'""') + '"',
+                    '"' + (log.action||'').replace(/"/g,'""') + '"',
+                    '"' + (log.details||'').replace(/"/g,'""') + '"',
+                    '"' + (log.user||'').replace(/"/g,'""') + '"',
+                    '"' + (log.storeName||log.storeId||'').replace(/"/g,'""') + '"'
+                ].join(','));
+            });
+            blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+            filename = 'activity-log-' + new Date().toISOString().slice(0,10) + '.csv';
+        } else {
+            blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            filename = 'activity-log-' + new Date().toISOString().slice(0,10) + '.json';
+        }
+
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a'); a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+        showToast('Exported ' + data.length + ' entries as ' + format.toUpperCase(), 'success');
+    }
+
+    async function clearActivityLog() {
+        if (!confirm('Clear ALL activity logs? This cannot be undone.')) return;
+        STATE.activityLog = [];
+        localStorage.setItem('goatActivityLog', '[]');
+        _allLogs = [];
+        // Also clear from Firebase
+        if (db) {
+            try {
+                var snap = await db.collection('activityLogs').limit(500).get();
+                var batch = db.batch();
+                snap.forEach(function(d){ batch.delete(d.ref); });
+                await batch.commit();
+                showToast('All logs cleared', 'info');
+            } catch(e) {
+                showToast('Local cleared, Firebase clear failed: ' + e.message, 'warning');
+            }
+        }
+        filterActivityLog();
     }
 
     // =============================================
