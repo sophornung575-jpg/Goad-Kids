@@ -2805,14 +2805,26 @@ function sendToTelegram(order, callback) {
         }
         try {
             var timeoutPromise = new Promise(function(_, reject) {
-                setTimeout(function() { reject(new Error('Firebase timeout')); }, 8000);
+                setTimeout(function() { reject(new Error('Firebase timeout')); }, 15000); // 15s for slow connections
             });
             var fetchPromise = async function() {
                 var s = await db.collection('stores').doc(STATE.storeId).collection('products').get();
                 var p = [];
                 s.forEach(function(d) {
                     var dt = d.data();
-                    p.push({ id: d.id, name: dt.name || '', price: dt.price || 0, stock: dt.stock || 0, category: dt.category || '', images: dt.images || [], sizes: dt.sizes || [], addedAt: dt.addedAt || 0, active: dt.active !== false });
+                    // Preserve ALL fields from Firebase — don't strip unknown fields
+                    p.push(Object.assign({}, dt, {
+                        id: d.id,
+                        name: dt.name || '',
+                        slug: dt.slug || makeSlug(dt.name || ''),
+                        price: dt.price || 0,
+                        stock: dt.stock || 0,
+                        category: dt.category || '',
+                        images: dt.images || [],
+                        sizes: dt.sizes || [],
+                        addedAt: dt.addedAt || 0,
+                        active: dt.active !== false
+                    }));
                 });
                 // Firebase is source of truth - always use Firebase products
                 if (p.length) { STATE.products = p; saveProducts(); }
@@ -2824,10 +2836,10 @@ function sendToTelegram(order, callback) {
                 os.forEach(function(d) {
                     var dt = d.data();
                     var o = Object.assign({}, dt, { orderId: d.id });
-                    if (dt.status === 'confirmed' || dt.status === 'refunded' || dt.status === 'rejected') {
+                    if (dt.status === 'confirmed' || dt.status === 'refunded' ||
+                        dt.status === 'partial_refund' || dt.status === 'rejected') {
                         fbConfirmed.push(o);
                     } else {
-                        // truly pending orders only
                         o.status = 'pending';
                         fbPending.push(o);
                     }
@@ -2891,11 +2903,23 @@ function sendToTelegram(order, callback) {
             renderHistory();
             updateAdminBadges();
             showStatus('Synced', 'online');
+            // Remove local data warning banner if Firebase succeeded
+            var warn = document.getElementById('localDataWarning');
+            if (warn) warn.remove();
             setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 3000);
         } catch (e) {
             // Firebase timed out or failed — localStorage data already showing, no blank page
             console.warn('Firebase load failed, using local data:', e.message);
             showStatus('Using local data', 'offline');
+            // Show persistent warning banner so admin knows data may be stale
+            var existing = document.getElementById('localDataWarning');
+            if (!existing) {
+                var banner = document.createElement('div');
+                banner.id = 'localDataWarning';
+                banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:0.82rem;z-index:9999;cursor:pointer';
+                banner.innerHTML = '⚠️ <b>Using cached data</b> — Firebase unavailable. Stock may be outdated. <span style="text-decoration:underline" onclick="loadData()">Tap to retry</span>';
+                document.body.prepend(banner);
+            }
             setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 3000);
         }
     }
