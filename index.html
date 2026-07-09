@@ -59,8 +59,11 @@
         try {
             firebase.initializeApp(firebaseConfig);
             db = firebase.firestore();
-            db.enablePersistence().catch(function(err) {
-                if (err.code !== 'failed-precondition' && err.code !== 'unimplemented') {
+            // Enable multi-tab persistence — allows multiple tabs/windows to share the same cache
+            db.enablePersistence({ synchronizeTabs: true }).catch(function(err) {
+                if (err.code === 'unimplemented') {
+                    console.warn('Persistence not supported in this browser — using memory cache');
+                } else if (err.code !== 'failed-precondition') {
                     console.warn('Persistence error:', err);
                 }
             });
