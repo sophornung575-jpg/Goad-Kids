@@ -1142,6 +1142,59 @@
     </div>
 
     <!-- EDIT PRODUCT MODAL -->
+    <!-- REFUND MODAL -->
+    <div class="modal-overlay" id="refundModal" onclick="if(event.target===this)closeRefundModal()" style="display:none;z-index:1000">
+        <div class="modal" style="max-width:480px;width:94%;max-height:90vh;overflow-y:auto">
+            <div class="modal-header">
+                <h3 style="margin:0;color:var(--danger)">↩️ Process Refund</h3>
+                <button class="modal-close" onclick="closeRefundModal()">✕</button>
+            </div>
+            <div class="modal-body" style="padding:1rem">
+                <div id="refundOrderInfo" style="background:var(--light);border-radius:8px;padding:0.75rem;margin-bottom:1rem;font-size:0.85rem"></div>
+                <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.5rem">Select items to refund:</div>
+                <div id="refundItemsList"></div>
+                <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--gray-light)">
+                    <div class="form-group">
+                        <label style="font-size:0.85rem;font-weight:600">Refund Reason</label>
+                        <select id="refundReason" class="form-control" style="font-size:0.85rem">
+                            <option value="Customer return">Customer return</option>
+                            <option value="Wrong item">Wrong item</option>
+                            <option value="Defective product">Defective product</option>
+                            <option value="Size issue">Size issue</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="font-size:0.85rem;font-weight:600">Custom reason (optional)</label>
+                        <input type="text" id="refundReasonCustom" class="form-control" placeholder="Add more detail..." style="font-size:0.85rem">
+                    </div>
+                </div>
+                <div style="background:var(--light);border-radius:8px;padding:0.75rem;margin-top:0.75rem">
+                    <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:4px">
+                        <span>Selected items subtotal:</span>
+                        <span id="refundItemsSubtotal" style="font-weight:600">$0.00</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:4px">
+                        <span>Discount applied:</span>
+                        <span id="refundDiscountAmt" style="color:var(--success)">-$0.00</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:1rem;font-weight:700;border-top:1px solid var(--gray-light);padding-top:6px;margin-top:4px">
+                        <span>Refund Total:</span>
+                        <span id="refundTotal" style="color:var(--danger)">$0.00</span>
+                    </div>
+                    <div class="form-group" style="margin-top:0.75rem;margin-bottom:0">
+                        <label style="font-size:0.82rem;color:var(--gray)">Override refund amount (optional)</label>
+                        <input type="number" id="refundAmountOverride" class="form-control" min="0" step="0.01" placeholder="Leave empty to use calculated total" style="font-size:0.85rem" oninput="onRefundAmountOverride()">
+                    </div>
+                </div>
+                <div style="display:flex;gap:0.5rem;margin-top:1rem">
+                    <button class="btn btn-outline" onclick="closeRefundModal()" style="flex:1">Cancel</button>
+                    <button class="btn btn-danger" onclick="confirmRefund()" style="flex:2"><i class="fas fa-undo"></i> Confirm Refund</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="editProductModal">
         <div class="modal">
             <div class="modal-header"><h3><i class="fas fa-edit"></i> Edit Product</h3><button class="modal-close" onclick="closeEditModal()">&times;</button></div>
@@ -3323,11 +3376,45 @@ function sendToTelegram(order, callback) {
                 sz +
                 '<div class="product-actions"><button class="btn btn-primary btn-add-to-cart" onclick="event.stopPropagation();addToCart(\'' + p.id + '\')" ' + (!hasStock(p) ? 'disabled' : '') + '><i class="fas fa-cart-plus"></i> Add</button>' +
                 '<button class="btn btn-outline btn-small" onclick="openProductDetail(\'' + p.id + '\')" title="View Details"><i class="fas fa-eye"></i></button>' +
+                '<button class="btn btn-outline btn-small" style="color:#0084ff;border-color:#0084ff" onclick="event.stopPropagation();shareToMessenger(\'' + p.id + '\')" title="Share on Messenger"><i class="fab fa-facebook-messenger"></i></button>' +
                 '</div>' +
                 '</div></div>';
             h += card;
         }
         g.innerHTML = h;
+    }
+
+    function shareToMessenger(pid) {
+        var p = STATE.products.find(function(x){ return x.id === pid; });
+        if (!p) return;
+
+        // Build share URL — links to the store page with product name as hash
+        var storeUrl = window.location.href.split('#')[0].split('?')[0];
+        var storeId = STATE.storeId ? '?store=' + STATE.storeId : '';
+        var productLink = storeUrl + storeId + '#' + encodeURIComponent(p.name);
+
+        // Build share text
+        var text = '🛍️ ' + p.name + '\n💰 $' + p.price.toFixed(2) + '\n\n' + productLink;
+
+        // Try native share (works on mobile — shows Messenger in share sheet)
+        if (navigator.share) {
+            navigator.share({
+                title: p.name,
+                text: '🛍️ ' + p.name + ' — $' + p.price.toFixed(2),
+                url: productLink
+            }).catch(function() {}); // user cancelled
+            return;
+        }
+
+        // Fallback: open Messenger app on mobile, or Facebook share on desktop
+        var isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+        if (isMobile) {
+            // Deep link into Messenger app
+            window.open('fb-messenger://share?link=' + encodeURIComponent(productLink), '_blank');
+        } else {
+            // Desktop fallback — Facebook share dialog
+            window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(productLink) + '&quote=' + encodeURIComponent('🛍️ ' + p.name + ' — $' + p.price.toFixed(2)), '_blank', 'width=600,height=400');
+        }
     }
 
     function clearFilters() {
@@ -4824,76 +4911,235 @@ function sendToTelegram(order, callback) {
     // =============================================
     // REFUND SYSTEM
     // =============================================
+    var _refundState = { order: null, idx: -1 };
+
     function refundOrder(oid) {
         var order = null, idx = -1;
-        for (var i = 0; i < STATE.confirmedOrders.length; i++) { if (STATE.confirmedOrders[i].orderId === oid && STATE.confirmedOrders[i].status === 'confirmed') { order = STATE.confirmedOrders[i]; idx = i; break; } }
-        if (!order) { showToast('Order not found or already refunded', 'error'); return; }
-        var reason = prompt('Refund reason:', 'Customer return');
-        if (!reason) return;
-        var refundAmount = parseFloat(prompt('Refund amount ($):', order.total.toFixed(2)));
-        if (isNaN(refundAmount) || refundAmount <= 0 || refundAmount > order.total) { showToast('Invalid refund amount', 'error'); return; }
-        if (!confirm('Refund $' + refundAmount.toFixed(2) + ' for order ' + oid + '?\n\nReason: ' + reason + '\n\nStock will be restored.')) return;
-        for (var j = 0; j < order.cart.length; j++) {
-            var item = order.cart[j], product = null;
-            for (var k = 0; k < STATE.products.length; k++) { if (STATE.products[k].id === item.productId) { product = STATE.products[k]; break; } }
-            if (product) {
-                if (product.sizes && product.sizes.length) {
-                    var sizeFound = false;
-                    for (var l = 0; l < product.sizes.length; l++) { if (product.sizes[l].name === item.size) { product.sizes[l].qty += item.quantity; sizeFound = true; break; } }
-                    if (!sizeFound) product.sizes.push({ name: item.size, qty: item.quantity });
-                }
-                // FIX #6: Recalculate from sizes
-                product.stock = getTotalStock(product);
+        for (var i = 0; i < STATE.confirmedOrders.length; i++) {
+            if (STATE.confirmedOrders[i].orderId === oid && STATE.confirmedOrders[i].status === 'confirmed') {
+                order = STATE.confirmedOrders[i]; idx = i; break;
             }
         }
-        var refundRecord = { refundId: 'REF-' + Date.now(), orderId: order.orderId, originalOrder: JSON.parse(JSON.stringify(order)), refundAmount: refundAmount, refundReason: reason, refundDate: new Date().toLocaleString(), refundTimestamp: Date.now(), refundedBy: STATE.adminRole || 'admin', customerName: order.customerName, customerPhone: order.customerPhone, cart: order.cart };
-        order.status = 'refunded'; order.refundedAt = new Date().toLocaleString(); order.refundAmount = refundAmount; order.refundReason = reason;
+        if (!order) { showToast('Order not found or already refunded', 'error'); return; }
+        _refundState.order = order;
+        _refundState.idx = idx;
+
+        // Populate order info
+        document.getElementById('refundOrderInfo').innerHTML =
+            '<b>' + escHtml(order.orderId) + '</b> &nbsp;|&nbsp; 👤 ' + escHtml(order.customerName||'') +
+            ' &nbsp;|&nbsp; 📞 ' + escHtml(order.customerPhone||'') +
+            '<br><span style="color:var(--gray)">Order total: <b>$' + (order.total||0).toFixed(2) + '</b></span>';
+
+        // Populate items list with checkboxes and qty inputs
+        var h = '';
+        (order.cart||[]).forEach(function(it, i) {
+            var lineTotal = Math.max(0, (it.price * it.quantity) - (it.discountAmt || 0));
+            h += '<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--light);border-radius:8px;margin-bottom:6px">' +
+                '<input type="checkbox" class="refund-item-cb" data-idx="' + i + '" checked onchange="recalcRefundTotal()" style="width:16px;height:16px;accent-color:var(--danger);flex-shrink:0">' +
+                (it.image ? '<img src="' + escHtml(it.image) + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0">' : '') +
+                '<div style="flex:1;min-width:0">' +
+                    '<div style="font-size:0.85rem;font-weight:600">' + escHtml(it.name) + '</div>' +
+                    '<div style="font-size:0.78rem;color:var(--gray)">Size: ' + escHtml(it.size||'') + ' &nbsp;·&nbsp; $' + it.price.toFixed(2) + ' each</div>' +
+                    (it.discountAmt > 0 ? '<div style="font-size:0.75rem;color:var(--success)">Discount: -$' + it.discountAmt.toFixed(2) + '</div>' : '') +
+                '</div>' +
+                '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">' +
+                    '<label style="font-size:0.75rem;color:var(--gray)">Qty:</label>' +
+                    '<input type="number" class="refund-item-qty" data-idx="' + i + '" data-max="' + it.quantity + '" data-price="' + it.price + '" data-discount="' + (it.discountAmt||0) + '" data-origqty="' + it.quantity + '"' +
+                        ' value="' + it.quantity + '" min="1" max="' + it.quantity + '"' +
+                        ' style="width:50px;font-size:0.82rem;padding:3px 5px;border:1px solid var(--gray-light);border-radius:5px;text-align:center"' +
+                        ' oninput="recalcRefundTotal()">' +
+                    '<span style="font-size:0.78rem;color:var(--gray)">/' + it.quantity + '</span>' +
+                '</div>' +
+                '<div class="refund-item-line-total" data-idx="' + i + '" style="font-size:0.88rem;font-weight:700;min-width:50px;text-align:right;flex-shrink:0">$' + lineTotal.toFixed(2) + '</div>' +
+            '</div>';
+        });
+        document.getElementById('refundItemsList').innerHTML = h;
+        document.getElementById('refundAmountOverride').value = '';
+        document.getElementById('refundReason').value = 'Customer return';
+        document.getElementById('refundReasonCustom').value = '';
+        recalcRefundTotal();
+
+        // Show modal
+        var modal = document.getElementById('refundModal');
+        modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+    }
+
+    function recalcRefundTotal() {
+        var order = _refundState.order;
+        if (!order) return;
+        var subtotal = 0, discountTotal = 0;
+        var cbs = document.querySelectorAll('.refund-item-cb');
+        var qtys = document.querySelectorAll('.refund-item-qty');
+        cbs.forEach(function(cb, i) {
+            var qtyEl = qtys[i];
+            var origQty = parseInt(qtyEl.getAttribute('data-origqty')) || 1;
+            var refundQty = Math.min(parseInt(qtyEl.value)||1, origQty);
+            var price = parseFloat(qtyEl.getAttribute('data-price')) || 0;
+            var discPerItem = parseFloat(qtyEl.getAttribute('data-discount')) || 0;
+            var discPerUnit = discPerItem / origQty;
+            if (cb.checked) {
+                var lineSubtotal = price * refundQty;
+                var lineDiscount = discPerUnit * refundQty;
+                subtotal += lineSubtotal;
+                discountTotal += lineDiscount;
+                // Update line total display
+                var lineEl = document.querySelector('.refund-item-line-total[data-idx="' + cb.getAttribute('data-idx') + '"]');
+                if (lineEl) lineEl.textContent = '$' + Math.max(0, lineSubtotal - lineDiscount).toFixed(2);
+            } else {
+                var lineEl2 = document.querySelector('.refund-item-line-total[data-idx="' + cb.getAttribute('data-idx') + '"]');
+                if (lineEl2) lineEl2.style.opacity = '0.3';
+            }
+        });
+        var refundTotal = Math.max(0, subtotal - discountTotal);
+        document.getElementById('refundItemsSubtotal').textContent = '$' + subtotal.toFixed(2);
+        document.getElementById('refundDiscountAmt').textContent = '-$' + discountTotal.toFixed(2);
+        document.getElementById('refundTotal').textContent = '$' + refundTotal.toFixed(2);
+        // Clear override when items change
+        var override = document.getElementById('refundAmountOverride');
+        if (!override.value) override.placeholder = 'Leave empty to use $' + refundTotal.toFixed(2);
+    }
+
+    function onRefundAmountOverride() {
+        var val = parseFloat(document.getElementById('refundAmountOverride').value);
+        if (!isNaN(val) && val > 0) {
+            document.getElementById('refundTotal').textContent = '$' + val.toFixed(2);
+        } else {
+            recalcRefundTotal();
+        }
+    }
+
+    function closeRefundModal() {
+        document.getElementById('refundModal').style.display = 'none';
+        _refundState = { order: null, idx: -1 };
+    }
+
+    function confirmRefund() {
+        var order = _refundState.order;
+        var idx = _refundState.idx;
+        if (!order) return;
+
+        // Collect selected items + quantities
+        var refundItems = [];
+        var cbs = document.querySelectorAll('.refund-item-cb');
+        var qtys = document.querySelectorAll('.refund-item-qty');
+        cbs.forEach(function(cb, i) {
+            if (cb.checked) {
+                var itemIdx = parseInt(cb.getAttribute('data-idx'));
+                var origItem = order.cart[itemIdx];
+                var refundQty = Math.min(parseInt(qtys[i].value)||1, origItem.quantity);
+                refundItems.push(Object.assign({}, origItem, { quantity: refundQty }));
+            }
+        });
+        if (!refundItems.length) { showToast('Select at least one item to refund', 'error'); return; }
+
+        // Get refund amount
+        var overrideVal = parseFloat(document.getElementById('refundAmountOverride').value);
+        var refundAmount = !isNaN(overrideVal) && overrideVal > 0
+            ? overrideVal
+            : parseFloat(document.getElementById('refundTotal').textContent.replace('$',''));
+        if (isNaN(refundAmount) || refundAmount <= 0) { showToast('Invalid refund amount', 'error'); return; }
+
+        // Get reason
+        var reason = document.getElementById('refundReason').value;
+        var custom = document.getElementById('refundReasonCustom').value.trim();
+        if (custom) reason = reason + ' — ' + custom;
+
+        // Confirm
+        var itemSummary = refundItems.map(function(it){ return it.quantity + '× ' + it.name + ' (' + it.size + ')'; }).join('\n');
+        if (!confirm('Confirm refund?\n\nItems:\n' + itemSummary + '\n\nRefund: $' + refundAmount.toFixed(2) + '\nReason: ' + reason)) return;
+
+        // Restore stock for selected items only
+        refundItems.forEach(function(refItem) {
+            for (var k = 0; k < STATE.products.length; k++) {
+                var product = STATE.products[k];
+                if (product.id === refItem.productId || product.name === refItem.name) {
+                    if (product.sizes && product.sizes.length) {
+                        var found = false;
+                        for (var l = 0; l < product.sizes.length; l++) {
+                            if (product.sizes[l].name === refItem.size) {
+                                product.sizes[l].qty += refItem.quantity;
+                                found = true; break;
+                            }
+                        }
+                        if (!found) product.sizes.push({ name: refItem.size, qty: refItem.quantity });
+                    } else {
+                        product.stock = (product.stock || 0) + refItem.quantity;
+                    }
+                    product.stock = getTotalStock(product);
+                    break;
+                }
+            }
+        });
+
+        // Create refund record
+        var refundRecord = {
+            refundId: 'REF-' + Date.now(),
+            orderId: order.orderId,
+            originalOrder: JSON.parse(JSON.stringify(order)),
+            refundAmount: refundAmount,
+            refundReason: reason,
+            refundDate: new Date().toLocaleString(),
+            refundTimestamp: Date.now(),
+            refundedBy: STATE.adminRole || 'admin',
+            customerName: order.customerName,
+            customerPhone: order.customerPhone,
+            cart: refundItems,  // only refunded items
+            isPartial: refundItems.length < order.cart.length
+        };
+
+        // Determine if full or partial refund
+        var isPartial = refundItems.length < order.cart.length ||
+            refundItems.some(function(ri, i) { return ri.quantity < order.cart[i] && order.cart[i] ? order.cart[i].quantity : false; });
+
+        order.status = isPartial ? 'partial_refund' : 'refunded';
+        order.refundedAt = new Date().toLocaleString();
+        order.refundAmount = refundAmount;
+        order.refundReason = reason;
+
         STATE.refundedOrders.push(refundRecord);
-        STATE.confirmedOrders.splice(idx, 1);
+        if (!isPartial) STATE.confirmedOrders.splice(idx, 1);
+
         saveProducts(); saveOrders(); saveRefunds();
-        logActivity('Refund Order', oid + ' - $' + refundAmount.toFixed(2) + ' (' + reason + '). Stock restored.');
-        // Save refund, updated order, AND restored stock to Firebase
+        logActivity('Refund', order.orderId + ' — $' + refundAmount.toFixed(2) + ' (' + refundItems.length + ' item(s))');
+
+        // Save to Firebase
         if (db) {
             var storeRef = db.collection('stores').doc(STATE.storeId);
-            storeRef.collection('refunds').doc(refundRecord.refundId)
-              .set(refundRecord)
-              .catch(function(e){ console.warn('Refund Firebase save failed:', e.message); });
-            storeRef.collection('orders').doc(oid)
-              .set(order, { merge: true })
-              .catch(function(e){ console.warn('Order refund update failed:', e.message); });
-            // FIX: Write restored stock back to Firebase so it is not overwritten on next sync
-            for (var ri = 0; ri < order.cart.length; ri++) {
-                (function(cartItem) {
-                    var rProduct = null;
-                    for (var rk = 0; rk < STATE.products.length; rk++) { if (STATE.products[rk].id === cartItem.productId) { rProduct = STATE.products[rk]; break; } }
-                    if (!rProduct) return;
-                    var pRef = storeRef.collection('products').doc(rProduct.id);
-                    if (rProduct.sizes && rProduct.sizes.length) {
-                        pRef.update({ sizes: rProduct.sizes, stock: rProduct.stock })
-                          .catch(function(e){ console.warn('Stock restore Firebase update failed:', e.message); });
-                    } else {
-                        pRef.update({ stock: rProduct.stock })
-                          .catch(function(e){ console.warn('Stock restore Firebase update failed:', e.message); });
-                    }
-                })(order.cart[ri]);
-            }
+            storeRef.collection('refunds').doc(refundRecord.refundId).set(refundRecord)
+                .catch(function(e){ console.warn('Refund Firebase save failed:', e.message); });
+            storeRef.collection('orders').doc(order.orderId).set(order, { merge: true })
+                .catch(function(e){ console.warn('Order refund update failed:', e.message); });
+            // Restore stock in Firebase
+            refundItems.forEach(function(refItem) {
+                var rProduct = STATE.products.find(function(p){ return p.id === refItem.productId || p.name === refItem.name; });
+                if (!rProduct) return;
+                var pRef = storeRef.collection('products').doc(rProduct.id);
+                if (rProduct.sizes && rProduct.sizes.length) {
+                    pRef.update({ sizes: rProduct.sizes, stock: rProduct.stock }).catch(function(e){ console.warn(e); });
+                } else {
+                    pRef.update({ stock: rProduct.stock }).catch(function(e){ console.warn(e); });
+                }
+            });
         }
+
+        closeRefundModal();
         renderPending(); renderHistory(); renderRefunds(); renderProducts(); renderInventory(); updateAdminBadges(); renderReports();
-        showToast('✅ Refund processed! $' + refundAmount.toFixed(2) + ' - Stock restored', 'success');
+        showToast('✅ Refund processed! $' + refundAmount.toFixed(2) + ' — Stock restored for ' + refundItems.length + ' item(s)', 'success');
 
         // Telegram notification
-        var itemLines = order.cart.map(function(it) {
+        var itemLines = refundItems.map(function(it) {
             return '  • ' + it.name + (it.size && it.size !== 'One Size' ? ' (' + it.size + ')' : '') + ' x' + it.quantity;
         }).join('\n');
-        var refundCaption = '↩️ <b>REFUND PROCESSED</b>\n\n' +
-            '🧾 Order: ' + oid + '\n' +
-            '👤 Customer: ' + (order.customerName || '—') + ' | ' + (order.customerPhone || '—') + '\n' +
-            '💰 Refund Amount: <b>$' + refundAmount.toFixed(2) + '</b> (of $' + order.total.toFixed(2) + ')\n' +
-            '📦 Items:\n' + itemLines + '\n' +
+        var refundCaption = '↩️ <b>REFUND PROCESSED</b>' + (refundRecord.isPartial ? ' (Partial)' : '') + '\n\n' +
+            '🧾 Order: ' + order.orderId + '\n' +
+            '👤 ' + (order.customerName||'—') + ' | 📞 ' + (order.customerPhone||'—') + '\n' +
+            '💰 Refund: <b>$' + refundAmount.toFixed(2) + '</b>\n' +
+            '📦 Refunded items:\n' + itemLines + '\n' +
             '📝 Reason: ' + reason + '\n' +
-            '🏪 Store: ' + (STATE.storeName || STATE.storeId) + '\n' +
             '🕐 ' + new Date().toLocaleString();
-        var refundImages = order.cart.map(function(it) { return it.image; }).filter(Boolean);
+        var refundImages = refundItems.map(function(it){ return it.image; }).filter(Boolean);
         _sendTelegramMediaGroup(refundImages, refundCaption, refundCaption, null);
 
         setTimeout(function() { if (confirm('Print refund receipt?')) printRefundReceipt(refundRecord.refundId); }, 300);
