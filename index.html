@@ -4328,6 +4328,7 @@ function sendToTelegram(order, callback) {
         for (var i = 0; i < pageOrders.length; i++) {
             var o = pageOrders[i];
             var ok = o.status === 'confirmed';
+            var isPartialRefund = o.status === 'partial_refund';
             var itemsSummary = '';
             if (o.cart && o.cart.length) {
                 for (var j = 0; j < Math.min(o.cart.length, 3); j++) {
@@ -4338,11 +4339,13 @@ function sendToTelegram(order, callback) {
                 if (o.cart.length > 3) itemsSummary += '+' + (o.cart.length-3) + ' more';
             }
             var discBadge2 = (o.discount > 0) ? ' <span style="font-size:0.72rem;background:#d4edda;color:#276749;border-radius:4px;padding:1px 5px;margin-left:4px">-$' + o.discount.toFixed(2) + '</span>' : '';
+            var statusIcon = ok ? '✅' : isPartialRefund ? '↩️' : '❌';
+            var statusLabel = isPartialRefund ? ' <span style="font-size:0.7rem;background:#fff3cd;color:#856404;border-radius:4px;padding:1px 5px;margin-left:4px">Partial Refund</span>' : '';
             h += '<div class="order-card-mini ' + (o.status||'') + '">' +
-                '<div class="oc-head"><div class="oc-id">' + (ok ? '✅' : '❌') + ' ' + escHtml(o.orderId) + '<br><span style="font-weight:400;color:var(--gray)">' + escHtml(o.orderDate||o.confirmedAt||'') + '</span></div><div class="oc-total">$' + (o.total||0).toFixed(2) + discBadge2 + '</div></div>' +
+                '<div class="oc-head"><div class="oc-id">' + statusIcon + ' ' + escHtml(o.orderId) + statusLabel + '<br><span style="font-weight:400;color:var(--gray)">' + escHtml(o.orderDate||o.confirmedAt||'') + '</span></div><div class="oc-total">$' + (o.total||0).toFixed(2) + discBadge2 + '</div></div>' +
                 '<div class="oc-info">👤 ' + escHtml(o.customerName||'N/A') + ' · 📞 ' + escHtml(o.customerPhone||'') + '</div>' +
                 '<div class="oc-items">' + escHtml(itemsSummary) + '</div>' +
-                (ok ? '<div class="oc-actions"><button class="btn btn-receipt" onclick="printReceipt(\'' + o.orderId + '\')"><i class="fas fa-print"></i> Print</button><button class="btn btn-danger" onclick="refundOrder(\'' + o.orderId + '\')"><i class="fas fa-undo"></i> Refund</button></div>' : '') +
+                ((ok || isPartialRefund) ? '<div class="oc-actions"><button class="btn btn-receipt" onclick="printReceipt(\'' + o.orderId + '\')"><i class="fas fa-print"></i> Print</button><button class="btn btn-danger" onclick="refundOrder(\'' + o.orderId + '\')"><i class="fas fa-undo"></i> ' + (isPartialRefund ? 'More Refund' : 'Refund') + '</button></div>' : '') +
                 '</div>';
         }
         c.innerHTML = h;
@@ -4980,7 +4983,8 @@ function sendToTelegram(order, callback) {
     function refundOrder(oid) {
         var order = null, idx = -1;
         for (var i = 0; i < STATE.confirmedOrders.length; i++) {
-            if (STATE.confirmedOrders[i].orderId === oid && STATE.confirmedOrders[i].status === 'confirmed') {
+            if (STATE.confirmedOrders[i].orderId === oid &&
+                (STATE.confirmedOrders[i].status === 'confirmed' || STATE.confirmedOrders[i].status === 'partial_refund')) {
                 order = STATE.confirmedOrders[i]; idx = i; break;
             }
         }
@@ -5151,16 +5155,40 @@ function sendToTelegram(order, callback) {
         };
 
         // Determine if full or partial refund
-        var isPartial = refundItems.length < order.cart.length ||
-            refundItems.some(function(ri, i) { return ri.quantity < order.cart[i] && order.cart[i] ? order.cart[i].quantity : false; });
+        // Check by matching product+size, not by array index
+        var isPartial = false;
+        refundItems.forEach(function(refItem) {
+            var origItem = order.cart.find(function(c){ return c.name === refItem.name && c.size === refItem.size; });
+            if (!origItem || refItem.quantity < origItem.quantity) isPartial = true;
+        });
+        if (refundItems.length < order.cart.length) isPartial = true;
 
-        order.status = isPartial ? 'partial_refund' : 'refunded';
+        // Update order cart quantities — deduct refunded qty from each item
+        refundItems.forEach(function(refItem) {
+            var origItem = order.cart.find(function(c){ return c.name === refItem.name && c.size === refItem.size; });
+            if (origItem) {
+                origItem.quantity -= refItem.quantity;
+                origItem.subtotal = Math.max(0, origItem.price * origItem.quantity);
+                // Remove item from order cart if fully refunded
+            }
+        });
+        // Remove fully refunded items from order cart
+        order.cart = order.cart.filter(function(c){ return c.quantity > 0; });
+        // Recalculate order total
+        order.subtotal = order.cart.reduce(function(a, c){ return a + (c.price * c.quantity); }, 0);
+        order.discount = order.cart.reduce(function(a, c){ return a + (c.discountAmt || 0); }, 0);
+        order.total = Math.max(0, order.subtotal - order.discount + (order.shipping || 0));
+
+        order.status = order.cart.length === 0 ? 'refunded' : 'partial_refund';
         order.refundedAt = new Date().toLocaleString();
-        order.refundAmount = refundAmount;
+        order.refundAmount = (order.refundAmount || 0) + refundAmount; // accumulate if multiple refunds
         order.refundReason = reason;
 
         STATE.refundedOrders.push(refundRecord);
-        if (!isPartial) STATE.confirmedOrders.splice(idx, 1);
+        // Remove from confirmed only if fully refunded
+        if (order.cart.length === 0) {
+            STATE.confirmedOrders.splice(idx, 1);
+        }
 
         saveProducts(); saveOrders(); saveRefunds();
         logActivity('Refund', order.orderId + ' — $' + refundAmount.toFixed(2) + ' (' + refundItems.length + ' item(s))');
