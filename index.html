@@ -6560,11 +6560,11 @@ function sendToTelegram(order, callback) {
             snap.forEach(function(d) {
                 var t = Object.assign({ transferId: d.id }, d.data());
                 // Pending shows on DESTINATION store — receiver confirms receipt
+                // Hide 'processing' ones too — they're being confirmed right now
                 if (t.toStoreId === STATE.storeId && t.status === 'pending') {
                     pending.push(t);
                 }
-                // History: this store is involved in any completed transfer
-                if ((t.fromStoreId === STATE.storeId || t.toStoreId === STATE.storeId) && t.status !== 'pending') {
+                if ((t.fromStoreId === STATE.storeId || t.toStoreId === STATE.storeId) && t.status !== 'pending' && t.status !== 'processing') {
                     history.push(t);
                 }
             });
@@ -6665,12 +6665,38 @@ function sendToTelegram(order, callback) {
 
     async function approveTransfer(transferId) {
         if (STATE.adminRole !== 'full') { showToast('Full admin required', 'error'); return; }
-        if (!confirm('Confirm receipt of this stock?\n\nThis will deduct from ' + 'the sending store and add to your store.')) return;
         if (!db) { showToast('Firebase offline', 'error'); return; }
+
+        // ── IDEMPOTENCY CHECK: fetch latest status from Firebase first ──
+        var tDoc = await db.collection('transfers').doc(transferId).get();
+        if (!tDoc.exists) { showToast('Transfer not found', 'error'); return; }
+        var t = tDoc.data();
+        if (t.status === 'approved') {
+            showToast('Already confirmed — stock was already updated', 'warning');
+            loadTransfers();
+            return;
+        }
+        if (t.status === 'rejected') {
+            showToast('This transfer was rejected', 'warning');
+            loadTransfers();
+            return;
+        }
+
+        if (!confirm('Confirm receipt of this stock?\n\nThis will deduct from the sending store and add to your store.')) return;
+
+        // ── Mark as PROCESSING immediately to block double-clicks ──
         try {
-            var tDoc = await db.collection('transfers').doc(transferId).get();
-            if (!tDoc.exists) { showToast('Transfer not found', 'error'); return; }
-            var t = tDoc.data();
+            await db.collection('transfers').doc(transferId).update({
+                status: 'processing',
+                processingAt: Date.now(),
+                processingBy: STATE.storeId
+            });
+        } catch(e) {
+            showToast('Could not lock transfer: ' + e.message, 'error');
+            return;
+        }
+
+        try {
 
             // Source = fromStoreId (the store sending the stock, e.g. Main Store)
             // Destination = toStoreId (this device — the branch confirming receipt)
@@ -6786,6 +6812,10 @@ function sendToTelegram(order, callback) {
             loadTransfers();
         } catch(e) {
             showToast('Approve failed: ' + e.message, 'error');
+            // Reset status back to pending so admin can retry
+            try {
+                await db.collection('transfers').doc(transferId).update({ status: 'pending' });
+            } catch(e2) { console.warn('Could not reset transfer status:', e2.message); }
         }
     }
 
@@ -6798,14 +6828,47 @@ function sendToTelegram(order, callback) {
 
         showToast('Processing ' + checked.length + ' transfer(s)...', 'info');
 
-        // ── Step 1: Load all transfer documents ──
+        // ── Step 1: Load all transfer documents — skip already approved ones ──
         var transfers = [];
+        var alreadyDone = [];
         for (var i = 0; i < checked.length; i++) {
             try {
                 var tDoc = await db.collection('transfers').doc(checked[i]).get();
-                if (tDoc.exists) transfers.push(Object.assign({ transferId: checked[i] }, tDoc.data()));
-                else console.warn('Transfer not found:', checked[i]);
+                if (tDoc.exists) {
+                    var tData = Object.assign({ transferId: checked[i] }, tDoc.data());
+                    if (tData.status === 'approved') {
+                        alreadyDone.push(tData.productName || checked[i]);
+                        console.warn('Skipping already approved transfer:', checked[i]);
+                    } else if (tData.status === 'processing') {
+                        alreadyDone.push((tData.productName || checked[i]) + ' (in progress)');
+                        console.warn('Skipping in-progress transfer:', checked[i]);
+                    } else {
+                        transfers.push(tData);
+                    }
+                } else console.warn('Transfer not found:', checked[i]);
             } catch(e) { console.warn('Failed to load transfer:', checked[i], e); }
+        }
+        if (alreadyDone.length) {
+            showToast(alreadyDone.length + ' transfer(s) already confirmed — skipped', 'warning');
+        }
+        if (!transfers.length) {
+            showToast('All selected transfers already confirmed', 'info');
+            loadTransfers();
+            return;
+        }
+
+        // ── Mark all as PROCESSING immediately to block double-confirm ──
+        try {
+            var lockBatch = db.batch();
+            transfers.forEach(function(t) {
+                lockBatch.update(db.collection('transfers').doc(t.transferId), {
+                    status: 'processing', processingAt: Date.now(), processingBy: STATE.storeId
+                });
+            });
+            await lockBatch.commit();
+        } catch(e) {
+            showToast('Could not lock transfers: ' + e.message, 'error');
+            return;
         }
 
         // ── Step 2: Load each unique source product ONCE from Firebase ──
@@ -6973,6 +7036,15 @@ function sendToTelegram(order, callback) {
             } catch(e) {
                 showToast('Batch write failed: ' + e.message, 'error');
                 console.error('Bulk approve batch failed:', e);
+                // Reset all processing transfers back to pending so they can be retried
+                try {
+                    var resetBatch = db.batch();
+                    transfers.forEach(function(t) {
+                        resetBatch.update(db.collection('transfers').doc(t.transferId), { status: 'pending' });
+                    });
+                    await resetBatch.commit();
+                    showToast('Transfers reset — please try again', 'warning');
+                } catch(e2) { console.warn('Could not reset transfer statuses:', e2.message); }
             }
         } else {
             showToast('Nothing approved. ' + failed.length + ' failed — see console.', 'error');
