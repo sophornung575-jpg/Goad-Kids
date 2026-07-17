@@ -825,7 +825,10 @@
                         <div class="admin-card" style="margin-bottom:1rem">
                             <div class="admin-card-header" style="display:flex;justify-content:space-between;align-items:center">
                                 <div class="admin-card-title"><i class="fas fa-warehouse" style="color:var(--primary)"></i> Branch Stock Overview</div>
-                                <button class="btn btn-outline btn-small" onclick="loadBranchStockTab()"><i class="fas fa-sync"></i> Refresh</button>
+                                <div style="display:flex;gap:6px">
+                                    <button class="btn btn-success btn-small" onclick="openStockRequestModal()"><i class="fas fa-plus"></i> Request Stock</button>
+                                    <button class="btn btn-outline btn-small" onclick="loadBranchStockTab()"><i class="fas fa-sync"></i> Refresh</button>
+                                </div>
                             </div>
                             <div class="admin-card-body">
                                 <p style="font-size:0.83rem;color:var(--gray);margin-bottom:1rem">View stock at any branch in real-time. Click a quantity to adjust it directly (bypasses transfer approval).</p>
@@ -1184,6 +1187,46 @@
                 <div style="display:flex;gap:0.5rem;margin-top:1rem">
                     <button class="btn btn-outline" onclick="closeRefundModal()" style="flex:1">Cancel</button>
                     <button class="btn btn-danger" onclick="confirmRefund()" style="flex:2"><i class="fas fa-undo"></i> Confirm Refund</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STOCK REQUEST MODAL -->
+    <div class="modal-overlay" id="stockRequestModal" onclick="if(event.target===this)closeStockRequestModal()">
+        <div class="modal" style="max-width:560px;width:96%;max-height:92vh;overflow-y:auto" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 style="margin:0"><i class="fas fa-exchange-alt"></i> Request Stock</h3>
+                <button class="modal-close" onclick="closeStockRequestModal()">✕</button>
+            </div>
+            <div class="modal-body" style="padding:0.75rem">
+                <!-- Source branch selector -->
+                <div class="form-group">
+                    <label style="font-size:0.85rem;font-weight:600">Request FROM:</label>
+                    <select id="reqFromBranch" class="form-control" onchange="loadReqBranchProducts()">
+                        <option value="">— Select source branch —</option>
+                    </select>
+                </div>
+                <!-- Product search -->
+                <div class="form-group">
+                    <label style="font-size:0.85rem;font-weight:600">Search Product:</label>
+                    <input type="text" id="reqProductSearch" class="form-control" placeholder="Type product name..." oninput="filterReqProducts()">
+                </div>
+                <!-- Product list -->
+                <div id="reqProductList" style="max-height:280px;overflow-y:auto;border:1px solid var(--gray-light);border-radius:8px;margin-bottom:1rem">
+                    <div style="text-align:center;color:var(--gray);padding:1.5rem;font-size:0.85rem">Select a source branch first</div>
+                </div>
+                <!-- Request list -->
+                <div id="reqListSection" class="hidden">
+                    <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.5rem;color:var(--gray-dark)">📋 Request List <span id="reqCount" style="color:var(--primary)"></span></div>
+                    <div id="reqList" style="max-height:200px;overflow-y:auto;border:1px solid var(--gray-light);border-radius:8px;margin-bottom:0.75rem"></div>
+                    <div class="form-group" style="margin-bottom:0.75rem">
+                        <label style="font-size:0.82rem">Note to sender (optional)</label>
+                        <input type="text" id="reqNote" class="form-control" placeholder="e.g. Urgent — needed for weekend sale">
+                    </div>
+                    <button class="btn btn-primary" style="width:100%" onclick="sendStockRequest()">
+                        <i class="fas fa-paper-plane"></i> Send Request
+                    </button>
                 </div>
             </div>
         </div>
@@ -2477,8 +2520,228 @@ function sendToTelegram(order, callback) {
         var pid = btn.getAttribute('data-pid');
         var action = btn.getAttribute('data-act');
         if (action === 'label') openLabelModal(pid);
-        else if (action === 'edit') openEditModal(pid);
-        else if (action === 'del') { if (confirm('Delete this product?')) deleteProduct(pid); }
+        else if (action === 'edit') requireProductPassword(function(){ openEditModal(pid); });
+        else if (action === 'del') requireProductPassword(function(){
+            if (confirm('Delete this product?')) deleteProduct(pid);
+        });
+    }
+
+    // =============================================
+    // STOCK REQUEST SYSTEM — Branch requests stock from any branch
+    // =============================================
+    var _reqState = { fromStoreId: '', fromStoreName: '', products: [], requestList: [] };
+
+    async function openStockRequestModal() {
+        if (!STATE.adminRole) { showToast('Admin login required', 'error'); return; }
+        _reqState = { fromStoreId: '', fromStoreName: '', products: [], requestList: [] };
+
+        // Load all branches into FROM selector (excluding current store)
+        var fromSel = document.getElementById('reqFromBranch');
+        fromSel.innerHTML = '<option value="">— Select source branch —</option>';
+        try {
+            // Add Main Store
+            if (STATE.storeId !== 'GOAT-1979') {
+                fromSel.innerHTML += '<option value="GOAT-1979">Main Store</option>';
+            }
+            var bSnap = await db.collection('_admin_').doc('branches').get();
+            if (bSnap.exists) {
+                (bSnap.data().list || []).forEach(function(b) {
+                    if (b.id !== STATE.storeId) {
+                        fromSel.innerHTML += '<option value="' + escHtml(b.id) + '">' + escHtml(b.name) + '</option>';
+                    }
+                });
+            }
+        } catch(e) { console.warn('Branch load failed:', e.message); }
+
+        document.getElementById('reqProductSearch').value = '';
+        document.getElementById('reqProductList').innerHTML = '<div style="text-align:center;color:var(--gray);padding:1.5rem;font-size:0.85rem">Select a source branch first</div>';
+        document.getElementById('reqListSection').classList.add('hidden');
+        document.getElementById('stockRequestModal').classList.add('active');
+    }
+
+    function closeStockRequestModal() {
+        document.getElementById('stockRequestModal').classList.remove('active');
+    }
+
+    async function loadReqBranchProducts() {
+        var sel = document.getElementById('reqFromBranch');
+        _reqState.fromStoreId = sel.value;
+        _reqState.fromStoreName = sel.options[sel.selectedIndex].text;
+        var listEl = document.getElementById('reqProductList');
+        if (!_reqState.fromStoreId) {
+            listEl.innerHTML = '<div style="text-align:center;color:var(--gray);padding:1.5rem;font-size:0.85rem">Select a source branch first</div>';
+            return;
+        }
+        listEl.innerHTML = '<div style="text-align:center;color:var(--gray);padding:1.5rem"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+        try {
+            var snap = await db.collection('stores').doc(_reqState.fromStoreId).collection('products').get();
+            _reqState.products = [];
+            snap.forEach(function(d) {
+                var p = Object.assign({ id: d.id }, d.data());
+                var stock = (p.sizes && p.sizes.length) ? p.sizes.reduce(function(a,s){ return a+(s.qty||0); }, 0) : (p.stock||0);
+                if (stock > 0) _reqState.products.push(p); // only show in-stock items
+            });
+            _reqState.products.sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
+            filterReqProducts();
+        } catch(e) {
+            listEl.innerHTML = '<div style="text-align:center;color:var(--danger);padding:1.5rem">Failed to load: ' + e.message + '</div>';
+        }
+    }
+
+    function filterReqProducts() {
+        var search = (document.getElementById('reqProductSearch').value || '').toLowerCase();
+        var filtered = _reqState.products.filter(function(p) {
+            return !search || (p.name||'').toLowerCase().indexOf(search) !== -1;
+        });
+        var listEl = document.getElementById('reqProductList');
+        if (!filtered.length) {
+            listEl.innerHTML = '<div style="text-align:center;color:var(--gray);padding:1.5rem;font-size:0.85rem">No products found</div>';
+            return;
+        }
+        var h = '';
+        filtered.forEach(function(p) {
+            var totalStock = (p.sizes && p.sizes.length) ? p.sizes.reduce(function(a,s){ return a+(s.qty||0); }, 0) : (p.stock||0);
+            h += '<div style="padding:8px 10px;border-bottom:1px solid var(--gray-light);display:flex;align-items:center;gap:8px">' +
+                (p.images && p.images[0] ? '<img src="' + escHtml(p.images[0]) + '" style="width:40px;height:40px;object-fit:cover;border-radius:6px;flex-shrink:0" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100\'">' : '') +
+                '<div style="flex:1;min-width:0">' +
+                    '<div style="font-size:0.85rem;font-weight:600">' + escHtml(p.name) + '</div>' +
+                    '<div style="font-size:0.75rem;color:var(--gray)">$' + (p.price||0).toFixed(2) + ' · Available: ' + totalStock + '</div>' +
+                    (p.sizes && p.sizes.length ? '<div style="font-size:0.72rem;color:var(--gray-dark);margin-top:2px">' +
+                        p.sizes.filter(function(s){ return (s.qty||0)>0; }).map(function(s){ return s.name+':'+s.qty; }).join(' · ') +
+                    '</div>' : '') +
+                '</div>' +
+                '<button class="btn btn-success btn-small" onclick="addToReqList(' + "'" + p.id + "'" + ')">+ Add</button>' +
+            '</div>';
+        });
+        listEl.innerHTML = h;
+    }
+
+    function addToReqList(productId) {
+        var p = _reqState.products.find(function(x){ return x.id === productId; });
+        if (!p) return;
+
+        // If product has sizes, show size picker
+        if (p.sizes && p.sizes.length > 0) {
+            var availSizes = p.sizes.filter(function(s){ return (s.qty||0) > 0; });
+            var sizeOptions = availSizes.map(function(s) {
+                return s.name + ' (avail:' + s.qty + ')';
+            }).join(', ');
+            var sizeName = prompt('Select size for ' + p.name + ':\nAvailable: ' + sizeOptions + '\n\nType size name:');
+            if (!sizeName) return;
+            var sz = p.sizes.find(function(s){ return s.name === sizeName.trim(); });
+            if (!sz || (sz.qty||0) <= 0) { showToast('Size not available', 'error'); return; }
+            var maxQty = sz.qty;
+            var qty = parseInt(prompt('Quantity to request (max ' + maxQty + '):', '1'));
+            if (!qty || qty <= 0) return;
+            qty = Math.min(qty, maxQty);
+            _reqState.requestList.push({
+                productId: p.id, productName: p.name, productImage: (p.images && p.images[0]) || '',
+                size: sizeName.trim(), qty: qty, price: p.price || 0,
+                fromStoreId: _reqState.fromStoreId, fromStoreName: _reqState.fromStoreName
+            });
+        } else {
+            var qty2 = parseInt(prompt('Quantity to request (max ' + (p.stock||0) + '):', '1'));
+            if (!qty2 || qty2 <= 0) return;
+            qty2 = Math.min(qty2, p.stock||0);
+            _reqState.requestList.push({
+                productId: p.id, productName: p.name, productImage: (p.images && p.images[0]) || '',
+                size: 'One Size', qty: qty2, price: p.price || 0,
+                fromStoreId: _reqState.fromStoreId, fromStoreName: _reqState.fromStoreName
+            });
+        }
+        renderReqList();
+        showToast(p.name + ' added to request', 'success');
+    }
+
+    function renderReqList() {
+        var section = document.getElementById('reqListSection');
+        var listEl = document.getElementById('reqList');
+        var countEl = document.getElementById('reqCount');
+        if (!_reqState.requestList.length) {
+            section.classList.add('hidden');
+            return;
+        }
+        section.classList.remove('hidden');
+        countEl.textContent = '(' + _reqState.requestList.length + ' item' + (_reqState.requestList.length > 1 ? 's' : '') + ')';
+        var h = '';
+        _reqState.requestList.forEach(function(item, i) {
+            h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--gray-light)">' +
+                (item.productImage ? '<img src="' + escHtml(item.productImage) + '" style="width:36px;height:36px;object-fit:cover;border-radius:5px;flex-shrink:0">' : '') +
+                '<div style="flex:1;min-width:0">' +
+                    '<div style="font-size:0.82rem;font-weight:600">' + escHtml(item.productName) + '</div>' +
+                    '<div style="font-size:0.75rem;color:var(--gray)">Size: ' + escHtml(item.size) + ' · Qty: ' + item.qty + ' · From: ' + escHtml(item.fromStoreName) + '</div>' +
+                '</div>' +
+                '<button onclick="removeFromReqList(' + i + ')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:1rem;padding:2px 6px">✕</button>' +
+            '</div>';
+        });
+        listEl.innerHTML = h;
+    }
+
+    function removeFromReqList(idx) {
+        _reqState.requestList.splice(idx, 1);
+        renderReqList();
+    }
+
+    async function sendStockRequest() {
+        if (!_reqState.requestList.length) { showToast('Add items first', 'error'); return; }
+        if (!db) { showToast('Firebase offline', 'error'); return; }
+        var note = document.getElementById('reqNote').value.trim();
+        var now = Date.now();
+        var batch = db.batch();
+        _reqState.requestList.forEach(function(item) {
+            var transferRef = db.collection('transfers').doc();
+            batch.set(transferRef, {
+                productId: item.productId,
+                productName: item.productName,
+                productImage: item.productImage,
+                size: item.size,
+                qty: item.qty,
+                price: item.price,
+                fromStoreId: item.fromStoreId,
+                fromStoreName: item.fromStoreName,
+                toStoreId: STATE.storeId,
+                toStoreName: STATE.storeName || STATE.storeId,
+                status: 'pending',
+                note: note,
+                requestedAt: now,
+                requestedAtStr: new Date().toLocaleString(),
+                requestedBy: STATE.storeId
+            });
+        });
+        try {
+            await batch.commit();
+            // Telegram notification to sender
+            var itemLines = _reqState.requestList.map(function(item) {
+                return '  • ' + item.productName + (item.size !== 'One Size' ? ' (' + item.size + ')' : '') + ' x' + item.qty;
+            }).join('\n');
+            var msg = '📦 <b>STOCK REQUEST</b>\n\n' +
+                '📤 From: ' + (STATE.storeName || STATE.storeId) + '\n' +
+                '📥 Requesting from: ' + _reqState.fromStoreName + '\n' +
+                '📋 Items:\n' + itemLines +
+                (note ? '\n📝 Note: ' + note : '') + '\n' +
+                '🕐 ' + new Date().toLocaleString();
+            _sendTelegramText(msg, null);
+            logActivity('Stock Request Sent', _reqState.requestList.length + ' items from ' + _reqState.fromStoreName);
+            closeStockRequestModal();
+            showToast('Request sent to ' + _reqState.fromStoreName + '!', 'success');
+            loadTransfers();
+        } catch(e) {
+            showToast('Send failed: ' + e.message, 'error');
+        }
+    }
+
+    function requireProductPassword(callback) {
+        // If already full admin, allow without extra password
+        if (STATE.adminRole === 'full') { callback(); return; }
+        // Otherwise require full admin password
+        var stored = JSON.parse(localStorage.getItem('goatPasswords') || '{}');
+        var pw = prompt('🔒 Enter admin password to edit products:');
+        if (pw === null) return;
+        if (pw === stored.fullPass || pw === 'admin123') {
+            callback();
+        } else {
+            showToast('Incorrect password', 'error');
+        }
     }
 
     function loadCurrentFirebaseConfig() {
@@ -6560,11 +6823,11 @@ function sendToTelegram(order, callback) {
             snap.forEach(function(d) {
                 var t = Object.assign({ transferId: d.id }, d.data());
                 // Pending shows on DESTINATION store — receiver confirms receipt
-                // Hide 'processing' ones too — they're being confirmed right now
                 if (t.toStoreId === STATE.storeId && t.status === 'pending') {
                     pending.push(t);
                 }
-                if ((t.fromStoreId === STATE.storeId || t.toStoreId === STATE.storeId) && t.status !== 'pending' && t.status !== 'processing') {
+                // History: this store is involved in any completed transfer
+                if ((t.fromStoreId === STATE.storeId || t.toStoreId === STATE.storeId) && t.status !== 'pending') {
                     history.push(t);
                 }
             });
@@ -6665,38 +6928,12 @@ function sendToTelegram(order, callback) {
 
     async function approveTransfer(transferId) {
         if (STATE.adminRole !== 'full') { showToast('Full admin required', 'error'); return; }
+        if (!confirm('Confirm receipt of this stock?\n\nThis will deduct from ' + 'the sending store and add to your store.')) return;
         if (!db) { showToast('Firebase offline', 'error'); return; }
-
-        // ── IDEMPOTENCY CHECK: fetch latest status from Firebase first ──
-        var tDoc = await db.collection('transfers').doc(transferId).get();
-        if (!tDoc.exists) { showToast('Transfer not found', 'error'); return; }
-        var t = tDoc.data();
-        if (t.status === 'approved') {
-            showToast('Already confirmed — stock was already updated', 'warning');
-            loadTransfers();
-            return;
-        }
-        if (t.status === 'rejected') {
-            showToast('This transfer was rejected', 'warning');
-            loadTransfers();
-            return;
-        }
-
-        if (!confirm('Confirm receipt of this stock?\n\nThis will deduct from the sending store and add to your store.')) return;
-
-        // ── Mark as PROCESSING immediately to block double-clicks ──
         try {
-            await db.collection('transfers').doc(transferId).update({
-                status: 'processing',
-                processingAt: Date.now(),
-                processingBy: STATE.storeId
-            });
-        } catch(e) {
-            showToast('Could not lock transfer: ' + e.message, 'error');
-            return;
-        }
-
-        try {
+            var tDoc = await db.collection('transfers').doc(transferId).get();
+            if (!tDoc.exists) { showToast('Transfer not found', 'error'); return; }
+            var t = tDoc.data();
 
             // Source = fromStoreId (the store sending the stock, e.g. Main Store)
             // Destination = toStoreId (this device — the branch confirming receipt)
@@ -6812,10 +7049,6 @@ function sendToTelegram(order, callback) {
             loadTransfers();
         } catch(e) {
             showToast('Approve failed: ' + e.message, 'error');
-            // Reset status back to pending so admin can retry
-            try {
-                await db.collection('transfers').doc(transferId).update({ status: 'pending' });
-            } catch(e2) { console.warn('Could not reset transfer status:', e2.message); }
         }
     }
 
@@ -6828,47 +7061,14 @@ function sendToTelegram(order, callback) {
 
         showToast('Processing ' + checked.length + ' transfer(s)...', 'info');
 
-        // ── Step 1: Load all transfer documents — skip already approved ones ──
+        // ── Step 1: Load all transfer documents ──
         var transfers = [];
-        var alreadyDone = [];
         for (var i = 0; i < checked.length; i++) {
             try {
                 var tDoc = await db.collection('transfers').doc(checked[i]).get();
-                if (tDoc.exists) {
-                    var tData = Object.assign({ transferId: checked[i] }, tDoc.data());
-                    if (tData.status === 'approved') {
-                        alreadyDone.push(tData.productName || checked[i]);
-                        console.warn('Skipping already approved transfer:', checked[i]);
-                    } else if (tData.status === 'processing') {
-                        alreadyDone.push((tData.productName || checked[i]) + ' (in progress)');
-                        console.warn('Skipping in-progress transfer:', checked[i]);
-                    } else {
-                        transfers.push(tData);
-                    }
-                } else console.warn('Transfer not found:', checked[i]);
+                if (tDoc.exists) transfers.push(Object.assign({ transferId: checked[i] }, tDoc.data()));
+                else console.warn('Transfer not found:', checked[i]);
             } catch(e) { console.warn('Failed to load transfer:', checked[i], e); }
-        }
-        if (alreadyDone.length) {
-            showToast(alreadyDone.length + ' transfer(s) already confirmed — skipped', 'warning');
-        }
-        if (!transfers.length) {
-            showToast('All selected transfers already confirmed', 'info');
-            loadTransfers();
-            return;
-        }
-
-        // ── Mark all as PROCESSING immediately to block double-confirm ──
-        try {
-            var lockBatch = db.batch();
-            transfers.forEach(function(t) {
-                lockBatch.update(db.collection('transfers').doc(t.transferId), {
-                    status: 'processing', processingAt: Date.now(), processingBy: STATE.storeId
-                });
-            });
-            await lockBatch.commit();
-        } catch(e) {
-            showToast('Could not lock transfers: ' + e.message, 'error');
-            return;
         }
 
         // ── Step 2: Load each unique source product ONCE from Firebase ──
@@ -7036,15 +7236,6 @@ function sendToTelegram(order, callback) {
             } catch(e) {
                 showToast('Batch write failed: ' + e.message, 'error');
                 console.error('Bulk approve batch failed:', e);
-                // Reset all processing transfers back to pending so they can be retried
-                try {
-                    var resetBatch = db.batch();
-                    transfers.forEach(function(t) {
-                        resetBatch.update(db.collection('transfers').doc(t.transferId), { status: 'pending' });
-                    });
-                    await resetBatch.commit();
-                    showToast('Transfers reset — please try again', 'warning');
-                } catch(e2) { console.warn('Could not reset transfer statuses:', e2.message); }
             }
         } else {
             showToast('Nothing approved. ' + failed.length + ' failed — see console.', 'error');
