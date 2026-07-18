@@ -5408,28 +5408,9 @@ function sendToTelegram(order, callback) {
         var itemSummary = refundItems.map(function(it){ return it.quantity + '× ' + it.name + ' (' + it.size + ')'; }).join('\n');
         if (!confirm('Confirm refund?\n\nItems:\n' + itemSummary + '\n\nRefund: $' + refundAmount.toFixed(2) + '\nReason: ' + reason)) return;
 
-        // Restore stock for selected items only
-        refundItems.forEach(function(refItem) {
-            for (var k = 0; k < STATE.products.length; k++) {
-                var product = STATE.products[k];
-                if (product.id === refItem.productId || product.name === refItem.name) {
-                    if (product.sizes && product.sizes.length) {
-                        var found = false;
-                        for (var l = 0; l < product.sizes.length; l++) {
-                            if (product.sizes[l].name === refItem.size) {
-                                product.sizes[l].qty += refItem.quantity;
-                                found = true; break;
-                            }
-                        }
-                        if (!found) product.sizes.push({ name: refItem.size, qty: refItem.quantity });
-                    } else {
-                        product.stock = (product.stock || 0) + refItem.quantity;
-                    }
-                    product.stock = getTotalStock(product);
-                    break;
-                }
-            }
-        });
+        // NOTE: Do NOT restore stock in local STATE here.
+        // Firebase restore (below) fetches fresh from Firestore and applies exactly +qty once.
+        // Doing it here AND in Firebase caused double-restore (stock doubled after refund).
 
         // Create refund record
         var refundRecord = {
@@ -5493,43 +5474,50 @@ function sendToTelegram(order, callback) {
                 .catch(function(e){ console.warn('Refund Firebase save failed:', e.message); });
             storeRef.collection('orders').doc(order.orderId).set(order, { merge: true })
                 .catch(function(e){ console.warn('Order refund update failed:', e.message); });
-        // Restore stock in Firebase — fetch fresh from Firestore to avoid stale local STATE
+        // Restore stock in Firebase — ALWAYS fetch fresh from Firestore first
+        // Never read from STATE.products as source (it may be stale or already modified)
         var restorePromises = refundItems.map(function(refItem) {
             return new Promise(async function(resolve) {
                 try {
-                    // Try local STATE first
-                    var rProduct = STATE.products.find(function(p){ return p.id === refItem.productId || p.name === refItem.name; });
+                    var pRef = null;
+                    var freshData = null;
 
-                    // If not in local STATE, fetch from Firebase
-                    if (!rProduct) {
-                        var snap = await storeRef.collection('products').where('name', '==', refItem.name).limit(1).get();
-                        if (!snap.empty) {
-                            rProduct = Object.assign({ id: snap.docs[0].id }, snap.docs[0].data());
-                        }
+                    // Try by productId first
+                    if (refItem.productId) {
+                        var byId = await storeRef.collection('products').doc(refItem.productId).get();
+                        if (byId.exists) { pRef = byId.ref; freshData = byId.data(); }
                     }
-                    if (!rProduct) { console.warn('Product not found for stock restore:', refItem.name); resolve(); return; }
+                    // Fallback: by name
+                    if (!pRef) {
+                        var byName = await storeRef.collection('products').where('name', '==', refItem.name).limit(1).get();
+                        if (!byName.empty) { pRef = byName.docs[0].ref; freshData = byName.docs[0].data(); }
+                    }
+                    if (!pRef || !freshData) {
+                        console.warn('Product not found for stock restore:', refItem.name);
+                        resolve(); return;
+                    }
 
-                    var pRef = storeRef.collection('products').doc(rProduct.id);
-
-                    if (rProduct.sizes && rProduct.sizes.length) {
-                        // Apply restore to sizes
+                    // Apply restore to FRESH Firestore data (not local STATE)
+                    if (freshData.sizes && freshData.sizes.length) {
+                        var sizes = JSON.parse(JSON.stringify(freshData.sizes));
                         var found = false;
-                        rProduct.sizes.forEach(function(s) {
-                            if (s.name === refItem.size) { s.qty += refItem.quantity; found = true; }
+                        sizes.forEach(function(s) {
+                            if (s.name === refItem.size) { s.qty = (s.qty||0) + refItem.quantity; found = true; }
                         });
-                        if (!found) rProduct.sizes.push({ name: refItem.size, qty: refItem.quantity });
-                        var newTotal = rProduct.sizes.reduce(function(a,s){ return a+(s.qty||0); }, 0);
-                        await pRef.update({ sizes: rProduct.sizes, stock: newTotal });
-                        // Also update local STATE if present
-                        var localP = STATE.products.find(function(p){ return p.id === rProduct.id; });
-                        if (localP) { localP.sizes = rProduct.sizes; localP.stock = newTotal; }
+                        if (!found) sizes.push({ name: refItem.size, qty: refItem.quantity });
+                        var newTotal = sizes.reduce(function(a,s){ return a+(s.qty||0); }, 0);
+                        await pRef.update({ sizes: sizes, stock: newTotal });
+                        // Update local STATE to match
+                        var localP = STATE.products.find(function(p){ return p.id === pRef.id; });
+                        if (localP) { localP.sizes = sizes; localP.stock = newTotal; }
+                        console.log('✅ Restored', refItem.name, refItem.size, '+' + refItem.quantity, '→ total:', newTotal);
                     } else {
-                        var newStock = (rProduct.stock || 0) + refItem.quantity;
+                        var newStock = (freshData.stock || 0) + refItem.quantity;
                         await pRef.update({ stock: newStock });
-                        var localP2 = STATE.products.find(function(p){ return p.id === rProduct.id; });
+                        var localP2 = STATE.products.find(function(p){ return p.id === pRef.id; });
                         if (localP2) localP2.stock = newStock;
+                        console.log('✅ Restored', refItem.name, '+' + refItem.quantity, '→ total:', newStock);
                     }
-                    console.log('✅ Stock restored in Firebase:', refItem.name, 'Size', refItem.size, '+' + refItem.quantity);
                 } catch(e) {
                     console.warn('Stock restore failed for', refItem.name, ':', e.message);
                 }
@@ -7491,6 +7479,218 @@ function sendToTelegram(order, callback) {
     //   mergeDuplicates('GOAT-271-ID', 'Cutie Dresses_106')  — merge one product in one store
     //   mergeAllDuplicates('GOAT-271-ID')  — merge ALL duplicate products in a store
     // =============================================
+    // =============================================
+    // FIX ALL BRANCHES — run once to fix doubled refund stock everywhere
+    // Run from console: fixAllBranchesDoubledStock()
+    // =============================================
+    async function fixAllBranchesDoubledStock() {
+        if (!db) { console.error('Firebase offline'); return; }
+        if (!confirm('This will scan ALL stores and fix any stock that was doubled due to the refund bug.\n\nThis may take 30-60 seconds. Continue?')) return;
+
+        // Get all stores
+        var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
+        try {
+            var bSnap = await db.collection('_admin_').doc('branches').get();
+            if (bSnap.exists) {
+                (bSnap.data().list || []).forEach(function(b){ stores.push({ id: b.id, name: b.name }); });
+            }
+        } catch(e) { console.warn('Branch list failed:', e.message); }
+
+        console.log('🔍 Scanning ' + stores.length + ' store(s):', stores.map(function(s){ return s.name; }).join(', '));
+
+        var grandTotal = 0;
+        var report = [];
+
+        for (var si = 0; si < stores.length; si++) {
+            var store = stores[si];
+            console.log('\n📦 Checking ' + store.name + ' (' + store.id + ')...');
+
+            try {
+                // Get all refunds for this store
+                var refSnap = await db.collection('stores').doc(store.id).collection('refunds').get();
+                if (refSnap.empty) { console.log('  No refunds found — skipping'); continue; }
+
+                // Build map: productName|size → total qty restored across all refunds
+                var restoredMap = {};
+                refSnap.forEach(function(d) {
+                    (d.data().cart || []).forEach(function(item) {
+                        var key = item.name + '|' + (item.size || 'One Size');
+                        restoredMap[key] = (restoredMap[key] || 0) + (item.quantity || 0);
+                    });
+                });
+
+                if (!Object.keys(restoredMap).length) { console.log('  No refund items found'); continue; }
+
+                // Get current products
+                var prodSnap = await db.collection('stores').doc(store.id).collection('products').get();
+                var corrections = [];
+
+                prodSnap.forEach(function(doc) {
+                    var p = Object.assign({ id: doc.id }, doc.data());
+                    (p.sizes || []).forEach(function(sz) {
+                        var key = p.name + '|' + sz.name;
+                        if (restoredMap[key]) {
+                            var doubled = restoredMap[key];
+                            var correctedQty = Math.max(0, sz.qty - doubled);
+                            if (correctedQty !== sz.qty) {
+                                console.log('  ⚠️ ' + p.name + ' Size ' + sz.name + ': ' + sz.qty + ' → ' + correctedQty + ' (removing doubled +' + doubled + ')');
+                                corrections.push({
+                                    docId: doc.id,
+                                    pName: p.name,
+                                    sizeName: sz.name,
+                                    currentQty: sz.qty,
+                                    correctedQty: correctedQty,
+                                    sizes: JSON.parse(JSON.stringify(p.sizes || []))
+                                });
+                                report.push(store.name + ' | ' + p.name + ' ' + sz.name + ': ' + sz.qty + ' → ' + correctedQty);
+                            }
+                        }
+                    });
+                    // Handle no-size products
+                    if (!p.sizes || !p.sizes.length) {
+                        Object.keys(restoredMap).forEach(function(key) {
+                            var parts = key.split('|');
+                            if (parts[0] === p.name) {
+                                var doubled = restoredMap[key];
+                                var correctedQty = Math.max(0, (p.stock||0) - doubled);
+                                if (correctedQty !== p.stock) {
+                                    console.log('  ⚠️ ' + p.name + ': ' + p.stock + ' → ' + correctedQty);
+                                    corrections.push({
+                                        docId: doc.id, pName: p.name, sizeName: null,
+                                        currentQty: p.stock, correctedQty: correctedQty, sizes: null
+                                    });
+                                    report.push(store.name + ' | ' + p.name + ': ' + p.stock + ' → ' + correctedQty);
+                                }
+                            }
+                        });
+                    }
+                });
+
+                if (!corrections.length) {
+                    console.log('  ✅ No corrections needed for ' + store.name);
+                    continue;
+                }
+
+                // Apply corrections in batch
+                var batch = db.batch();
+                corrections.forEach(function(c) {
+                    var pRef = db.collection('stores').doc(store.id).collection('products').doc(c.docId);
+                    if (c.sizes) {
+                        var updatedSizes = c.sizes.map(function(s) {
+                            if (s.name === c.sizeName) return Object.assign({}, s, { qty: c.correctedQty });
+                            return s;
+                        });
+                        var newTotal = updatedSizes.reduce(function(a,s){ return a+(s.qty||0); }, 0);
+                        batch.update(pRef, { sizes: updatedSizes, stock: newTotal });
+                    } else {
+                        batch.update(pRef, { stock: c.correctedQty });
+                    }
+                    grandTotal++;
+                });
+                await batch.commit();
+                console.log('  ✅ Fixed ' + corrections.length + ' product(s) in ' + store.name);
+
+            } catch(e) {
+                console.error('  ❌ Failed for ' + store.name + ':', e.message);
+            }
+        }
+
+        console.log('\n══════════════════════════════════');
+        console.log('✅ COMPLETE — Fixed ' + grandTotal + ' stock value(s) across all stores');
+        if (report.length) {
+            console.log('\nFull report:');
+            report.forEach(function(r){ console.log('  ' + r); });
+        }
+        console.log('══════════════════════════════════');
+
+        alert('✅ Done!\n\nFixed ' + grandTotal + ' stock correction(s) across all stores.\n\nCheck console for full report.');
+        renderInventory(); renderProducts();
+        logActivity('Bulk Stock Fix', 'Fixed ' + grandTotal + ' doubled refund stock values across all stores');
+    }
+
+    // =============================================
+    // FIX DOUBLED REFUND STOCK (single store/product)
+    // Run from console: fixDoubledRefundStock('GOAT-GOAT-KIDS-271-0889', 'Girl Shoes_028')
+    // Or fix all affected products: fixDoubledRefundStock('GOAT-GOAT-KIDS-271-0889')
+    // This fixes stock that was doubled due to the double-restore refund bug
+    // =============================================
+    async function fixDoubledRefundStock(storeId, productName) {
+        if (!db) { console.error('Firebase offline'); return; }
+        if (!confirm('This will check refund history and correct any doubled stock in ' + storeId + (productName ? ' for ' + productName : '') + '.\n\nContinue?')) return;
+
+        // Get all refunds for this store
+        var refSnap = await db.collection('stores').doc(storeId).collection('refunds').get();
+        var refunds = [];
+        refSnap.forEach(function(d){ refunds.push(d.data()); });
+        console.log('Found ' + refunds.length + ' refund(s) in ' + storeId);
+
+        // Build map of what was restored per product/size
+        var restoredMap = {}; // key: productName|size → total qty restored
+        refunds.forEach(function(r) {
+            (r.cart || []).forEach(function(item) {
+                if (productName && item.name !== productName) return;
+                var key = item.name + '|' + (item.size || 'One Size');
+                restoredMap[key] = (restoredMap[key] || 0) + (item.quantity || 0);
+            });
+        });
+
+        if (!Object.keys(restoredMap).length) {
+            console.log('No refunds found for', productName || 'any product');
+            return;
+        }
+
+        console.log('\nRefund history (what should have been restored once):');
+        Object.keys(restoredMap).forEach(function(k) {
+            console.log(' ', k, '→ +' + restoredMap[k] + ' total restored across all refunds');
+        });
+
+        // Now check current Firebase stock
+        var prodSnap = productName
+            ? await db.collection('stores').doc(storeId).collection('products').where('name','==',productName).get()
+            : await db.collection('stores').doc(storeId).collection('products').get();
+
+        console.log('\nCurrent stock vs expected corrections:');
+        var corrections = [];
+        prodSnap.forEach(function(doc) {
+            var p = Object.assign({ id: doc.id }, doc.data());
+            (p.sizes || []).forEach(function(sz) {
+                var key = p.name + '|' + sz.name;
+                if (restoredMap[key] && sz.qty > 0) {
+                    var doubled = restoredMap[key]; // amount that was doubled
+                    var correctedQty = sz.qty - doubled; // subtract one extra restore
+                    if (correctedQty < 0) correctedQty = 0;
+                    console.log('  ' + p.name + ' Size ' + sz.name + ': current=' + sz.qty + ' doubled=' + doubled + ' → corrected=' + correctedQty);
+                    corrections.push({ docId: doc.id, pName: p.name, sizeName: sz.name, currentQty: sz.qty, correctedQty: correctedQty, sizes: p.sizes });
+                }
+            });
+        });
+
+        if (!corrections.length) {
+            console.log('No corrections needed — stock looks correct');
+            alert('No corrections needed!');
+            return;
+        }
+
+        var summary = corrections.map(function(c){ return c.pName + ' ' + c.sizeName + ': ' + c.currentQty + ' → ' + c.correctedQty; }).join('\n');
+        if (!confirm('Apply these stock corrections?\n\n' + summary)) { console.log('Cancelled'); return; }
+
+        var batch = db.batch();
+        corrections.forEach(function(c) {
+            var updatedSizes = c.sizes.map(function(s) {
+                if (s.name === c.sizeName) return Object.assign({}, s, { qty: c.correctedQty });
+                return s;
+            });
+            var newTotal = updatedSizes.reduce(function(a,s){ return a+(s.qty||0); }, 0);
+            batch.update(db.collection('stores').doc(storeId).collection('products').doc(c.docId), {
+                sizes: updatedSizes, stock: newTotal
+            });
+        });
+        await batch.commit();
+        console.log('✅ Fixed ' + corrections.length + ' stock value(s)');
+        alert('✅ Stock corrected! ' + corrections.length + ' item(s) fixed.');
+        renderInventory(); renderProducts();
+    }
+
     async function checkDuplicateProducts(name) {
         if (!db) { console.error('Firebase offline'); return; }
         var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
