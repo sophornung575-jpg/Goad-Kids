@@ -1292,6 +1292,20 @@
         return getTelegramConfig();
     }
 
+    async function loadTelegramConfigFromFirebase() {
+        if (!db) return;
+        try {
+            var doc = await db.collection('_admin_').doc('telegramConfig').get();
+            if (!doc.exists) return;
+            var cfg = doc.data();
+            if (cfg.orderToken) localStorage.setItem('goatTgToken', cfg.orderToken);
+            if (cfg.orderChatId) localStorage.setItem('goatTgChatId', cfg.orderChatId);
+            if (cfg.invToken) localStorage.setItem('goatTgInvToken', cfg.invToken);
+            if (cfg.invChatId) localStorage.setItem('goatTgInvChatId', cfg.invChatId);
+            console.log('✅ Telegram config synced from Firebase');
+        } catch(e) { console.warn('Telegram config load failed:', e.message); }
+    }
+
     async function saveTelegramConfig() {
         var token = document.getElementById('telegramBotTokenInput').value.trim();
         var chatId = document.getElementById('telegramChatIdInput').value.trim();
