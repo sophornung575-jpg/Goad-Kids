@@ -955,19 +955,38 @@
                         <div class="admin-card">
                             <div class="admin-card-header"><div class="admin-card-title"><i class="fab fa-telegram-plane" style="color:#0088cc"></i> Telegram Notifications</div></div>
                             <div class="admin-card-body">
-                                <div class="form-group">
-                                    <label>Bot Token <small style="color:var(--gray)">(saved in browser)</small></label>
-                                    <div class="flex gap-2">
-                                        <input type="password" id="telegramBotTokenInput" class="form-control" placeholder="123456789:ABCdef..." style="flex:1;font-family:monospace">
-                                        <button class="btn btn-outline btn-small" onclick="toggleTelegramTokenVisibility()" id="telegramTokenEyeBtn"><i class="fas fa-eye"></i></button>
+                                <!-- Orders Bot -->
+                                <div style="background:#f0f9ff;border-radius:8px;padding:0.75rem;margin-bottom:0.75rem;border:1px solid #bae6fd">
+                                    <div style="font-weight:700;font-size:0.85rem;color:#0369a1;margin-bottom:0.5rem">🛒 Orders Bot <small style="font-weight:400;color:var(--gray)">(new orders, confirmations, cancellations)</small></div>
+                                    <div class="form-group" style="margin-bottom:0.5rem">
+                                        <label style="font-size:0.82rem">Bot Token</label>
+                                        <div class="flex gap-2">
+                                            <input type="password" id="telegramBotTokenInput" class="form-control" placeholder="123456789:ABCdef..." style="flex:1;font-family:monospace;font-size:0.82rem">
+                                            <button class="btn btn-outline btn-small" onclick="toggleTelegramTokenVisibility('telegramBotTokenInput','orderTokenEye')" id="orderTokenEye"><i class="fas fa-eye"></i></button>
+                                        </div>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom:0.5rem">
+                                        <label style="font-size:0.82rem">Chat ID</label>
+                                        <input type="text" id="telegramChatIdInput" class="form-control" placeholder="-1001234567890" style="font-family:monospace;font-size:0.82rem">
                                     </div>
                                 </div>
-                                <div class="form-group">
-                                    <label>Chat ID</label>
-                                    <input type="text" id="telegramChatIdInput" class="form-control" placeholder="-1001234567890" style="font-family:monospace">
+                                <!-- Inventory Bot -->
+                                <div style="background:#f0fdf4;border-radius:8px;padding:0.75rem;margin-bottom:0.75rem;border:1px solid #bbf7d0">
+                                    <div style="font-weight:700;font-size:0.85rem;color:#15803d;margin-bottom:0.5rem">📦 Inventory Bot <small style="font-weight:400;color:var(--gray)">(stock changes, transfers, refunds)</small></div>
+                                    <div class="form-group" style="margin-bottom:0.5rem">
+                                        <label style="font-size:0.82rem">Bot Token</label>
+                                        <div class="flex gap-2">
+                                            <input type="password" id="telegramInvBotTokenInput" class="form-control" placeholder="123456789:ABCdef..." style="flex:1;font-family:monospace;font-size:0.82rem">
+                                            <button class="btn btn-outline btn-small" onclick="toggleTelegramTokenVisibility('telegramInvBotTokenInput','invTokenEye')" id="invTokenEye"><i class="fas fa-eye"></i></button>
+                                        </div>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom:0.5rem">
+                                        <label style="font-size:0.82rem">Chat ID</label>
+                                        <input type="text" id="telegramInvChatIdInput" class="form-control" placeholder="-1001234567890" style="font-family:monospace;font-size:0.82rem">
+                                    </div>
                                 </div>
                                 <div class="flex gap-2">
-                                    <button class="btn btn-primary" onclick="saveTelegramConfig()" style="flex:1"><i class="fas fa-save"></i> Save</button>
+                                    <button class="btn btn-primary" onclick="saveTelegramConfig()" style="flex:1"><i class="fas fa-save"></i> Save Both</button>
                                     <button class="btn btn-info" onclick="testTelegramMessage()"><i class="fas fa-paper-plane"></i> Test</button>
                                     <button class="btn btn-danger btn-small" onclick="clearTelegramConfig()"><i class="fas fa-trash"></i></button>
                                 </div>
@@ -1254,37 +1273,59 @@
     // They are NOT in the source code — open DevTools > Application > localStorage to see them.
     // =============================================
     function getTelegramConfig() {
+        // Orders bot — used for order notifications
         return {
             botToken: localStorage.getItem('goatTgToken') || '',
             chatId: localStorage.getItem('goatTgChatId') || ''
         };
     }
 
+    function getInventoryTelegramConfig() {
+        // Inventory bot — used for stock/transfer/refund notifications
+        // Falls back to orders bot if not configured
+        var invToken = localStorage.getItem('goatTgInvToken') || '';
+        var invChatId = localStorage.getItem('goatTgInvChatId') || '';
+        if (invToken && invChatId) {
+            return { botToken: invToken, chatId: invChatId };
+        }
+        // Fallback to orders bot
+        return getTelegramConfig();
+    }
+
     function saveTelegramConfig() {
         var token = document.getElementById('telegramBotTokenInput').value.trim();
         var chatId = document.getElementById('telegramChatIdInput').value.trim();
+        var invToken = document.getElementById('telegramInvBotTokenInput').value.trim();
+        var invChatId = document.getElementById('telegramInvChatIdInput').value.trim();
         var statusEl = document.getElementById('telegramConfigStatus');
         if (!token || !chatId) {
-            statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Please enter both Bot Token and Chat ID.</span>';
+            statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Orders Bot token and Chat ID are required.</span>';
             return;
         }
         localStorage.setItem('goatTgToken', token);
         localStorage.setItem('goatTgChatId', chatId);
-        statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Saved! Telegram notifications are now active.</span>';
+        if (invToken) localStorage.setItem('goatTgInvToken', invToken);
+        if (invChatId) localStorage.setItem('goatTgInvChatId', invChatId);
+        var invConfigured = invToken && invChatId;
+        statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Orders bot saved!' + (invConfigured ? ' Inventory bot saved!' : ' ⚠️ Inventory bot not set — using orders bot as fallback.') + '</span>';
     }
 
     function clearTelegramConfig() {
-        if (!confirm('Remove saved Telegram credentials?')) return;
+        if (!confirm('Remove all Telegram bot settings?')) return;
         localStorage.removeItem('goatTgToken');
         localStorage.removeItem('goatTgChatId');
+        localStorage.removeItem('goatTgInvToken');
+        localStorage.removeItem('goatTgInvChatId');
         document.getElementById('telegramBotTokenInput').value = '';
         document.getElementById('telegramChatIdInput').value = '';
-        document.getElementById('telegramConfigStatus').innerHTML = '<span style="color:var(--gray)"><i class="fas fa-info-circle"></i> Credentials cleared.</span>';
+        document.getElementById('telegramInvBotTokenInput').value = '';
+        document.getElementById('telegramInvChatIdInput').value = '';
+        document.getElementById('telegramConfigStatus').innerHTML = '<span style="color:var(--gray)"><i class="fas fa-info-circle"></i> All Telegram settings cleared.</span>';
     }
 
-    function toggleTelegramTokenVisibility() {
-        var inp = document.getElementById('telegramBotTokenInput');
-        var btn = document.getElementById('telegramTokenEyeBtn');
+    function toggleTelegramTokenVisibility(inputId, btnId) {
+        var inp = document.getElementById(inputId || 'telegramBotTokenInput');
+        var btn = document.getElementById(btnId || 'orderTokenEye');
         if (inp.type === 'password') {
             inp.type = 'text';
             btn.innerHTML = '<i class="fas fa-eye-slash"></i>';
@@ -1354,8 +1395,8 @@
         return '🏬 <b>[' + label + ']</b>\n' + message;
     }
 
-    function _sendTelegramRaw(message, callback) {
-        var cfg = getTelegramConfig();
+    function _sendTelegramRaw(message, callback, botType) {
+        var cfg = (botType === 'inventory') ? getInventoryTelegramConfig() : getTelegramConfig();
         if (!cfg.botToken || !cfg.chatId) {
             console.warn('Telegram not configured. Go to Admin > Inventory > Telegram Settings.');
             if (callback) callback(false);
@@ -1422,7 +1463,7 @@
 
     // Send up to 10 photos as an album. Caption goes on the FIRST photo only (Telegram requirement).
     // Falls back to text-only message if the album send fails entirely.
-    function _sendTelegramMediaGroup(imageUrls, caption, fallbackMessage, callback) {
+    function _sendTelegramMediaGroup(imageUrls, caption, fallbackMessage, callback, botType) {
         var cfg = getTelegramConfig();
         if (!cfg.botToken || !cfg.chatId) {
             console.warn('Telegram not configured.');
@@ -1522,8 +1563,8 @@ function sendToTelegram(order, callback) {
     ];
 
     // Send a photo with caption. Falls back to text-only message if the photo send fails entirely.
-    function _sendTelegramPhoto(imageUrl, caption, callback) {
-        var cfg = getTelegramConfig();
+    function _sendTelegramPhoto(imageUrl, caption, callback, botType) {
+        var cfg = (botType === 'inventory') ? getInventoryTelegramConfig() : getTelegramConfig();
         if (!cfg.botToken || !cfg.chatId) {
             console.warn('Telegram not configured.');
             if (callback) callback(false);
@@ -3663,7 +3704,7 @@ function sendToTelegram(order, callback) {
                 '🏪 ' + (STATE.storeName || STATE.storeId) + '\n' +
                 '🕐 ' + new Date().toLocaleString();
             var img = (p.images && p.images[0]) ? [p.images[0]] : [];
-            _sendTelegramMediaGroup(img, msg, msg, null);
+            _sendTelegramMediaGroup(img, msg, msg, null, 'inventory');
         }
 
         closeEditModal(); renderProducts(); renderInventory(); updateAdminBadges();
@@ -4172,9 +4213,9 @@ function sendToTelegram(order, callback) {
             if (lsProduct) {
                 var lsTotal = getTotalStock(lsProduct);
                 if (lsTotal <= 3 && lsTotal > 0) {
-                    _sendTelegramPhoto((lsProduct.images && lsProduct.images[0]) || '', '⚠️ <b>LOW STOCK ALERT</b>\n' + lsProduct.name + ' has only <b>' + lsTotal + '</b> items left!', null);
+                    _sendTelegramPhoto((lsProduct.images && lsProduct.images[0]) || '', '⚠️ <b>LOW STOCK ALERT</b>\n' + lsProduct.name + ' has only <b>' + lsTotal + '</b> items left!', null, 'inventory');
                 } else if (lsTotal === 0) {
-                    _sendTelegramPhoto((lsProduct.images && lsProduct.images[0]) || '', '🚫 <b>OUT OF STOCK</b>\n' + lsProduct.name + ' is now out of stock!', null);
+                    _sendTelegramPhoto((lsProduct.images && lsProduct.images[0]) || '', '🚫 <b>OUT OF STOCK</b>\n' + lsProduct.name + ' is now out of stock!', null, 'inventory');
                 }
             }
         }
@@ -4532,11 +4573,15 @@ function sendToTelegram(order, callback) {
             // Populate Telegram settings
             var savedToken = localStorage.getItem('goatTgToken') || '';
             var savedChat = localStorage.getItem('goatTgChatId') || '';
+            var savedInvToken = localStorage.getItem('goatTgInvToken') || '';
+            var savedInvChat = localStorage.getItem('goatTgInvChatId') || '';
             var ti = document.getElementById('telegramBotTokenInput'); if (ti) ti.value = savedToken;
             var ci = document.getElementById('telegramChatIdInput'); if (ci) ci.value = savedChat;
+            var iti = document.getElementById('telegramInvBotTokenInput'); if (iti) iti.value = savedInvToken;
+            var ici = document.getElementById('telegramInvChatIdInput'); if (ici) ici.value = savedInvChat;
             var st = document.getElementById('telegramConfigStatus');
             if (st) st.innerHTML = savedToken && savedChat
-                ? '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Telegram active.</span>'
+                ? '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Orders bot active.' + (savedInvToken && savedInvChat ? ' Inventory bot active.' : ' ⚠️ Inventory bot not set.') + '</span>'
                 : '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> Not configured.</span>';
         } else {
             if (err) {
@@ -5543,7 +5588,7 @@ function sendToTelegram(order, callback) {
             '📝 Reason: ' + reason + '\n' +
             '🕐 ' + new Date().toLocaleString();
         var refundImages = refundItems.map(function(it){ return it.image; }).filter(Boolean);
-        _sendTelegramMediaGroup(refundImages, refundCaption, refundCaption, null);
+        _sendTelegramMediaGroup(refundImages, refundCaption, refundCaption, null, 'inventory');
 
         setTimeout(function() { if (confirm('Print refund receipt?')) printRefundReceipt(refundRecord.refundId); }, 300);
     }
@@ -6586,7 +6631,7 @@ function sendToTelegram(order, callback) {
                 '📥 To: ' + toStoreName + '\n' +
                 (note ? '📝 Note: ' + note + '\n' : '') +
                 '\n⏳ Waiting for approval from ' + fromStoreName + ' admin.';
-            _sendTelegramMediaGroup(imageUrls, caption, caption, null);
+            _sendTelegramMediaGroup(imageUrls, caption, caption, null, 'inventory');
 
             _transferCart = [];
             renderTransferCart();
@@ -7018,7 +7063,7 @@ function sendToTelegram(order, callback) {
                 });
                 var imageUrls = succeeded.map(function(t){ return t.productImage; }).filter(Boolean);
                 var caption = '✅ <b>STOCK RECEIPT CONFIRMED</b> (' + succeeded.length + ' item' + (succeeded.length>1?'s':'') + ')\n\n📦 Items:\n' + itemLines.join('\n') + '\n\n✅ Confirmed by ' + (STATE.storeName || STATE.storeId);
-                _sendTelegramMediaGroup(imageUrls, caption, caption, null);
+                _sendTelegramMediaGroup(imageUrls, caption, caption, null, 'inventory');
 
                 logActivity('Bulk Transfer Receipt Confirmed', succeeded.length + ' transfers from ' + fromStoreId);
 
@@ -7070,7 +7115,7 @@ function sendToTelegram(order, callback) {
                 var caption = '❌ <b>TRANSFERS REJECTED</b> (' + rejected.length + ' item' + (rejected.length>1?'s':'') + ')\n\n' +
                     '📦 Items:\n' + itemLines.join('\n') + '\n\n' +
                     '📝 Reason: ' + reason;
-                _sendTelegramMediaGroup(imageUrls, caption, caption, null);
+                _sendTelegramMediaGroup(imageUrls, caption, caption, null, 'inventory');
             }
 
             showToast(checked.length + ' transfer(s) rejected', 'info');
