@@ -1273,6 +1273,7 @@
     // They are NOT in the source code — open DevTools > Application > localStorage to see them.
     // =============================================
     function getTelegramConfig() {
+        // Orders bot — used for order notifications
         return {
             botToken: localStorage.getItem('goatTgToken') || '',
             chatId: localStorage.getItem('goatTgChatId') || ''
@@ -1280,13 +1281,17 @@
     }
 
     function getInventoryTelegramConfig() {
+        // Inventory bot — used for stock/transfer/refund notifications
+        // Falls back to orders bot if not configured
         var invToken = localStorage.getItem('goatTgInvToken') || '';
         var invChatId = localStorage.getItem('goatTgInvChatId') || '';
-        if (invToken && invChatId) return { botToken: invToken, chatId: invChatId };
+        if (invToken && invChatId) {
+            return { botToken: invToken, chatId: invChatId };
+        }
+        // Fallback to orders bot
         return getTelegramConfig();
     }
 
-    // Save to both localStorage AND Firebase so all devices share the same config
     async function saveTelegramConfig() {
         var token = document.getElementById('telegramBotTokenInput').value.trim();
         var chatId = document.getElementById('telegramChatIdInput').value.trim();
@@ -1297,77 +1302,24 @@
             statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Orders Bot token and Chat ID are required.</span>';
             return;
         }
-        // Save to localStorage
         localStorage.setItem('goatTgToken', token);
         localStorage.setItem('goatTgChatId', chatId);
         if (invToken) localStorage.setItem('goatTgInvToken', invToken);
         if (invChatId) localStorage.setItem('goatTgInvChatId', invChatId);
-
-        // Save to Firebase so ALL devices get the config automatically
+        // Save to Firebase so ALL devices auto-load it
         if (db) {
             try {
                 await db.collection('_admin_').doc('telegramConfig').set({
-                    orderToken: token,
-                    orderChatId: chatId,
-                    invToken: invToken || '',
-                    invChatId: invChatId || '',
+                    orderToken: token, orderChatId: chatId,
+                    invToken: invToken || '', invChatId: invChatId || '',
                     updatedAt: Date.now()
                 });
-                statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Saved to all devices! Orders bot ✅' + (invToken && invChatId ? ' Inventory bot ✅' : ' ⚠️ Inventory bot not set') + '</span>';
-            } catch(e) {
-                statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-check-circle"></i> Saved locally. Firebase save failed: ' + e.message + '</span>';
-            }
-        } else {
-            statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Saved locally (Firebase offline)</span>';
+                var invOk = invToken && invChatId;
+                statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Saved to all devices! Orders ✅' + (invOk ? ' Inventory ✅' : ' ⚠️ Inventory not set') + '</span>';
+                return;
+            } catch(e) { console.warn('Firebase save failed:', e); }
         }
-    }
-
-    // Load Telegram config from Firebase — called on app init
-    async function loadTelegramConfigFromFirebase() {
-        if (!db) return;
-        try {
-            var doc = await db.collection('_admin_').doc('telegramConfig').get();
-            if (!doc.exists) return;
-            var cfg = doc.data();
-            if (cfg.orderToken) { localStorage.setItem('goatTgToken', cfg.orderToken); }
-            if (cfg.orderChatId) { localStorage.setItem('goatTgChatId', cfg.orderChatId); }
-            if (cfg.invToken) { localStorage.setItem('goatTgInvToken', cfg.invToken); }
-            if (cfg.invChatId) { localStorage.setItem('goatTgInvChatId', cfg.invChatId); }
-            console.log('✅ Telegram config loaded from Firebase');
-        } catch(e) {
-            console.warn('Telegram config Firebase load failed:', e.message);
-        }
-    }
-
-    function clearTelegramConfig() {
-        if (!confirm('Remove all Telegram bot settings?')) return;
-        localStorage.removeItem('goatTgToken');
-        localStorage.removeItem('goatTgChatId');
-        localStorage.removeItem('goatTgInvToken');
-        localStorage.removeItem('goatTgInvChatId');
-        document.getElementById('telegramBotTokenInput').value = '';
-        document.getElementById('telegramChatIdInput').value = '';
-        document.getElementById('telegramInvBotTokenInput').value = '';
-        document.getElementById('telegramInvChatIdInput').value = '';
-        document.getElementById('telegramConfigStatus').innerHTML = '<span style="color:var(--gray)"><i class="fas fa-info-circle"></i> All Telegram settings cleared.</span>';
-    }
-
-    function saveTelegramConfig() {
-        var token = document.getElementById('telegramBotTokenInput').value.trim();
-        var chatId = document.getElementById('telegramChatIdInput').value.trim();
-        var invToken = document.getElementById('telegramInvBotTokenInput').value.trim();
-        var invChatId = document.getElementById('telegramInvChatIdInput').value.trim();
-        var statusEl = document.getElementById('telegramConfigStatus');
-        if (!token || !chatId) {
-            statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Orders Bot token and Chat ID are required.</span>';
-            return;
-        }
-        localStorage.setItem('goatTgToken', token);
-        localStorage.setItem('goatTgChatId', chatId);
-        if (invToken) localStorage.setItem('goatTgInvToken', invToken);
-        if (invChatId) localStorage.setItem('goatTgInvChatId', invChatId);
-        var invConfigured = invToken && invChatId;
-        statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Orders bot saved!' + (invConfigured ? ' Inventory bot saved!' : ' ⚠️ Inventory bot not set — using orders bot as fallback.') + '</span>';
+        statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Saved locally.</span>';
     }
 
     function clearTelegramConfig() {
@@ -3089,8 +3041,7 @@ function sendToTelegram(order, callback) {
             showStatus('Synced', 'online');
             var warn = document.getElementById('localDataWarning');
             if (warn) warn.remove();
-            // Load Telegram config from Firebase so ALL devices share same bot settings
-            loadTelegramConfigFromFirebase();
+            loadTelegramConfigFromFirebase(); // sync telegram config to all devices
             setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 3000);
 
         } catch(e) {
@@ -6698,7 +6649,7 @@ function sendToTelegram(order, callback) {
                 '📥 To: ' + toStoreName + '\n' +
                 (note ? '📝 Note: ' + note + '\n' : '') +
                 '\n⏳ Waiting for approval from ' + fromStoreName + ' admin.';
-            _sendTelegramRaw(caption, null, 'inventory');
+            _sendTelegramMediaGroup(imageUrls, caption, caption, null, 'inventory');
 
             _transferCart = [];
             renderTransferCart();
@@ -7130,7 +7081,7 @@ function sendToTelegram(order, callback) {
                 });
                 var imageUrls = succeeded.map(function(t){ return t.productImage; }).filter(Boolean);
                 var caption = '✅ <b>STOCK RECEIPT CONFIRMED</b> (' + succeeded.length + ' item' + (succeeded.length>1?'s':'') + ')\n\n📦 Items:\n' + itemLines.join('\n') + '\n\n✅ Confirmed by ' + (STATE.storeName || STATE.storeId);
-                _sendTelegramRaw(caption, null, 'inventory');
+                _sendTelegramMediaGroup(imageUrls, caption, caption, null, 'inventory');
 
                 logActivity('Bulk Transfer Receipt Confirmed', succeeded.length + ' transfers from ' + fromStoreId);
 
@@ -7182,7 +7133,7 @@ function sendToTelegram(order, callback) {
                 var caption = '❌ <b>TRANSFERS REJECTED</b> (' + rejected.length + ' item' + (rejected.length>1?'s':'') + ')\n\n' +
                     '📦 Items:\n' + itemLines.join('\n') + '\n\n' +
                     '📝 Reason: ' + reason;
-                _sendTelegramRaw(caption, null, 'inventory');
+                _sendTelegramMediaGroup(imageUrls, caption, caption, null, 'inventory');
             }
 
             showToast(checked.length + ' transfer(s) rejected', 'info');
