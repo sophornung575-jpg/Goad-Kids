@@ -1337,12 +1337,20 @@
 
     function testTelegramMessage() {
         var statusEl = document.getElementById('telegramConfigStatus');
-        statusEl.innerHTML = '<span style="color:var(--info)"><i class="fas fa-spinner fa-spin"></i> Sending test message...</span>';
-        _sendTelegramRaw('📨 GOAT KIDS: Telegram is working! Orders will be delivered here.', function(ok) {
-            if (ok) {
-                statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Test message sent successfully!</span>';
+        statusEl.innerHTML = '<span style="color:var(--info)"><i class="fas fa-spinner fa-spin"></i> Testing both bots...</span>';
+        // Test orders bot
+        _sendTelegramRaw('🛒 GOAT KIDS: Orders bot is working!', function(ok1) {
+            if (ok1) {
+                // Test inventory bot
+                _sendTelegramRaw('📦 GOAT KIDS: Inventory bot is working!', function(ok2) {
+                    if (ok2) {
+                        statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Both bots working!</span>';
+                    } else {
+                        statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-circle"></i> Orders bot ✅ — Inventory bot ❌ (check token/chat ID)</span>';
+                    }
+                }, 'inventory');
             } else {
-                statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times-circle"></i> Failed. Check your Bot Token and Chat ID.</span>';
+                statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times-circle"></i> Orders bot failed. Check token and chat ID.</span>';
             }
         });
     }
@@ -1464,7 +1472,7 @@
     // Send up to 10 photos as an album. Caption goes on the FIRST photo only (Telegram requirement).
     // Falls back to text-only message if the album send fails entirely.
     function _sendTelegramMediaGroup(imageUrls, caption, fallbackMessage, callback, botType) {
-        var cfg = getTelegramConfig();
+        var cfg = (botType === 'inventory') ? getInventoryTelegramConfig() : getTelegramConfig();
         if (!cfg.botToken || !cfg.chatId) {
             console.warn('Telegram not configured.');
             if (callback) callback(false);
@@ -1477,12 +1485,12 @@
 
         if (!urls.length) {
             // No images at all — just send as text
-            _sendTelegramRaw(fallbackMessage, callback);
+            _sendTelegramRaw(fallbackMessage, callback, botType);
             return;
         }
         if (urls.length === 1) {
-            // Single image — use sendPhoto instead, simpler and equally effective
-            _sendTelegramPhoto(urls[0], caption, callback);
+            // Single image — use sendPhoto instead
+            _sendTelegramPhoto(urls[0], caption, callback, botType);
             return;
         }
 
@@ -1571,20 +1579,18 @@ function sendToTelegram(order, callback) {
             return;
         }
         if (!imageUrl) {
-            // No image available — just send as text
-            _sendTelegramRaw(caption, callback);
+            _sendTelegramRaw(caption, callback, botType);
             return;
         }
         var taggedCaption = _withStoreTag(caption);
         var body = JSON.stringify({ chat_id: cfg.chatId, photo: imageUrl, caption: taggedCaption, parse_mode: 'HTML' });
-        _tryPhotoWithFallback(cfg.botToken, body, caption, 0, callback);
+        _tryPhotoWithFallback(cfg.botToken, body, caption, 0, callback, botType);
     }
 
-    function _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex, callback) {
+    function _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex, callback, botType) {
         if (proxyIndex >= _TELEGRAM_PHOTO_PROXIES.length) {
-            // All photo routes failed — fall back to a text-only message so the notification still arrives
             console.warn('All Telegram photo routes failed — sending as text instead');
-            _sendTelegramRaw(fallbackCaption, callback);
+            _sendTelegramRaw(fallbackCaption, callback, botType);
             return;
         }
         var proxy = _TELEGRAM_PHOTO_PROXIES[proxyIndex];
@@ -1604,14 +1610,14 @@ function sendToTelegram(order, callback) {
                 if (callback) callback(true);
             } else {
                 console.warn('Telegram photo rejected (' + data.description + ') — trying next route');
-                _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex + 1, callback);
+                _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex + 1, callback, botType);
             }
         })
         .catch(function(err) {
             if (timeoutId) clearTimeout(timeoutId);
             var reason = (err && err.name === 'AbortError') ? 'timeout' : err.message;
             console.warn('Telegram photo route ' + (proxyIndex + 1) + ' failed (' + reason + ') — trying next...');
-            _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex + 1, callback);
+            _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex + 1, callback, botType);
         });
     }
     // =============================================
