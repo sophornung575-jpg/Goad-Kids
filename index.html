@@ -1273,7 +1273,6 @@
     // They are NOT in the source code — open DevTools > Application > localStorage to see them.
     // =============================================
     function getTelegramConfig() {
-        // Orders bot — used for order notifications
         return {
             botToken: localStorage.getItem('goatTgToken') || '',
             chatId: localStorage.getItem('goatTgChatId') || ''
@@ -1281,15 +1280,76 @@
     }
 
     function getInventoryTelegramConfig() {
-        // Inventory bot — used for stock/transfer/refund notifications
-        // Falls back to orders bot if not configured
         var invToken = localStorage.getItem('goatTgInvToken') || '';
         var invChatId = localStorage.getItem('goatTgInvChatId') || '';
-        if (invToken && invChatId) {
-            return { botToken: invToken, chatId: invChatId };
-        }
-        // Fallback to orders bot
+        if (invToken && invChatId) return { botToken: invToken, chatId: invChatId };
         return getTelegramConfig();
+    }
+
+    // Save to both localStorage AND Firebase so all devices share the same config
+    async function saveTelegramConfig() {
+        var token = document.getElementById('telegramBotTokenInput').value.trim();
+        var chatId = document.getElementById('telegramChatIdInput').value.trim();
+        var invToken = document.getElementById('telegramInvBotTokenInput').value.trim();
+        var invChatId = document.getElementById('telegramInvChatIdInput').value.trim();
+        var statusEl = document.getElementById('telegramConfigStatus');
+        if (!token || !chatId) {
+            statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Orders Bot token and Chat ID are required.</span>';
+            return;
+        }
+        // Save to localStorage
+        localStorage.setItem('goatTgToken', token);
+        localStorage.setItem('goatTgChatId', chatId);
+        if (invToken) localStorage.setItem('goatTgInvToken', invToken);
+        if (invChatId) localStorage.setItem('goatTgInvChatId', invChatId);
+
+        // Save to Firebase so ALL devices get the config automatically
+        if (db) {
+            try {
+                await db.collection('_admin_').doc('telegramConfig').set({
+                    orderToken: token,
+                    orderChatId: chatId,
+                    invToken: invToken || '',
+                    invChatId: invChatId || '',
+                    updatedAt: Date.now()
+                });
+                statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Saved to all devices! Orders bot ✅' + (invToken && invChatId ? ' Inventory bot ✅' : ' ⚠️ Inventory bot not set') + '</span>';
+            } catch(e) {
+                statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-check-circle"></i> Saved locally. Firebase save failed: ' + e.message + '</span>';
+            }
+        } else {
+            statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Saved locally (Firebase offline)</span>';
+        }
+    }
+
+    // Load Telegram config from Firebase — called on app init
+    async function loadTelegramConfigFromFirebase() {
+        if (!db) return;
+        try {
+            var doc = await db.collection('_admin_').doc('telegramConfig').get();
+            if (!doc.exists) return;
+            var cfg = doc.data();
+            if (cfg.orderToken) { localStorage.setItem('goatTgToken', cfg.orderToken); }
+            if (cfg.orderChatId) { localStorage.setItem('goatTgChatId', cfg.orderChatId); }
+            if (cfg.invToken) { localStorage.setItem('goatTgInvToken', cfg.invToken); }
+            if (cfg.invChatId) { localStorage.setItem('goatTgInvChatId', cfg.invChatId); }
+            console.log('✅ Telegram config loaded from Firebase');
+        } catch(e) {
+            console.warn('Telegram config Firebase load failed:', e.message);
+        }
+    }
+
+    function clearTelegramConfig() {
+        if (!confirm('Remove all Telegram bot settings?')) return;
+        localStorage.removeItem('goatTgToken');
+        localStorage.removeItem('goatTgChatId');
+        localStorage.removeItem('goatTgInvToken');
+        localStorage.removeItem('goatTgInvChatId');
+        document.getElementById('telegramBotTokenInput').value = '';
+        document.getElementById('telegramChatIdInput').value = '';
+        document.getElementById('telegramInvBotTokenInput').value = '';
+        document.getElementById('telegramInvChatIdInput').value = '';
+        document.getElementById('telegramConfigStatus').innerHTML = '<span style="color:var(--gray)"><i class="fas fa-info-circle"></i> All Telegram settings cleared.</span>';
     }
 
     function saveTelegramConfig() {
@@ -3027,9 +3087,10 @@ function sendToTelegram(order, callback) {
             renderHistory();
             updateAdminBadges();
             showStatus('Synced', 'online');
-            // Remove warning banner — Firebase loaded successfully
             var warn = document.getElementById('localDataWarning');
             if (warn) warn.remove();
+            // Load Telegram config from Firebase so ALL devices share same bot settings
+            loadTelegramConfigFromFirebase();
             setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 3000);
 
         } catch(e) {
