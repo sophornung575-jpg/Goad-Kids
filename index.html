@@ -1500,13 +1500,13 @@
             return item;
         });
         var body = JSON.stringify({ chat_id: cfg.chatId, media: media });
-        _tryGroupWithFallback(cfg.botToken, body, fallbackMessage, 0, callback);
+        _tryGroupWithFallback(cfg.botToken, body, fallbackMessage, 0, callback, botType);
     }
 
-    function _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex, callback) {
+    function _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex, callback, botType) {
         if (proxyIndex >= _TELEGRAM_GROUP_PROXIES.length) {
             console.warn('All Telegram media group routes failed — sending as text instead');
-            _sendTelegramRaw(fallbackMessage, callback);
+            _sendTelegramRaw(fallbackMessage, callback, botType);
             return;
         }
         var proxy = _TELEGRAM_GROUP_PROXIES[proxyIndex];
@@ -1526,14 +1526,14 @@
                 if (callback) callback(true);
             } else {
                 console.warn('Telegram media group rejected (' + data.description + ') — trying next route');
-                _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex + 1, callback);
+                _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex + 1, callback, botType);
             }
         })
         .catch(function(err) {
             if (timeoutId) clearTimeout(timeoutId);
             var reason = (err && err.name === 'AbortError') ? 'timeout' : err.message;
             console.warn('Telegram media group route ' + (proxyIndex + 1) + ' failed (' + reason + ') — trying next...');
-            _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex + 1, callback);
+            _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex + 1, callback, botType);
         });
     }
 
