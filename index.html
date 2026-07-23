@@ -1244,6 +1244,9 @@
                 </div>
             </div>
             <div id="archiveResultInfo" style="padding:6px 0.75rem;font-size:0.8rem;color:var(--gray)"></div>
+            <div style="padding:0 0.75rem 0.5rem">
+                <input type="text" id="archiveSearch" class="form-control" placeholder="🔍 Search by name, phone, order ID, item, location..." style="font-size:0.85rem" oninput="filterArchiveResults()">
+            </div>
             <div id="archiveOrdersList" style="flex:1;overflow-y:auto;padding:0 0.75rem 0.75rem">
                 <div style="text-align:center;color:var(--gray);padding:2rem">Select a date range and click Search</div>
             </div>
@@ -5912,33 +5915,8 @@ function sendToTelegram(order, callback) {
             orders.sort(function(a, b) { return (b.timestamp||0) - (a.timestamp||0); });
 
             _archiveOrders = orders;
-            infoEl.textContent = orders.length + ' archived order(s) found · Total: $' +
-                orders.reduce(function(a,o){ return a+(o.total||0); }, 0).toFixed(2);
-
-            if (!orders.length) {
-                listEl.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">No archived orders found for this period</div>';
-                return;
-            }
-
-            var h = '';
-            orders.forEach(function(o) {
-                var statusColor = o.status === 'confirmed' ? 'var(--success)' : o.status === 'refunded' ? 'var(--warning)' : 'var(--danger)';
-                var statusIcon = o.status === 'confirmed' ? '✅' : o.status === 'refunded' ? '↩️' : '❌';
-                var itemSummary = (o.cart||[]).slice(0,3).map(function(it){ return it.quantity+'× '+it.name+' ('+it.size+')'; }).join(', ');
-                if ((o.cart||[]).length > 3) itemSummary += ' +' + ((o.cart||[]).length-3) + ' more';
-                h += '<div style="padding:8px 0;border-bottom:1px solid var(--gray-light)">' +
-                    '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
-                    '<div>' +
-                    '<span style="font-weight:600;font-size:0.85rem">' + statusIcon + ' ' + escHtml(o.orderId) + '</span>' +
-                    '<span style="font-size:0.75rem;color:var(--gray);margin-left:8px">' + escHtml(o.orderDate||'') + '</span>' +
-                    '</div>' +
-                    '<b style="color:' + statusColor + ';font-size:0.9rem">$' + (o.total||0).toFixed(2) + '</b>' +
-                    '</div>' +
-                    '<div style="font-size:0.78rem;color:var(--gray-dark)">👤 ' + escHtml(o.customerName||'') + ' · 📞 ' + escHtml(o.customerPhone||'') + '</div>' +
-                    '<div style="font-size:0.75rem;color:var(--gray);margin-top:2px">' + escHtml(itemSummary) + '</div>' +
-                    '</div>';
-            });
-            listEl.innerHTML = h;
+            document.getElementById('archiveSearch').value = '';
+            filterArchiveResults();
 
         } catch(e) {
             listEl.innerHTML = '<div style="text-align:center;color:var(--danger);padding:2rem">Error: ' + e.message + '<br><small>You may need a Firestore index. Check Firebase Console.</small></div>';
@@ -5946,10 +5924,80 @@ function sendToTelegram(order, callback) {
         }
     }
 
+    function filterArchiveResults() {
+        var listEl = document.getElementById('archiveOrdersList');
+        var infoEl = document.getElementById('archiveResultInfo');
+        var q = (document.getElementById('archiveSearch').value || '').toLowerCase().trim();
+
+        var filtered = _archiveOrders.filter(function(o) {
+            if (!q) return true;
+            // Search across multiple fields
+            var searchFields = [
+                o.orderId || '',
+                o.customerName || '',
+                o.customerPhone || '',
+                o.customerAddress || '',
+                o.customerCity || '',
+                o.shippingMethod || '',
+                // Search item names and sizes
+                (o.cart || []).map(function(it){ return it.name + ' ' + (it.size||''); }).join(' ')
+            ].join(' ').toLowerCase();
+            return searchFields.indexOf(q) !== -1;
+        });
+
+        infoEl.textContent = filtered.length + ' of ' + _archiveOrders.length + ' order(s) · Total: $' +
+            filtered.reduce(function(a,o){ return a+(o.total||0); }, 0).toFixed(2);
+
+        if (!filtered.length) {
+            listEl.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">' +
+                (q ? 'No orders match "' + escHtml(q) + '"' : 'No archived orders found for this period') + '</div>';
+            return;
+        }
+
+        var h = '';
+        filtered.forEach(function(o) {
+            var statusColor = o.status === 'confirmed' ? 'var(--success)' : o.status === 'refunded' ? 'var(--warning)' : 'var(--danger)';
+            var statusIcon = o.status === 'confirmed' ? '✅' : o.status === 'refunded' ? '↩️' : '❌';
+            var itemSummary = (o.cart||[]).slice(0,3).map(function(it){
+                return it.quantity + '× ' + it.name + ' (' + (it.size||'') + ')';
+            }).join(', ');
+            if ((o.cart||[]).length > 3) itemSummary += ' +' + ((o.cart||[]).length-3) + ' more';
+
+            // Highlight search term
+            function hl(str) {
+                if (!q || !str) return escHtml(str||'');
+                var idx = str.toLowerCase().indexOf(q);
+                if (idx === -1) return escHtml(str);
+                return escHtml(str.slice(0,idx)) + '<mark style="background:#fef08a;border-radius:2px">' + escHtml(str.slice(idx,idx+q.length)) + '</mark>' + escHtml(str.slice(idx+q.length));
+            }
+
+            h += '<div style="padding:8px 0;border-bottom:1px solid var(--gray-light)">' +
+                '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
+                '<div>' +
+                '<span style="font-weight:600;font-size:0.85rem">' + statusIcon + ' ' + hl(o.orderId) + '</span>' +
+                '<span style="font-size:0.75rem;color:var(--gray);margin-left:8px">' + escHtml(o.orderDate||'') + '</span>' +
+                '</div>' +
+                '<b style="color:' + statusColor + ';font-size:0.9rem">$' + (o.total||0).toFixed(2) + '</b>' +
+                '</div>' +
+                '<div style="font-size:0.78rem;color:var(--gray-dark)">👤 ' + hl(o.customerName||'') + ' · 📞 ' + hl(o.customerPhone||'') +
+                (o.customerCity ? ' · 📍 ' + hl(o.customerCity) : '') + '</div>' +
+                '<div style="font-size:0.75rem;color:var(--gray);margin-top:2px">' + hl(itemSummary) + '</div>' +
+                '</div>';
+        });
+        listEl.innerHTML = h;
+    }
+
     function exportArchiveCSV() {
-        if (!_archiveOrders.length) { showToast('Search first to load archived orders', 'warning'); return; }
+        var q = (document.getElementById('archiveSearch').value || '').toLowerCase().trim();
+        var toExport = q ? _archiveOrders.filter(function(o) {
+            var searchFields = [o.orderId||'', o.customerName||'', o.customerPhone||'', o.customerAddress||'', o.customerCity||'',
+                (o.cart||[]).map(function(it){ return it.name+' '+(it.size||''); }).join(' ')].join(' ').toLowerCase();
+            return searchFields.indexOf(q) !== -1;
+        }) : _archiveOrders;
+
+        if (!toExport.length) { showToast('No orders to export', 'warning'); return; }
         var csv = 'Order ID,Date,Status,Customer,Phone,City,Address,Shipping,Item,Size,Qty,Price,Discount,Subtotal,Total\n';
-        _archiveOrders.forEach(function(o) {
+        toExport.forEach(function(o) {
             if (!o.cart || !o.cart.length) return;
             o.cart.forEach(function(it, j) {
                 var sub = (it.subtotal != null ? it.subtotal : (it.price * it.quantity)) || 0;
@@ -5968,7 +6016,7 @@ function sendToTelegram(order, callback) {
         var from = document.getElementById('archiveDateFrom').value;
         var to = document.getElementById('archiveDateTo').value;
         dlCSV(csv, 'GOAT_KIDS_Archive_' + from + '_to_' + to + '.csv');
-        showToast('Exported ' + _archiveOrders.length + ' archived orders!', 'success');
+        showToast('Exported ' + toExport.length + ' archived orders!', 'success');
     }
 
     function openOrderExportModal() {
