@@ -2913,16 +2913,38 @@ function sendToTelegram(order, callback) {
     // =============================================
     // FIREBASE & DATA
     // =============================================
+    async function retryFirebaseConnection() {
+        var banner = document.getElementById('localDataWarning');
+        if (banner) banner.innerHTML = '🔄 Reconnecting to Firebase...';
+        await checkFirebase();
+        if (STATE.firebaseOnline) {
+            await loadData();
+        } else {
+            if (banner) banner.innerHTML = '⚠️ <b>Still offline</b> — <span style="text-decoration:underline;cursor:pointer" onclick="retryFirebaseConnection()">Try again</span>';
+        }
+    }
+
     async function checkFirebase() {
         if (!db) {
             showStatus('Firebase SDK not loaded', 'offline');
             STATE.firebaseOnline = false;
-            console.error('Firebase db is null — SDK may not have loaded. Check network/CDN.');
+            console.error('Firebase db is null — SDK may not have loaded.');
             return Promise.resolve();
         }
+
+        // Wait for storeId to be set
+        if (!STATE.storeId) {
+            console.warn('checkFirebase: storeId not set yet, waiting...');
+            await new Promise(function(r){ setTimeout(r, 1000); });
+            if (!STATE.storeId) { console.error('storeId still not set'); return; }
+        }
+
         showStatus('Connecting...', 'offline');
-        // Use 12s timeout on mobile — SDK needs time to establish connection
-        var timeout = /Android|iPhone|iPad/i.test(navigator.userAgent) ? 12000 : 8000;
+        var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        var isIOS = /iPhone|iPad/i.test(navigator.userAgent);
+        // Safari needs much longer — ITP + WebSocket negotiation takes time
+        var timeout = (isSafari || isIOS) ? 20000 : 10000;
+
         try {
             var timeoutPromise = new Promise(function(_, reject) {
                 setTimeout(function() { reject(new Error('timeout')); }, timeout);
@@ -2934,33 +2956,47 @@ function sendToTelegram(order, callback) {
             STATE.firebaseOnline = true;
             showStatus('Connected', 'online');
             document.getElementById('syncBtn').disabled = false;
-            // Remove warning banner if it was showing
             var warn = document.getElementById('localDataWarning');
             if (warn) warn.remove();
             await flushOfflineSyncQueue();
         } catch (e) {
             STATE.firebaseOnline = false;
             var errMsg = e.message || 'unknown error';
+            console.error('Firebase connection error:', errMsg);
+
             if (errMsg === 'timeout') {
                 showStatus('Slow connection — retrying...', 'offline');
-                // Auto-retry once after 5 more seconds on mobile
+                // Retry up to 3 times with increasing delay
+                var retryDelay = isSafari || isIOS ? 8000 : 5000;
                 setTimeout(function() {
                     checkFirebase().then(function() {
                         if (STATE.firebaseOnline) loadData();
                     });
-                }, 5000);
-            } else if (errMsg.indexOf('permission') !== -1 || errMsg.indexOf('PERMISSION') !== -1) {
-                showStatus('Firebase rules blocked', 'offline');
-                console.error('Firestore rules blocking connection.');
-            } else if (errMsg.indexOf('Failed to fetch') !== -1 || errMsg.indexOf('network') !== -1) {
-                showStatus('No internet', 'offline');
+                }, retryDelay);
+            } else if (errMsg.indexOf('permission') !== -1) {
+                showStatus('Firebase permission denied', 'offline');
+            } else if (errMsg.indexOf('Failed to fetch') !== -1 || errMsg.indexOf('network') !== -1 || errMsg.indexOf('offline') !== -1) {
+                showStatus('No internet connection', 'offline');
+                // Retry when online
+                window.addEventListener('online', function onOnline() {
+                    window.removeEventListener('online', onOnline);
+                    checkFirebase().then(function(){ if (STATE.firebaseOnline) loadData(); });
+                });
             } else {
-                showStatus('Firebase error', 'offline');
+                showStatus('Firebase error: ' + errMsg.substring(0,30), 'offline');
+                // Retry once for unknown errors
+                setTimeout(function() {
+                    if (!STATE.firebaseOnline) {
+                        checkFirebase().then(function(){ if (STATE.firebaseOnline) loadData(); });
+                    }
+                }, 10000);
             }
-            console.error('Firebase connection error:', errMsg);
             document.getElementById('syncBtn').disabled = true;
         }
-        setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 2000);
+        setTimeout(function() {
+            var sb = document.getElementById('statusBar');
+            if (sb) sb.classList.remove('show');
+        }, 2000);
     }
 
     // Run from browser console on any device to diagnose connection issues
@@ -3101,14 +3137,17 @@ function sendToTelegram(order, callback) {
         } catch(e) {
             console.warn('Firebase load failed, using local data:', e.message);
             showStatus('Using local data', 'offline');
-            // Only show banner if truly offline — not just slow
+            // Only show banner if truly offline
             if (!navigator.onLine || e.message.indexOf('Failed to fetch') !== -1 || e.message.indexOf('network') !== -1) {
                 var existing = document.getElementById('localDataWarning');
                 if (!existing) {
+                    var isSafariDevice = /iPhone|iPad/i.test(navigator.userAgent);
                     var banner = document.createElement('div');
                     banner.id = 'localDataWarning';
-                    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:0.82rem;z-index:9999;cursor:pointer';
-                    banner.innerHTML = '⚠️ <b>No internet</b> — Showing cached data. <span style="text-decoration:underline" onclick="loadData()">Tap to retry</span>';
+                    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px 10px;font-size:0.82rem;z-index:9999';
+                    banner.innerHTML = '⚠️ <b>Using cached data</b> — ' +
+                        (isSafariDevice ? 'Safari may block Firebase. Try <b>Add to Home Screen</b> for better connection. ' : '') +
+                        '<span style="text-decoration:underline;cursor:pointer" onclick="retryFirebaseConnection()">Tap to retry</span>';
                     document.body.prepend(banner);
                 }
             }
