@@ -6205,15 +6205,14 @@ function sendToTelegram(order, callback) {
             }
 
             logActivity('Branch Stock Adjusted', label + ': ' + oldQty + ' → ' + newQty + ' @ ' + _branchStockCurrentName);
-            _sendTelegramPhoto(
-                (p.images && p.images[0]) || '',
+            _sendTelegramRaw(
                 '🔧 <b>BRANCH STOCK ADJUSTED</b>\n\n' +
                 '🏬 Branch: ' + _branchStockCurrentName + '\n' +
                 '📦 ' + label + '\n' +
                 '🔢 ' + oldQty + ' → ' + newQty + '\n' +
                 '👑 By: Full Admin (' + (STATE.storeName || STATE.storeId) + ')\n' +
                 '🕐 ' + new Date().toLocaleString(),
-                null
+                null, 'inventory'
             );
             showToast('Stock updated: ' + label + ' = ' + newQty, 'success');
             renderBranchStockList();
@@ -6663,7 +6662,7 @@ function sendToTelegram(order, callback) {
                 '📥 To: ' + toStoreName + '\n' +
                 (note ? '📝 Note: ' + note + '\n' : '') +
                 '\n⏳ Waiting for approval from ' + fromStoreName + ' admin.';
-            _sendTelegramMediaGroup(imageUrls, caption, caption, null, 'inventory');
+            _sendTelegramRaw(caption, null, 'inventory');
 
             _transferCart = [];
             renderTransferCart();
@@ -6906,15 +6905,14 @@ function sendToTelegram(order, callback) {
             if (localP) { localP.sizes = destData.sizes; localP.stock = destData.stock; saveProducts(); }
 
             logActivity('Transfer Receipt Confirmed', t.productName + ' x' + t.qty + ' from ' + t.fromStoreName);
-            _sendTelegramPhoto(
-                t.productImage || (p.images && p.images[0]) || '',
-                '✅ <b>TRANSFER APPROVED</b>\n\n' +
+            _sendTelegramRaw(
+                '✅ <b>TRANSFER CONFIRMED</b>\n\n' +
                 '📦 ' + t.productName + (t.size && t.size !== 'One Size' ? ' (' + t.size + ')' : '') + '\n' +
                 '🔢 Qty: ' + t.qty + '\n' +
-                '📤 From: ' + (STATE.storeName || STATE.storeId) + '\n' +
+                '📤 From: ' + t.fromStoreName + '\n' +
                 '📥 To: ' + t.toStoreName + '\n' +
-                '✅ Approved by Full Admin',
-                null
+                '✅ Confirmed by ' + (STATE.storeName || STATE.storeId),
+                null, 'inventory'
             );
             showToast('Transfer approved! Stock updated.', 'success');
             renderInventory(); renderProducts();
@@ -7095,7 +7093,7 @@ function sendToTelegram(order, callback) {
                 });
                 var imageUrls = succeeded.map(function(t){ return t.productImage; }).filter(Boolean);
                 var caption = '✅ <b>STOCK RECEIPT CONFIRMED</b> (' + succeeded.length + ' item' + (succeeded.length>1?'s':'') + ')\n\n📦 Items:\n' + itemLines.join('\n') + '\n\n✅ Confirmed by ' + (STATE.storeName || STATE.storeId);
-                _sendTelegramMediaGroup(imageUrls, caption, caption, null, 'inventory');
+                _sendTelegramRaw(caption, null, 'inventory');
 
                 logActivity('Bulk Transfer Receipt Confirmed', succeeded.length + ' transfers from ' + fromStoreId);
 
@@ -7147,7 +7145,7 @@ function sendToTelegram(order, callback) {
                 var caption = '❌ <b>TRANSFERS REJECTED</b> (' + rejected.length + ' item' + (rejected.length>1?'s':'') + ')\n\n' +
                     '📦 Items:\n' + itemLines.join('\n') + '\n\n' +
                     '📝 Reason: ' + reason;
-                _sendTelegramMediaGroup(imageUrls, caption, caption, null, 'inventory');
+                _sendTelegramRaw(caption, null, 'inventory');
             }
 
             showToast(checked.length + ' transfer(s) rejected', 'info');
@@ -7331,14 +7329,13 @@ function sendToTelegram(order, callback) {
             logActivity('Transfer Rejected', transferId);
             showToast('Transfer rejected', 'info');
             if (t) {
-                _sendTelegramPhoto(
-                    t.productImage || '',
+                _sendTelegramRaw(
                     '❌ <b>TRANSFER REJECTED</b>\n\n' +
                     '📦 ' + (t.productName || '') + (t.size && t.size !== 'One Size' ? ' (' + t.size + ')' : '') + '\n' +
                     '🔢 Qty: ' + (t.qty || 0) + '\n' +
                     '📥 Requested by: ' + (t.toStoreName || '') + '\n' +
                     '📝 Reason: ' + reason,
-                    null
+                    null, 'inventory'
                 );
             }
             loadTransfers();
