@@ -5894,11 +5894,11 @@ function sendToTelegram(order, callback) {
             var fromTs = from ? new Date(from + 'T00:00:00').getTime() : 0;
             var toTs = to ? new Date(to + 'T23:59:59').getTime() : Date.now();
 
-            var query = db.collection('archivedOrders')
+            // Simple query without compound index — filter client-side
+            var snap = await db.collection('archivedOrders')
                 .where('storeId', '==', STATE.storeId)
-                .orderBy('timestamp', 'desc');
+                .get();
 
-            var snap = await query.get();
             var orders = [];
             snap.forEach(function(d) {
                 var o = Object.assign({ orderId: d.id }, d.data());
@@ -5907,6 +5907,9 @@ function sendToTelegram(order, callback) {
                 if (statusFilter && o.status !== statusFilter) return;
                 orders.push(o);
             });
+
+            // Sort by timestamp descending client-side
+            orders.sort(function(a, b) { return (b.timestamp||0) - (a.timestamp||0); });
 
             _archiveOrders = orders;
             infoEl.textContent = orders.length + ' archived order(s) found · Total: $' +
