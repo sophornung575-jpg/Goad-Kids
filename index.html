@@ -567,7 +567,7 @@
                             <div class="orders-col-header history-header">
                                 <span><i class="fas fa-history"></i> History <span class="admin-count" id="historyCount">0</span></span>
                                 <div style="display:flex;gap:0.4rem;align-items:center">
-                                    <button class="btn btn-outline btn-small" onclick="archiveOldOrders()" title="Archive orders older than 30 days to Firebase"><i class="fas fa-archive"></i> <span class="hide-xs">Archive</span></button>
+                                    <button class="btn btn-outline btn-small" onclick="openArchiveViewer()" title="View & export archived orders"><i class="fas fa-box-archive"></i> <span class="hide-xs">Archive</span></button>
                                     <button class="btn btn-outline btn-small" onclick="openOrderExportModal()"><i class="fas fa-download"></i></button>
                                 </div>
                             </div>
@@ -1207,6 +1207,49 @@
             </div>
         </div>
     </div>
+    <!-- ARCHIVE VIEWER MODAL -->
+    <div class="modal-overlay" id="archiveViewerModal" onclick="if(event.target===this)closeArchiveViewer()">
+        <div class="modal" style="max-width:700px;width:96%;max-height:92vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 style="margin:0"><i class="fas fa-box-archive"></i> Archived Orders</h3>
+                <button class="modal-close" onclick="closeArchiveViewer()">✕</button>
+            </div>
+            <div style="padding:0.75rem;border-bottom:1px solid var(--gray-light)">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+                    <div style="flex:1;min-width:120px">
+                        <label style="font-size:0.78rem;color:var(--gray)">From</label>
+                        <input type="date" id="archiveDateFrom" class="form-control" style="font-size:0.85rem">
+                    </div>
+                    <div style="flex:1;min-width:120px">
+                        <label style="font-size:0.78rem;color:var(--gray)">To</label>
+                        <input type="date" id="archiveDateTo" class="form-control" style="font-size:0.85rem">
+                    </div>
+                    <div style="flex:1;min-width:120px">
+                        <label style="font-size:0.78rem;color:var(--gray)">Status</label>
+                        <select id="archiveStatusFilter" class="form-control" style="font-size:0.85rem">
+                            <option value="">All</option>
+                            <option value="confirmed">Confirmed</option>
+                            <option value="refunded">Refunded</option>
+                            <option value="rejected">Cancelled</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary btn-small" onclick="loadArchiveOrders()" style="height:38px;flex-shrink:0"><i class="fas fa-search"></i> Search</button>
+                </div>
+                <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+                    <button class="btn btn-outline btn-small" onclick="setArchiveDateRange('month')">This Month</button>
+                    <button class="btn btn-outline btn-small" onclick="setArchiveDateRange('last3')">Last 3 Months</button>
+                    <button class="btn btn-outline btn-small" onclick="setArchiveDateRange('year')">This Year</button>
+                    <button class="btn btn-outline btn-small" onclick="setArchiveDateRange('all')">All Time</button>
+                    <button class="btn btn-success btn-small" style="margin-left:auto" onclick="exportArchiveCSV()"><i class="fas fa-download"></i> Export CSV</button>
+                </div>
+            </div>
+            <div id="archiveResultInfo" style="padding:6px 0.75rem;font-size:0.8rem;color:var(--gray)"></div>
+            <div id="archiveOrdersList" style="flex:1;overflow-y:auto;padding:0 0.75rem 0.75rem">
+                <div style="text-align:center;color:var(--gray);padding:2rem">Select a date range and click Search</div>
+            </div>
+        </div>
+    </div>
+
     <!-- ORDER EXPORT MODAL -->
     <div class="modal-overlay" id="orderExportModal" onclick="if(event.target===this)closeOrderExportModal()">
         <div class="modal" style="max-width:400px;width:94%" onclick="event.stopPropagation()">
@@ -1884,11 +1927,16 @@ function sendToTelegram(order, callback) {
             var overflow = sorted.slice(0, sorted.length - 50);
             STATE.confirmedOrders = sorted.slice(sorted.length - 50);
             if (STATE.firebaseOnline && overflow.length) {
-                var batch = db.batch();
-                overflow.forEach(function(o){
-                    batch.set(db.collection('archivedOrders').doc(o.orderId), Object.assign({}, o, { archivedAt: Date.now(), storeId: STATE.storeId }));
-                });
-                batch.commit().catch(function(e){ console.warn('Auto-archive failed:', e); });
+                // Use setTimeout to avoid blocking the main load flow (fixes Safari streaming channel issue)
+                setTimeout(function() {
+                    try {
+                        var batch = db.batch();
+                        overflow.forEach(function(o){
+                            batch.set(db.collection('archivedOrders').doc(o.orderId), Object.assign({}, o, { archivedAt: Date.now(), storeId: STATE.storeId }));
+                        });
+                        batch.commit().catch(function(e){ console.warn('Auto-archive failed:', e.message); });
+                    } catch(e) { console.warn('Auto-archive error:', e.message); }
+                }, 2000);
             }
         }
         localStorage.setItem('confirmedOrders_' + STATE.storeId, JSON.stringify(STATE.confirmedOrders));
@@ -2017,6 +2065,8 @@ function sendToTelegram(order, callback) {
     // =============================================
     // FIX #7 + #13: PLACE ORDER - with cooldown, success screen, cart cleared AFTER send
     // =============================================
+    var _placingOrder = false; // Lock to prevent double submission
+
     function placeOrder() {
         var n = document.getElementById('customerName').value.trim();
         var ph = document.getElementById('customerPhone').value.trim();
@@ -2024,6 +2074,9 @@ function sendToTelegram(order, callback) {
         var ci = document.getElementById('customerCity').value.trim();
         if (!n || !ph || !ad) { showToast('Fill Name, Phone & Address', 'error'); return; }
         if (!STATE.cart || STATE.cart.length === 0) { showToast('Cart is empty!', 'error'); return; }
+
+        // ── DOUBLE-SUBMIT LOCK ──
+        if (_placingOrder) { showToast('Order is being sent, please wait...', 'warning'); return; }
 
         // FIX #7: Rate limit - 30 second cooldown between orders
         var now = Date.now();
@@ -2037,6 +2090,7 @@ function sendToTelegram(order, callback) {
             return;
         }
 
+        _placingOrder = true;
         var placeBtn = document.getElementById('placeOrderBtn');
         placeBtn.disabled = true;
         placeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
@@ -2082,6 +2136,14 @@ function sendToTelegram(order, callback) {
 
         // FIX #7: Only clear cart AFTER Telegram send attempt, not before
         sendToTelegram(order, function(success) {
+            // ── IDEMPOTENCY: Check if order was already saved (double-send protection) ──
+            var alreadySaved = STATE.pendingOrders.some(function(o){ return o.orderId === oid; });
+            if (alreadySaved) {
+                console.warn('Order already saved, skipping duplicate:', oid);
+                _placingOrder = false;
+                return;
+            }
+
             // Save order regardless of Telegram result
             STATE.pendingOrders.push(order);
             saveOrders();
@@ -2105,6 +2167,7 @@ function sendToTelegram(order, callback) {
 
             placeBtn.disabled = false;
             placeBtn.innerHTML = '<i class="fab fa-telegram-plane"></i> <span data-translate="placeOrder">Send Order via Telegram</span>';
+            _placingOrder = false; // Release lock
 
             // FIX #13: Show success screen instead of just a toast
             document.getElementById('cartMainContent').classList.add('hidden');
@@ -3135,6 +3198,15 @@ function sendToTelegram(order, callback) {
             setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 3000);
 
         } catch(e) {
+            // Check if data actually loaded despite the error (Safari streaming channel issue)
+            if (STATE.products && STATE.products.length > 0) {
+                // Data loaded OK — the error is just Safari blocking the streaming channel
+                console.warn('Firebase streaming channel error (common on Safari):', e.message);
+                showStatus('Connected', 'online');
+                var warn2 = document.getElementById('localDataWarning');
+                if (warn2) warn2.remove();
+                return;
+            }
             console.warn('Firebase load failed, using local data:', e.message);
             showStatus('Using local data', 'offline');
             // Only show banner if truly offline
@@ -5771,6 +5843,130 @@ function sendToTelegram(order, callback) {
     // =============================================
     function escCSV(v) { if (!v) return ''; var s = String(v); return s.indexOf(',') > -1 || s.indexOf('"') > -1 ? '"' + s.replace(/"/g, '""') + '"' : s; }
     function dlCSV(csv, fn) { var b = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }); var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = fn; a.click(); URL.revokeObjectURL(a.href); }
+
+    // =============================================
+    // ARCHIVE VIEWER
+    // =============================================
+    var _archiveOrders = [];
+
+    function openArchiveViewer() {
+        setArchiveDateRange('month');
+        document.getElementById('archiveStatusFilter').value = '';
+        document.getElementById('archiveOrdersList').innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">Select a date range and click Search</div>';
+        document.getElementById('archiveResultInfo').textContent = '';
+        _archiveOrders = [];
+        document.getElementById('archiveViewerModal').classList.add('active');
+    }
+
+    function closeArchiveViewer() {
+        document.getElementById('archiveViewerModal').classList.remove('active');
+    }
+
+    function setArchiveDateRange(range) {
+        var now = new Date();
+        var from, to = now.toISOString().slice(0,10);
+        if (range === 'month') {
+            from = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01';
+        } else if (range === 'last3') {
+            var d = new Date(now); d.setMonth(d.getMonth()-3);
+            from = d.toISOString().slice(0,10);
+        } else if (range === 'year') {
+            from = now.getFullYear() + '-01-01';
+        } else {
+            from = '2020-01-01'; to = '2099-12-31';
+        }
+        document.getElementById('archiveDateFrom').value = from;
+        document.getElementById('archiveDateTo').value = to;
+    }
+
+    async function loadArchiveOrders() {
+        if (!db) { showToast('Firebase offline', 'error'); return; }
+        var from = document.getElementById('archiveDateFrom').value;
+        var to = document.getElementById('archiveDateTo').value;
+        var statusFilter = document.getElementById('archiveStatusFilter').value;
+        var listEl = document.getElementById('archiveOrdersList');
+        var infoEl = document.getElementById('archiveResultInfo');
+
+        listEl.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem"><i class="fas fa-spinner fa-spin"></i> Loading archived orders...</div>';
+        infoEl.textContent = '';
+
+        try {
+            var fromTs = from ? new Date(from + 'T00:00:00').getTime() : 0;
+            var toTs = to ? new Date(to + 'T23:59:59').getTime() : Date.now();
+
+            var query = db.collection('archivedOrders')
+                .where('storeId', '==', STATE.storeId)
+                .orderBy('timestamp', 'desc');
+
+            var snap = await query.get();
+            var orders = [];
+            snap.forEach(function(d) {
+                var o = Object.assign({ orderId: d.id }, d.data());
+                var ts = o.timestamp || o.archivedAt || 0;
+                if (ts < fromTs || ts > toTs) return;
+                if (statusFilter && o.status !== statusFilter) return;
+                orders.push(o);
+            });
+
+            _archiveOrders = orders;
+            infoEl.textContent = orders.length + ' archived order(s) found · Total: $' +
+                orders.reduce(function(a,o){ return a+(o.total||0); }, 0).toFixed(2);
+
+            if (!orders.length) {
+                listEl.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">No archived orders found for this period</div>';
+                return;
+            }
+
+            var h = '';
+            orders.forEach(function(o) {
+                var statusColor = o.status === 'confirmed' ? 'var(--success)' : o.status === 'refunded' ? 'var(--warning)' : 'var(--danger)';
+                var statusIcon = o.status === 'confirmed' ? '✅' : o.status === 'refunded' ? '↩️' : '❌';
+                var itemSummary = (o.cart||[]).slice(0,3).map(function(it){ return it.quantity+'× '+it.name+' ('+it.size+')'; }).join(', ');
+                if ((o.cart||[]).length > 3) itemSummary += ' +' + ((o.cart||[]).length-3) + ' more';
+                h += '<div style="padding:8px 0;border-bottom:1px solid var(--gray-light)">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
+                    '<div>' +
+                    '<span style="font-weight:600;font-size:0.85rem">' + statusIcon + ' ' + escHtml(o.orderId) + '</span>' +
+                    '<span style="font-size:0.75rem;color:var(--gray);margin-left:8px">' + escHtml(o.orderDate||'') + '</span>' +
+                    '</div>' +
+                    '<b style="color:' + statusColor + ';font-size:0.9rem">$' + (o.total||0).toFixed(2) + '</b>' +
+                    '</div>' +
+                    '<div style="font-size:0.78rem;color:var(--gray-dark)">👤 ' + escHtml(o.customerName||'') + ' · 📞 ' + escHtml(o.customerPhone||'') + '</div>' +
+                    '<div style="font-size:0.75rem;color:var(--gray);margin-top:2px">' + escHtml(itemSummary) + '</div>' +
+                    '</div>';
+            });
+            listEl.innerHTML = h;
+
+        } catch(e) {
+            listEl.innerHTML = '<div style="text-align:center;color:var(--danger);padding:2rem">Error: ' + e.message + '<br><small>You may need a Firestore index. Check Firebase Console.</small></div>';
+            console.error('Archive load failed:', e);
+        }
+    }
+
+    function exportArchiveCSV() {
+        if (!_archiveOrders.length) { showToast('Search first to load archived orders', 'warning'); return; }
+        var csv = 'Order ID,Date,Status,Customer,Phone,City,Address,Shipping,Item,Size,Qty,Price,Discount,Subtotal,Total\n';
+        _archiveOrders.forEach(function(o) {
+            if (!o.cart || !o.cart.length) return;
+            o.cart.forEach(function(it, j) {
+                var sub = (it.subtotal != null ? it.subtotal : (it.price * it.quantity)) || 0;
+                var disc = it.discountAmt || 0;
+                csv += [
+                    escCSV(o.orderId), escCSV(o.orderDate||''), escCSV(o.status||''),
+                    escCSV(o.customerName||''), escCSV(o.customerPhone||''),
+                    escCSV(o.customerCity||''), escCSV(o.customerAddress||''),
+                    escCSV(o.shippingMethod||''),
+                    escCSV(it.name), escCSV(it.size||''),
+                    it.quantity, it.price.toFixed(2), disc.toFixed(2), sub.toFixed(2),
+                    (j === 0 ? (o.total||0).toFixed(2) : '')
+                ].join(',') + '\n';
+            });
+        });
+        var from = document.getElementById('archiveDateFrom').value;
+        var to = document.getElementById('archiveDateTo').value;
+        dlCSV(csv, 'GOAT_KIDS_Archive_' + from + '_to_' + to + '.csv');
+        showToast('Exported ' + _archiveOrders.length + ' archived orders!', 'success');
+    }
 
     function openOrderExportModal() {
         // Default to this month
