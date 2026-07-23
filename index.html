@@ -568,7 +568,7 @@
                                 <span><i class="fas fa-history"></i> History <span class="admin-count" id="historyCount">0</span></span>
                                 <div style="display:flex;gap:0.4rem;align-items:center">
                                     <button class="btn btn-outline btn-small" onclick="archiveOldOrders()" title="Archive orders older than 30 days to Firebase"><i class="fas fa-archive"></i> <span class="hide-xs">Archive</span></button>
-                                    <button class="btn btn-outline btn-small" onclick="exportHistoryCSV()"><i class="fas fa-download"></i></button>
+                                    <button class="btn btn-outline btn-small" onclick="openOrderExportModal()"><i class="fas fa-download"></i></button>
                                 </div>
                             </div>
                             <!-- History pagination bar -->
@@ -1207,6 +1207,46 @@
             </div>
         </div>
     </div>
+    <!-- ORDER EXPORT MODAL -->
+    <div class="modal-overlay" id="orderExportModal" onclick="if(event.target===this)closeOrderExportModal()">
+        <div class="modal" style="max-width:400px;width:94%" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 style="margin:0"><i class="fas fa-download"></i> Export Orders</h3>
+                <button class="modal-close" onclick="closeOrderExportModal()">✕</button>
+            </div>
+            <div class="modal-body" style="padding:1rem">
+                <div class="form-group">
+                    <label style="font-size:0.85rem;font-weight:600">Export Type</label>
+                    <select id="exportOrderType" class="form-control" style="font-size:0.85rem">
+                        <option value="all">All Orders (confirmed + refunded)</option>
+                        <option value="confirmed">Confirmed Only</option>
+                        <option value="refunded">Refunded Only</option>
+                        <option value="pending">Pending Orders</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label style="font-size:0.85rem;font-weight:600">Date Range</label>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <input type="date" id="exportDateFrom" class="form-control" style="flex:1;font-size:0.85rem">
+                        <span style="color:var(--gray);flex-shrink:0">to</span>
+                        <input type="date" id="exportDateTo" class="form-control" style="flex:1;font-size:0.85rem">
+                    </div>
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem">
+                    <button class="btn btn-outline btn-small" onclick="setExportDateRange('today')">Today</button>
+                    <button class="btn btn-outline btn-small" onclick="setExportDateRange('week')">This Week</button>
+                    <button class="btn btn-outline btn-small" onclick="setExportDateRange('month')">This Month</button>
+                    <button class="btn btn-outline btn-small" onclick="setExportDateRange('all')">All Time</button>
+                </div>
+                <div id="exportOrderCount" style="font-size:0.82rem;color:var(--gray);margin-bottom:0.75rem"></div>
+                <div style="display:flex;gap:8px">
+                    <button class="btn btn-outline" style="flex:1" onclick="closeOrderExportModal()">Cancel</button>
+                    <button class="btn btn-primary" style="flex:2" onclick="doExportOrders()"><i class="fas fa-file-csv"></i> Export CSV</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="editProductModal">
         <div class="modal">
             <div class="modal-header"><h3><i class="fas fa-edit"></i> Edit Product</h3><button class="modal-close" onclick="closeEditModal()">&times;</button></div>
@@ -5693,36 +5733,134 @@ function sendToTelegram(order, callback) {
     function escCSV(v) { if (!v) return ''; var s = String(v); return s.indexOf(',') > -1 || s.indexOf('"') > -1 ? '"' + s.replace(/"/g, '""') + '"' : s; }
     function dlCSV(csv, fn) { var b = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }); var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = fn; a.click(); URL.revokeObjectURL(a.href); }
 
+    function openOrderExportModal() {
+        // Default to this month
+        setExportDateRange('month');
+        document.getElementById('exportOrderType').value = 'all';
+        updateExportCount();
+        document.getElementById('orderExportModal').classList.add('active');
+    }
+
+    function closeOrderExportModal() {
+        document.getElementById('orderExportModal').classList.remove('active');
+    }
+
+    function setExportDateRange(range) {
+        var now = new Date();
+        var from, to;
+        to = now.toISOString().slice(0,10);
+        if (range === 'today') {
+            from = to;
+        } else if (range === 'week') {
+            var d = new Date(now);
+            d.setDate(d.getDate() - d.getDay());
+            from = d.toISOString().slice(0,10);
+        } else if (range === 'month') {
+            from = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01';
+        } else if (range === 'all') {
+            from = '2020-01-01';
+            to = '2099-12-31';
+        }
+        document.getElementById('exportDateFrom').value = from;
+        document.getElementById('exportDateTo').value = to;
+        updateExportCount();
+    }
+
+    function updateExportCount() {
+        var from = document.getElementById('exportDateFrom').value;
+        var to = document.getElementById('exportDateTo').value;
+        var type = document.getElementById('exportOrderType').value;
+        var orders = getFilteredExportOrders(from, to, type);
+        document.getElementById('exportOrderCount').textContent = 
+            '📦 ' + orders.length + ' order(s) found in selected range';
+    }
+
+    function getFilteredExportOrders(from, to, type) {
+        var fromDate = from ? new Date(from + 'T00:00:00') : new Date('2020-01-01');
+        var toDate = to ? new Date(to + 'T23:59:59') : new Date('2099-12-31');
+        var allOrders = [];
+        if (type === 'pending') {
+            allOrders = STATE.pendingOrders.slice();
+        } else {
+            allOrders = STATE.confirmedOrders.slice();
+            if (type !== 'confirmed') {
+                // include refunded
+            }
+        }
+        return allOrders.filter(function(o) {
+            if (type === 'confirmed' && o.status !== 'confirmed') return false;
+            if (type === 'refunded' && o.status !== 'refunded' && o.status !== 'partial_refund') return false;
+            // Parse order date
+            var dateStr = o.orderDate || o.confirmedAt || o.orderId || '';
+            var oDate = new Date(dateStr);
+            if (isNaN(oDate.getTime())) {
+                // Try parsing from orderId (format: ORD-1234567890)
+                var ts = parseInt((o.orderId || '').replace('ORD-',''));
+                if (!isNaN(ts)) oDate = new Date(ts);
+            }
+            if (isNaN(oDate.getTime())) return true; // can't parse, include it
+            return oDate >= fromDate && oDate <= toDate;
+        });
+    }
+
+    function doExportOrders() {
+        var from = document.getElementById('exportDateFrom').value;
+        var to = document.getElementById('exportDateTo').value;
+        var type = document.getElementById('exportOrderType').value;
+        var orders = getFilteredExportOrders(from, to, type);
+        if (!orders.length) { showToast('No orders in selected range', 'warning'); return; }
+
+        var csv = 'Order ID,Date,Status,Shipping,Customer,Phone,City,Address,Payment,Item,Size,Qty,Price,Discount,Subtotal,Total\n';
+        for (var i = 0; i < orders.length; i++) {
+            var o = orders[i];
+            if (!o.cart || !o.cart.length) continue;
+            for (var j = 0; j < o.cart.length; j++) {
+                var it = o.cart[j];
+                var sub = (it.subtotal != null ? it.subtotal : (it.price * it.quantity)) || 0;
+                var disc = it.discountAmt || 0;
+                csv += [
+                    escCSV(o.orderId),
+                    escCSV(o.orderDate || ''),
+                    escCSV(o.status || ''),
+                    escCSV(o.shippingMethod || ''),
+                    escCSV(o.customerName || ''),
+                    escCSV(o.customerPhone || ''),
+                    escCSV(o.customerCity || ''),
+                    escCSV(o.customerAddress || ''),
+                    'COD',
+                    escCSV(it.name),
+                    escCSV(it.size || ''),
+                    it.quantity,
+                    it.price.toFixed(2),
+                    disc.toFixed(2),
+                    sub.toFixed(2),
+                    (j === 0 ? o.total.toFixed(2) : '')
+                ].join(',') + '\n';
+            }
+        }
+        var fromLabel = from || 'all';
+        var toLabel = to || 'all';
+        dlCSV(csv, 'GOAT_KIDS_Orders_' + fromLabel + '_to_' + toLabel + '.csv');
+        closeOrderExportModal();
+        showToast('Exported ' + orders.length + ' orders!', 'success');
+    }
+
+    function exportHistoryCSV() { openOrderExportModal(); }
+
     function exportPendingCSV() {
-        if (!STATE.pendingOrders.length) { showToast('No pending', 'warning'); return; }
-        var csv = 'Order ID,Date,Status,Shipping,Customer,Phone,City,Address,Payment,Item,Size,Qty,Price,Subtotal,Total\n';
+        if (!STATE.pendingOrders.length) { showToast('No pending orders', 'warning'); return; }
+        var csv = 'Order ID,Date,Status,Shipping,Customer,Phone,City,Address,Payment,Item,Size,Qty,Price,Discount,Subtotal,Total\n';
         for (var i = 0; i < STATE.pendingOrders.length; i++) {
             var o = STATE.pendingOrders[i];
             for (var j = 0; j < o.cart.length; j++) {
                 var it = o.cart[j];
-                // FIX #11: safe subtotal
                 var sub = (it.subtotal != null ? it.subtotal : (it.price * it.quantity)) || 0;
-                csv += [escCSV(o.orderId), escCSV(o.orderDate), escCSV(o.status), escCSV(o.shippingMethod || ''), escCSV(o.customerName), escCSV(o.customerPhone), escCSV(o.customerCity || ''), escCSV(o.customerAddress), 'COD', escCSV(it.name), escCSV(it.size), it.quantity, it.price.toFixed(2), sub.toFixed(2), (j === 0 ? o.total.toFixed(2) : '')].join(',') + '\n';
+                var disc = it.discountAmt || 0;
+                csv += [escCSV(o.orderId), escCSV(o.orderDate), escCSV(o.status), escCSV(o.shippingMethod || ''), escCSV(o.customerName), escCSV(o.customerPhone), escCSV(o.customerCity || ''), escCSV(o.customerAddress), 'COD', escCSV(it.name), escCSV(it.size), it.quantity, it.price.toFixed(2), disc.toFixed(2), sub.toFixed(2), (j === 0 ? o.total.toFixed(2) : '')].join(',') + '\n';
             }
         }
-        dlCSV(csv, 'GOAT_KIDS_Pending.csv');
-        showToast('Exported!', 'success');
-    }
-
-    function exportHistoryCSV() {
-        if (!STATE.confirmedOrders.length) { showToast('No history', 'warning'); return; }
-        var csv = 'Order ID,Date,Status,Shipping,Customer,Phone,City,Address,Payment,Item,Size,Qty,Price,Subtotal,Total\n';
-        for (var i = 0; i < STATE.confirmedOrders.length; i++) {
-            var o = STATE.confirmedOrders[i];
-            for (var j = 0; j < o.cart.length; j++) {
-                var it = o.cart[j];
-                // FIX #11: safe subtotal
-                var sub = (it.subtotal != null ? it.subtotal : (it.price * it.quantity)) || 0;
-                csv += [escCSV(o.orderId), escCSV(o.orderDate), escCSV(o.status), escCSV(o.shippingMethod || ''), escCSV(o.customerName), escCSV(o.customerPhone), escCSV(o.customerCity || ''), escCSV(o.customerAddress), 'COD', escCSV(it.name), escCSV(it.size), it.quantity, it.price.toFixed(2), sub.toFixed(2), (j === 0 ? o.total.toFixed(2) : '')].join(',') + '\n';
-            }
-        }
-        dlCSV(csv, 'GOAT_KIDS_History.csv');
-        showToast('Exported!', 'success');
+        dlCSV(csv, 'GOAT_KIDS_Pending_' + new Date().toISOString().slice(0,10) + '.csv');
+        showToast('Exported ' + STATE.pendingOrders.length + ' pending orders!', 'success');
     }
 
     function exportInventoryCSV() {
@@ -6205,15 +6343,14 @@ function sendToTelegram(order, callback) {
             }
 
             logActivity('Branch Stock Adjusted', label + ': ' + oldQty + ' → ' + newQty + ' @ ' + _branchStockCurrentName);
-            _sendTelegramPhoto(
-                (p.images && p.images[0]) || '',
+            _sendTelegramRaw(
                 '🔧 <b>BRANCH STOCK ADJUSTED</b>\n\n' +
                 '🏬 Branch: ' + _branchStockCurrentName + '\n' +
                 '📦 ' + label + '\n' +
                 '🔢 ' + oldQty + ' → ' + newQty + '\n' +
                 '👑 By: Full Admin (' + (STATE.storeName || STATE.storeId) + ')\n' +
                 '🕐 ' + new Date().toLocaleString(),
-                null
+                null, 'inventory'
             );
             showToast('Stock updated: ' + label + ' = ' + newQty, 'success');
             renderBranchStockList();
@@ -6663,7 +6800,7 @@ function sendToTelegram(order, callback) {
                 '📥 To: ' + toStoreName + '\n' +
                 (note ? '📝 Note: ' + note + '\n' : '') +
                 '\n⏳ Waiting for approval from ' + fromStoreName + ' admin.';
-            _sendTelegramMediaGroup(imageUrls, caption, caption, null, 'inventory');
+            _sendTelegramRaw(caption, null, 'inventory');
 
             _transferCart = [];
             renderTransferCart();
@@ -6906,15 +7043,14 @@ function sendToTelegram(order, callback) {
             if (localP) { localP.sizes = destData.sizes; localP.stock = destData.stock; saveProducts(); }
 
             logActivity('Transfer Receipt Confirmed', t.productName + ' x' + t.qty + ' from ' + t.fromStoreName);
-            _sendTelegramPhoto(
-                t.productImage || (p.images && p.images[0]) || '',
-                '✅ <b>TRANSFER APPROVED</b>\n\n' +
+            _sendTelegramRaw(
+                '✅ <b>TRANSFER CONFIRMED</b>\n\n' +
                 '📦 ' + t.productName + (t.size && t.size !== 'One Size' ? ' (' + t.size + ')' : '') + '\n' +
                 '🔢 Qty: ' + t.qty + '\n' +
-                '📤 From: ' + (STATE.storeName || STATE.storeId) + '\n' +
+                '📤 From: ' + t.fromStoreName + '\n' +
                 '📥 To: ' + t.toStoreName + '\n' +
-                '✅ Approved by Full Admin',
-                null
+                '✅ Confirmed by ' + (STATE.storeName || STATE.storeId),
+                null, 'inventory'
             );
             showToast('Transfer approved! Stock updated.', 'success');
             renderInventory(); renderProducts();
@@ -7095,7 +7231,7 @@ function sendToTelegram(order, callback) {
                 });
                 var imageUrls = succeeded.map(function(t){ return t.productImage; }).filter(Boolean);
                 var caption = '✅ <b>STOCK RECEIPT CONFIRMED</b> (' + succeeded.length + ' item' + (succeeded.length>1?'s':'') + ')\n\n📦 Items:\n' + itemLines.join('\n') + '\n\n✅ Confirmed by ' + (STATE.storeName || STATE.storeId);
-                _sendTelegramMediaGroup(imageUrls, caption, caption, null, 'inventory');
+                _sendTelegramRaw(caption, null, 'inventory');
 
                 logActivity('Bulk Transfer Receipt Confirmed', succeeded.length + ' transfers from ' + fromStoreId);
 
@@ -7147,7 +7283,7 @@ function sendToTelegram(order, callback) {
                 var caption = '❌ <b>TRANSFERS REJECTED</b> (' + rejected.length + ' item' + (rejected.length>1?'s':'') + ')\n\n' +
                     '📦 Items:\n' + itemLines.join('\n') + '\n\n' +
                     '📝 Reason: ' + reason;
-                _sendTelegramMediaGroup(imageUrls, caption, caption, null, 'inventory');
+                _sendTelegramRaw(caption, null, 'inventory');
             }
 
             showToast(checked.length + ' transfer(s) rejected', 'info');
@@ -7331,14 +7467,13 @@ function sendToTelegram(order, callback) {
             logActivity('Transfer Rejected', transferId);
             showToast('Transfer rejected', 'info');
             if (t) {
-                _sendTelegramPhoto(
-                    t.productImage || '',
+                _sendTelegramRaw(
                     '❌ <b>TRANSFER REJECTED</b>\n\n' +
                     '📦 ' + (t.productName || '') + (t.size && t.size !== 'One Size' ? ' (' + t.size + ')' : '') + '\n' +
                     '🔢 Qty: ' + (t.qty || 0) + '\n' +
                     '📥 Requested by: ' + (t.toStoreName || '') + '\n' +
                     '📝 Reason: ' + reason,
-                    null
+                    null, 'inventory'
                 );
             }
             loadTransfers();
