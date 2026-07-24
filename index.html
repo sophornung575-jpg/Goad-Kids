@@ -1530,7 +1530,6 @@
 
     function _trySendWithFallback(token, body, originalMessage, proxyIndex, callback) {
         if (proxyIndex >= _TELEGRAM_PROXIES.length) {
-            // All proxies exhausted — queue for later
             console.warn('All Telegram routes failed — message queued for retry');
             _queueTelegramMessage(originalMessage);
             if (callback) callback(false);
@@ -1539,16 +1538,14 @@
 
         var proxy = _TELEGRAM_PROXIES[proxyIndex];
         var url = proxy.url.replace(/{TOKEN}/g, token);
-
         var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
         var timeoutId = controller ? setTimeout(function() { controller.abort(); }, 10000) : null;
-
-        var fetchOptions = {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: body
-        };
+        var fetchOptions = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body };
         if (controller) fetchOptions.signal = controller.signal;
+
+        // ── Guard: callback fires exactly once per attempt ──
+        var _fired = false;
+        var fire = function(val) { if (!_fired) { _fired = true; if (callback) callback(val); } };
 
         console.log('📡 Telegram attempt ' + (proxyIndex + 1) + '/' + _TELEGRAM_PROXIES.length + ' via ' + proxy.type);
 
@@ -1560,10 +1557,10 @@
         .then(function(data) {
             if (data.ok) {
                 console.log('✅ Telegram sent via ' + proxy.type + ' (attempt ' + (proxyIndex + 1) + ')');
-                if (callback) callback(true);
+                fire(true);
             } else {
                 console.warn('Telegram API rejected (' + data.description + ') — not retrying proxies');
-                if (callback) callback(false);
+                fire(false);
             }
         })
         .catch(function(err) {
@@ -1673,7 +1670,15 @@ function sendToTelegram(order, callback) {
         '💵 TOTAL: $' + (order.total || 0).toFixed(2) + '\n\n' +
         '📝 Notes: ' + (order.customerNotes || 'None');
 
-    _sendTelegramMediaGroup(imageUrls, message, message, callback);
+    // ── ONE-TIME CALLBACK GUARD — prevents double order save if fallback chain fires callback multiple times ──
+    var _called = false;
+    var safeCallback = function(success) {
+        if (_called) { console.warn('sendToTelegram callback already fired — ignoring duplicate'); return; }
+        _called = true;
+        if (callback) callback(success);
+    };
+
+    _sendTelegramMediaGroup(imageUrls, message, message, safeCallback);
 }
 
     // ── Telegram photo proxies (sendPhoto endpoint, same fallback pattern as text) ──
