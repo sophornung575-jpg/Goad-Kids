@@ -1003,6 +1003,7 @@
                                         <option value="full">Full Admin (unlocks everything + Settings)</option>
                                         <option value="orders">Orders password (orders only)</option>
                                         <option value="inventory">Inventory / Settings password</option>
+                                        <option value="productedit">Product Edit/Delete password</option>
                                     </select>
                                 </div>
                                 <div class="form-group"><label>Current Password</label><input type="password" id="changePwCurrent" class="form-control" placeholder="Current password"></div>
@@ -2670,9 +2671,9 @@ function sendToTelegram(order, callback) {
     }
 
     function requireProductPassword(callback) {
-        var stored = JSON.parse(localStorage.getItem('goatPasswords') || '{}');
-        var correctPw = stored.fullPass || 'admin123';
-        // Show a proper password modal instead of browser prompt
+        var stored = getStoredPasswords();
+        // Use dedicated product edit password if set, otherwise fall back to full admin password
+        var correctPw = stored.productEditPass || stored.fullPass || 'admin123';
         showProductPasswordModal(function(pw) {
             if (pw === correctPw) {
                 callback();
@@ -2846,8 +2847,9 @@ function sendToTelegram(order, callback) {
         if (np.length < 6) { statusEl.innerHTML = '<span style="color:var(--danger)">New password must be at least 6 characters.</span>'; return; }
         if (np !== cf) { statusEl.innerHTML = '<span style="color:var(--danger)">New passwords do not match.</span>'; return; }
         var passwords = getStoredPasswords();
-        var key = role === 'full' ? 'fullPass' : (role === 'orders' ? 'ordersPass' : 'inventoryPass');
-        if (passwords[key] !== cur) { statusEl.innerHTML = '<span style="color:var(--danger)">Current password is incorrect.</span>'; return; }
+        var key = role === 'full' ? 'fullPass' : role === 'orders' ? 'ordersPass' : role === 'productedit' ? 'productEditPass' : 'inventoryPass';
+        var currentCorrect = passwords[key] || (role === 'productedit' ? (passwords.fullPass || 'admin123') : null);
+        if (currentCorrect !== cur) { statusEl.innerHTML = '<span style="color:var(--danger)">Current password is incorrect.</span>'; return; }
         passwords[key] = np;
         savePasswords(passwords);
         document.getElementById('changePwCurrent').value = '';
