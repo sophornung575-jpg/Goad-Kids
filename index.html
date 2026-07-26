@@ -2143,50 +2143,46 @@ function sendToTelegram(order, callback) {
             total: total
         };
 
-        // FIX #7: Only clear cart AFTER Telegram send attempt, not before
-        sendToTelegram(order, function(success) {
-            // ── IDEMPOTENCY: Check if order was already saved (double-send protection) ──
-            var alreadySaved = STATE.pendingOrders.some(function(o){ return o.orderId === oid; });
-            if (alreadySaved) {
-                console.warn('Order already saved, skipping duplicate:', oid);
-                _placingOrder = false;
-                return;
-            }
+        // ── Telegram notification is now handled server-side by a Cloud Function ──
+        // (triggered automatically the instant this order document is created in
+        // Firestore). The function claims a `telegramNotified` flag inside a
+        // transaction BEFORE sending, so it is sent exactly once even if the
+        // function itself is ever re-invoked. No client-side network gamble needed.
 
-            // Save order regardless of Telegram result
-            STATE.pendingOrders.push(order);
-            saveOrders();
+        STATE.pendingOrders.push(order);
+        saveOrders();
 
-            logActivity('New Order', oid + ' - $' + total.toFixed(2));
-            if (STATE.firebaseOnline && db) {
-                db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order)
-                .catch(function(e) { console.warn('Order Firebase save failed:', e); });
-            }
+        logActivity('New Order', oid + ' - $' + total.toFixed(2));
 
-            // Now clear cart
-            STATE.cart = [];
-            localStorage.setItem('goatCart', '[]');
-            updateCartBadge();
+        if (STATE.firebaseOnline && db) {
+            db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order)
+            .catch(function(e) {
+                console.warn('Order Firebase save failed:', e);
+                showToast('Order saved locally — will sync when back online', 'warning');
+            });
+        } else {
+            showToast('Offline — order saved locally. Notification will send once synced.', 'warning');
+        }
 
-            // Update rate limit timestamp
-            STATE.lastOrderTime = Date.now();
-            localStorage.setItem('goatLastOrderTime', STATE.lastOrderTime);
+        // Clear cart
+        STATE.cart = [];
+        localStorage.setItem('goatCart', '[]');
+        updateCartBadge();
 
-            if (STATE.isAdmin) { renderPending(); updateAdminBadges(); }
+        // Update rate limit timestamp
+        STATE.lastOrderTime = Date.now();
+        localStorage.setItem('goatLastOrderTime', STATE.lastOrderTime);
 
-            placeBtn.disabled = false;
-            placeBtn.innerHTML = '<i class="fab fa-telegram-plane"></i> <span data-translate="placeOrder">Send Order via Telegram</span>';
-            _placingOrder = false; // Release lock
+        if (STATE.isAdmin) { renderPending(); updateAdminBadges(); }
 
-            // FIX #13: Show success screen instead of just a toast
-            document.getElementById('cartMainContent').classList.add('hidden');
-            document.getElementById('orderSuccessScreen').classList.remove('hidden');
-            document.getElementById('successOrderId').textContent = '📦 ' + oid;
+        placeBtn.disabled = false;
+        placeBtn.innerHTML = '<i class="fab fa-telegram-plane"></i> <span data-translate="placeOrder">Send Order via Telegram</span>';
+        _placingOrder = false; // Release lock
 
-            if (!success) {
-                showToast('Order saved! (Telegram may have failed - seller was notified via app)', 'warning');
-            }
-        });
+        // Show success screen
+        document.getElementById('cartMainContent').classList.add('hidden');
+        document.getElementById('orderSuccessScreen').classList.remove('hidden');
+        document.getElementById('successOrderId').textContent = '📦 ' + oid;
     }
 
     function switchAdminTab(tab) {
