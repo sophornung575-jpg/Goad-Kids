@@ -4732,7 +4732,8 @@ function sendToTelegram(order, callback) {
                 }
             }
             var discBadge = (o.discount > 0) ? ' <span style="font-size:0.72rem;background:#d4edda;color:#276749;border-radius:4px;padding:1px 5px;margin-left:4px">-$' + o.discount.toFixed(2) + '</span>' : '';
-            var pmVal = (o.paymentMethod === 'qr') ? 'qr' : 'cash';
+            if (o.paymentMethod !== 'cash' && o.paymentMethod !== 'qr') o.paymentMethod = 'qr'; // default to QR Code until staff picks otherwise
+            var pmVal = o.paymentMethod;
             h += '<div class="order-card-mini">' +
                 '<div class="oc-head"><div class="oc-id">⏳ ' + escHtml(o.orderId) + '<br><span style="font-weight:400;color:var(--gray)">' + escHtml(o.orderDate||'') + '</span></div><div class="oc-total">$' + (o.total||0).toFixed(2) + discBadge + '</div></div>' +
                 '<div class="oc-info">👤 ' + escHtml(o.customerName||'N/A') + ' · 📞 ' + escHtml(o.customerPhone||'') + '<br>📍 ' + escHtml((o.customerAddress||'') + (o.customerCity ? ', '+o.customerCity : '')) + '<br>🚚 ' + escHtml(o.shippingMethod||'N/A') + (o.customerNotes ? ' · 📝 ' + escHtml(o.customerNotes) : '') + '</div>' +
@@ -4740,8 +4741,8 @@ function sendToTelegram(order, callback) {
                 '<div class="oc-payment" style="display:flex;align-items:center;gap:0.4rem;margin:0.4rem 0;font-size:0.85rem">' +
                     '<span style="font-weight:600;color:var(--gray-dark)"><i class="fas fa-money-bill-wave"></i> ' + t('payment') + ':</span>' +
                     '<select class="form-control" style="width:auto;padding:0.3rem 0.5rem;font-size:0.85rem" onchange="setOrderPaymentMethod(\'' + o.orderId + '\', this.value)">' +
-                        '<option value="cash"' + (pmVal==='cash'?' selected':'') + '>💵 ' + t('cash') + '</option>' +
                         '<option value="qr"' + (pmVal==='qr'?' selected':'') + '>📱 ' + t('qrCode') + '</option>' +
+                        '<option value="cash"' + (pmVal==='cash'?' selected':'') + '>💵 ' + t('cash') + '</option>' +
                     '</select>' +
                 '</div>' +
                 '<div class="oc-actions"><button class="btn btn-success" onclick="confirmOrder(\'' + o.orderId + '\')"><i class="fas fa-check"></i> ' + t('confirm') + '</button><button class="btn btn-receipt" onclick="printReceipt(\'' + o.orderId + '\')"><i class="fas fa-print"></i> ' + t('printBill') + '</button><button class="btn btn-danger" onclick="rejectOrder(\'' + o.orderId + '\')"><i class="fas fa-times"></i> ' + t('reject') + '</button></div>' +
@@ -5117,7 +5118,12 @@ function sendToTelegram(order, callback) {
         html += '<div class="row"><span class="lbl">Order</span><span>' + order.orderId + '</span></div>';
         html += '<div class="row"><span class="lbl">Date</span><span>' + (order.orderDate||'') + '</span></div>';
         html += '<div class="row"><span class="lbl">Shipping</span><span>' + (order.shippingMethod||'N/A') + '</span></div>';
-        html += '<div class="row"><span class="lbl">Payment</span><span>' + (order.paymentMethod === 'qr' ? '📱 QR Code' : '💵 Cash') + '</span></div>';
+        if (order.status === 'confirmed' || order.status === 'partial_refund') {
+            html += '<div class="row"><span class="lbl">Status</span><span>✅ Confirmed</span></div>';
+            html += '<div class="row"><span class="lbl">Payment</span><span>' + (order.paymentMethod === 'qr' ? '📱 QR Code' : '💵 Cash') + '</span></div>';
+        } else {
+            html += '<div class="row"><span class="lbl">Status</span><span>⏳ Pending — Awaiting Confirmation</span></div>';
+        }
         html += '<hr class="dash">';
         html += '<div class="row"><span class="lbl">Name</span><span>' + (order.customerName||'N/A') + '</span></div>';
         html += '<div class="row"><span class="lbl">Phone</span><span>' + (order.customerPhone||'N/A') + '</span></div>';
