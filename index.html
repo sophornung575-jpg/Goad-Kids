@@ -4636,14 +4636,32 @@ function sendToTelegram(order, callback) {
                 }
             }
             var discBadge = (o.discount > 0) ? ' <span style="font-size:0.72rem;background:#d4edda;color:#276749;border-radius:4px;padding:1px 5px;margin-left:4px">-$' + o.discount.toFixed(2) + '</span>' : '';
+            var pmVal = (o.paymentMethod === 'qr') ? 'qr' : 'cash';
             h += '<div class="order-card-mini">' +
                 '<div class="oc-head"><div class="oc-id">⏳ ' + escHtml(o.orderId) + '<br><span style="font-weight:400;color:var(--gray)">' + escHtml(o.orderDate||'') + '</span></div><div class="oc-total">$' + (o.total||0).toFixed(2) + discBadge + '</div></div>' +
                 '<div class="oc-info">👤 ' + escHtml(o.customerName||'N/A') + ' · 📞 ' + escHtml(o.customerPhone||'') + '<br>📍 ' + escHtml((o.customerAddress||'') + (o.customerCity ? ', '+o.customerCity : '')) + '<br>🚚 ' + escHtml(o.shippingMethod||'N/A') + (o.customerNotes ? ' · 📝 ' + escHtml(o.customerNotes) : '') + '</div>' +
                 '<div class="oc-items">' + escHtml(itemsSummary) + '</div>' +
-                '<div class="oc-actions"><button class="btn btn-success" onclick="confirmOrder(\'' + o.orderId + '\')"><i class="fas fa-check"></i> Confirm</button><button class="btn btn-danger" onclick="rejectOrder(\'' + o.orderId + '\')"><i class="fas fa-times"></i> Reject</button></div>' +
+                '<div class="oc-payment" style="display:flex;align-items:center;gap:0.4rem;margin:0.4rem 0;font-size:0.85rem">' +
+                    '<span style="font-weight:600;color:var(--gray-dark)"><i class="fas fa-money-bill-wave"></i> Payment:</span>' +
+                    '<select class="form-control" style="width:auto;padding:0.3rem 0.5rem;font-size:0.85rem" onchange="setOrderPaymentMethod(\'' + o.orderId + '\', this.value)">' +
+                        '<option value="cash"' + (pmVal==='cash'?' selected':'') + '>💵 Cash</option>' +
+                        '<option value="qr"' + (pmVal==='qr'?' selected':'') + '>📱 QR Code</option>' +
+                    '</select>' +
+                '</div>' +
+                '<div class="oc-actions"><button class="btn btn-success" onclick="confirmOrder(\'' + o.orderId + '\')"><i class="fas fa-check"></i> Confirm</button><button class="btn btn-receipt" onclick="printReceipt(\'' + o.orderId + '\')"><i class="fas fa-print"></i> Print Bill</button><button class="btn btn-danger" onclick="rejectOrder(\'' + o.orderId + '\')"><i class="fas fa-times"></i> Reject</button></div>' +
                 '</div>';
         }
         c.innerHTML = h;
+    }
+
+    // ── Set payment method (Cash / QR Code) on a pending order before confirming ──
+    function setOrderPaymentMethod(oid, method) {
+        var order = null;
+        for (var i = 0; i < STATE.pendingOrders.length; i++) { if (STATE.pendingOrders[i].orderId === oid) { order = STATE.pendingOrders[i]; break; } }
+        if (!order) return;
+        order.paymentMethod = (method === 'qr') ? 'qr' : 'cash';
+        saveOrders();
+        showToast((order.paymentMethod === 'qr' ? '📱 QR Code' : '💵 Cash') + ' payment selected for ' + oid, 'success');
     }
 
     function filterOrders() {
@@ -4870,9 +4888,9 @@ function sendToTelegram(order, callback) {
             var statusLabel = isPartialRefund ? ' <span style="font-size:0.7rem;background:#fff3cd;color:#856404;border-radius:4px;padding:1px 5px;margin-left:4px">Partial Refund · -$' + (o.refundAmount||0).toFixed(2) + '</span>' : '';
             h += '<div class="order-card-mini ' + (o.status||'') + '">' +
                 '<div class="oc-head"><div class="oc-id">' + statusIcon + ' ' + escHtml(o.orderId) + statusLabel + '<br><span style="font-weight:400;color:var(--gray)">' + escHtml(o.orderDate||o.confirmedAt||'') + '</span></div><div class="oc-total">$' + (o.total||0).toFixed(2) + discBadge2 + '</div></div>' +
-                '<div class="oc-info">👤 ' + escHtml(o.customerName||'N/A') + ' · 📞 ' + escHtml(o.customerPhone||'') + '</div>' +
+                '<div class="oc-info">👤 ' + escHtml(o.customerName||'N/A') + ' · 📞 ' + escHtml(o.customerPhone||'') + ' · ' + (o.paymentMethod === 'qr' ? '📱 QR Code' : '💵 Cash') + '</div>' +
                 '<div class="oc-items">' + escHtml(itemsSummary) + '</div>' +
-                ((ok || isPartialRefund) ? '<div class="oc-actions"><button class="btn btn-receipt" onclick="printReceipt(\'' + o.orderId + '\')"><i class="fas fa-print"></i> Print</button><button class="btn btn-danger" onclick="refundOrder(\'' + o.orderId + '\')"><i class="fas fa-undo"></i> ' + (isPartialRefund ? 'More Refund' : 'Refund') + '</button></div>' : '') +
+                ((ok || isPartialRefund) ? '<div class="oc-actions"><button class="btn btn-receipt" onclick="printReceipt(\'' + o.orderId + '\')"><i class="fas fa-print"></i> Print Bill</button><button class="btn btn-danger" onclick="refundOrder(\'' + o.orderId + '\')"><i class="fas fa-undo"></i> ' + (isPartialRefund ? 'More Refund' : 'Refund') + '</button></div>' : '') +
                 '</div>';
         }
         c.innerHTML = h;
@@ -4892,6 +4910,7 @@ function sendToTelegram(order, callback) {
     function printReceipt(oid) {
         var order = null;
         for (var i = 0; i < STATE.confirmedOrders.length; i++) { if (STATE.confirmedOrders[i].orderId === oid) { order = STATE.confirmedOrders[i]; break; } }
+        if (!order) { for (var k = 0; k < STATE.pendingOrders.length; k++) { if (STATE.pendingOrders[k].orderId === oid) { order = STATE.pendingOrders[k]; break; } } }
         if (!order) { showToast('Order not found', 'error'); return; }
         var smt = order.shippingMethod || 'N/A';
         var items = '';
@@ -4970,6 +4989,7 @@ function sendToTelegram(order, callback) {
         html += '<div class="row"><span class="lbl">Order</span><span>' + order.orderId + '</span></div>';
         html += '<div class="row"><span class="lbl">Date</span><span>' + (order.orderDate||'') + '</span></div>';
         html += '<div class="row"><span class="lbl">Shipping</span><span>' + (order.shippingMethod||'N/A') + '</span></div>';
+        html += '<div class="row"><span class="lbl">Payment</span><span>' + (order.paymentMethod === 'qr' ? '📱 QR Code' : '💵 Cash') + '</span></div>';
         html += '<hr class="dash">';
         html += '<div class="row"><span class="lbl">Name</span><span>' + (order.customerName||'N/A') + '</span></div>';
         html += '<div class="row"><span class="lbl">Phone</span><span>' + (order.customerPhone||'N/A') + '</span></div>';
