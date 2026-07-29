@@ -2953,19 +2953,30 @@ function sendToTelegram(order, callback) {
         var valid = false, name = '';
         var passwords = getStoredPasswords();
         // Try per-store Firestore credentials first, fall back to legacy shared doc, then localStorage
+        var firestoreReached = false;
         try {
             var doc = await db.collection('_admin_').doc(STATE.storeId).get();
             if (!doc.exists) doc = await db.collection('_admin_').doc('credentials').get();
             var data = doc.exists ? doc.data() : null;
             if (data) {
+                firestoreReached = true; // Firestore answered — treat it as the source of truth
+                // Self-heal local cache so offline logins later use the current password
+                localStorage.setItem('goatPasswords', JSON.stringify({
+                    fullPass: data.fullPass || passwords.fullPass,
+                    ordersPass: data.ordersPass || passwords.ordersPass,
+                    inventoryPass: data.inventoryPass || passwords.inventoryPass
+                }));
+                passwords = getStoredPasswords();
                 if (role === 'full' && pw === data.fullPass) { valid = true; name = 'Full Admin'; }
                 else if (role === 'orders' && pw === data.ordersPass) { valid = true; name = 'Order Manager'; }
                 else if (role === 'inventory' && pw === data.inventoryPass) { valid = true; name = 'Inventory Manager'; }
                 if (data.masterKey && pw === data.masterKey) { valid = true; name = 'Super Admin'; role = 'full'; }
             }
         } catch (e) { /* offline — fall through to localStorage passwords */ }
-        // localStorage passwords (always available offline)
-        if (!valid) {
+        // localStorage passwords — only used when Firestore couldn't be reached (offline).
+        // If Firestore WAS reached, its answer is final: an old/changed password must not
+        // still work here just because this device's local cache hasn't been refreshed.
+        if (!valid && !firestoreReached) {
             if (role === 'full' && pw === passwords.fullPass) { valid = true; name = 'Full Admin'; }
             else if (role === 'orders' && pw === passwords.ordersPass) { valid = true; name = 'Order Manager'; }
             else if (role === 'inventory' && pw === passwords.inventoryPass) { valid = true; name = 'Inventory Manager'; }
@@ -4783,13 +4794,39 @@ function sendToTelegram(order, callback) {
         if (err) err.textContent = '';
     }
 
-    function unlockReport() {
+    async function unlockReport() {
         var inp = document.getElementById('reportLockInput');
         var err = document.getElementById('reportLockError');
         var pw = inp ? inp.value.trim() : '';
         var passwords = getStoredPasswords();
+        var valid = false;
+
+        // Firestore is the source of truth when reachable — check it first so a
+        // password changed on another device/browser takes effect immediately here too.
+        var firestoreReached = false;
+        if (db && STATE.firebaseOnline) {
+            try {
+                var doc = await db.collection('_admin_').doc(STATE.storeId).get();
+                if (!doc.exists) doc = await db.collection('_admin_').doc('credentials').get();
+                if (doc.exists) {
+                    firestoreReached = true;
+                    var d = doc.data();
+                    localStorage.setItem('goatPasswords', JSON.stringify({
+                        fullPass: d.fullPass || passwords.fullPass,
+                        ordersPass: d.ordersPass || passwords.ordersPass,
+                        inventoryPass: d.inventoryPass || passwords.inventoryPass
+                    }));
+                    passwords = getStoredPasswords();
+                    if (pw === d.fullPass || pw === d.ordersPass) valid = true;
+                }
+            } catch(e) { console.warn('Firebase password check failed:', e); }
+        }
+        if (!valid && !firestoreReached) {
+            valid = (pw === passwords.fullPass || pw === passwords.ordersPass);
+        }
+
         // Accept full admin OR orders password
-        if (pw === passwords.fullPass || pw === passwords.ordersPass) {
+        if (valid) {
             document.getElementById('reportLock').style.display = 'none';
             document.getElementById('reportContent').style.display = 'block';
             inp.value = '';
@@ -4833,26 +4870,32 @@ function sendToTelegram(order, callback) {
         var err = document.getElementById('settingsLockError');
         var pw = inp ? inp.value : '';
         var passwords = getStoredPasswords();
-        var valid = (pw === passwords.fullPass || pw === passwords.inventoryPass);
+        var valid = false;
 
-        // If local check fails, try Firebase per-store credentials (handles new devices)
-        if (!valid && db && STATE.firebaseOnline) {
+        // Firestore is the source of truth when reachable — check it first so a
+        // password changed on another device/browser takes effect immediately here too.
+        var firestoreReached = false;
+        if (db && STATE.firebaseOnline) {
             try {
                 var doc = await db.collection('_admin_').doc(STATE.storeId).get();
                 if (!doc.exists) doc = await db.collection('_admin_').doc('credentials').get();
                 if (doc.exists) {
+                    firestoreReached = true;
                     var d = doc.data();
-                    if (pw === d.fullPass || pw === d.inventoryPass) {
-                        valid = true;
-                        // Update local cache
-                        localStorage.setItem('goatPasswords', JSON.stringify({
-                            fullPass: d.fullPass || passwords.fullPass,
-                            ordersPass: d.ordersPass || passwords.ordersPass,
-                            inventoryPass: d.inventoryPass || passwords.inventoryPass
-                        }));
-                    }
+                    // Self-heal local cache to match Firestore's current values
+                    localStorage.setItem('goatPasswords', JSON.stringify({
+                        fullPass: d.fullPass || passwords.fullPass,
+                        ordersPass: d.ordersPass || passwords.ordersPass,
+                        inventoryPass: d.inventoryPass || passwords.inventoryPass
+                    }));
+                    passwords = getStoredPasswords();
+                    if (pw === d.fullPass || pw === d.inventoryPass) valid = true;
                 }
             } catch(e) { console.warn('Firebase password check failed:', e); }
+        }
+        // Only fall back to the local cache when Firestore couldn't be reached (offline).
+        if (!valid && !firestoreReached) {
+            valid = (pw === passwords.fullPass || pw === passwords.inventoryPass);
         }
 
         if (valid) {
