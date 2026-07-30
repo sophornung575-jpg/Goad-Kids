@@ -2875,15 +2875,23 @@ function sendToTelegram(order, callback) {
     }
     function savePasswords(obj) {
         localStorage.setItem('goatPasswords', JSON.stringify(obj));
-        // Save to Firebase per store so each store has independent passwords
+        // Save to Firebase per store so each store has independent passwords.
+        // Returns a Promise<boolean> so callers (e.g. changePassword) can know
+        // whether the change actually made it to Firebase, instead of assuming
+        // success just because the local write happened.
         if (db && STATE.firebaseOnline) {
-            db.collection('_admin_').doc(STATE.storeId).set({
+            return db.collection('_admin_').doc(STATE.storeId).set({
                 fullPass: obj.fullPass,
                 ordersPass: obj.ordersPass,
                 inventoryPass: obj.inventoryPass,
                 updatedAt: new Date().toISOString()
-            }, { merge: true }).catch(function(e){ console.warn('Password sync failed:', e); });
+            }, { merge: true }).then(function(){ return true; }).catch(function(e){
+                console.warn('Password sync failed:', e);
+                return false;
+            });
         }
+        // No live Firebase connection right now — saved locally only.
+        return Promise.resolve(false);
     }
 
     function completeSetup() {
@@ -2917,7 +2925,7 @@ function sendToTelegram(order, callback) {
         document.getElementById('firebaseSetupScreen').style.display = 'none';
         document.getElementById('storeSelectorScreen').style.display = 'flex';
     }
-    function changePassword() {
+    async function changePassword() {
         var role = document.getElementById('changePwRole').value;
         var cur = document.getElementById('changePwCurrent').value;
         var np = document.getElementById('changePwNew').value;
@@ -2931,12 +2939,33 @@ function sendToTelegram(order, callback) {
         var currentCorrect = passwords[key] || (role === 'productedit' ? (passwords.fullPass || 'admin123') : null);
         if (currentCorrect !== cur) { statusEl.innerHTML = '<span style="color:var(--danger)">Current password is incorrect.</span>'; return; }
         passwords[key] = np;
-        savePasswords(passwords);
+
+        var btn = document.querySelector('[onclick="changePassword()"]');
+        if (btn) btn.disabled = true;
+        statusEl.innerHTML = '<span style="color:var(--gray)"><i class="fas fa-spinner fa-spin"></i> Saving...</span>';
+
+        var synced = await savePasswords(passwords);
+
+        if (btn) btn.disabled = false;
         document.getElementById('changePwCurrent').value = '';
         document.getElementById('changePwNew').value = '';
         document.getElementById('changePwConfirm').value = '';
-        statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Password changed successfully!</span>';
-        logActivity('Password Changed', 'Role: ' + role);
+
+        if (synced) {
+            // Confirmed written to Firebase — this is the real source of truth,
+            // so the new password is now active everywhere for this store.
+            statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Password changed successfully!</span>';
+            showToast('Password changed', 'success');
+            logActivity('Password Changed', 'Role: ' + role);
+        } else if (db && STATE.firebaseOnline) {
+            // We appear online but the write itself failed (permissions, rules, etc.)
+            statusEl.innerHTML = '<span style="color:var(--danger)">⚠️ Saved on THIS DEVICE ONLY — Firebase sync failed, so the old password may still work elsewhere. Check your connection and try again.</span>';
+            showToast('Sync failed — password not fully changed', 'error');
+        } else {
+            // Genuinely offline right now.
+            statusEl.innerHTML = '<span style="color:var(--danger)">⚠️ Saved on THIS DEVICE ONLY (offline) — the old password will still work on other devices until you reconnect and change it again while online.</span>';
+            showToast('Offline — password not synced', 'error');
+        }
     }
 
     async function adminLogin() {
