@@ -7194,6 +7194,7 @@ function sendToTelegram(order, callback) {
 
     var _transferSubmitting = false; // Lock to prevent double-click
     var _transferApproving = {}; // Lock per transferId — prevents double-tap/double-approve duplicating stock
+    var _bulkTransferBusy = false; // Lock for bulk approve/reject — prevents double-tap duplicating a whole batch
 
     async function submitTransferRequest() {
         if (!STATE.adminRole) { showToast('Admin login required', 'error'); return; }
@@ -7570,16 +7571,33 @@ function sendToTelegram(order, callback) {
         if (!confirm('Approve ' + checked.length + ' selected transfer(s)? Stock will be deducted from this store and added to the destination store(s).')) return;
         if (!db) { showToast('Firebase offline', 'error'); return; }
 
+        // ── DOUBLE-TAP PROTECTION ── mirrors approveTransfer's lock
+        if (_bulkTransferBusy) { showToast('Already processing a batch — please wait...', 'warning'); return; }
+        _bulkTransferBusy = true;
+        var bulkApproveBtn = document.querySelector('[onclick="bulkApproveTransfers()"]');
+        if (bulkApproveBtn) { bulkApproveBtn.disabled = true; bulkApproveBtn.textContent = '⏳ Processing...'; }
+
+        try {
+
         showToast('Processing ' + checked.length + ' transfer(s)...', 'info');
 
         // ── Step 1: Load all transfer documents ──
+        // ── IDEMPOTENCY GUARD ── skip anything not still 'pending' — protects against a
+        // stale checkbox list, a duplicate bulk-approve click, or an item approved
+        // individually while it was still checked here.
         var transfers = [];
+        var skippedAlready = [];
         for (var i = 0; i < checked.length; i++) {
             try {
                 var tDoc = await db.collection('transfers').doc(checked[i]).get();
-                if (tDoc.exists) transfers.push(Object.assign({ transferId: checked[i] }, tDoc.data()));
-                else console.warn('Transfer not found:', checked[i]);
+                if (!tDoc.exists) { console.warn('Transfer not found:', checked[i]); continue; }
+                var tData = tDoc.data();
+                if (tData.status !== 'pending') { skippedAlready.push(checked[i]); continue; }
+                transfers.push(Object.assign({ transferId: checked[i] }, tData));
             } catch(e) { console.warn('Failed to load transfer:', checked[i], e); }
+        }
+        if (skippedAlready.length) {
+            console.warn('Skipped already-processed transfers:', skippedAlready);
         }
 
         // ── Step 2: Load each unique source product ONCE from Firebase ──
@@ -7755,6 +7773,12 @@ function sendToTelegram(order, callback) {
 
         renderInventory(); renderProducts();
         loadTransfers();
+
+        } finally {
+            // ── Always unlock, even on error ──
+            _bulkTransferBusy = false;
+            if (bulkApproveBtn) { bulkApproveBtn.disabled = false; bulkApproveBtn.innerHTML = '<i class="fas fa-check-double"></i> Confirm Receipt (<span id="transferSelCount">0</span>)'; }
+        }
     }
 
     async function bulkRejectTransfers() {
@@ -7763,13 +7787,21 @@ function sendToTelegram(order, callback) {
         var reason = prompt('Reason for rejecting ' + checked.length + ' request(s) (optional):') || 'Rejected by admin';
         if (!db) return;
 
+        // ── DOUBLE-TAP PROTECTION ── shares the bulk lock with bulkApproveTransfers
+        if (_bulkTransferBusy) { showToast('Already processing a batch — please wait...', 'warning'); return; }
+        _bulkTransferBusy = true;
+
         var rejected = [];
         try {
             var batch = db.batch();
             for (var i = 0; i < checked.length; i++) {
                 var transferId = checked[i];
                 var tDoc = await db.collection('transfers').doc(transferId).get();
-                if (tDoc.exists) rejected.push(tDoc.data());
+                if (!tDoc.exists) continue;
+                var tData = tDoc.data();
+                // ── IDEMPOTENCY GUARD ── skip anything already handled
+                if (tData.status !== 'pending') continue;
+                rejected.push(tData);
                 batch.update(db.collection('transfers').doc(transferId), {
                     status: 'rejected', rejectedAt: Date.now(), rejectedBy: STATE.adminRole,
                     rejectedAtStr: new Date().toLocaleString(), rejectReason: reason
@@ -7789,10 +7821,12 @@ function sendToTelegram(order, callback) {
                 _sendTelegramRaw(caption, null, 'inventory');
             }
 
-            showToast(checked.length + ' transfer(s) rejected', 'info');
+            showToast(rejected.length + ' transfer(s) rejected', 'info');
             loadTransfers();
         } catch(e) {
             showToast('Bulk reject failed: ' + e.message, 'error');
+        } finally {
+            _bulkTransferBusy = false;
         }
     }
 
@@ -7960,9 +7994,24 @@ function sendToTelegram(order, callback) {
     async function rejectTransfer(transferId) {
         var reason = prompt('Reason for rejection (optional):') || 'Rejected by admin';
         if (!db) return;
+
+        // ── DOUBLE-TAP PROTECTION ── same pattern as approveTransfer
+        if (_transferApproving[transferId]) {
+            showToast('Already processing this transfer — please wait...', 'warning');
+            return;
+        }
+        _transferApproving[transferId] = true;
+
         try {
             var tDoc = await db.collection('transfers').doc(transferId).get();
             var t = tDoc.exists ? tDoc.data() : null;
+
+            // ── IDEMPOTENCY GUARD ── don't re-reject (and re-notify) something already handled
+            if (t && t.status !== 'pending') {
+                showToast('This transfer was already ' + t.status + ' — no changes made.', 'warning');
+                return;
+            }
+
             await db.collection('transfers').doc(transferId).update({
                 status: 'rejected', rejectedAt: Date.now(), rejectedBy: STATE.adminRole,
                 rejectedAtStr: new Date().toLocaleString(), rejectReason: reason
@@ -7981,6 +8030,7 @@ function sendToTelegram(order, callback) {
             }
             loadTransfers();
         } catch(e) { showToast('Reject failed: ' + e.message, 'error'); }
+        finally { delete _transferApproving[transferId]; }
     }
 
     // =============================================
