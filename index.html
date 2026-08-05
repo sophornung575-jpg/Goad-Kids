@@ -7193,6 +7193,7 @@ function sendToTelegram(order, callback) {
     }
 
     var _transferSubmitting = false; // Lock to prevent double-click
+    var _transferApproving = {}; // Lock per transferId — prevents double-tap/double-approve duplicating stock
 
     async function submitTransferRequest() {
         if (!STATE.adminRole) { showToast('Admin login required', 'error'); return; }
@@ -7419,10 +7420,28 @@ function sendToTelegram(order, callback) {
         if (STATE.adminRole !== 'full') { showToast('Full admin required', 'error'); return; }
         if (!confirm('Confirm receipt of this stock?\n\nThis will deduct from ' + 'the sending store and add to your store.')) return;
         if (!db) { showToast('Firebase offline', 'error'); return; }
+
+        // ── DOUBLE-TAP PROTECTION ── (mirrors submitTransferRequest's _transferSubmitting lock)
+        if (_transferApproving[transferId]) {
+            showToast('Already processing this transfer — please wait...', 'warning');
+            return;
+        }
+        _transferApproving[transferId] = true;
+        var approveBtn = document.querySelector('[onclick="approveTransfer(\'' + transferId + '\')"]');
+        if (approveBtn) { approveBtn.disabled = true; approveBtn.textContent = '⏳ Processing...'; }
+
         try {
             var tDoc = await db.collection('transfers').doc(transferId).get();
             if (!tDoc.exists) { showToast('Transfer not found', 'error'); return; }
             var t = tDoc.data();
+
+            // ── IDEMPOTENCY GUARD ── the real safety net: even if two calls both get past the
+            // in-memory lock (e.g. two admins on different devices), only a transfer still
+            // 'pending' may be approved. This is what actually stops stock from being doubled.
+            if (t.status !== 'pending') {
+                showToast('This transfer was already ' + t.status + ' — no changes made.', 'warning');
+                return;
+            }
 
             // Source = fromStoreId (the store sending the stock, e.g. Main Store)
             // Destination = toStoreId (this device — the branch confirming receipt)
@@ -7537,6 +7556,10 @@ function sendToTelegram(order, callback) {
             loadTransfers();
         } catch(e) {
             showToast('Approve failed: ' + e.message, 'error');
+        } finally {
+            // ── Always unlock, even on error/early-return ──
+            delete _transferApproving[transferId];
+            if (approveBtn) { approveBtn.disabled = false; approveBtn.innerHTML = '<i class="fas fa-check"></i> Confirm Receipt'; }
         }
     }
 
