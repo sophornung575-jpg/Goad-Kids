@@ -1549,11 +1549,20 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
         _trySendWithFallback(cfg.botToken, body, message, 0, callback);
     }
 
-    function _trySendWithFallback(token, body, originalMessage, proxyIndex, callback) {
+    // _sent: shared object passed through the whole proxy chain.
+    // Once any proxy confirms delivery, _sent.ok=true stops all further attempts.
+    function _trySendWithFallback(token, body, originalMessage, proxyIndex, callback, _sent) {
+        if (!_sent) _sent = { ok: false, done: false };
+
+        if (_sent.ok) return; // already delivered — ignore late responses from slow proxies
+
         if (proxyIndex >= _TELEGRAM_PROXIES.length) {
-            console.warn('All Telegram routes failed — message queued for retry');
-            _queueTelegramMessage(originalMessage);
-            if (callback) callback(false);
+            if (!_sent.done) {
+                _sent.done = true;
+                console.warn('All Telegram routes failed — message queued for retry');
+                _queueTelegramMessage(originalMessage);
+                if (callback) callback(false);
+            }
             return;
         }
 
@@ -1564,10 +1573,6 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
         var fetchOptions = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body };
         if (controller) fetchOptions.signal = controller.signal;
 
-        // ── Guard: callback fires exactly once per attempt ──
-        var _fired = false;
-        var fire = function(val) { if (!_fired) { _fired = true; if (callback) callback(val); } };
-
         console.log('📡 Telegram attempt ' + (proxyIndex + 1) + '/' + _TELEGRAM_PROXIES.length + ' via ' + proxy.type);
 
         fetch(url, fetchOptions)
@@ -1576,20 +1581,22 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
             return res.json();
         })
         .then(function(data) {
+            if (_sent.ok) return; // a faster proxy already succeeded — discard this response
             if (data.ok) {
+                _sent.ok = true; _sent.done = true;
                 console.log('✅ Telegram sent via ' + proxy.type + ' (attempt ' + (proxyIndex + 1) + ')');
-                fire(true);
+                if (callback) callback(true);
             } else {
                 console.warn('Telegram API rejected (' + data.description + ') — not retrying proxies');
-                fire(false);
+                if (!_sent.done) { _sent.done = true; if (callback) callback(false); }
             }
         })
         .catch(function(err) {
             if (timeoutId) clearTimeout(timeoutId);
+            if (_sent.ok) return; // already delivered by another proxy — ignore
             var reason = (err && err.name === 'AbortError') ? 'timeout' : err.message;
             console.warn('Telegram route ' + (proxyIndex + 1) + ' failed (' + reason + ') — trying next...');
-            // Try next proxy
-            _trySendWithFallback(token, body, originalMessage, proxyIndex + 1, callback);
+            _trySendWithFallback(token, body, originalMessage, proxyIndex + 1, callback, _sent);
         });
     }
 
@@ -1634,10 +1641,15 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
         _tryGroupWithFallback(cfg.botToken, body, fallbackMessage, 0, callback, botType);
     }
 
-    function _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex, callback, botType) {
+    function _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex, callback, botType, _sent) {
+        if (!_sent) _sent = { ok: false, done: false };
+        if (_sent.ok) return;
+
         if (proxyIndex >= _TELEGRAM_GROUP_PROXIES.length) {
-            console.warn('All Telegram media group routes failed — sending as text instead');
-            _sendTelegramRaw(fallbackMessage, callback, botType);
+            if (!_sent.done) { _sent.done = true;
+                console.warn('All Telegram media group routes failed — sending as text instead');
+                _sendTelegramRaw(fallbackMessage, callback, botType);
+            }
             return;
         }
         var proxy = _TELEGRAM_GROUP_PROXIES[proxyIndex];
@@ -1652,19 +1664,22 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
         fetch(url, fetchOptions)
         .then(function(res) { if (timeoutId) clearTimeout(timeoutId); return res.json(); })
         .then(function(data) {
+            if (_sent.ok) return;
             if (data.ok) {
+                _sent.ok = true; _sent.done = true;
                 console.log('✅ Telegram media group sent via ' + proxy.type);
                 if (callback) callback(true);
             } else {
                 console.warn('Telegram media group rejected (' + data.description + ') — trying next route');
-                _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex + 1, callback, botType);
+                _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex + 1, callback, botType, _sent);
             }
         })
         .catch(function(err) {
             if (timeoutId) clearTimeout(timeoutId);
+            if (_sent.ok) return;
             var reason = (err && err.name === 'AbortError') ? 'timeout' : err.message;
             console.warn('Telegram media group route ' + (proxyIndex + 1) + ' failed (' + reason + ') — trying next...');
-            _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex + 1, callback, botType);
+            _tryGroupWithFallback(token, body, fallbackMessage, proxyIndex + 1, callback, botType, _sent);
         });
     }
 
@@ -1726,10 +1741,15 @@ function sendToTelegram(order, callback) {
         _tryPhotoWithFallback(cfg.botToken, body, caption, 0, callback, botType);
     }
 
-    function _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex, callback, botType) {
+    function _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex, callback, botType, _sent) {
+        if (!_sent) _sent = { ok: false, done: false };
+        if (_sent.ok) return;
+
         if (proxyIndex >= _TELEGRAM_PHOTO_PROXIES.length) {
-            console.warn('All Telegram photo routes failed — sending as text instead');
-            _sendTelegramRaw(fallbackCaption, callback, botType);
+            if (!_sent.done) { _sent.done = true;
+                console.warn('All Telegram photo routes failed — sending as text instead');
+                _sendTelegramRaw(fallbackCaption, callback, botType);
+            }
             return;
         }
         var proxy = _TELEGRAM_PHOTO_PROXIES[proxyIndex];
@@ -1744,19 +1764,22 @@ function sendToTelegram(order, callback) {
         fetch(url, fetchOptions)
         .then(function(res) { if (timeoutId) clearTimeout(timeoutId); return res.json(); })
         .then(function(data) {
+            if (_sent.ok) return;
             if (data.ok) {
+                _sent.ok = true; _sent.done = true;
                 console.log('✅ Telegram photo sent via ' + proxy.type);
                 if (callback) callback(true);
             } else {
                 console.warn('Telegram photo rejected (' + data.description + ') — trying next route');
-                _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex + 1, callback, botType);
+                _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex + 1, callback, botType, _sent);
             }
         })
         .catch(function(err) {
             if (timeoutId) clearTimeout(timeoutId);
+            if (_sent.ok) return;
             var reason = (err && err.name === 'AbortError') ? 'timeout' : err.message;
             console.warn('Telegram photo route ' + (proxyIndex + 1) + ' failed (' + reason + ') — trying next...');
-            _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex + 1, callback, botType);
+            _tryPhotoWithFallback(token, body, fallbackCaption, proxyIndex + 1, callback, botType, _sent);
         });
     }
     // =============================================
@@ -2241,15 +2264,9 @@ function sendToTelegram(order, callback) {
             total: total
         };
 
-        // ── Telegram notification is now handled server-side by a Cloud Function ──
-        // (triggered automatically the instant this order document is created in
-        // Firestore). The function claims a `telegramNotified` flag inside a
-        // transaction BEFORE sending, so it is sent exactly once even if the
-        // function itself is ever re-invoked. No client-side network gamble needed.
-
+        // ── Send Telegram notification directly from browser ──
         STATE.pendingOrders.push(order);
         saveOrders();
-
         logActivity('New Order', oid + ' - $' + total.toFixed(2));
 
         if (typeof fbq !== 'undefined') {
@@ -2262,35 +2279,37 @@ function sendToTelegram(order, callback) {
             });
         }
 
-        if (STATE.firebaseOnline && db) {
-            db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order)
-            .catch(function(e) {
-                console.warn('Order Firebase save failed:', e);
-                showToast('Order saved locally — will sync when back online', 'warning');
-            });
-        } else {
-            showToast('Offline — order saved locally. Notification will send once synced.', 'warning');
-        }
+        sendToTelegram(order, function(ok) {
+            // Save to Firebase
+            if (STATE.firebaseOnline && db) {
+                db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order)
+                .catch(function(e) { console.warn('Order Firebase save failed:', e); });
+            }
 
-        // Clear cart
-        STATE.cart = [];
-        localStorage.setItem('goatCart', '[]');
-        updateCartBadge();
+            // Clear cart
+            STATE.cart = [];
+            localStorage.setItem('goatCart', '[]');
+            updateCartBadge();
 
-        // Update rate limit timestamp
-        STATE.lastOrderTime = Date.now();
-        localStorage.setItem('goatLastOrderTime', STATE.lastOrderTime);
+            // Update rate limit timestamp
+            STATE.lastOrderTime = Date.now();
+            localStorage.setItem('goatLastOrderTime', STATE.lastOrderTime);
 
-        if (STATE.isAdmin) { renderPending(); updateAdminBadges(); }
+            if (STATE.isAdmin) { renderPending(); updateAdminBadges(); }
 
-        placeBtn.disabled = false;
-        placeBtn.innerHTML = '<i class="fab fa-telegram-plane"></i> <span data-translate="placeOrder">Send Order via Telegram</span>';
-        _placingOrder = false; // Release lock
+            placeBtn.disabled = false;
+            placeBtn.innerHTML = '<i class="fab fa-telegram-plane"></i> <span data-translate="placeOrder">Send Order via Telegram</span>';
+            _placingOrder = false; // Release lock
 
-        // Show success screen
-        document.getElementById('cartMainContent').classList.add('hidden');
-        document.getElementById('orderSuccessScreen').classList.remove('hidden');
-        document.getElementById('successOrderId').textContent = '📦 ' + oid;
+            // Show success screen
+            document.getElementById('cartMainContent').classList.add('hidden');
+            document.getElementById('orderSuccessScreen').classList.remove('hidden');
+            document.getElementById('successOrderId').textContent = '📦 ' + oid;
+
+            if (!ok) {
+                showToast('Order saved! (Telegram notification may have been delayed)', 'warning');
+            }
+        });
     }
 
     function switchAdminTab(tab) {
