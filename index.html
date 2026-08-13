@@ -2280,10 +2280,36 @@ function sendToTelegram(order, callback) {
         }
 
         sendToTelegram(order, function(ok) {
-            // Save to Firebase
-            if (STATE.firebaseOnline && db) {
+            // Save to Firebase — attempt this even if STATE.firebaseOnline is still
+            // false. That flag only reflects the *initial* connectivity check, which
+            // can take up to 20s on Safari/iOS; a customer placing an order in that
+            // window would otherwise have their order silently skipped and lost,
+            // even though the Telegram alert (sent independently, above) went out.
+            if (db) {
                 db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order)
-                .catch(function(e) { console.warn('Order Firebase save failed:', e); });
+                .then(function() {
+                    // Remove from the retry queue if a previous attempt had queued it
+                    try {
+                        var q = JSON.parse(localStorage.getItem('goatNewOrderQueue') || '[]');
+                        q = q.filter(function(o){ return o.orderId !== oid; });
+                        localStorage.setItem('goatNewOrderQueue', JSON.stringify(q));
+                    } catch(e) {}
+                })
+                .catch(function(e) {
+                    console.warn('Order Firebase save failed — queueing for retry:', e);
+                    try {
+                        var q2 = JSON.parse(localStorage.getItem('goatNewOrderQueue') || '[]');
+                        if (!q2.some(function(o){ return o.orderId === oid; })) q2.push(order);
+                        localStorage.setItem('goatNewOrderQueue', JSON.stringify(q2));
+                    } catch(e2) {}
+                });
+            } else {
+                // No db instance at all — queue immediately, no point attempting
+                try {
+                    var q3 = JSON.parse(localStorage.getItem('goatNewOrderQueue') || '[]');
+                    if (!q3.some(function(o){ return o.orderId === oid; })) q3.push(order);
+                    localStorage.setItem('goatNewOrderQueue', JSON.stringify(q3));
+                } catch(e3) {}
             }
 
             // Clear cart
@@ -3194,6 +3220,7 @@ function sendToTelegram(order, callback) {
             document.getElementById('syncBtn').disabled = false;
             var warn = document.getElementById('localDataWarning');
             if (warn) warn.remove();
+            await flushNewOrderQueue();
             await flushOfflineSyncQueue();
         } catch (e) {
             STATE.firebaseOnline = false;
@@ -4629,6 +4656,30 @@ function sendToTelegram(order, callback) {
         var queue = JSON.parse(localStorage.getItem('goatSyncQueue') || '[]');
         queue.push({ oid: oid, confirmedOrder: confirmedOrder, stockUpdates: stockUpdates.map(function(u){ return { productId: u.product.id, newSizes: u.newSizes, newStock: u.newStock }; }), queuedAt: Date.now() });
         localStorage.setItem('goatSyncQueue', JSON.stringify(queue));
+    }
+
+    async function flushNewOrderQueue() {
+        // Retries orders that were placed but never made it to Firebase
+        // (e.g. placed before the initial connectivity check finished, or
+        // during a brief drop). Without this, such orders would only ever
+        // exist in the placing customer's own browser and never reach the
+        // admin — even though the Telegram alert for them went out fine.
+        if (!db) return;
+        var q = [];
+        try { q = JSON.parse(localStorage.getItem('goatNewOrderQueue') || '[]'); } catch(e) {}
+        if (!q.length) return;
+        var remaining = [];
+        for (var i = 0; i < q.length; i++) {
+            var o = q[i];
+            try {
+                await db.collection('stores').doc(o.storeId || STATE.storeId).collection('orders').doc(o.orderId).set(o);
+                console.log('✅ Recovered queued new order:', o.orderId);
+            } catch (e) {
+                console.warn('New-order retry failed for', o.orderId, e);
+                remaining.push(o);
+            }
+        }
+        localStorage.setItem('goatNewOrderQueue', JSON.stringify(remaining));
     }
 
     async function flushOfflineSyncQueue() {
