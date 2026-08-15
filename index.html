@@ -4608,62 +4608,11 @@ function sendToTelegram(order, callback) {
             stockDeducted: true
         });
 
-        // ── Step 3: If Firebase online → write EVERYTHING atomically first ──
-        var firebaseWriteOk = !db; // true (skip) if db unavailable — falls to offline path below
-        if (db) {
-            // Show a spinner/lock so admin can't double-click
-            showToast('Confirming order...', 'info');
-            try {
-                var batch = db.batch();
-                var storeRef = db.collection('stores').doc(STATE.storeId);
-
-                // a) Move order from pending → confirmed in Firebase
-                batch.set(storeRef.collection('orders').doc(oid), confirmedOrder);
-
-                // b) Update each product's stock in Firebase.
-                //    Use set(merge:true) instead of update() — update() throws
-                //    "No document to update" if the product doc doesn't exist yet
-                //    in Firestore (e.g. added while offline and never fully synced).
-                for (var u = 0; u < stockUpdates.length; u++) {
-                    var upd = stockUpdates[u];
-                    var pRef = storeRef.collection('products').doc(upd.product.id);
-                    if (upd.newSizes) {
-                        batch.set(pRef, { sizes: upd.newSizes, stock: upd.newStock }, { merge: true });
-                    } else {
-                        batch.set(pRef, { stock: upd.newStock }, { merge: true });
-                    }
-                }
-
-                // Commit — but don't let a stalled connection hang forever.
-                // batch.commit() has no built-in timeout; on a flaky connection
-                // (especially Safari/iOS WebChannel) it can sit unresolved
-                // indefinitely, leaving the "Confirming order..." toast stuck
-                // with the order neither confirmed nor failed.
-                var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-                var isIOS = /iPhone|iPad/i.test(navigator.userAgent);
-                var commitTimeout = (isSafari || isIOS) ? 15000 : 10000;
-                var timeoutPromise = new Promise(function(_, reject) {
-                    setTimeout(function() { reject(new Error('commit-timeout')); }, commitTimeout);
-                });
-                await Promise.race([batch.commit(), timeoutPromise]);
-                firebaseWriteOk = true;
-
-            } catch (e) {
-                console.error('confirmOrder batch failed:', e);
-                if (e && e.message === 'commit-timeout') {
-                    // Connection is stalled, not necessarily dead — don't block the
-                    // order. Fall through to local confirm + queue for background sync.
-                    showToast('⏳ Slow connection — confirming locally and will sync when back online.', 'warning');
-                    STATE.firebaseOnline = false;
-                    firebaseWriteOk = false;
-                } else {
-                    showToast('Firebase sync failed — order NOT confirmed. Check connection and try again.', 'error');
-                    return; // ← STOP HERE. Don't touch local state.
-                }
-            }
-        }
-
-        // ── Step 4: Firebase succeeded (or offline) → now apply to local state ──
+        // ── Step 3: Commit locally FIRST — instant, never blocked by network.
+        // Your Firebase connection has been unreliable, so waiting on it
+        // before finishing was making every confirm feel like it "hung."
+        // We still sync to Firebase, just in the background, with a retry
+        // queue if it fails — so nothing is lost, it just doesn't block you. ──
         for (var v = 0; v < stockUpdates.length; v++) {
             var su = stockUpdates[v];
             if (su.newSizes) { su.product.sizes = su.newSizes; }
@@ -4692,9 +4641,25 @@ function sendToTelegram(order, callback) {
             }
         }
 
-        // If offline — queue a background sync so it retries when back online
-        if (!STATE.firebaseOnline) {
-            showToast('⚠️ Offline — order saved locally. Will sync when back online.', 'warning');
+        // ── Step 4: Sync to Firebase in the background — don't wait on it. ──
+        if (db) {
+            var batch = db.batch();
+            var storeRef = db.collection('stores').doc(STATE.storeId);
+            batch.set(storeRef.collection('orders').doc(oid), confirmedOrder);
+            for (var u = 0; u < stockUpdates.length; u++) {
+                var upd = stockUpdates[u];
+                var pRef = storeRef.collection('products').doc(upd.product.id);
+                if (upd.newSizes) {
+                    batch.set(pRef, { sizes: upd.newSizes, stock: upd.newStock }, { merge: true });
+                } else {
+                    batch.set(pRef, { stock: upd.newStock }, { merge: true });
+                }
+            }
+            batch.commit().catch(function(e) {
+                console.warn('confirmOrder background sync failed — queueing for retry:', e);
+                queueOfflineSync(oid, confirmedOrder, stockUpdates);
+            });
+        } else {
             queueOfflineSync(oid, confirmedOrder, stockUpdates);
         }
     }
@@ -7643,6 +7608,19 @@ function sendToTelegram(order, callback) {
         if (approveBtn) { approveBtn.disabled = true; approveBtn.textContent = '⏳ Processing...'; }
 
         try {
+            // Wrap the whole read+write sequence with a timeout — this operation
+            // genuinely cannot skip Firebase (it needs the sending store's LIVE
+            // stock, which doesn't exist locally on this device at all), but a
+            // stalled connection should fail clearly within a bounded time
+            // instead of hanging indefinitely with no feedback.
+            var isSafariT = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+            var isIOST = /iPhone|iPad/i.test(navigator.userAgent);
+            var approveTimeoutMs = (isSafariT || isIOST) ? 20000 : 15000;
+            var approveTimeoutPromise = new Promise(function(_, reject) {
+                setTimeout(function() { reject(new Error('approve-timeout')); }, approveTimeoutMs);
+            });
+
+            await Promise.race([(async function() {
             var tDoc = await db.collection('transfers').doc(transferId).get();
             if (!tDoc.exists) { showToast('Transfer not found', 'error'); return; }
             var t = tDoc.data();
@@ -7766,8 +7744,13 @@ function sendToTelegram(order, callback) {
             showToast('Transfer approved! Stock updated.', 'success');
             renderInventory(); renderProducts();
             loadTransfers();
+            })(), approveTimeoutPromise]);
         } catch(e) {
-            showToast('Approve failed: ' + e.message, 'error');
+            if (e && e.message === 'approve-timeout') {
+                showToast('⏳ Firebase connection too slow — transfer NOT approved. Check your connection and try again.', 'error');
+            } else {
+                showToast('Approve failed: ' + e.message, 'error');
+            }
         } finally {
             // ── Always unlock, even on error/early-return ──
             delete _transferApproving[transferId];
