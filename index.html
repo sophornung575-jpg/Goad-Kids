@@ -4077,14 +4077,16 @@ function sendToTelegram(order, callback) {
             return;
         }
 
+        // Save locally first — instant, never blocked by network.
         saveProducts();
         var logNote = p.name + ' (Stock: ' + oldStock + ' → ' + p.stock + ')' + (reason ? ' | Reason: ' + reason : '');
         logActivity('Edit Product', logNote);
 
-        // Sync to Firebase — always attempt if db exists, don't gate on
-        // STATE.firebaseOnline (that flag can be stale/false-negative and was
-        // silently skipping this write, leaving the stock change stuck only in
-        // this device's localStorage and invisible to other branches/devices).
+        // Sync to Firebase in the background — always attempt if db exists
+        // (don't gate on STATE.firebaseOnline, which can be a stale
+        // false-negative). If it fails, queue it in goatProductSyncQueue so
+        // flushProductSyncQueue() retries it automatically once reconnected —
+        // the edit is never silently lost even though we don't block on it.
         var productSyncPayload = {
             name: p.name, slug: p.slug, price: p.price, stock: p.stock, category: p.category,
             images: p.images || [], sizes: p.sizes || [], active: true,
