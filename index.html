@@ -1358,7 +1358,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                 </select>
                 <input type="text" id="editRevisionReasonCustom" class="form-control" placeholder="Add detail (optional)..." style="margin-top:6px;font-size:0.85rem">
             </div>
-            <button class="btn btn-primary w-full btn-large" id="saveEditProductBtn" onclick="saveEditProduct()"><i class="fas fa-save"></i> Save Changes</button>
+            <button class="btn btn-primary w-full btn-large" onclick="saveEditProduct()"><i class="fas fa-save"></i> Save Changes</button>
         </div>
     </div>
 
@@ -4027,46 +4027,39 @@ function sendToTelegram(order, callback) {
         renderEditSizes();
     }
 
-    async function saveEditProduct() {
+    function saveEditProduct() {
         var pid = document.getElementById('editProductId').value;
         var p = null;
         for (var i = 0; i < STATE.products.length; i++) { if (STATE.products[i].id === pid) { p = STATE.products[i]; break; } }
         if (!p) return;
 
-        // Capture old state for comparison / rollback reference
+        // Capture old stock for comparison
         var oldSizes = p.sizes ? p.sizes.map(function(s){ return Object.assign({}, s); }) : [];
         var oldStock = p.stock || 0;
 
-        // ── Build the new values WITHOUT mutating STATE.products or
-        // localStorage yet. Firebase must accept the write first — local
-        // state is only committed after that succeeds (or after a genuine
-        // timeout, where we fall back and queue for retry rather than
-        // silently treating local storage as if it were saved). ──
-        var newName = document.getElementById('editProductName').value.trim() || p.name;
-        var newSlug = makeSlug(newName);
-        var newCategory = document.getElementById('editProductCategory').value;
-        var newPrice = parseFloat(document.getElementById('editProductPrice').value);
-        var newImages = STATE.editProductImages.slice();
-        var newSizes = p.sizes ? p.sizes.map(function(s){ return Object.assign({}, s); }) : [];
+        p.name = document.getElementById('editProductName').value.trim() || p.name;
+        p.slug = makeSlug(p.name);
+        p.category = document.getElementById('editProductCategory').value;
+        p.price = parseFloat(document.getElementById('editProductPrice').value);
+        p.images = STATE.editProductImages.slice();
 
         if (STATE._editSizes && STATE._editSizes.length) {
             var nameInputs = document.querySelectorAll('.edit-size-name');
             var qtyInputs = document.querySelectorAll('.edit-size-qty');
-            var workingSizes = STATE._editSizes.map(function(s){ return Object.assign({}, s); });
-            for (var j = 0; j < workingSizes.length; j++) {
-                if (nameInputs[j]) workingSizes[j].name = nameInputs[j].value.trim() || workingSizes[j].name;
-                if (qtyInputs[j]) workingSizes[j].qty = parseInt(qtyInputs[j].value) || 0;
+            for (var j = 0; j < STATE._editSizes.length; j++) {
+                if (nameInputs[j]) STATE._editSizes[j].name = nameInputs[j].value.trim() || STATE._editSizes[j].name;
+                if (qtyInputs[j]) STATE._editSizes[j].qty = parseInt(qtyInputs[j].value) || 0;
             }
-            newSizes = workingSizes;
+            p.sizes = STATE._editSizes.slice();
         }
-        var newStock = newSizes.length ? newSizes.reduce(function(a,s){ return a + (s.qty||0); }, 0) : (p.stock || 0);
+        p.stock = getTotalStock(p);
 
         // Check if stock changed
-        var stockChanged = newStock !== oldStock;
-        if (!stockChanged && newSizes) {
-            for (var k = 0; k < newSizes.length; k++) {
-                var oldSz = oldSizes.find(function(s){ return s.name === newSizes[k].name; });
-                if (!oldSz || oldSz.qty !== newSizes[k].qty) { stockChanged = true; break; }
+        var stockChanged = p.stock !== oldStock;
+        if (!stockChanged && p.sizes) {
+            for (var k = 0; k < p.sizes.length; k++) {
+                var oldSz = oldSizes.find(function(s){ return s.name === p.sizes[k].name; });
+                if (!oldSz || oldSz.qty !== p.sizes[k].qty) { stockChanged = true; break; }
             }
         }
 
@@ -4084,53 +4077,39 @@ function sendToTelegram(order, callback) {
             return;
         }
 
+        saveProducts();
+        var logNote = p.name + ' (Stock: ' + oldStock + ' → ' + p.stock + ')' + (reason ? ' | Reason: ' + reason : '');
+        logActivity('Edit Product', logNote);
+
+        // Sync to Firebase — always attempt if db exists, don't gate on
+        // STATE.firebaseOnline (that flag can be stale/false-negative and was
+        // silently skipping this write, leaving the stock change stuck only in
+        // this device's localStorage and invisible to other branches/devices).
         var productSyncPayload = {
-            name: newName, slug: newSlug, price: newPrice, stock: newStock, category: newCategory,
-            images: newImages || [], sizes: newSizes || [], active: true,
+            name: p.name, slug: p.slug, price: p.price, stock: p.stock, category: p.category,
+            images: p.images || [], sizes: p.sizes || [], active: true,
             updatedAt: new Date().toISOString()
         };
-
-        var saveBtn = document.getElementById('saveEditProductBtn');
-        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Saving...'; }
-        showToast('Saving to Firebase...', 'info');
-
-        var firebaseOk = false;
         if (db) {
-            try {
-                var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-                var isIOS = /iPhone|iPad/i.test(navigator.userAgent);
-                var commitTimeout = (isSafari || isIOS) ? 15000 : 10000;
-                var timeoutPromise = new Promise(function(_, reject) {
-                    setTimeout(function() { reject(new Error('commit-timeout')); }, commitTimeout);
-                });
-                await Promise.race([
-                    db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set(productSyncPayload, { merge: true }),
-                    timeoutPromise
-                ]);
-                firebaseOk = true;
-            } catch (e) {
-                if (e && e.message === 'commit-timeout') {
-                    console.warn('Product save timed out — falling back to local + queue:', e);
-                    showToast('⏳ Slow connection — saving locally and will sync when back online.', 'warning');
-                    STATE.firebaseOnline = false;
-                    // Queue for retry, then proceed to commit locally below
-                    try {
-                        var pq = JSON.parse(localStorage.getItem('goatProductSyncQueue') || '[]');
-                        pq = pq.filter(function(q){ return q.productId !== p.id; });
-                        pq.push({ storeId: STATE.storeId, productId: p.id, payload: productSyncPayload });
-                        localStorage.setItem('goatProductSyncQueue', JSON.stringify(pq));
-                    } catch(e2) {}
-                } else {
-                    console.error('Product save failed:', e);
-                    showToast('Firebase save failed — stock NOT changed. Check connection and try again.', 'error');
-                    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Changes'; }
-                    return; // ← STOP. Do not touch local state on a real (non-timeout) failure.
-                }
-            }
+            db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id)
+            .set(productSyncPayload, { merge: true })
+            .then(function() {
+                try {
+                    var pq = JSON.parse(localStorage.getItem('goatProductSyncQueue') || '[]');
+                    pq = pq.filter(function(q){ return q.productId !== p.id; });
+                    localStorage.setItem('goatProductSyncQueue', JSON.stringify(pq));
+                } catch(e) {}
+            })
+            .catch(function(e) {
+                console.warn('Edit save failed — queueing for retry:', e);
+                try {
+                    var pq2 = JSON.parse(localStorage.getItem('goatProductSyncQueue') || '[]');
+                    pq2 = pq2.filter(function(q){ return q.productId !== p.id; });
+                    pq2.push({ storeId: STATE.storeId, productId: p.id, payload: productSyncPayload });
+                    localStorage.setItem('goatProductSyncQueue', JSON.stringify(pq2));
+                } catch(e2) {}
+            });
         } else {
-            // No db instance available at all (app never connected this session) —
-            // queue immediately so it's not silently lost, then proceed locally.
-            showToast('No Firebase connection — saving locally and will sync when available.', 'warning');
             try {
                 var pq3 = JSON.parse(localStorage.getItem('goatProductSyncQueue') || '[]');
                 pq3 = pq3.filter(function(q){ return q.productId !== p.id; });
@@ -4138,23 +4117,6 @@ function sendToTelegram(order, callback) {
                 localStorage.setItem('goatProductSyncQueue', JSON.stringify(pq3));
             } catch(e3) {}
         }
-
-        // ── Only now, after Firebase succeeded (or we deliberately fell back
-        // after a timeout/no-connection), do we commit to local state. ──
-        p.name = newName; p.slug = newSlug; p.category = newCategory; p.price = newPrice;
-        p.images = newImages; p.sizes = newSizes; p.stock = newStock;
-        saveProducts();
-
-        if (firebaseOk) {
-            try {
-                var pqOk = JSON.parse(localStorage.getItem('goatProductSyncQueue') || '[]');
-                pqOk = pqOk.filter(function(q){ return q.productId !== p.id; });
-                localStorage.setItem('goatProductSyncQueue', JSON.stringify(pqOk));
-            } catch(e) {}
-        }
-
-        var logNote = p.name + ' (Stock: ' + oldStock + ' → ' + p.stock + ')' + (reason ? ' | Reason: ' + reason : '');
-        logActivity('Edit Product', logNote);
 
         // Send Telegram if stock changed
         if (stockChanged) {
@@ -4170,9 +4132,8 @@ function sendToTelegram(order, callback) {
             _sendTelegramRaw(msg, null, 'inventory');
         }
 
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Changes'; }
         closeEditModal(); renderProducts(); renderInventory(); updateAdminBadges();
-        showToast('"' + p.name + '" updated!' + (firebaseOk ? '' : ' (queued to sync)'), 'success');
+        showToast('"' + p.name + '" updated!', 'success');
     }
 
     // =============================================
