@@ -7669,9 +7669,16 @@ function sendToTelegram(order, callback) {
             // stock, which doesn't exist locally on this device at all), but a
             // stalled connection should fail clearly within a bounded time
             // instead of hanging indefinitely with no feedback.
+            //
+            // NOTE: this is the first Firestore WRITE of a session (reads to load
+            // the pending list happen first and use a separate channel handshake
+            // from writes). If you approve right after opening the Transfers tab,
+            // the write's own auth/channel handshake can still be finishing —
+            // that's a slow-but-healthy connection, not a stuck one, so this gets
+            // extra margin versus a typical operation.
             var isSafariT = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
             var isIOST = /iPhone|iPad/i.test(navigator.userAgent);
-            var approveTimeoutMs = (isSafariT || isIOST) ? 20000 : 15000;
+            var approveTimeoutMs = (isSafariT || isIOST) ? 30000 : 25000;
             var approveTimeoutPromise = new Promise(function(_, reject) {
                 setTimeout(function() { reject(new Error('approve-timeout')); }, approveTimeoutMs);
             });
