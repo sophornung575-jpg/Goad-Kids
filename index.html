@@ -6983,20 +6983,37 @@ function sendToTelegram(order, callback) {
         adjustBranchStock(productId, sizeName, currentQty, newQty, label);
     }
 
+    var _branchStockAdjusting = {}; // Lock per productId+size — prevents overlapping edits and a hung
+                                     // call from silently leaving _branchStockData out of sync
+
     async function adjustBranchStock(productId, sizeName, oldQty, newQty, label) {
+        var lockKey = productId + '|' + (sizeName || '');
+
+        // ── DOUBLE-TAP / OVERLAP PROTECTION ──
+        if (_branchStockAdjusting[lockKey]) {
+            showToast('Already updating this item — please wait...', 'warning');
+            return;
+        }
+        _branchStockAdjusting[lockKey] = true;
+
         try {
             var p = _branchStockData.find(function(x){ return x.id === productId; });
             if (!p) return;
             var pRef = db.collection('stores').doc(_branchStockCurrentId).collection('products').doc(productId);
 
-            if (sizeName && p.sizes) {
-                p.sizes.forEach(function(s) { if (s.name === sizeName) s.qty = newQty; });
-                p.stock = p.sizes.reduce(function(a,s){return a+(s.qty||0);},0);
-                await pRef.update({ sizes: p.sizes, stock: p.stock });
-            } else {
-                p.stock = newQty;
-                await pRef.update({ stock: newQty });
-            }
+            // ── HANG GUARD ── bounded so a stalled Firestore write fails within
+            // 15–20s instead of hanging indefinitely with no feedback, and instead
+            // of potentially tying up the connection other Firestore calls need.
+            await _raceFirestore(async function() {
+                if (sizeName && p.sizes) {
+                    p.sizes.forEach(function(s) { if (s.name === sizeName) s.qty = newQty; });
+                    p.stock = p.sizes.reduce(function(a,s){return a+(s.qty||0);},0);
+                    await pRef.update({ sizes: p.sizes, stock: p.stock });
+                } else {
+                    p.stock = newQty;
+                    await pRef.update({ stock: newQty });
+                }
+            }, 'adjustBranchStock');
 
             logActivity('Branch Stock Adjusted', label + ': ' + oldQty + ' → ' + newQty + ' @ ' + _branchStockCurrentName);
             _sendTelegramRaw(
@@ -7011,7 +7028,14 @@ function sendToTelegram(order, callback) {
             showToast('Stock updated: ' + label + ' = ' + newQty, 'success');
             renderBranchStockList();
         } catch(e) {
-            showToast('Update failed: ' + e.message, 'error');
+            if (_isFbTimeout(e)) {
+                showToast('⏳ Firebase connection too slow — stock NOT updated. Check your connection and try again.', 'error');
+            } else {
+                showToast('Update failed: ' + e.message, 'error');
+            }
+        } finally {
+            // ── Always unlock, even on error/timeout ──
+            delete _branchStockAdjusting[lockKey];
         }
     }
 
@@ -7372,6 +7396,31 @@ function sendToTelegram(order, callback) {
     var _transferApproving = {}; // Lock per transferId — prevents double-tap/double-approve duplicating stock
     var _bulkTransferBusy = false; // Lock for bulk approve/reject — prevents double-tap duplicating a whole batch
 
+    // ── SHARED FIRESTORE HANG GUARD ──
+    // Firestore's WebChannel can silently hang (no resolve, no reject) instead of
+    // erroring out — especially on Safari/iOS or a flaky connection. Without a
+    // bounded timeout, an `await` on that call just sits forever: the button never
+    // re-enables, the lock never releases, and the hung request can tie up one of
+    // the browser's limited concurrent connections to Firestore — which can make
+    // totally unrelated Firestore calls (like placing a new order right after) stall
+    // too. Every multi-step Firestore write path should run through this so a stall
+    // fails loudly within a bounded time instead of hanging indefinitely.
+    function _fbTimeoutMs() {
+        var isSaf = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        var isIOS = /iPhone|iPad/i.test(navigator.userAgent);
+        return (isSaf || isIOS) ? 20000 : 15000;
+    }
+    function _raceFirestore(promiseFactory, opLabel) {
+        var timeoutMs = _fbTimeoutMs();
+        var timeoutPromise = new Promise(function(_, reject) {
+            setTimeout(function() { reject(new Error('firestore-timeout:' + (opLabel || 'operation'))); }, timeoutMs);
+        });
+        return Promise.race([promiseFactory(), timeoutPromise]);
+    }
+    function _isFbTimeout(e) {
+        return !!(e && e.message && e.message.indexOf('firestore-timeout') === 0);
+    }
+
     async function submitTransferRequest() {
         if (!STATE.adminRole) { showToast('Admin login required', 'error'); return; }
         if (!db) { showToast('Firebase offline', 'error'); return; }
@@ -7447,7 +7496,9 @@ function sendToTelegram(order, callback) {
                 if (it.productImage) imageUrls.push(it.productImage);
             });
 
-            await batch.commit();
+            // ── HANG GUARD ── bounded so a stalled Firestore connection fails within
+            // 15–20s instead of leaving the submit lock stuck forever.
+            await _raceFirestore(function() { return batch.commit(); }, 'submitTransferRequest');
 
             status.style.color = 'var(--success)';
             status.textContent = '✅ Request sent: ' + fromStoreName + ' → ' + toStoreName + ' (' + _transferCart.length + ' item' + (_transferCart.length>1?'s':'') + ')!';
@@ -7465,8 +7516,13 @@ function sendToTelegram(order, callback) {
             document.getElementById('transferNoteInput').value = '';
             loadTransfers();
         } catch(e) {
-            status.style.color = 'var(--danger)'; status.textContent = '❌ Failed: ' + e.message;
-            showToast('Send failed: ' + e.message, 'error');
+            if (_isFbTimeout(e)) {
+                status.style.color = 'var(--danger)'; status.textContent = '⏳ Firebase connection too slow — request NOT sent. Check your connection and try again.';
+                showToast('⏳ Firebase connection too slow — transfer request NOT sent.', 'error');
+            } else {
+                status.style.color = 'var(--danger)'; status.textContent = '❌ Failed: ' + e.message;
+                showToast('Send failed: ' + e.message, 'error');
+            }
         } finally {
             // ── Always unlock, even on error ──
             _transferSubmitting = false;
@@ -7772,6 +7828,11 @@ function sendToTelegram(order, callback) {
         if (bulkApproveBtn) { bulkApproveBtn.disabled = true; bulkApproveBtn.textContent = '⏳ Processing...'; }
 
         try {
+        // ── HANG GUARD ── the entire multi-step read/write sequence below is raced
+        // against a bounded timeout, so a single stalled Firestore call (silent
+        // WebChannel hang) fails loudly within 15–20s instead of leaving the bulk
+        // lock — and the button — stuck forever.
+        await _raceFirestore(async function() {
 
         showToast('Processing ' + checked.length + ' transfer(s)...', 'info');
 
@@ -7968,8 +8029,15 @@ function sendToTelegram(order, callback) {
         renderInventory(); renderProducts();
         loadTransfers();
 
+        }, 'bulkApproveTransfers');
+        } catch(e) {
+            if (_isFbTimeout(e)) {
+                showToast('⏳ Firebase connection too slow — batch may be partially processed. Check transfer statuses and try again.', 'error');
+            } else {
+                showToast('Bulk approve failed: ' + e.message, 'error');
+            }
         } finally {
-            // ── Always unlock, even on error ──
+            // ── Always unlock, even on error/timeout ──
             _bulkTransferBusy = false;
             if (bulkApproveBtn) { bulkApproveBtn.disabled = false; bulkApproveBtn.innerHTML = '<i class="fas fa-check-double"></i> Confirm Receipt (<span id="transferSelCount">0</span>)'; }
         }
@@ -7987,6 +8055,9 @@ function sendToTelegram(order, callback) {
 
         var rejected = [];
         try {
+            // ── HANG GUARD ── bounded so a stalled Firestore read/write fails within
+            // 15–20s instead of leaving the bulk lock stuck forever.
+            await _raceFirestore(async function() {
             var batch = db.batch();
             for (var i = 0; i < checked.length; i++) {
                 var transferId = checked[i];
@@ -8017,8 +8088,13 @@ function sendToTelegram(order, callback) {
 
             showToast(rejected.length + ' transfer(s) rejected', 'info');
             loadTransfers();
+            }, 'bulkRejectTransfers');
         } catch(e) {
-            showToast('Bulk reject failed: ' + e.message, 'error');
+            if (_isFbTimeout(e)) {
+                showToast('⏳ Firebase connection too slow — reject NOT completed. Check your connection and try again.', 'error');
+            } else {
+                showToast('Bulk reject failed: ' + e.message, 'error');
+            }
         } finally {
             _bulkTransferBusy = false;
         }
