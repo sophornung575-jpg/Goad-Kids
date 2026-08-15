@@ -2058,18 +2058,45 @@ function sendToTelegram(order, callback) {
             STATE.confirmedOrders = sorted.slice(sorted.length - 50);
             if (STATE.firebaseOnline && overflow.length) {
                 // Use setTimeout to avoid blocking the main load flow (fixes Safari streaming channel issue)
-                setTimeout(function() {
-                    try {
-                        var batch = db.batch();
-                        overflow.forEach(function(o){
-                            batch.set(db.collection('archivedOrders').doc(o.orderId), Object.assign({}, o, { archivedAt: Date.now(), storeId: STATE.storeId }));
-                        });
-                        batch.commit().catch(function(e){ console.warn('Auto-archive failed:', e.message); });
-                    } catch(e) { console.warn('Auto-archive error:', e.message); }
-                }, 2000);
+                setTimeout(function() { _archiveAndPruneOrders(overflow); }, 2000);
             }
         }
         localStorage.setItem('confirmedOrders_' + STATE.storeId, JSON.stringify(STATE.confirmedOrders));
+    }
+
+    // Archives overflow orders to `archivedOrders`, then DELETES them from the
+    // live `stores/{storeId}/orders` collection. Deleting is essential — without
+    // it, loadData() re-fetches these same orders on every page load forever,
+    // saveOrders() recomputes the same "overflow," and re-writes it to
+    // archivedOrders again — every single refresh. That repeated re-write is
+    // what exhausted the daily Firestore quota. Chunked into batches of 400
+    // (Firestore's hard batch limit is 500 operations) since overflow can be
+    // large the first time this runs after the bug has been active a while.
+    async function _archiveAndPruneOrders(overflow) {
+        var CHUNK = 400;
+        for (var i = 0; i < overflow.length; i += CHUNK) {
+            var chunk = overflow.slice(i, i + CHUNK);
+            try {
+                var archiveBatch = db.batch();
+                chunk.forEach(function(o){
+                    archiveBatch.set(db.collection('archivedOrders').doc(o.orderId), Object.assign({}, o, { archivedAt: Date.now(), storeId: STATE.storeId }));
+                });
+                await archiveBatch.commit();
+
+                // Only delete from the live collection AFTER the archive write
+                // succeeded — never risk losing an order that failed to archive.
+                var deleteBatch = db.batch();
+                chunk.forEach(function(o){
+                    deleteBatch.delete(db.collection('stores').doc(STATE.storeId).collection('orders').doc(o.orderId));
+                });
+                await deleteBatch.commit();
+            } catch(e) {
+                console.warn('Auto-archive/prune failed for a chunk:', e.message);
+                // Stop here — remaining chunks will simply be picked up as
+                // "overflow" again on a future saveOrders() call.
+                break;
+            }
+        }
     }
 
     function logActivity(action, details) {
@@ -3345,9 +3372,27 @@ function sendToTelegram(order, callback) {
             if (p.length) { STATE.products = p; saveProducts(); }
             localStorage.setItem('goatDeletedProducts', '[]');
 
-            var os = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
+            // ── Orders ──
+            // NOTE: previously this fetched the ENTIRE order history unbounded, every
+            // single page load, forever. Combined with saveOrders() re-archiving the
+            // same "overflow" batch every time (because those orders were never
+            // deleted from this live collection), that meant every refresh re-wrote
+            // hundreds of documents to Firestore — the real cause of hitting the
+            // daily quota (resource-exhausted). Two bounded, index-free queries fix
+            // this: ALL pending orders (never limited — staff must always see every
+            // pending order, however old) plus only the most recent 150 confirmed/
+            // refunded/rejected orders (older ones live permanently in archivedOrders
+            // instead, see saveOrders below).
+            var pendingSnap = await db.collection('stores').doc(STATE.storeId).collection('orders')
+                .where('status', '==', 'pending').get();
+            var recentSnap = await db.collection('stores').doc(STATE.storeId).collection('orders')
+                .orderBy('timestamp', 'desc').limit(150).get();
+            var osById = {};
+            pendingSnap.forEach(function(d) { osById[d.id] = d; });
+            recentSnap.forEach(function(d) { osById[d.id] = d; }); // dedupe if a doc appears in both
             var fbPending = [], fbConfirmed = [];
-            os.forEach(function(d) {
+            Object.keys(osById).forEach(function(id) {
+                var d = osById[id];
                 var dt = d.data();
                 var o = Object.assign({}, dt, { orderId: d.id });
                 if (dt.status === 'confirmed' || dt.status === 'refunded' ||
@@ -8843,6 +8888,71 @@ function sendToTelegram(order, callback) {
         console.log('✅ Merged ' + fixed + ' duplicate doc(s) across ' + dupes.length + ' product(s).');
         alert('✅ Done! Merged ' + fixed + ' duplicate doc(s) across ' + dupes.length + ' product(s).\nCheck inventory to confirm.');
         renderInventory(); renderProducts();
+    }
+
+    // =============================================
+    // ONE-TIME CLEANUP: purge already-archived orders still sitting in the
+    // live `stores/{storeId}/orders` collection.
+    //
+    // Background: before this fix, saveOrders() copied old confirmed orders
+    // into `archivedOrders` but never deleted them from the live collection.
+    // That meant loadData() kept re-fetching (and re-archiving) the same
+    // growing pile of old orders on every single page load — which is what
+    // exhausted the daily Firestore quota. The code fix stops this from
+    // continuing, but it does NOT retroactively clean up orders that were
+    // already archived before today. Run this once per store to do that.
+    //
+    // SAFE TO RUN: it only deletes a live order doc if a matching document
+    // (same orderId) already exists in `archivedOrders` — i.e. the order's
+    // data is already safely preserved elsewhere before anything is removed
+    // from the live collection.
+    //
+    // Run from browser console, once per store device: cleanupArchivedLiveOrders()
+    // =============================================
+    async function cleanupArchivedLiveOrders() {
+        if (!db) { console.error('Firebase offline'); return; }
+        console.log('🔍 Scanning archivedOrders for ' + STATE.storeId + '...');
+        var archSnap = await db.collection('archivedOrders').where('storeId', '==', STATE.storeId).get();
+        var archivedIds = [];
+        archSnap.forEach(function(d) { archivedIds.push(d.id); });
+        if (!archivedIds.length) { console.log('✅ Nothing archived for this store — nothing to clean up.'); alert('✅ Nothing to clean up.'); return; }
+        console.log('Found ' + archivedIds.length + ' already-archived order(s). Checking which still exist in the live orders collection...');
+
+        // Only delete live docs that ACTUALLY still exist AND are confirmed/
+        // refunded/rejected — never touch anything still pending, even if it
+        // somehow has a matching archived doc.
+        var toDelete = [];
+        var CHECK_CHUNK = 300;
+        for (var i = 0; i < archivedIds.length; i += CHECK_CHUNK) {
+            var idsChunk = archivedIds.slice(i, i + CHECK_CHUNK);
+            var checks = await Promise.all(idsChunk.map(function(id) {
+                return db.collection('stores').doc(STATE.storeId).collection('orders').doc(id).get();
+            }));
+            checks.forEach(function(snap) {
+                if (snap.exists && snap.data().status !== 'pending') toDelete.push(snap.ref);
+            });
+        }
+        if (!toDelete.length) { console.log('✅ Live collection already clean — nothing left to delete.'); alert('✅ Already clean — nothing left to delete.'); return; }
+
+        if (!confirm('This will permanently delete ' + toDelete.length + ' already-archived order(s) from the live orders list for ' + STATE.storeId + ' (their data stays safe in archivedOrders — Reports → Archive can still find them).\n\nContinue?')) return;
+
+        var DELETE_CHUNK = 400;
+        var deleted = 0;
+        for (var j = 0; j < toDelete.length; j += DELETE_CHUNK) {
+            var delChunk = toDelete.slice(j, j + DELETE_CHUNK);
+            try {
+                var batch = db.batch();
+                delChunk.forEach(function(ref) { batch.delete(ref); });
+                await batch.commit();
+                deleted += delChunk.length;
+                console.log('  Deleted ' + deleted + ' / ' + toDelete.length + '...');
+            } catch (e) {
+                console.warn('Cleanup chunk failed, stopping here:', e.message);
+                break;
+            }
+        }
+        console.log('✅ Cleanup done. Deleted ' + deleted + ' order(s) from the live collection.');
+        alert('✅ Cleanup done!\n\nDeleted ' + deleted + ' already-archived order(s) from the live list.\nTheir data is safe in archivedOrders — nothing was lost.');
     }
 
     // =============================================
