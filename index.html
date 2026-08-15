@@ -2317,12 +2317,19 @@ function sendToTelegram(order, callback) {
             });
         }
 
-        sendToTelegram(order, function(ok) {
+        // ── Order notification is sent server-side by the notifyNewOrder Cloud
+        // Function (triggered when this order document is written to Firestore
+        // below), using a Firestore transaction flag for guaranteed exactly-once
+        // delivery. We used to ALSO send directly from the browser here — that
+        // was firing in addition to the Cloud Function, so every order sent two
+        // Telegram notices. Don't call sendToTelegram() here; just do what its
+        // callback used to do (save + reset UI) directly.
+        (function(oid, order) {
             // Save to Firebase — attempt this even if STATE.firebaseOnline is still
             // false. That flag only reflects the *initial* connectivity check, which
             // can take up to 20s on Safari/iOS; a customer placing an order in that
-            // window would otherwise have their order silently skipped and lost,
-            // even though the Telegram alert (sent independently, above) went out.
+            // window would otherwise have their order silently skipped and lost.
+            // This write is also what triggers notifyNewOrder server-side.
             if (db) {
                 db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order)
                 .then(function() {
@@ -2369,11 +2376,7 @@ function sendToTelegram(order, callback) {
             document.getElementById('cartMainContent').classList.add('hidden');
             document.getElementById('orderSuccessScreen').classList.remove('hidden');
             document.getElementById('successOrderId').textContent = '📦 ' + oid;
-
-            if (!ok) {
-                showToast('Order saved! (Telegram notification may have been delayed)', 'warning');
-            }
-        });
+        })(oid, order);
     }
 
     function switchAdminTab(tab) {
@@ -7453,7 +7456,13 @@ function sendToTelegram(order, callback) {
     function _fbTimeoutMs() {
         var isSaf = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
         var isIOS = /iPhone|iPad/i.test(navigator.userAgent);
-        return (isSaf || isIOS) ? 20000 : 15000;
+        // NOTE: matches approveTransfer's timeout. The first Firestore WRITE of a
+        // session needs its own auth/channel handshake, separate from whatever
+        // channel a preceding read used — if someone acts within the first few
+        // seconds of opening the app, that handshake can still be finishing. That's
+        // a slow-but-healthy connection, not a stuck one, so this gets real margin
+        // rather than a tight timeout tuned for an already-warm connection.
+        return (isSaf || isIOS) ? 30000 : 25000;
     }
     function _raceFirestore(promiseFactory, opLabel) {
         var timeoutMs = _fbTimeoutMs();
