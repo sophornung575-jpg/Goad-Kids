@@ -4619,34 +4619,59 @@ function sendToTelegram(order, callback) {
         var order = STATE.pendingOrders[idx];
 
         // ── Step 1: Validate stock BEFORE touching anything ──
+        // Accumulate demand per productId+size first, in case the cart has
+        // more than one line item for the exact same product+size — checking
+        // each line independently against not-yet-decremented stock could
+        // otherwise pass two lines that together exceed what's available.
+        var demandByKey = {}; // "productId|size" -> total quantity requested
         for (var j = 0; j < order.cart.length; j++) {
-            var it = order.cart[j], p = findProduct(it.productId);
-            if (!p) { showToast('Product not found: ' + it.name, 'error'); return; }
+            var it = order.cart[j];
+            var key = it.productId + '|' + (it.size || '');
+            demandByKey[key] = (demandByKey[key] || 0) + it.quantity;
+        }
+        for (var j2 = 0; j2 < order.cart.length; j2++) {
+            var it2 = order.cart[j2], p = findProduct(it2.productId);
+            if (!p) { showToast('Product not found: ' + it2.name, 'error'); return; }
+            var neededTotal = demandByKey[it2.productId + '|' + (it2.size || '')];
             if (p.sizes && p.sizes.length) {
                 var so = null;
-                for (var l = 0; l < p.sizes.length; l++) { if (p.sizes[l].name === it.size) { so = p.sizes[l]; break; } }
-                if (!so || so.qty < it.quantity) { showToast('Not enough stock: ' + it.name + ' (' + it.size + ')', 'error'); return; }
-            } else if ((p.stock || 0) < it.quantity) { showToast('Not enough stock: ' + it.name, 'error'); return; }
+                for (var l = 0; l < p.sizes.length; l++) { if (p.sizes[l].name === it2.size) { so = p.sizes[l]; break; } }
+                if (!so || so.qty < neededTotal) { showToast('Not enough stock: ' + it2.name + ' (' + it2.size + ')', 'error'); return; }
+            } else if ((p.stock || 0) < neededTotal) { showToast('Not enough stock: ' + it2.name, 'error'); return; }
         }
 
         // ── Step 2: Build the new stock values in memory (don't apply yet) ──
-        var stockUpdates = []; // { product, sizeIdx, newQty, newTotal }
+        // IMPORTANT: group by productId, not by cart line item. An order can
+        // contain multiple sizes of the SAME product (e.g. one order with
+        // sizes 100, 130, and 140 of "Girl Set_039"). Building an independent
+        // clone per cart item and then applying them one after another in
+        // Step 3 causes each later item to silently overwrite the earlier
+        // item's deduction on the same product — losing those deductions
+        // entirely. Accumulating onto a single working copy per productId
+        // fixes that.
+        var stockUpdatesByProduct = {}; // productId -> { product, newSizes, newStock }
         for (var m = 0; m < order.cart.length; m++) {
             var item = order.cart[m], pr = findProduct(item.productId);
             if (!pr) continue;
-            var update = { product: pr, sizeIdx: -1, newSizes: null, newStock: pr.stock };
-            if (pr.sizes && pr.sizes.length) {
-                var newSizes = JSON.parse(JSON.stringify(pr.sizes));
-                for (var s = 0; s < newSizes.length; s++) {
-                    if (newSizes[s].name === item.size) { newSizes[s].qty = Math.max(0, newSizes[s].qty - item.quantity); break; }
-                }
-                update.newSizes = newSizes;
-                update.newStock = newSizes.reduce(function(t,s){return t+s.qty;}, 0);
-            } else {
-                update.newStock = Math.max(0, (pr.stock||0) - item.quantity);
+            var su2 = stockUpdatesByProduct[item.productId];
+            if (!su2) {
+                su2 = {
+                    product: pr,
+                    newSizes: (pr.sizes && pr.sizes.length) ? JSON.parse(JSON.stringify(pr.sizes)) : null,
+                    newStock: pr.stock
+                };
+                stockUpdatesByProduct[item.productId] = su2;
             }
-            stockUpdates.push(update);
+            if (su2.newSizes) {
+                for (var s = 0; s < su2.newSizes.length; s++) {
+                    if (su2.newSizes[s].name === item.size) { su2.newSizes[s].qty = Math.max(0, su2.newSizes[s].qty - item.quantity); break; }
+                }
+                su2.newStock = su2.newSizes.reduce(function(t,s){return t+s.qty;}, 0);
+            } else {
+                su2.newStock = Math.max(0, su2.newStock - item.quantity);
+            }
         }
+        var stockUpdates = Object.keys(stockUpdatesByProduct).map(function(pid) { return stockUpdatesByProduct[pid]; });
 
         var confirmedOrder = Object.assign({}, order, {
             status: 'confirmed',
@@ -8962,6 +8987,66 @@ function sendToTelegram(order, callback) {
         }
         console.log('✅ Cleanup done. Deleted ' + deleted + ' order(s) from the live collection.');
         alert('✅ Cleanup done!\n\nDeleted ' + deleted + ' already-archived order(s) from the live list.\nTheir data is safe in archivedOrders — nothing was lost.');
+    }
+
+    // =============================================
+    // DIAGNOSTIC: find past confirmed orders that hit the multi-size-same-
+    // product stock bug (fixed in this version). Any order containing 2+
+    // cart lines for the SAME productId (different sizes) only had the LAST
+    // of those lines' deductions actually stick — earlier ones were silently
+    // reverted. This scans confirmed orders (both current + archived) for
+    // that pattern so you know which stock counts may need a manual
+    // correction. It does NOT change anything — read-only, safe to run
+    // anytime.
+    //
+    // Run from browser console: findMultiSizeOrders()
+    // =============================================
+    async function findMultiSizeOrders() {
+        if (!db) { console.error('Firebase offline'); return; }
+        console.log('🔍 Scanning confirmed orders for the multi-size-same-product pattern...');
+
+        var flagged = [];
+
+        function checkOrder(o, source) {
+            if (!o.cart || !o.cart.length) return;
+            var byProduct = {};
+            o.cart.forEach(function(item) {
+                if (!byProduct[item.productId]) byProduct[item.productId] = [];
+                byProduct[item.productId].push(item);
+            });
+            var affectedLines = [];
+            Object.keys(byProduct).forEach(function(pid) {
+                if (byProduct[pid].length > 1) affectedLines = affectedLines.concat(byProduct[pid]);
+            });
+            if (affectedLines.length) {
+                flagged.push({
+                    orderId: o.orderId,
+                    source: source,
+                    confirmedAt: o.confirmedAt || '(unknown)',
+                    lines: affectedLines.map(function(l) { return l.name + ' (' + l.size + ') x' + l.quantity; })
+                });
+            }
+        }
+
+        // Currently-loaded confirmed orders (most recent ~150, per loadData's bound)
+        (STATE.confirmedOrders || []).forEach(function(o) { checkOrder(o, 'recent'); });
+
+        // Full archived history for this store
+        var archSnap = await db.collection('archivedOrders').where('storeId', '==', STATE.storeId).get();
+        archSnap.forEach(function(d) { checkOrder(d.data(), 'archived'); });
+
+        if (!flagged.length) {
+            console.log('✅ No affected orders found for ' + STATE.storeId + '.');
+            alert('✅ No affected orders found!\n\nNo past orders had multiple sizes of the same product, so nothing needs manual correction.');
+            return;
+        }
+
+        console.log('⚠️ Found ' + flagged.length + ' order(s) with multiple sizes of the same product:');
+        flagged.forEach(function(f) {
+            console.log('  • ' + f.orderId + ' (' + f.source + ', confirmed ' + f.confirmedAt + '): ' + f.lines.join(', '));
+        });
+        console.log('\nFor each order above, only the LAST listed size actually deducted correctly — the earlier size(s) listed were silently reverted and likely still show their pre-order stock. Check Inventory for those specific product+size combinations and deduct manually if needed.');
+        alert('⚠️ Found ' + flagged.length + ' past order(s) that may need a manual stock correction.\n\nFull details (order ID, product, sizes) are printed in the console above — check there and adjust Branch Stock for the affected size(s).');
     }
 
     // =============================================
