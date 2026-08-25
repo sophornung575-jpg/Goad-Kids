@@ -6294,6 +6294,9 @@ function sendToTelegram(order, callback) {
     // ARCHIVE VIEWER
     // =============================================
     var _archiveOrders = [];
+    var _archiveFilteredOrders = []; // cached filtered set, so page changes don't re-filter
+    var _archivePage = 1;
+    var ARCHIVE_PAGE_SIZE = 20;
 
     function openArchiveViewer() {
         setArchiveDateRange('month');
@@ -6368,11 +6371,9 @@ function sendToTelegram(order, callback) {
     }
 
     function filterArchiveResults() {
-        var listEl = document.getElementById('archiveOrdersList');
-        var infoEl = document.getElementById('archiveResultInfo');
         var q = (document.getElementById('archiveSearch').value || '').toLowerCase().trim();
 
-        var filtered = _archiveOrders.filter(function(o) {
+        _archiveFilteredOrders = _archiveOrders.filter(function(o) {
             if (!q) return true;
             // Search across multiple fields
             var searchFields = [
@@ -6388,8 +6389,34 @@ function sendToTelegram(order, callback) {
             return searchFields.indexOf(q) !== -1;
         });
 
+        // Any change to the search/filter resets back to the newest page —
+        // _archiveOrders is already sorted newest-first, so page 1 is always
+        // the most recent orders in the current filtered result.
+        _archivePage = 1;
+        renderArchivePage();
+    }
+
+    function changeArchivePage(delta) {
+        var totalPages = Math.max(1, Math.ceil(_archiveFilteredOrders.length / ARCHIVE_PAGE_SIZE));
+        _archivePage = Math.min(totalPages, Math.max(1, _archivePage + delta));
+        renderArchivePage();
+        var listEl = document.getElementById('archiveOrdersList');
+        if (listEl) listEl.scrollTop = 0;
+    }
+
+    function renderArchivePage() {
+        var listEl = document.getElementById('archiveOrdersList');
+        var infoEl = document.getElementById('archiveResultInfo');
+        var q = (document.getElementById('archiveSearch').value || '').toLowerCase().trim();
+        var filtered = _archiveFilteredOrders;
+
+        var totalPages = Math.max(1, Math.ceil(filtered.length / ARCHIVE_PAGE_SIZE));
+        if (_archivePage > totalPages) _archivePage = totalPages;
+        if (_archivePage < 1) _archivePage = 1;
+
         infoEl.textContent = filtered.length + ' of ' + _archiveOrders.length + ' order(s) · Total: $' +
-            filtered.reduce(function(a,o){ return a+(o.total||0); }, 0).toFixed(2);
+            filtered.reduce(function(a,o){ return a+(o.total||0); }, 0).toFixed(2) +
+            (filtered.length ? ' · Page ' + _archivePage + ' of ' + totalPages : '');
 
         if (!filtered.length) {
             listEl.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">' +
@@ -6397,22 +6424,25 @@ function sendToTelegram(order, callback) {
             return;
         }
 
+        var pageStart = (_archivePage - 1) * ARCHIVE_PAGE_SIZE;
+        var pageItems = filtered.slice(pageStart, pageStart + ARCHIVE_PAGE_SIZE);
+
+        // Highlight search term
+        function hl(str) {
+            if (!q || !str) return escHtml(str||'');
+            var idx = str.toLowerCase().indexOf(q);
+            if (idx === -1) return escHtml(str);
+            return escHtml(str.slice(0,idx)) + '<mark style="background:#fef08a;border-radius:2px">' + escHtml(str.slice(idx,idx+q.length)) + '</mark>' + escHtml(str.slice(idx+q.length));
+        }
+
         var h = '';
-        filtered.forEach(function(o) {
+        pageItems.forEach(function(o) {
             var statusColor = o.status === 'confirmed' ? 'var(--success)' : o.status === 'refunded' ? 'var(--warning)' : 'var(--danger)';
             var statusIcon = o.status === 'confirmed' ? '✅' : o.status === 'refunded' ? '↩️' : '❌';
             var itemSummary = (o.cart||[]).slice(0,3).map(function(it){
                 return it.quantity + '× ' + it.name + ' (' + (it.size||'') + ')';
             }).join(', ');
             if ((o.cart||[]).length > 3) itemSummary += ' +' + ((o.cart||[]).length-3) + ' more';
-
-            // Highlight search term
-            function hl(str) {
-                if (!q || !str) return escHtml(str||'');
-                var idx = str.toLowerCase().indexOf(q);
-                if (idx === -1) return escHtml(str);
-                return escHtml(str.slice(0,idx)) + '<mark style="background:#fef08a;border-radius:2px">' + escHtml(str.slice(idx,idx+q.length)) + '</mark>' + escHtml(str.slice(idx+q.length));
-            }
 
             h += '<div style="padding:8px 0;border-bottom:1px solid var(--gray-light)">' +
                 '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
@@ -6427,6 +6457,15 @@ function sendToTelegram(order, callback) {
                 '<div style="font-size:0.75rem;color:var(--gray);margin-top:2px">' + hl(itemSummary) + '</div>' +
                 '</div>';
         });
+
+        // Pagination controls — Page 1 is always the newest orders since
+        // _archiveOrders is sorted newest-first.
+        h += '<div style="display:flex;justify-content:center;align-items:center;gap:10px;padding:14px 0 4px">' +
+            '<button class="btn btn-outline btn-small" onclick="changeArchivePage(-1)"' + (_archivePage<=1?' disabled':'') + '><i class="fas fa-chevron-left"></i> Prev</button>' +
+            '<span style="font-size:0.8rem;color:var(--gray)">Page ' + _archivePage + ' of ' + totalPages + '</span>' +
+            '<button class="btn btn-outline btn-small" onclick="changeArchivePage(1)"' + (_archivePage>=totalPages?' disabled':'') + '>Next <i class="fas fa-chevron-right"></i></button>' +
+            '</div>';
+
         listEl.innerHTML = h;
     }
 
