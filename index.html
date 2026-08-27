@@ -5259,7 +5259,14 @@ function sendToTelegram(order, callback) {
         var c = document.getElementById('historyContainer');
         document.getElementById('historyCount').textContent = STATE.confirmedOrders.length;
         if (!c) return;
-        var orders = STATE.confirmedOrders.slice().reverse();
+        // Sort by timestamp descending (same pattern as the archive viewer) —
+        // do NOT rely on array insertion order via .reverse(). After loadData()
+        // merges Firestore results, STATE.confirmedOrders is in Object.keys()
+        // iteration order, not chronological order, so reversing it does not
+        // guarantee page 1 is the newest date.
+        var orders = STATE.confirmedOrders.slice().sort(function(a, b) {
+            return (b.timestamp || 0) - (a.timestamp || 0);
+        });
         if (searchQ) {
             var q = searchQ.toLowerCase();
             orders = orders.filter(function(o){ return (o.orderId||'').toLowerCase().indexOf(q)!==-1||(o.customerName||'').toLowerCase().indexOf(q)!==-1||(o.customerPhone||'').toLowerCase().indexOf(q)!==-1; });
