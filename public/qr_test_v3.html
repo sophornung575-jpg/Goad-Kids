@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QR Test v3</title>
+<style>
+body{font-family:Arial;padding:16px;max-width:500px;margin:0 auto}
+#log{background:#f0f0f0;padding:10px;border-radius:8px;font-size:11px;font-family:monospace;min-height:100px;white-space:pre-wrap;margin:10px 0}
+canvas{border:1px solid #ccc;margin:5px;image-rendering:pixelated}
+</style>
+</head>
+<body>
+<h3>QR Test v3</h3>
+<div id="log">Starting...
+</div>
+<div id="canvases"></div>
+
+<script>
+var log = document.getElementById('log');
+function L(m){ log.textContent += m + '\n'; }
+
+L('Page: ' + location.href.substring(0,50));
+L('Time: ' + new Date().toISOString());
+
+// Try multiple CDN sources
+var CDNs = [
+    'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js',
+    'https://unpkg.com/jsqr@1.4.0/dist/jsQR.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js'
+];
+
+var tried = 0;
+function tryNextCDN() {
+    if (tried >= CDNs.length) {
+        L('All CDNs failed ❌');
+        L('Will test QR generation only');
+        testGenOnly();
+        return;
+    }
+    var url = CDNs[tried++];
+    L('\nTrying: ' + url.split('/').slice(-1)[0] + ' from ' + url.split('/')[2]);
+    var s = document.createElement('script');
+    var t = setTimeout(function() {
+        L('Timeout after 8s');
+        tryNextCDN();
+    }, 8000);
+    s.onload = function() {
+        clearTimeout(t);
+        L('✅ Loaded from: ' + url.split('/')[2]);
+        testWithJsQR();
+    };
+    s.onerror = function(e) {
+        clearTimeout(t);
+        L('❌ Failed: ' + (e.message || 'load error'));
+        tryNextCDN();
+    };
+    s.src = url;
+    document.head.appendChild(s);
+}
+
+function testWithJsQR() {
+    L('\nTesting QR read...');
+    var c = document.createElement('canvas');
+    try {
+        QRGen.draw(c, 'TEST123', 200);
+        L('QR generated: ' + c.width + 'x' + c.height);
+        var d = c.getContext('2d').getImageData(0,0,c.width,c.height);
+        var r = jsQR(d.data, d.width, d.height, {inversionAttempts:'attemptBoth'});
+        if (r) {
+            L('✅ jsQR decoded: "' + r.data + '"');
+        } else {
+            L('❌ jsQR could not decode');
+        }
+        document.getElementById('canvases').appendChild(c);
+    } catch(e) {
+        L('Error: ' + e.message);
+    }
+}
+
+function testGenOnly() {
+    L('\nQR generation test (no jsQR):');
+    var c = document.createElement('canvas');
+    try {
+        QRGen.draw(c, 'TEST123', 200);
+        L('QR generated: ' + c.width + 'x' + c.height + 'px');
+        document.getElementById('canvases').appendChild(c);
+        L('QR shown above - scan with phone camera app to verify');
+    } catch(e) {
+        L('Generate error: ' + e.message);
+    }
+}
+
+tryNextCDN();
+</script>
+
+<script>
+// QR Code Generator v2 - Pure JS, no dependencies
+// Based on standard QR spec, Version 2-L (25x25)
+var QRGen = (function() {
+    var SIZE = 25;
+    
+    // Reed-Solomon
+    var EXP = [], LOG = [];
+    (function(){
+        var x=1;
+        for(var i=0;i<255;i++){EXP[i]=x;LOG[x]=i;x<<=1;if(x>255)x^=285;}
+        for(var i=255;i<512;i++)EXP[i]=EXP[i-255];
+    })();
+    function mul(a,b){return(a&&b)?EXP[(LOG[a]+LOG[b])%255]:0;}
+    function rsGen(n){var g=[1];for(var i=0;i<n;i++){var t=[1,EXP[i]];var r=new Array(g.length+1).fill(0);for(var a=0;a<g.length;a++)for(var b=0;b<t.length;b++)r[a+b]^=mul(g[a],t[b]);g=r;}return g;}
+    function rsDiv(msg,gen){var r=msg.slice();for(var i=0;i<msg.length;i++){var c=r[i];if(c)for(var j=1;j<gen.length;j++)r[i+j]^=mul(gen[j],c);}return r.slice(msg.length);}
+    
+    function encode(text){
+        var bytes=[];for(var i=0;i<text.length;i++)bytes.push(text.charCodeAt(i)&0xFF);
+        var bits=[];
+        function add(v,n){for(var i=n-1;i>=0;i--)bits.push((v>>i)&1);}
+        add(4,4);add(bytes.length,8);
+        for(var i=0;i<bytes.length;i++)add(bytes[i],8);
+        add(0,4);
+        while(bits.length%8)bits.push(0);
+        var cw=[];for(var i=0;i<bits.length;i+=8){var b=0;for(var j=0;j<8;j++)b=(b<<1)|bits[i+j];cw.push(b);}
+        var pad=[0xEC,0x11];while(cw.length<44)cw.push(pad[(cw.length-0)%2]);
+        return cw.concat(rsDiv(cw,rsGen(10)));
+    }
+    
+    function matrix(data){
+        var m=[];
+        for(var i=0;i<SIZE;i++){m.push(new Array(SIZE).fill(-1));}
+        
+        // Finder pattern (7x7 with border)
+        function finder(row,col){
+            for(var r=-1;r<=7;r++){
+                for(var c=-1;c<=7;c++){
+                    var pr=row+r, pc=col+c;
+                    if(pr<0||pr>=SIZE||pc<0||pc>=SIZE)continue;
+                    var v;
+                    if(r===-1||r===7||c===-1||c===7) v=0;      // separator
+                    else if(r===0||r===6||c===0||c===6) v=1;    // outer ring
+                    else if(r>=2&&r<=4&&c>=2&&c<=4) v=1;        // inner square
+                    else v=0;                                     // inner white
+                    m[pr][pc]=v;
+                }
+            }
+        }
+        finder(0,0);
+        finder(0,SIZE-7);
+        finder(SIZE-7,0);
+        
+        // Alignment pattern at (18,18) for version 2
+        for(var r=16;r<=20;r++)for(var c=16;c<=20;c++){
+            if(m[r][c]!==-1)continue;
+            m[r][c]=(r===16||r===20||c===16||c===20||(r===18&&c===18))?1:0;
+        }
+        
+        // Timing patterns
+        for(var i=8;i<SIZE-8;i++){
+            if(m[6][i]===-1)m[6][i]=i%2===0?1:0;
+            if(m[i][6]===-1)m[i][6]=i%2===0?1:0;
+        }
+        
+        // Dark module
+        m[SIZE-8][8]=1;
+        
+        // Format info (Version 2-L, mask 0: (i+j)%2==0)
+        // Pre-computed format string for L+mask0: 111011111000100 XOR 101010000010010 = 010001111010110
+        var fmt=[0,1,0,0,0,1,1,1,1,0,1,0,1,1,0];
+        // Top-left format
+        var fmtPos=[[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]];
+        // Top-right format
+        var fmtPos2=[[8,SIZE-1],[8,SIZE-2],[8,SIZE-3],[8,SIZE-4],[8,SIZE-5],[8,SIZE-6],[8,SIZE-7],[8,SIZE-8],[SIZE-7,8],[SIZE-6,8],[SIZE-5,8],[SIZE-4,8],[SIZE-3,8],[SIZE-2,8],[SIZE-1,8]];
+        for(var i=0;i<15;i++){
+            m[fmtPos[i][0]][fmtPos[i][1]]=fmt[i];
+            m[fmtPos2[i][0]][fmtPos2[i][1]]=fmt[i];
+        }
+        
+        // Data placement
+        var bits=[];
+        for(var i=0;i<data.length;i++)for(var b=7;b>=0;b--)bits.push((data[i]>>b)&1);
+        
+        var bi=0;
+        var col=SIZE-1;
+        while(col>0){
+            if(col===6)col--;
+            for(var row=0;row<SIZE;row++){
+                for(var dc=0;dc<2;dc++){
+                    var c=col-dc;
+                    var r=(col%4<2)?SIZE-1-row:row;  // alternate direction: start upward
+                    if(m[r][c]===-1){
+                        var bit=bi<bits.length?bits[bi++]:0;
+                        // Apply mask 0: (r+c)%2==0 → invert
+                        m[r][c]=((r+c)%2===0)?bit^1:bit;
+                    }
+                }
+            }
+            col-=2;
+        }
+        return m;
+    }
+    
+    function draw(canvas, text, size){
+        var quiet=4;
+        var data=encode(text);
+        var mat=matrix(data);
+        var mod=Math.max(1,Math.floor(size/(SIZE+quiet*2)));
+        var total=(SIZE+quiet*2)*mod;
+        canvas.width=total;canvas.height=total;
+        var ctx=canvas.getContext('2d');
+        ctx.fillStyle='#fff';ctx.fillRect(0,0,total,total);
+        ctx.fillStyle='#000';
+        for(var r=0;r<SIZE;r++)
+            for(var c=0;c<SIZE;c++)
+                if(mat[r][c]===1)
+                    ctx.fillRect((c+quiet)*mod,(r+quiet)*mod,mod,mod);
+    }
+    
+    return {draw:draw};
+})();
+
+</script>
+</body>
+</html>
