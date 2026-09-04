@@ -4176,7 +4176,11 @@ function sendToTelegram(order, callback) {
                 try {
                     var pq2 = JSON.parse(localStorage.getItem('goatProductSyncQueue') || '[]');
                     pq2 = pq2.filter(function(q){ return q.productId !== p.id; });
-                    pq2.push({ storeId: STATE.storeId, productId: p.id, payload: productSyncPayload });
+                    // queuedAt records when THIS edit was made — used later to detect
+                    // if the product has since been changed by something else (e.g. a
+                    // stock transfer) before this queued write gets a chance to retry,
+                    // so a stale queued edit can never silently overwrite newer data.
+                    pq2.push({ storeId: STATE.storeId, productId: p.id, payload: productSyncPayload, queuedAt: Date.now() });
                     localStorage.setItem('goatProductSyncQueue', JSON.stringify(pq2));
                 } catch(e2) {}
             });
@@ -4184,7 +4188,7 @@ function sendToTelegram(order, callback) {
             try {
                 var pq3 = JSON.parse(localStorage.getItem('goatProductSyncQueue') || '[]');
                 pq3 = pq3.filter(function(q){ return q.productId !== p.id; });
-                pq3.push({ storeId: STATE.storeId, productId: p.id, payload: productSyncPayload });
+                pq3.push({ storeId: STATE.storeId, productId: p.id, payload: productSyncPayload, queuedAt: Date.now() });
                 localStorage.setItem('goatProductSyncQueue', JSON.stringify(pq3));
             } catch(e3) {}
         }
@@ -4770,15 +4774,40 @@ function sendToTelegram(order, callback) {
         // Firebase (offline at save time, or the write failed). Without this,
         // a stock edit would only exist in the editing device's own browser
         // and other branches/devices would keep showing the old stock number.
+        //
+        // ── STALE-WRITE GUARD ──
+        // A queued edit can sit in localStorage for a long time before this
+        // finally gets a chance to retry (hours, even days, on a device with
+        // spotty connectivity). If something else legitimately changed this
+        // product on the server in the meantime — most importantly, a stock
+        // transfer deducting/adding units — blindly writing the old queued
+        // snapshot would silently erase that newer change. So: before writing,
+        // check the product's current updatedAt on the server. If it's newer
+        // than when this edit was queued, someone/something else touched it
+        // since — skip the overwrite and flag it for manual review instead of
+        // guessing which version is "right".
         if (!db) return;
         var q = [];
         try { q = JSON.parse(localStorage.getItem('goatProductSyncQueue') || '[]'); } catch(e) {}
         if (!q.length) return;
         var remaining = [];
+        var conflicts = [];
         for (var i = 0; i < q.length; i++) {
             var item = q[i];
             try {
-                await db.collection('stores').doc(item.storeId || STATE.storeId).collection('products').doc(item.productId).set(item.payload, { merge: true });
+                var ref = db.collection('stores').doc(item.storeId || STATE.storeId).collection('products').doc(item.productId);
+                if (item.queuedAt) {
+                    var liveSnap = await ref.get();
+                    if (liveSnap.exists) {
+                        var liveUpdatedAt = Date.parse(liveSnap.data().updatedAt || '');
+                        if (liveUpdatedAt && liveUpdatedAt > item.queuedAt) {
+                            console.warn('⚠️ Skipped stale queued edit — product changed on server since this was queued:', item.productId, 'queued at', new Date(item.queuedAt).toLocaleString(), 'but server updated', new Date(liveUpdatedAt).toLocaleString());
+                            conflicts.push(item);
+                            continue; // do NOT write — drop this item, do not requeue it either
+                        }
+                    }
+                }
+                await ref.set(item.payload, { merge: true });
                 console.log('✅ Recovered queued product edit:', item.productId);
             } catch (e) {
                 console.warn('Product sync retry failed for', item.productId, e);
@@ -4786,6 +4815,9 @@ function sendToTelegram(order, callback) {
             }
         }
         localStorage.setItem('goatProductSyncQueue', JSON.stringify(remaining));
+        if (conflicts.length) {
+            showToast(conflicts.length + ' queued edit(s) skipped — product changed on server since (e.g. by a transfer). Check console for details.', 'error');
+        }
     }
 
     async function flushNewOrderQueue() {
