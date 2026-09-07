@@ -6060,6 +6060,32 @@ function sendToTelegram(order, callback) {
             }
         }
 
+        csv += '\nItems Breakdown\n';
+        csv += 'Product,Size,Qty Sold,Revenue\n';
+        var byItem = {};
+        for (var c = 0; c < confirmed.length; c++) {
+            var cart = confirmed[c].cart || [];
+            for (var d2 = 0; d2 < cart.length; d2++) {
+                var it = cart[d2];
+                var key = it.name + '|' + (it.size || '');
+                if (!byItem[key]) byItem[key] = { name: it.name, size: it.size || '', qty: 0, revenue: 0 };
+                byItem[key].qty += it.quantity || 0;
+                var lineRevenue = (it.subtotal != null ? it.subtotal : (it.price * it.quantity)) - (it.discountAmt || 0);
+                byItem[key].revenue += Math.max(0, lineRevenue);
+            }
+        }
+        var itemKeys = Object.keys(byItem).sort(function(x, y) {
+            return byItem[y].qty - byItem[x].qty;
+        });
+        if (!itemKeys.length) {
+            csv += 'No data for this period\n';
+        } else {
+            for (var e = 0; e < itemKeys.length; e++) {
+                var itm = byItem[itemKeys[e]];
+                csv += escCSV(itm.name) + ',' + escCSV(itm.size) + ',' + itm.qty + ',$' + itm.revenue.toFixed(2) + '\n';
+            }
+        }
+
         dlCSV(csv, 'GOAT_KIDS_Report_' + new Date().toISOString().slice(0,10) + '.csv');
         showToast('Report exported!', 'success');
     }
