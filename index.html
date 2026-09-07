@@ -1090,7 +1090,8 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
 
                     <!-- REPORT CONTENT (hidden until unlocked) -->
                     <div id="reportContent" style="display:none">
-                    <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem">
+                    <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-bottom:0.75rem">
+                        <button class="btn btn-outline btn-small" onclick="exportReportCSV()"><i class="fas fa-download"></i> Export CSV</button>
                         <button class="btn btn-outline btn-small" onclick="lockReport()"><i class="fas fa-lock"></i> Lock Reports</button>
                     </div>
                     <div class="date-filter-container">
@@ -6002,6 +6003,65 @@ function sendToTelegram(order, callback) {
             html += '<tr><td style="font-weight:600">'+days[j]+'</td><td>'+d.orders+'</td><td>'+d.customers.size+'</td><td>$'+d.revenue.toFixed(2)+'</td></tr>';
         }
         el.innerHTML = html;
+    }
+
+    function exportReportCSV() {
+        var confirmed = getReportConfirmed();
+        if (!confirmed.length && !_reportRefunds.length) { showToast('No report data to export', 'warning'); return; }
+
+        var periodEl = document.getElementById('reportDateRange');
+        var period = periodEl ? periodEl.textContent : '';
+
+        var tr = 0; for (var i = 0; i < confirmed.length; i++) tr += confirmed[i].total || 0;
+        var is = 0; for (var j = 0; j < confirmed.length; j++) { for (var k = 0; k < (confirmed[j].cart||[]).length; k++) is += confirmed[j].cart[k].quantity || 0; }
+        var cs = new Set();
+        for (var l = 0; l < confirmed.length; l++) { if (confirmed[l].customerPhone || confirmed[l].customerName) cs.add(confirmed[l].customerPhone || confirmed[l].customerName); }
+        var refTotal = 0; for (var r = 0; r < _reportRefunds.length; r++) refTotal += _reportRefunds[r].refundAmount || 0;
+        var cashTotal = 0, cashCount = 0, qrTotal = 0, qrCount = 0;
+        for (var pm = 0; pm < confirmed.length; pm++) {
+            var pmOrder = confirmed[pm];
+            if (pmOrder.paymentMethod === 'qr') { qrTotal += pmOrder.total || 0; qrCount++; }
+            else { cashTotal += pmOrder.total || 0; cashCount++; }
+        }
+
+        var csv = 'GOAT KIDS Sales Report\n';
+        csv += 'Store,' + escCSV(STATE.storeName || STATE.storeId || '') + '\n';
+        csv += 'Period,' + escCSV(period) + '\n';
+        csv += 'Generated,' + escCSV(new Date().toLocaleString()) + '\n\n';
+
+        csv += 'Summary\n';
+        csv += 'Metric,Value\n';
+        csv += 'Total Revenue,$' + tr.toFixed(2) + '\n';
+        csv += 'Total Orders,' + confirmed.length + '\n';
+        csv += 'Items Sold,' + is + '\n';
+        csv += 'Customers,' + cs.size + '\n';
+        csv += 'Refunds,$' + refTotal.toFixed(2) + ' (' + _reportRefunds.length + ')\n';
+        csv += 'Cash,$' + cashTotal.toFixed(2) + ' (' + cashCount + ')\n';
+        csv += 'QR Code,$' + qrTotal.toFixed(2) + ' (' + qrCount + ')\n\n';
+
+        csv += 'Orders by Day\n';
+        csv += 'Date,Orders,Customers,Revenue\n';
+        var byDay = {};
+        for (var a = 0; a < confirmed.length; a++) {
+            var o = confirmed[a];
+            var dk = formatDate(new Date(o.confirmedTimestamp || o.timestamp || Date.now()));
+            if (!byDay[dk]) byDay[dk] = { revenue: 0, orders: 0, customers: new Set() };
+            byDay[dk].revenue += o.total || 0;
+            byDay[dk].orders++;
+            if (o.customerPhone || o.customerName) byDay[dk].customers.add(o.customerPhone || o.customerName);
+        }
+        var days = Object.keys(byDay).sort(function(x,y){ return new Date(y.split('/').reverse().join('-')) - new Date(x.split('/').reverse().join('-')); });
+        if (!days.length) {
+            csv += 'No data for this period\n';
+        } else {
+            for (var b = 0; b < days.length; b++) {
+                var d = byDay[days[b]];
+                csv += escCSV(days[b]) + ',' + d.orders + ',' + d.customers.size + ',$' + d.revenue.toFixed(2) + '\n';
+            }
+        }
+
+        dlCSV(csv, 'GOAT_KIDS_Report_' + new Date().toISOString().slice(0,10) + '.csv');
+        showToast('Report exported!', 'success');
     }
 
     // =============================================
