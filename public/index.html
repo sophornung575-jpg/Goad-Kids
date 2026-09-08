@@ -6849,11 +6849,16 @@ function sendToTelegram(order, callback) {
 
     function exportInventoryCSV() {
         if (!STATE.products.length) { showToast('No products', 'warning'); return; }
-        var csv = 'Product ID,Name,Category,Price,Total Stock,Size,Size Qty,Image\n';
+        var csv = 'Product ID,Name,Category,Price,Cost of Production,Margin %,Total Stock,Stock Value (Cost),Size,Size Qty,Image\n';
         for (var i = 0; i < STATE.products.length; i++) {
             var p = STATE.products[i], img = (p.images && p.images.length > 0) ? p.images[0] : '';
-            if (p.sizes && p.sizes.length > 0) { for (var j = 0; j < p.sizes.length; j++) { csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), getTotalStock(p), escCSV(p.sizes[j].name), p.sizes[j].qty, escCSV(img)].join(',') + '\n'; } }
-            else { csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), getTotalStock(p), 'No sizes', 0, escCSV(img)].join(',') + '\n'; }
+            var ts = getTotalStock(p);
+            var hasCost = p.costPrice != null && p.costPrice !== '';
+            var costStr = hasCost ? Number(p.costPrice).toFixed(2) : '';
+            var marginStr = (hasCost && p.price > 0) ? (((p.price - p.costPrice) / p.price) * 100).toFixed(1) : '';
+            var stockValueStr = hasCost ? (Number(p.costPrice) * ts).toFixed(2) : '';
+            if (p.sizes && p.sizes.length > 0) { for (var j = 0; j < p.sizes.length; j++) { csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), costStr, marginStr, ts, stockValueStr, escCSV(p.sizes[j].name), p.sizes[j].qty, escCSV(img)].join(',') + '\n'; } }
+            else { csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), costStr, marginStr, ts, stockValueStr, 'No sizes', 0, escCSV(img)].join(',') + '\n'; }
         }
         dlCSV(csv, 'GOAT_KIDS_Inventory.csv');
         showToast('Exported!', 'success');
