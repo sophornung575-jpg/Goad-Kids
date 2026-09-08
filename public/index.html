@@ -702,6 +702,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                             <div class="add-product-grid">
                                 <div class="form-group"><label data-translate="productName">Product Name</label><input type="text" id="productName" class="form-control" data-translate="enterProductName" placeholder="Enter product name"></div>
                                 <div class="form-group"><label data-translate="priceUsd">Price ($)</label><input type="number" id="productPrice" class="form-control" placeholder="0.00" step="0.01"></div>
+                                <div class="form-group"><label data-translate="costPriceUsd">Cost of Production ($)</label><input type="number" id="productCostPrice" class="form-control" placeholder="0.00" step="0.01" min="0"><small style="color:var(--gray);font-size:0.72rem" data-translate="costPriceHint">What it costs you to make/stock this item (optional)</small></div>
                                 <div class="form-group"><label data-translate="category">Category</label>
                                     <select id="productCategory" class="form-control">
                                         <option value="" data-translate="selectLbl">Select</option>
@@ -1354,6 +1355,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                 </select>
             </div>
             <div class="form-group"><label>Price ($)</label><input type="number" id="editProductPrice" class="form-control" step="0.01"></div>
+            <div class="form-group"><label>Cost of Production ($)</label><input type="number" id="editProductCostPrice" class="form-control" step="0.01" min="0" placeholder="0.00"><small style="color:var(--gray);font-size:0.72rem">What it costs you to make/stock this item (optional)</small></div>
             <div class="form-group"><label>Images</label>
                 <div class="image-preview-container" id="editImagePreviewContainer"></div>
                 <div class="flex gap-2 mt-4"><input type="text" id="editImageUrlInput" class="form-control" placeholder="Add image URL"><button class="btn btn-outline btn-small" onclick="addEditImageUrl()">Add</button></div>
@@ -1897,6 +1899,7 @@ function sendToTelegram(order, callback) {
             accessoriesShort:'Accessories',shoesShort:'Shoes',
             imgCol:'Img',productCol:'Product',catCol:'Cat',totalCol:'Total',actCol:'Act',
             enterProductName:'Enter product name',priceUsd:'Price ($)',
+            costPriceUsd:'Cost of Production ($)',costPriceHint:'What it costs you to make/stock this item (optional)',profitMargin:'Margin',
             sizePlaceholder:'Size',qtyPlaceholder:'Qty',clickToUpload:'Click to upload',
             max5:'Max 5',imageUrl:'Image URL',addProductBtn:'Add Product',
             storeContext:'Store Context',thisDevice:'This Device',defaultPartner:'Default Partner',
@@ -1960,6 +1963,7 @@ function sendToTelegram(order, callback) {
             accessoriesShort:'គ្រឿងបន្លាស់',shoesShort:'ស្បែកជើង',
             imgCol:'រូបភាព',productCol:'ផលិតផល',catCol:'ប្រភេទ',totalCol:'សរុប',actCol:'សកម្មភាព',
             enterProductName:'បញ្ចូលឈ្មោះផលិតផល',priceUsd:'តម្លៃ ($)',
+            costPriceUsd:'ថ្លៃដើមផលិតកម្ម ($)',costPriceHint:'ថ្លៃដើមផលិត/ស្តុកទំនិញនេះ (ស្រេចចិត្ត)',profitMargin:'ចំណេញ',
             sizePlaceholder:'ទំហំ',qtyPlaceholder:'ចំនួន',clickToUpload:'ចុចដើម្បីផ្ទុកឡើង',
             max5:'អតិបរមា 5',imageUrl:'តំណរូបភាព',addProductBtn:'បន្ថែមផលិតផល',
             storeContext:'បរិបទហាង',thisDevice:'ឧបករណ៍នេះ',defaultPartner:'ដៃគូលំនាំដើម',
@@ -3992,17 +3996,22 @@ function sendToTelegram(order, callback) {
     function addProduct() {
         var n = document.getElementById('productName').value.trim();
         var pr = parseFloat(document.getElementById('productPrice').value);
+        var costEl = document.getElementById('productCostPrice');
+        var costRaw = costEl ? costEl.value.trim() : '';
+        var cost = costRaw === '' ? null : parseFloat(costRaw);
         var c = document.getElementById('productCategory').value;
         if (!n || isNaN(pr) || pr <= 0 || !c) { showToast('Fill all fields', 'error'); return; }
+        if (cost !== null && (isNaN(cost) || cost < 0)) { showToast('Enter a valid cost of production', 'error'); return; }
         if (!STATE.newProductSizes.length) { showToast('Add at least one size', 'error'); return; }
         var imgs = STATE.newProductImages.length ? STATE.newProductImages.slice() : ['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'];
         var t = 0;
         for (var i = 0; i < STATE.newProductSizes.length; i++) { t += STATE.newProductSizes[i].qty; }
-        STATE.products.push({ id: 'p' + Date.now(), name: n, slug: makeSlug(n), price: pr, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice(), addedAt: Date.now(), active: true });
+        STATE.products.push({ id: 'p' + Date.now(), name: n, slug: makeSlug(n), price: pr, costPrice: cost, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice(), addedAt: Date.now(), active: true });
         saveProducts();
-        logActivity('Add Product', n + ' ($' + pr + ')');
+        logActivity('Add Product', n + ' ($' + pr + ')' + (cost !== null ? ' | Cost: $' + cost.toFixed(2) : ''));
         if (STATE.firebaseOnline) syncToFirebase();
         document.getElementById('productName').value = ''; document.getElementById('productPrice').value = ''; document.getElementById('productCategory').value = '';
+        if (costEl) costEl.value = '';
         STATE.newProductSizes = []; STATE.newProductImages = [];
         renderNewProductSizes(); renderImagePreviews();
         renderProducts(); renderInventory(); updateAdminBadges();
@@ -4045,6 +4054,8 @@ function sendToTelegram(order, callback) {
         document.getElementById('editProductName').value = p.name;
         document.getElementById('editProductCategory').value = p.category;
         document.getElementById('editProductPrice').value = p.price;
+        var editCostEl = document.getElementById('editProductCostPrice');
+        if (editCostEl) editCostEl.value = (p.costPrice != null && p.costPrice !== '') ? p.costPrice : '';
         var reasonEl = document.getElementById('editRevisionReason');
         var customEl = document.getElementById('editRevisionReasonCustom');
         if (reasonEl) reasonEl.value = '';
@@ -4111,6 +4122,16 @@ function sendToTelegram(order, callback) {
         p.slug = makeSlug(p.name);
         p.category = document.getElementById('editProductCategory').value;
         p.price = parseFloat(document.getElementById('editProductPrice').value);
+        var editCostVal = document.getElementById('editProductCostPrice');
+        if (editCostVal) {
+            var costRaw2 = editCostVal.value.trim();
+            if (costRaw2 === '') { p.costPrice = null; }
+            else {
+                var cost2 = parseFloat(costRaw2);
+                if (isNaN(cost2) || cost2 < 0) { showToast('Enter a valid cost of production', 'error'); return; }
+                p.costPrice = cost2;
+            }
+        }
         p.images = STATE.editProductImages.slice();
 
         if (STATE._editSizes && STATE._editSizes.length) {
@@ -4158,7 +4179,7 @@ function sendToTelegram(order, callback) {
         // flushProductSyncQueue() retries it automatically once reconnected —
         // the edit is never silently lost even though we don't block on it.
         var productSyncPayload = {
-            name: p.name, slug: p.slug, price: p.price, stock: p.stock, category: p.category,
+            name: p.name, slug: p.slug, price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), stock: p.stock, category: p.category,
             images: p.images || [], sizes: p.sizes || [], active: true,
             updatedAt: new Date().toISOString()
         };
@@ -5653,7 +5674,10 @@ function sendToTelegram(order, callback) {
                 '<td><img src="' + img + '" onclick="openLightbox(\'' + img.replace(/'/g, "\\'") + '\')" style="width:84px;height:84px;object-fit:cover;border-radius:10px;cursor:zoom-in;display:block" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=200\'"></td>' +
                 '<td style="max-width:110px"><strong style="font-size:0.78rem">' + p.name + '</strong></td>' +
                 '<td><span class="product-category ' + getCategoryDisplay(p.category) + '" style="font-size:0.65rem;padding:0.1rem 0.4rem">' + p.category + '</span></td>' +
-                '<td style="font-weight:600;font-size:0.78rem">$' + p.price.toFixed(2) + '</td>' +
+                '<td style="font-weight:600;font-size:0.78rem">$' + p.price.toFixed(2) +
+                (p.costPrice != null ? '<br><span style="font-weight:400;font-size:0.68rem;color:var(--gray)">Cost $' + Number(p.costPrice).toFixed(2) + '</span>' +
+                    '<br><span style="font-weight:600;font-size:0.68rem;color:' + ((p.price - p.costPrice) >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + (p.price > 0 ? (((p.price - p.costPrice) / p.price) * 100).toFixed(0) : '0') + '% margin</span>' : '') +
+                '</td>' +
                 '<td>' + sizeHtml + '</td>' +
                 '<td><strong style="color:' + stockColor + ';font-size:0.78rem">' + totalStock + '</strong></td>' +
                 '<td><div style="display:flex;gap:3px">' +
@@ -6083,6 +6107,52 @@ function sendToTelegram(order, callback) {
             for (var e = 0; e < itemKeys.length; e++) {
                 var itm = byItem[itemKeys[e]];
                 csv += escCSV(itm.name) + ',' + escCSV(itm.size) + ',' + itm.qty + ',$' + itm.revenue.toFixed(2) + '\n';
+            }
+        }
+
+        csv += '\nOrder Details (Customer Info)\n';
+        csv += 'Order ID,Date,Customer Name,Phone,Address,City,Payment,Shipping,Item,Size,Qty,Total\n';
+        if (!confirmed.length) {
+            csv += 'No data for this period\n';
+        } else {
+            var sortedOrders = confirmed.slice().sort(function(x, y) {
+                return (y.confirmedTimestamp || y.timestamp || 0) - (x.confirmedTimestamp || x.timestamp || 0);
+            });
+            for (var f = 0; f < sortedOrders.length; f++) {
+                var ord = sortedOrders[f];
+                var oCart = ord.cart || [];
+                var oDate = formatDate(new Date(ord.confirmedTimestamp || ord.timestamp || Date.now()));
+                var payLbl = ord.paymentMethod === 'qr' ? 'QR Code' : 'Cash';
+                if (!oCart.length) {
+                    csv += [
+                        escCSV(ord.orderId), escCSV(oDate), escCSV(ord.customerName||''), escCSV(ord.customerPhone||''),
+                        escCSV(ord.customerAddress||''), escCSV(ord.customerCity||''), escCSV(payLbl), escCSV(ord.shippingMethod||''),
+                        '', '', '', (ord.total||0).toFixed(2)
+                    ].join(',') + '\n';
+                } else {
+                    for (var g = 0; g < oCart.length; g++) {
+                        var oit = oCart[g];
+                        csv += [
+                            escCSV(ord.orderId), escCSV(oDate), escCSV(ord.customerName||''), escCSV(ord.customerPhone||''),
+                            escCSV(ord.customerAddress||''), escCSV(ord.customerCity||''), escCSV(payLbl), escCSV(ord.shippingMethod||''),
+                            escCSV(oit.name), escCSV(oit.size||''), oit.quantity,
+                            (g === 0 ? (ord.total||0).toFixed(2) : '')
+                        ].join(',') + '\n';
+                    }
+                }
+            }
+        }
+
+        if (_reportRefunds.length) {
+            csv += '\nRefunded Orders (Customer Info)\n';
+            csv += 'Refund ID,Order ID,Date,Customer Name,Phone,Refund Amount,Reason\n';
+            for (var h2 = 0; h2 < _reportRefunds.length; h2++) {
+                var rf = _reportRefunds[h2];
+                csv += [
+                    escCSV(rf.refundId||''), escCSV(rf.orderId||''), escCSV(rf.refundDate||''),
+                    escCSV(rf.customerName||''), escCSV(rf.customerPhone||''),
+                    (rf.refundAmount||0).toFixed(2), escCSV(rf.refundReason||'')
+                ].join(',') + '\n';
             }
         }
 
