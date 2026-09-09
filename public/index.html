@@ -931,7 +931,9 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                     </div>
                                     <button class="btn btn-outline btn-small" style="margin-top:8px;color:var(--gray)" onclick="resetStoreSelection()"><i class="fas fa-redo"></i> Reset Store Selection</button>
                                 </div>
-                                <div class="store-info-item"><small>Cloud Sync</small><button class="btn btn-success w-full" onclick="syncToFirebase()"><i class="fas fa-cloud-upload-alt"></i> Sync to Cloud</button></div>
+                                <div class="store-info-item"><small>Cloud Sync</small><button class="btn btn-success w-full" onclick="syncToFirebase()"><i class="fas fa-cloud-upload-alt"></i> Sync to Cloud</button>
+                                    <button class="btn btn-outline btn-small w-full" style="margin-top:6px" onclick="copyCostPricesFromStore271()"><i class="fas fa-dollar-sign"></i> Copy Cost Prices from Goat Kids 271 → All Stores</button>
+                                </div>
                                 <div class="store-info-item">
                                     <small>This Store Name</small>
                                     <div style="display:flex;gap:6px;margin-top:4px">
@@ -2070,7 +2072,7 @@ function sendToTelegram(order, callback) {
         for (var i = 0; i < STATE.products.length; i++) {
             var p = STATE.products[i];
             db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({
-                name: p.name, price: p.price, stock: p.stock, category: p.category,
+                name: p.name, price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), stock: p.stock, category: p.category,
                 images: p.images || [], sizes: p.sizes || [], active: true,
                 updatedAt: new Date().toISOString()
             }, { merge: true }).catch(function(e){ console.warn('Product sync failed:', e); });
@@ -3539,7 +3541,7 @@ function sendToTelegram(order, callback) {
         try {
             for (var i = 0; i < STATE.products.length; i++) {
                 var p = STATE.products[i];
-                await db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({ name: p.name, slug: p.slug || makeSlug(p.name), price: p.price, stock: p.stock, category: p.category, images: p.images || [], sizes: p.sizes || [], active: true, updatedAt: new Date().toISOString() }, { merge: true });
+                await db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({ name: p.name, slug: p.slug || makeSlug(p.name), price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), stock: p.stock, category: p.category, images: p.images || [], sizes: p.sizes || [], active: true, updatedAt: new Date().toISOString() }, { merge: true });
             }
             // Delete products that were deleted locally
             var deleted = JSON.parse(localStorage.getItem('goatDeletedProducts') || '[]');
@@ -3648,6 +3650,107 @@ function sendToTelegram(order, callback) {
             console.log('═══════════════════════════════════════════════════════');
         } catch(e) {
             console.error('Reconciliation failed:', e);
+        }
+    }
+
+    // One-time migration: copy Cost of Production from Goat Kids 271 to Main Store & Goat Kids PH
+    // Matches products by slug (falls back to name-derived slug). 271's cost always wins on conflict.
+    // Usage (browser console, while app is loaded and online): copyCostPricesFromStore271()
+    async function copyCostPricesFromStore271() {
+        if (!db) { console.error('Firebase offline'); return; }
+        var SOURCE_STORE = 'GOAT-KIDS-271-0889';
+        var TARGET_STORES = [
+            { id: 'GOAT-1979', name: 'Main Store' },
+            { id: 'GOAT-KIDS-PH-6012', name: 'Goat Kids PH' }
+        ];
+        if (!confirm('This will copy Cost of Production values from Goat Kids 271 to Main Store and Goat Kids PH, matching products by name.\n\nExisting cost prices in the target stores WILL be overwritten. Continue?')) return;
+
+        console.log('═══════════════════════════════════════════════════════');
+        console.log('COPYING COST PRICES FROM GOAT KIDS 271 → OTHER STORES');
+        console.log('═══════════════════════════════════════════════════════');
+
+        function normKey(name, slug) {
+            return (slug && slug.trim()) ? slug.trim().toLowerCase() : makeSlug(name || '');
+        }
+
+        try {
+            var srcSnap = await db.collection('stores').doc(SOURCE_STORE).collection('products').get();
+            var srcMap = {};
+            var srcCount = 0;
+            srcSnap.forEach(function(d) {
+                var dt = d.data();
+                if (dt.costPrice != null && dt.costPrice !== '') {
+                    srcMap[normKey(dt.name, dt.slug)] = { name: dt.name || '', costPrice: dt.costPrice };
+                    srcCount++;
+                }
+            });
+            console.log('Found ' + srcCount + ' products with a cost set in Goat Kids 271.');
+            if (!srcCount) { console.log('Nothing to copy. Done.'); return; }
+
+            var totalUpdated = 0;
+            var unmatchedByStore = {};
+
+            for (var t = 0; t < TARGET_STORES.length; t++) {
+                var store = TARGET_STORES[t];
+                console.log('\n── ' + store.name + ' (' + store.id + ') ──');
+                var tgtSnap = await db.collection('stores').doc(store.id).collection('products').get();
+                var matches = [];
+                var matchedKeys = {};
+
+                tgtSnap.forEach(function(d) {
+                    var dt = d.data();
+                    var key = normKey(dt.name, dt.slug);
+                    var src = srcMap[key];
+                    if (src) {
+                        matches.push({ id: d.id, name: dt.name || d.id, costPrice: src.costPrice });
+                        matchedKeys[key] = true;
+                    }
+                });
+
+                for (var i = 0; i < matches.length; i += 400) {
+                    var chunk = matches.slice(i, i + 400);
+                    var batch = db.batch();
+                    chunk.forEach(function(m) {
+                        var ref = db.collection('stores').doc(store.id).collection('products').doc(m.id);
+                        batch.update(ref, { costPrice: m.costPrice, updatedAt: new Date().toISOString() });
+                    });
+                    await batch.commit();
+                }
+
+                matches.forEach(function(m) { console.log('  ✅ ' + m.name + ' → $' + Number(m.costPrice).toFixed(2)); });
+                console.log(store.name + ': updated ' + matches.length + ' product(s).');
+                totalUpdated += matches.length;
+
+                var missing = [];
+                Object.keys(srcMap).forEach(function(k) { if (!matchedKeys[k]) missing.push(srcMap[k].name); });
+                unmatchedByStore[store.name] = missing;
+            }
+
+            console.log('\n═══════════════════════════════════════════════════════');
+            console.log('DONE. Total cost prices copied: ' + totalUpdated);
+            Object.keys(unmatchedByStore).forEach(function(storeName) {
+                var list = unmatchedByStore[storeName];
+                if (list.length) {
+                    console.log('\n⚠️  Not found in ' + storeName + ' (name/slug did not match any product there):');
+                    list.forEach(function(n) { console.log('   - ' + n); });
+                }
+            });
+            console.log('═══════════════════════════════════════════════════════');
+            showToast('Cost prices copied to ' + totalUpdated + ' product(s). See console for details.', 'success');
+
+            // If we're currently sitting on one of the target stores, refresh local state so the UI reflects it immediately
+            if (STATE.storeId === 'GOAT-1979' || STATE.storeId === 'GOAT-KIDS-PH-6012') {
+                var freshSnap = await db.collection('stores').doc(STATE.storeId).collection('products').get();
+                var fresh = [];
+                freshSnap.forEach(function(d) {
+                    var dt = d.data();
+                    fresh.push(Object.assign({}, dt, { id: d.id, name: dt.name || '', slug: dt.slug || makeSlug(dt.name||''), price: dt.price||0, stock: dt.stock||0, category: dt.category||'', images: dt.images||[], sizes: dt.sizes||[], active: dt.active !== false }));
+                });
+                if (fresh.length) { STATE.products = fresh; saveProducts(); renderInventory(); renderProducts(); }
+            }
+        } catch (e) {
+            console.error('Cost price copy failed:', e);
+            showToast('Copy failed - check console', 'error');
         }
     }
 
@@ -8112,6 +8215,9 @@ function sendToTelegram(order, callback) {
             // Ensure slug is set on destination product for future transfers
             if (!destData.slug) destData.slug = productSlug;
 
+            // Keep cost of production in sync with the sending store on every transfer
+            if (p.costPrice != null && p.costPrice !== '') destData.costPrice = p.costPrice;
+
             if (destData.sizes && destData.sizes.length > 0 && t.size !== 'One Size') {
                 var found = false;
                 destData.sizes.forEach(function(s){ if (s.name === t.size) { s.qty += t.qty; found = true; } });
@@ -8131,7 +8237,7 @@ function sendToTelegram(order, callback) {
 
             // Keep local STATE in sync if this product is in the local store
             var localP = STATE.products.find(function(x){ return x.id === destProductRef.id; });
-            if (localP) { localP.sizes = destData.sizes; localP.stock = destData.stock; saveProducts(); }
+            if (localP) { localP.sizes = destData.sizes; localP.stock = destData.stock; localP.costPrice = destData.costPrice; saveProducts(); }
 
             logActivity('Transfer Receipt Confirmed', t.productName + ' x' + t.qty + ' from ' + t.fromStoreName);
             _sendTelegramRaw(
@@ -8309,6 +8415,7 @@ function sendToTelegram(order, callback) {
             } else { srcP.stock = (srcP.stock || 0) - t.qty; }
 
             // Add to destination (in memory)
+            if (srcP.costPrice != null && srcP.costPrice !== '') dest.data.costPrice = srcP.costPrice;
             if (dest.data.sizes && dest.data.sizes.length > 0 && t.size !== 'One Size') {
                 var found = false;
                 dest.data.sizes.forEach(function(s){ if (s.name === t.size) { s.qty += t.qty; found = true; } });
