@@ -638,6 +638,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         <button class="inv-subbtn" onclick="switchInvTab('add',this)"><i class="fas fa-plus"></i> <span data-translate="addNew">Add New</span></button>
                         <button class="inv-subbtn" onclick="switchInvTab('transfer',this)"><i class="fas fa-exchange-alt"></i> <span data-translate="transfer">Transfer</span> <span id="transferBadge" style="display:none;background:var(--danger);color:#fff;border-radius:999px;font-size:0.7rem;padding:1px 6px;margin-left:4px">0</span></button>
                         <button class="inv-subbtn" id="branchStockTabBtn" onclick="switchInvTab('branchstock',this)" style="display:none"><i class="fas fa-warehouse"></i> <span data-translate="branchStock">Branch Stock</span></button>
+                        <button class="inv-subbtn" onclick="switchInvTab('reconcile',this)"><i class="fas fa-balance-scale"></i> <span data-translate="reconcile">Reconcile</span><span id="reconcileBadge" style="display:none;background:var(--danger);color:#fff;border-radius:999px;font-size:0.7rem;padding:1px 6px;margin-left:4px">0</span></button>
                         <button class="inv-subbtn" onclick="switchInvTab('settings',this)"><i class="fas fa-cog"></i> <span data-translate="settings">Settings</span></button>
                     </div>
 
@@ -1070,6 +1071,56 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                             </div>
                         </div>
                         </div><!-- end settingsContent -->
+                    </div>
+
+                    <!-- RECONCILE SUB-TAB -->
+                    <div id="invReconcileTab" class="inv-subtab">
+                        <div class="admin-card">
+                            <div class="admin-card-header">
+                                <div class="admin-card-title"><i class="fas fa-balance-scale" style="color:var(--primary)"></i> Stock Reconciliation</div>
+                                <button class="btn btn-outline btn-small" onclick="takeSnapshotNow()"><i class="fas fa-camera"></i> Take Snapshot Now</button>
+                            </div>
+                            <div class="admin-card-body">
+                                <p style="font-size:0.83rem;color:var(--gray);margin-bottom:0.75rem">Checks two things for the date range you pick: (1) sales that were confirmed but never deducted from stock, and (2) whether total stock movement (sold, refunded, transferred) actually matches what happened to stock levels. Movement checking needs a daily opening snapshot — snapshots start being recorded automatically once this feature is live, so historical ranges before that won't have data yet.</p>
+                                <div id="reconcileSnapshotInfo" style="font-size:0.8rem;color:var(--gray-dark);margin-bottom:0.75rem"></div>
+                                <div class="inv-filter-row" style="align-items:flex-end">
+                                    <div style="flex:1;min-width:130px">
+                                        <small style="color:var(--gray)">From</small>
+                                        <input type="date" id="reconcileDateFrom" class="form-control" style="font-size:0.85rem">
+                                    </div>
+                                    <div style="flex:1;min-width:130px">
+                                        <small style="color:var(--gray)">To</small>
+                                        <input type="date" id="reconcileDateTo" class="form-control" style="font-size:0.85rem">
+                                    </div>
+                                    <button class="btn btn-outline btn-small" onclick="setReconcileRange('today')">Today</button>
+                                    <button class="btn btn-outline btn-small" onclick="setReconcileRange('week')">Last 7d</button>
+                                    <button class="btn btn-outline btn-small" onclick="setReconcileRange('month')">This Month</button>
+                                    <button class="btn btn-primary btn-small" onclick="runStockReconciliation()"><i class="fas fa-play"></i> Run Check</button>
+                                </div>
+                                <div id="reconcileSummary" style="margin-top:1rem"></div>
+
+                                <!-- Section A: Orders not deducted -->
+                                <div id="reconcileOrderIssuesWrap" style="display:none;margin-top:1rem">
+                                    <div style="font-weight:700;color:var(--danger);margin-bottom:0.5rem"><i class="fas fa-exclamation-triangle"></i> Sales Not Deducted From Stock</div>
+                                    <div id="reconcileOrderIssues" style="display:grid;gap:0.5rem"></div>
+                                </div>
+
+                                <!-- Section B: Stock movement mismatches -->
+                                <div id="reconcileMovementWrap" style="display:none;margin-top:1.5rem">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.5rem">
+                                        <div style="font-weight:700;color:var(--danger)"><i class="fas fa-exclamation-triangle"></i> Stock Movement Mismatches</div>
+                                        <label style="font-size:0.8rem;color:var(--gray-dark);display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="reconcileShowAll" onchange="renderReconcileMovementTable()"> Show all checked items</label>
+                                    </div>
+                                    <div style="overflow-x:auto">
+                                        <table class="inventory-table" style="font-size:0.8rem">
+                                            <thead><tr><th>Item</th><th>Opening</th><th>Sold</th><th>Refund</th><th>Xfer In</th><th>Xfer Out</th><th>Adj</th><th>Expected</th><th>Actual</th><th>Diff</th><th></th></tr></thead>
+                                            <tbody id="reconcileMovementBody"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div id="reconcileEmptyState" style="display:none;text-align:center;color:var(--gray);padding:1.5rem"><i class="fas fa-check-circle" style="color:var(--success)"></i><p>No issues found for this range.</p></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -2417,6 +2468,8 @@ function sendToTelegram(order, callback) {
             clearInventorySearch(); renderInventory();
             // Ensure Products sub-tab is active by default
             switchInvTab('products', document.querySelector('.inv-subbtn'));
+            // Fire-and-forget: capture today's opening stock snapshot if not already done today
+            maybeCaptureOpeningSnapshot();
         }
         else if (tab === 'reports') {
             document.querySelectorAll('.admin-tab')[2].classList.add('active');
@@ -4276,6 +4329,10 @@ function sendToTelegram(order, callback) {
         var logNote = p.name + ' (Stock: ' + oldStock + ' → ' + p.stock + ')' + (reason ? ' | Reason: ' + reason : '');
         logActivity('Edit Product', logNote);
 
+        // Record a structured stock adjustment (used by Reconciliation so manual
+        // edits show up as an accounted-for movement instead of a false mismatch)
+        if (stockChanged) { recordStockAdjustment(p, oldSizes, oldStock, reason); }
+
         // Sync to Firebase in the background — always attempt if db exists
         // (don't gate on STATE.firebaseOnline, which can be a stale
         // false-negative). If it fails, queue it in goatProductSyncQueue so
@@ -5232,6 +5289,7 @@ function sendToTelegram(order, callback) {
         if (tab === 'products') renderInventory();
         if (tab === 'transfer') initTransferTab();
         if (tab === 'branchstock') initBranchStockTab();
+        if (tab === 'reconcile') initReconcileTab();
         if (tab === 'settings') {
             // Always lock when switching to settings
             lockSettings();
@@ -5697,6 +5755,355 @@ function sendToTelegram(order, callback) {
     }
 
     // =============================================
+    // =============================================
+    // STOCK RECONCILIATION
+    // Two checks over a chosen date range:
+    //  A) Orders confirmed but never deducted from stock (data integrity bug)
+    //  B) Stock movement audit: opening snapshot + sold/refunded/transferred
+    //     should equal the closing snapshot (or live stock, for "today")
+    // Requires a daily opening snapshot, captured automatically once this
+    // feature ships (see maybeCaptureOpeningSnapshot), plus a manual
+    // "Take Snapshot Now" button for correcting the baseline after a
+    // physical stock count.
+    // =============================================
+
+    function _dateStr(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+    function _todayStr() { return _dateStr(new Date()); }
+    function _nextDateStr(dateStr) { var d = new Date(dateStr + 'T00:00:00'); d.setDate(d.getDate() + 1); return _dateStr(d); }
+
+    async function maybeCaptureOpeningSnapshot() {
+        if (!db || !STATE.storeId) return;
+        var todayStr = _todayStr();
+        var marker = localStorage.getItem('goatSnapshotDate_' + STATE.storeId);
+        if (marker === todayStr) return; // already captured today from this device
+        try {
+            var ref = db.collection('stores').doc(STATE.storeId).collection('stockSnapshots').doc(todayStr);
+            var existing = await ref.get();
+            if (existing.exists) { localStorage.setItem('goatSnapshotDate_' + STATE.storeId, todayStr); return; } // another device already captured it
+            await saveSnapshotNow(todayStr);
+        } catch(e) { console.warn('Opening snapshot capture failed:', e.message); }
+    }
+
+    async function saveSnapshotNow(dateStr) {
+        var productsMap = {};
+        STATE.products.forEach(function(p) {
+            var sizesMap = {};
+            if (p.sizes && p.sizes.length) p.sizes.forEach(function(s){ sizesMap[s.name] = s.qty || 0; });
+            productsMap[p.id] = { name: p.name, sizes: sizesMap, stock: getTotalStock(p) };
+        });
+        var snap = { date: dateStr, timestamp: Date.now(), takenBy: STATE.adminRole || 'system', products: productsMap };
+        await db.collection('stores').doc(STATE.storeId).collection('stockSnapshots').doc(dateStr).set(snap);
+        localStorage.setItem('goatSnapshotDate_' + STATE.storeId, dateStr);
+        return snap;
+    }
+
+    async function takeSnapshotNow() {
+        if (!db) { showToast('Firebase offline — cannot take snapshot', 'error'); return; }
+        var todayStr = _todayStr();
+        if (!confirm('Take a stock snapshot now for today (' + todayStr + ')?\n\nThis overwrites any existing snapshot for today and becomes the new baseline for reconciliation. Use this right after a physical stock count.')) return;
+        try {
+            await saveSnapshotNow(todayStr);
+            logActivity('Stock Snapshot', 'Manual snapshot taken for ' + todayStr);
+            showToast('📸 Snapshot saved for ' + todayStr, 'success');
+            var infoEl = document.getElementById('reconcileSnapshotInfo');
+            if (infoEl) infoEl.textContent = 'Snapshot for ' + todayStr + ' saved just now.';
+        } catch(e) { showToast('Snapshot failed: ' + e.message, 'error'); }
+    }
+
+    async function recordStockAdjustment(p, oldSizes, oldStock, reason) {
+        if (!db || !STATE.storeId) return;
+        try {
+            var sizeDeltas = [];
+            if (p.sizes && p.sizes.length) {
+                p.sizes.forEach(function(s) {
+                    var old = oldSizes.find(function(o){ return o.name === s.name; });
+                    var oldQty = old ? (old.qty || 0) : 0;
+                    if (oldQty !== s.qty) sizeDeltas.push({ size: s.name, oldQty: oldQty, newQty: s.qty, delta: s.qty - oldQty });
+                });
+            }
+            var adj = {
+                productId: p.id, productName: p.name,
+                oldStock: oldStock, newStock: p.stock, totalDelta: p.stock - oldStock,
+                sizeDeltas: sizeDeltas, reason: reason || '',
+                timestamp: Date.now(), timeStr: new Date().toLocaleString(),
+                user: STATE.adminRole || 'admin'
+            };
+            await db.collection('stores').doc(STATE.storeId).collection('stockAdjustments').add(adj);
+        } catch(e) { console.warn('Stock adjustment log failed:', e.message); }
+    }
+
+    function initReconcileTab() {
+        var fromEl = document.getElementById('reconcileDateFrom'), toEl = document.getElementById('reconcileDateTo');
+        if (fromEl && !fromEl.value) { var t = _todayStr(); fromEl.value = t; toEl.value = t; }
+        var infoEl = document.getElementById('reconcileSnapshotInfo');
+        if (infoEl && db && STATE.storeId) {
+            db.collection('stores').doc(STATE.storeId).collection('stockSnapshots').doc(_todayStr()).get()
+                .then(function(s){ infoEl.textContent = s.exists ? ('Today\'s opening snapshot: saved ' + new Date(s.data().timestamp).toLocaleTimeString() + '.') : 'No snapshot for today yet — one is taken automatically, or click "Take Snapshot Now".'; })
+                .catch(function(){ infoEl.textContent = ''; });
+        }
+    }
+
+    function setReconcileRange(range) {
+        var now = new Date(), from;
+        var to = _todayStr();
+        if (range === 'today') { from = to; }
+        else if (range === 'week') { var d = new Date(now); d.setDate(d.getDate() - 6); from = _dateStr(d); }
+        else if (range === 'month') { from = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01'; }
+        document.getElementById('reconcileDateFrom').value = from;
+        document.getElementById('reconcileDateTo').value = to;
+    }
+
+    var _reconcileMovementRows = []; // cached rows from the last run, for the "show all" toggle
+
+    async function runStockReconciliation() {
+        if (!db) { showToast('Firebase offline — reconciliation needs a connection', 'error'); return; }
+        var fromDate = document.getElementById('reconcileDateFrom').value;
+        var toDate = document.getElementById('reconcileDateTo').value;
+        if (!fromDate || !toDate) { showToast('Pick both dates', 'error'); return; }
+        if (fromDate > toDate) { showToast('"From" must be before "To"', 'error'); return; }
+
+        var summaryEl = document.getElementById('reconcileSummary');
+        summaryEl.innerHTML = '<div style="text-align:center;color:var(--gray);padding:1rem"><i class="fas fa-spinner fa-spin"></i> Checking ' + fromDate + ' → ' + toDate + '...</div>';
+        document.getElementById('reconcileOrderIssuesWrap').style.display = 'none';
+        document.getElementById('reconcileMovementWrap').style.display = 'none';
+        document.getElementById('reconcileEmptyState').style.display = 'none';
+
+        var fromTs = new Date(fromDate + 'T00:00:00').getTime();
+        var toTs = new Date(toDate + 'T23:59:59').getTime();
+
+        try {
+            var orderIssues = await checkUndeductedOrders(fromTs, toTs);
+            var movement = await checkStockMovement(fromDate, toDate, fromTs, toTs);
+
+            renderOrderIssues(orderIssues);
+            _reconcileMovementRows = movement.rows;
+            document.getElementById('reconcileShowAll').checked = false;
+            renderReconcileMovementTable();
+
+            var mismatchCount = movement.rows.filter(function(r){ return r.diff !== 0; }).length;
+            var badge = document.getElementById('reconcileBadge');
+            var totalIssues = orderIssues.length + mismatchCount;
+            if (badge) { badge.style.display = totalIssues > 0 ? 'inline-block' : 'none'; badge.textContent = totalIssues; }
+
+            var parts = [];
+            parts.push('<div style="display:flex;gap:1rem;flex-wrap:wrap">');
+            parts.push('<div class="admin-card" style="flex:1;min-width:160px;padding:0.75rem 1rem"><div style="font-size:1.4rem;font-weight:700;color:' + (orderIssues.length ? 'var(--danger)' : 'var(--success)') + '">' + orderIssues.length + '</div><div style="font-size:0.8rem;color:var(--gray)">Sale(s) not deducted</div></div>');
+            parts.push('<div class="admin-card" style="flex:1;min-width:160px;padding:0.75rem 1rem"><div style="font-size:1.4rem;font-weight:700;color:' + (mismatchCount ? 'var(--danger)' : 'var(--success)') + '">' + mismatchCount + '</div><div style="font-size:0.8rem;color:var(--gray)">Item(s) with stock mismatch</div></div>');
+            parts.push('<div class="admin-card" style="flex:1;min-width:160px;padding:0.75rem 1rem"><div style="font-size:1.4rem;font-weight:700;color:var(--gray-dark)">' + movement.rows.length + '</div><div style="font-size:0.8rem;color:var(--gray)">Item(s) checked</div></div>');
+            parts.push('</div>');
+            if (movement.note) parts.push('<div style="font-size:0.8rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-info-circle"></i> ' + movement.note + '</div>');
+            summaryEl.innerHTML = parts.join('');
+
+            if (orderIssues.length) document.getElementById('reconcileOrderIssuesWrap').style.display = 'block';
+            if (movement.rows.length) document.getElementById('reconcileMovementWrap').style.display = 'block';
+            if (!orderIssues.length && mismatchCount === 0) document.getElementById('reconcileEmptyState').style.display = 'block';
+        } catch(e) {
+            console.error('Reconciliation failed:', e);
+            summaryEl.innerHTML = '<div style="color:var(--danger);padding:1rem">Check failed: ' + e.message + '</div>';
+        }
+    }
+
+    // Check A: confirmed orders whose stockDeducted flag never got set
+    async function checkUndeductedOrders(fromTs, toTs) {
+        var issues = [];
+        var seen = {};
+        // Live (un-archived) orders for this store
+        try {
+            var liveSnap = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
+            liveSnap.forEach(function(d) {
+                var o = Object.assign({ orderId: d.id }, d.data());
+                var ts = o.confirmedTimestamp || o.timestamp || 0;
+                if (ts < fromTs || ts > toTs) return;
+                if (o.status !== 'confirmed' && o.status !== 'partial_refund' && o.status !== 'refunded') return;
+                if (o.stockDeducted === true) return;
+                if (seen[o.orderId]) return; seen[o.orderId] = true;
+                issues.push(o);
+            });
+        } catch(e) { console.warn('Live order scan failed:', e.message); }
+        // Archived orders for this store
+        try {
+            var archSnap = await db.collection('archivedOrders').where('storeId', '==', STATE.storeId).get();
+            archSnap.forEach(function(d) {
+                var o = Object.assign({ orderId: d.id }, d.data());
+                var ts = o.confirmedTimestamp || o.timestamp || 0;
+                if (ts < fromTs || ts > toTs) return;
+                if (o.status !== 'confirmed' && o.status !== 'partial_refund' && o.status !== 'refunded') return;
+                if (o.stockDeducted === true) return;
+                if (seen[o.orderId]) return; seen[o.orderId] = true;
+                issues.push(o);
+            });
+        } catch(e) { console.warn('Archived order scan failed:', e.message); }
+        issues.sort(function(a,b){ return (b.confirmedTimestamp||b.timestamp||0) - (a.confirmedTimestamp||a.timestamp||0); });
+        return issues;
+    }
+
+    function renderOrderIssues(issues) {
+        var wrap = document.getElementById('reconcileOrderIssues');
+        if (!issues.length) { wrap.innerHTML = ''; return; }
+        wrap.innerHTML = issues.map(function(o) {
+            var items = (o.cart || []).map(function(c){ return c.quantity + '× ' + escHtml(c.name) + (c.size ? ' (' + escHtml(c.size) + ')' : ''); }).join(', ');
+            var flagState = (o.stockDeducted === undefined) ? 'field missing entirely (never set)' : 'set to ' + JSON.stringify(o.stockDeducted);
+            return '<div class="admin-card" style="padding:0.75rem 1rem;border-left:3px solid var(--danger)">' +
+                '<div><b>' + escHtml(o.orderId) + '</b> <span style="color:var(--gray);font-size:0.8rem">confirmed ' + escHtml(o.confirmedAt || o.orderDate || 'unknown time') + '</span></div>' +
+                '<div style="font-size:0.85rem;margin:0.25rem 0">' + items + '</div>' +
+                '<div style="font-size:0.78rem;color:var(--gray-dark)">Status: <code>' + escHtml(o.status||'') + '</code> · <code>stockDeducted</code> ' + flagState + ' · Total: $' + (o.total||0).toFixed(2) + ' · Customer: ' + escHtml(o.customerName||'—') + '</div>' +
+                '</div>';
+        }).join('');
+    }
+
+    // Check B: opening snapshot + movements should equal closing snapshot / live stock
+    async function checkStockMovement(fromDate, toDate, fromTs, toTs) {
+        var openingSnap = await db.collection('stores').doc(STATE.storeId).collection('stockSnapshots').doc(fromDate).get();
+        if (!openingSnap.exists) {
+            return { rows: [], note: 'No opening snapshot for ' + fromDate + ' yet, so stock movement can\'t be checked for this range. Snapshots are captured automatically going forward — try a range starting today or later, or click "Take Snapshot Now".' };
+        }
+        var opening = openingSnap.data().products || {};
+
+        var isToday = toDate === _todayStr();
+        var closing = null;
+        if (!isToday) {
+            var closingSnap = await db.collection('stores').doc(STATE.storeId).collection('stockSnapshots').doc(_nextDateStr(toDate)).get();
+            if (!closingSnap.exists) {
+                return { rows: [], note: 'No closing snapshot found for the end of ' + toDate + ' (would be dated ' + _nextDateStr(toDate) + '). Movement can only be checked once that day\'s opening snapshot exists.' };
+            }
+            closing = closingSnap.data().products || {};
+        }
+
+        // Aggregate sold / refunded / transfer-out by our own productId+size
+        var sold = {}, refunded = {}, transferOut = {}, transferIn = {}, adjustments = {};
+        function addQty(map, key, qty) { map[key] = (map[key]||0) + qty; }
+
+        var soldOrders = [];
+        var liveSnap = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
+        liveSnap.forEach(function(d){ soldOrders.push(d.data()); });
+        var archSnap = await db.collection('archivedOrders').where('storeId', '==', STATE.storeId).get();
+        archSnap.forEach(function(d){ soldOrders.push(d.data()); });
+        soldOrders.forEach(function(o) {
+            var ts = o.confirmedTimestamp || o.timestamp || 0;
+            if (ts < fromTs || ts > toTs) return;
+            if (o.status !== 'confirmed' && o.status !== 'partial_refund' && o.status !== 'refunded') return;
+            (o.cart || []).forEach(function(it){ addQty(sold, it.productId + '|' + (it.size||''), it.quantity); });
+        });
+
+        var refundSnap = await db.collection('stores').doc(STATE.storeId).collection('refunds').get();
+        refundSnap.forEach(function(d) {
+            var r = d.data();
+            var ts = r.refundTimestamp || 0;
+            if (ts < fromTs || ts > toTs) return;
+            (r.cart || []).forEach(function(it){ addQty(refunded, it.productId + '|' + (it.size||''), it.quantity); });
+        });
+
+        var xferOutSnap = await db.collection('transfers').where('fromStoreId', '==', STATE.storeId).where('status', '==', 'approved').get();
+        xferOutSnap.forEach(function(d) {
+            var t = d.data();
+            var ts = t.approvedAt || t.requestedAt || 0;
+            if (ts < fromTs || ts > toTs) return;
+            addQty(transferOut, t.productId + '|' + (t.size||''), t.qty);
+        });
+
+        var xferInSnap = await db.collection('transfers').where('toStoreId', '==', STATE.storeId).where('status', '==', 'approved').get();
+        var transferInByName = {}; // productName|size -> qty (source productId doesn't match our local ids)
+        xferInSnap.forEach(function(d) {
+            var t = d.data();
+            var ts = t.approvedAt || t.requestedAt || 0;
+            if (ts < fromTs || ts > toTs) return;
+            addQty(transferInByName, (t.productName||'') + '|' + (t.size||''), t.qty);
+        });
+
+        var adjSnap = await db.collection('stores').doc(STATE.storeId).collection('stockAdjustments').get();
+        adjSnap.forEach(function(d) {
+            var a = d.data();
+            if (a.timestamp < fromTs || a.timestamp > toTs) return;
+            if (a.sizeDeltas && a.sizeDeltas.length) {
+                a.sizeDeltas.forEach(function(sd){ addQty(adjustments, a.productId + '|' + sd.size, sd.delta); });
+            } else {
+                addQty(adjustments, a.productId + '|', a.totalDelta);
+            }
+        });
+
+        // Build the row set: every product+size that appears in the opening snapshot
+        // or the current catalog (covers products added mid-range too)
+        var allKeys = {}; // key -> { productId, name, size }
+        function registerFromMap(map, nameLookup) {
+            Object.keys(map).forEach(function(pid) {
+                var entry = map[pid];
+                var sizes = entry.sizes && Object.keys(entry.sizes).length ? Object.keys(entry.sizes) : [''];
+                sizes.forEach(function(sz) { allKeys[pid + '|' + sz] = { productId: pid, name: entry.name, size: sz }; });
+            });
+        }
+        registerFromMap(opening);
+        var currentMap = {};
+        STATE.products.forEach(function(p) {
+            var sizesMap = {};
+            if (p.sizes && p.sizes.length) p.sizes.forEach(function(s){ sizesMap[s.name] = s.qty||0; });
+            currentMap[p.id] = { name: p.name, sizes: sizesMap };
+        });
+        registerFromMap(currentMap);
+
+        var rows = [];
+        Object.keys(allKeys).forEach(function(key) {
+            var info = allKeys[key];
+            var openQty = (opening[info.productId] && opening[info.productId].sizes && opening[info.productId].sizes[info.size] !== undefined)
+                ? opening[info.productId].sizes[info.size]
+                : (opening[info.productId] && !info.size ? (opening[info.productId].stock||0) : 0);
+            var soldQty = sold[key] || 0;
+            var refQty = refunded[key] || 0;
+            var outQty = transferOut[key] || 0;
+            var adjQty = (adjustments[key] !== undefined ? adjustments[key] : (adjustments[info.productId+'|']||0));
+            var inQty = transferInByName[info.name + '|' + info.size] || 0;
+
+            var actualQty;
+            if (isToday) {
+                var live = currentMap[info.productId];
+                actualQty = live ? (live.sizes[info.size] !== undefined ? live.sizes[info.size] : 0) : 0;
+            } else {
+                actualQty = (closing[info.productId] && closing[info.productId].sizes && closing[info.productId].sizes[info.size] !== undefined) ? closing[info.productId].sizes[info.size] : 0;
+            }
+
+            var expectedQty = openQty - soldQty + refQty + inQty - outQty + adjQty;
+            var diff = actualQty - expectedQty;
+            rows.push({
+                productId: info.productId, name: info.name, size: info.size,
+                opening: openQty, sold: soldQty, refunded: refQty, transferIn: inQty, transferOut: outQty, adjustments: adjQty,
+                expected: expectedQty, actual: actualQty, diff: diff
+            });
+        });
+
+        rows.sort(function(a,b){ if (a.diff !== 0 && b.diff === 0) return -1; if (a.diff === 0 && b.diff !== 0) return 1; return a.name.localeCompare(b.name); });
+        return { rows: rows, note: null };
+    }
+
+    function renderReconcileMovementTable() {
+        var showAll = document.getElementById('reconcileShowAll').checked;
+        var rows = showAll ? _reconcileMovementRows : _reconcileMovementRows.filter(function(r){ return r.diff !== 0; });
+        var body = document.getElementById('reconcileMovementBody');
+        if (!rows.length) { body.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--gray);padding:1rem">Nothing to show</td></tr>'; return; }
+        body.innerHTML = rows.map(function(r) {
+            var diffColor = r.diff === 0 ? 'var(--success)' : 'var(--danger)';
+            return '<tr>' +
+                '<td>' + escHtml(r.name) + (r.size ? ' <small style="color:var(--gray)">(' + escHtml(r.size) + ')</small>' : '') + '</td>' +
+                '<td>' + r.opening + '</td><td>-' + r.sold + '</td><td>+' + r.refunded + '</td><td>+' + r.transferIn + '</td><td>-' + r.transferOut + '</td>' +
+                '<td>' + (r.adjustments >= 0 ? '+' : '') + r.adjustments + '</td>' +
+                '<td>' + r.expected + '</td><td>' + r.actual + '</td>' +
+                '<td style="font-weight:700;color:' + diffColor + '">' + (r.diff > 0 ? '+' : '') + r.diff + '</td>' +
+                '<td><button class="btn btn-outline btn-small" onclick="jumpToInventoryItem(\'' + r.name.replace(/'/g,"\\'") + '\',\'' + (r.size||'').replace(/'/g,"\\'") + '\')" title="View this item"><i class="fas fa-search"></i></button></td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    // Jumps to the Products sub-tab, filtered to a specific item — the "click to
+    // show the incorrect items directly" behavior for reconciliation mismatches
+    function jumpToInventoryItem(name, size) {
+        switchInvTab('products', document.querySelector('.inv-subbtn'));
+        var nameEl = document.getElementById('inventorySearchName');
+        var sizeEl = document.getElementById('inventorySearchSize');
+        if (nameEl) nameEl.value = name || '';
+        if (sizeEl) sizeEl.value = size || '';
+        filterInventory();
+        var body = document.getElementById('inventoryBody');
+        if (body) body.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
     // INVENTORY
     // =============================================
     function quickSizeFilter(size) { document.getElementById('inventorySearchSize').value = size; highlightQuickButton(size); filterInventory(); }
