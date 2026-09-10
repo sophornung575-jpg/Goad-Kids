@@ -1081,7 +1081,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                 <button class="btn btn-outline btn-small" onclick="takeSnapshotNow()"><i class="fas fa-camera"></i> Take Snapshot Now</button>
                             </div>
                             <div class="admin-card-body">
-                                <p style="font-size:0.83rem;color:var(--gray);margin-bottom:0.75rem">Checks two things for the date range you pick: (1) sales that were confirmed but never deducted from stock, and (2) whether total stock movement (sold, refunded, transferred) actually matches what happened to stock levels. Movement checking needs a daily opening snapshot — snapshots start being recorded automatically once this feature is live, so historical ranges before that won't have data yet.</p>
+                                <p style="font-size:0.83rem;color:var(--gray);margin-bottom:0.75rem">Checks three things for the date range you pick: (1) sales that were confirmed but never deducted from stock, (2) whether total stock movement (sold, refunded, transferred) actually matches what happened to stock levels, and (3) products that were manually edited shortly after a sale — the edit can silently overwrite the sale's deduction if it wasn't reloaded first. Movement checking needs a daily opening snapshot — snapshots start being recorded automatically once this feature is live, so historical ranges before that won't have data yet.</p>
                                 <div id="reconcileSnapshotInfo" style="font-size:0.8rem;color:var(--gray-dark);margin-bottom:0.75rem"></div>
                                 <div class="inv-filter-row" style="align-items:flex-end">
                                     <div style="flex:1;min-width:130px">
@@ -1117,6 +1117,12 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                             <tbody id="reconcileMovementBody"></tbody>
                                         </table>
                                     </div>
+                                </div>
+                                <!-- Section C: Sale followed by a manual stock edit -->
+                                <div id="reconcileEditAfterSaleWrap" style="display:none;margin-top:1.5rem">
+                                    <div style="font-weight:700;color:var(--danger);margin-bottom:0.5rem"><i class="fas fa-exclamation-triangle"></i> Sale(s) Followed By A Stock Edit</div>
+                                    <p style="font-size:0.78rem;color:var(--gray);margin:0 0 0.5rem">A manual product edit happened after a sale for the same item. If that edit's browser tab hadn't reloaded the product first, it may have overwritten the sale's deduction. Worth a quick check.</p>
+                                    <div id="reconcileEditAfterSale" style="display:grid;gap:0.5rem"></div>
                                 </div>
                                 <div id="reconcileEmptyState" style="display:none;text-align:center;color:var(--gray);padding:1.5rem"><i class="fas fa-check-circle" style="color:var(--success)"></i><p>No issues found for this range.</p></div>
                             </div>
@@ -4264,49 +4270,58 @@ function sendToTelegram(order, callback) {
         renderEditSizes();
     }
 
-    function saveEditProduct() {
+    async function saveEditProduct() {
         var pid = document.getElementById('editProductId').value;
         var p = null;
         for (var i = 0; i < STATE.products.length; i++) { if (STATE.products[i].id === pid) { p = STATE.products[i]; break; } }
         if (!p) return;
 
-        // Capture old stock for comparison
+        // Capture old stock for comparison — this is what THIS TAB currently
+        // believes the stock is, which can be hours stale if the tab has been
+        // open a long time (e.g. during a slow recount session) while sales
+        // were confirmed elsewhere in the meantime.
         var oldSizes = p.sizes ? p.sizes.map(function(s){ return Object.assign({}, s); }) : [];
         var oldStock = p.stock || 0;
 
-        p.name = document.getElementById('editProductName').value.trim() || p.name;
-        p.slug = makeSlug(p.name);
-        p.category = document.getElementById('editProductCategory').value;
-        p.price = parseFloat(document.getElementById('editProductPrice').value);
+        // Read the modal's fields into local variables first — don't mutate
+        // `p` yet. We need to know what the user INTENDED before we check
+        // whether stock moved on the server underneath us.
+        var newName = document.getElementById('editProductName').value.trim() || p.name;
+        var newSlug = makeSlug(newName);
+        var newCategory = document.getElementById('editProductCategory').value;
+        var newPrice = parseFloat(document.getElementById('editProductPrice').value);
+        var newCostPrice = (typeof p.costPrice !== 'undefined') ? p.costPrice : null;
         var editCostVal = document.getElementById('editProductCostPrice');
         if (editCostVal) {
             var costRaw2 = editCostVal.value.trim();
-            if (costRaw2 === '') { p.costPrice = null; }
+            if (costRaw2 === '') { newCostPrice = null; }
             else {
                 var cost2 = parseFloat(costRaw2);
                 if (isNaN(cost2) || cost2 < 0) { showToast('Enter a valid cost of production', 'error'); return; }
-                p.costPrice = cost2;
+                newCostPrice = cost2;
             }
         }
-        p.images = STATE.editProductImages.slice();
+        var newImages = STATE.editProductImages.slice();
 
+        var newSizes = oldSizes, newStockIntent = oldStock;
         if (STATE._editSizes && STATE._editSizes.length) {
             var nameInputs = document.querySelectorAll('.edit-size-name');
             var qtyInputs = document.querySelectorAll('.edit-size-qty');
-            for (var j = 0; j < STATE._editSizes.length; j++) {
-                if (nameInputs[j]) STATE._editSizes[j].name = nameInputs[j].value.trim() || STATE._editSizes[j].name;
-                if (qtyInputs[j]) STATE._editSizes[j].qty = parseInt(qtyInputs[j].value) || 0;
-            }
-            p.sizes = STATE._editSizes.slice();
+            newSizes = STATE._editSizes.map(function(s, j) {
+                return {
+                    name: (nameInputs[j] ? (nameInputs[j].value.trim() || s.name) : s.name),
+                    qty: (qtyInputs[j] ? (parseInt(qtyInputs[j].value) || 0) : s.qty)
+                };
+            });
+            newStockIntent = newSizes.reduce(function(t, s){ return t + (s.qty || 0); }, 0);
         }
-        p.stock = getTotalStock(p);
 
-        // Check if stock changed
-        var stockChanged = p.stock !== oldStock;
-        if (!stockChanged && p.sizes) {
-            for (var k = 0; k < p.sizes.length; k++) {
-                var oldSz = oldSizes.find(function(s){ return s.name === p.sizes[k].name; });
-                if (!oldSz || oldSz.qty !== p.sizes[k].qty) { stockChanged = true; break; }
+        // Did the person editing actually mean to change stock?
+        var stockChanged = newStockIntent !== oldStock;
+        if (!stockChanged) {
+            for (var k = 0; k < newSizes.length; k++) {
+                var oldSz = oldSizes.find(function(s){ return s.name === newSizes[k].name; });
+                if (!oldSz || oldSz.qty !== newSizes[k].qty) { stockChanged = true; break; }
             }
         }
 
@@ -4324,14 +4339,66 @@ function sendToTelegram(order, callback) {
             return;
         }
 
+        // ── LIVE STOCK CONFLICT CHECK ──
+        // Stock is the one field on a product that can change every few
+        // seconds (a sale, a refund, a transfer) — unlike name/price/images,
+        // which only ever change from this same modal. Before we write OUR
+        // stock/sizes over Firestore, ask Firestore what's actually there
+        // RIGHT NOW. If it doesn't match what this tab had cached (oldStock),
+        // something else touched this product since we loaded it, and
+        // blindly pushing our numbers would silently erase that — which is
+        // exactly what happened to several Sept 9 sales during a long
+        // recount session. So: if the live number has moved, we keep the
+        // live stock/sizes instead of overwriting them, and only apply the
+        // user's OTHER edits (name/price/category/images). If the user was
+        // also deliberately trying to change stock in this same save, that's
+        // a genuine conflict — we still don't guess, we keep the live value
+        // and tell them to reopen and re-enter the count against the current
+        // number.
+        var finalStock = newStockIntent, finalSizes = newSizes;
+        var stockConflict = false, liveStockAtCheck = oldStock;
+        if (db) {
+            try {
+                var liveSnap = await db.collection('stores').doc(STATE.storeId).collection('products').doc(pid).get();
+                if (liveSnap.exists) {
+                    var liveData = liveSnap.data();
+                    liveStockAtCheck = (liveData.stock != null) ? liveData.stock : oldStock;
+                    if (liveStockAtCheck !== oldStock) {
+                        stockConflict = true;
+                        finalStock = liveStockAtCheck;
+                        finalSizes = liveData.sizes || oldSizes;
+                    }
+                }
+            } catch (e) {
+                console.warn('Live stock check failed — proceeding with local values:', e);
+            }
+        }
+
+        // Now apply everything to the local product object.
+        p.name = newName;
+        p.slug = newSlug;
+        p.category = newCategory;
+        p.price = newPrice;
+        p.costPrice = newCostPrice;
+        p.images = newImages;
+        p.sizes = finalSizes;
+        p.stock = (p.sizes && p.sizes.length) ? getTotalStock(p) : finalStock;
+
         // Save locally first — instant, never blocked by network.
         saveProducts();
         var logNote = p.name + ' (Stock: ' + oldStock + ' → ' + p.stock + ')' + (reason ? ' | Reason: ' + reason : '');
         logActivity('Edit Product', logNote);
 
-        // Record a structured stock adjustment (used by Reconciliation so manual
-        // edits show up as an accounted-for movement instead of a false mismatch)
-        if (stockChanged) { recordStockAdjustment(p, oldSizes, oldStock, reason); }
+        if (stockConflict && stockChanged) {
+            showToast('⚠️ Stock changed on the server since you opened this (now ' + liveStockAtCheck + ') — your stock edit was NOT applied, to avoid overwriting a sale or transfer. Other changes were saved. Reopen to re-enter the count.', 'error');
+        } else if (stockConflict) {
+            showToast('Note: stock moved elsewhere while this was open — kept the live number (' + liveStockAtCheck + ').', 'info');
+        }
+
+        // Record a structured stock adjustment only when OUR edit is what
+        // actually changed the stored stock (not when we just deferred to
+        // a live conflicting value someone else already wrote).
+        if (stockChanged && !stockConflict) { recordStockAdjustment(p, oldSizes, oldStock, reason); }
 
         // Sync to Firebase in the background — always attempt if db exists
         // (don't gate on STATE.firebaseOnline, which can be a stale
@@ -4375,8 +4442,10 @@ function sendToTelegram(order, callback) {
             } catch(e3) {}
         }
 
-        // Send Telegram if stock changed
-        if (stockChanged) {
+        // Send Telegram if stock changed (and it was actually OUR change that
+        // took effect — not a case where we deferred to a live value someone
+        // else already wrote, which would make this alert misleading).
+        if (stockChanged && !stockConflict) {
             var sizeLines = (p.sizes || []).map(function(s){ return '  ' + s.name + ': ' + s.qty; }).join('\n');
             var msg = '📦 <b>STOCK REVISED</b>\n\n' +
                 '🏷️ ' + p.name + '\n' +
@@ -5866,6 +5935,7 @@ function sendToTelegram(order, callback) {
         summaryEl.innerHTML = '<div style="text-align:center;color:var(--gray);padding:1rem"><i class="fas fa-spinner fa-spin"></i> Checking ' + fromDate + ' → ' + toDate + '...</div>';
         document.getElementById('reconcileOrderIssuesWrap').style.display = 'none';
         document.getElementById('reconcileMovementWrap').style.display = 'none';
+        document.getElementById('reconcileEditAfterSaleWrap').style.display = 'none';
         document.getElementById('reconcileEmptyState').style.display = 'none';
 
         var fromTs = new Date(fromDate + 'T00:00:00').getTime();
@@ -5874,21 +5944,24 @@ function sendToTelegram(order, callback) {
         try {
             var orderIssues = await checkUndeductedOrders(fromTs, toTs);
             var movement = await checkStockMovement(fromDate, toDate, fromTs, toTs);
+            var editAfterSaleIssues = await checkSaleFollowedByEdit(fromTs, toTs);
 
             renderOrderIssues(orderIssues);
             _reconcileMovementRows = movement.rows;
             document.getElementById('reconcileShowAll').checked = false;
             renderReconcileMovementTable();
+            renderEditAfterSaleIssues(editAfterSaleIssues);
 
             var mismatchCount = movement.rows.filter(function(r){ return r.diff !== 0; }).length;
             var badge = document.getElementById('reconcileBadge');
-            var totalIssues = orderIssues.length + mismatchCount;
+            var totalIssues = orderIssues.length + mismatchCount + editAfterSaleIssues.length;
             if (badge) { badge.style.display = totalIssues > 0 ? 'inline-block' : 'none'; badge.textContent = totalIssues; }
 
             var parts = [];
             parts.push('<div style="display:flex;gap:1rem;flex-wrap:wrap">');
             parts.push('<div class="admin-card" style="flex:1;min-width:160px;padding:0.75rem 1rem"><div style="font-size:1.4rem;font-weight:700;color:' + (orderIssues.length ? 'var(--danger)' : 'var(--success)') + '">' + orderIssues.length + '</div><div style="font-size:0.8rem;color:var(--gray)">Sale(s) not deducted</div></div>');
             parts.push('<div class="admin-card" style="flex:1;min-width:160px;padding:0.75rem 1rem"><div style="font-size:1.4rem;font-weight:700;color:' + (mismatchCount ? 'var(--danger)' : 'var(--success)') + '">' + mismatchCount + '</div><div style="font-size:0.8rem;color:var(--gray)">Item(s) with stock mismatch</div></div>');
+            parts.push('<div class="admin-card" style="flex:1;min-width:160px;padding:0.75rem 1rem"><div style="font-size:1.4rem;font-weight:700;color:' + (editAfterSaleIssues.length ? 'var(--danger)' : 'var(--success)') + '">' + editAfterSaleIssues.length + '</div><div style="font-size:0.8rem;color:var(--gray)">Sale(s) followed by an edit</div></div>');
             parts.push('<div class="admin-card" style="flex:1;min-width:160px;padding:0.75rem 1rem"><div style="font-size:1.4rem;font-weight:700;color:var(--gray-dark)">' + movement.rows.length + '</div><div style="font-size:0.8rem;color:var(--gray)">Item(s) checked</div></div>');
             parts.push('</div>');
             if (movement.note) parts.push('<div style="font-size:0.8rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-info-circle"></i> ' + movement.note + '</div>');
@@ -5896,7 +5969,8 @@ function sendToTelegram(order, callback) {
 
             if (orderIssues.length) document.getElementById('reconcileOrderIssuesWrap').style.display = 'block';
             if (movement.rows.length) document.getElementById('reconcileMovementWrap').style.display = 'block';
-            if (!orderIssues.length && mismatchCount === 0) document.getElementById('reconcileEmptyState').style.display = 'block';
+            if (editAfterSaleIssues.length) document.getElementById('reconcileEditAfterSaleWrap').style.display = 'block';
+            if (!orderIssues.length && mismatchCount === 0 && !editAfterSaleIssues.length) document.getElementById('reconcileEmptyState').style.display = 'block';
         } catch(e) {
             console.error('Reconciliation failed:', e);
             summaryEl.innerHTML = '<div style="color:var(--danger);padding:1rem">Check failed: ' + e.message + '</div>';
@@ -5951,6 +6025,91 @@ function sendToTelegram(order, callback) {
         }).join('');
     }
 
+    // Check C: a sale, then a manual "Edit Product" on the SAME product name
+    // shortly after. The edit modal always writes stock from whatever it had
+    // loaded — if that browser tab loaded the product before the sale synced,
+    // saving (even for an unrelated field) can silently overwrite the sale's
+    // deduction. We can't prove that happened from the activity log alone
+    // (it only stores product name + before/after text, not a productId), but
+    // any edit that lands soon after a sale on the same item is worth a human
+    // glance — this is what caught the Sept 9 incident in the first place.
+    var SALE_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000; // look up to 24h after the sale
+    async function checkSaleFollowedByEdit(fromTs, toTs) {
+        var issues = [];
+        try {
+            var allOrders = [];
+            var liveSnap = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
+            liveSnap.forEach(function(d){ allOrders.push(Object.assign({ orderId: d.id }, d.data())); });
+            var archSnap = await db.collection('archivedOrders').where('storeId', '==', STATE.storeId).get();
+            archSnap.forEach(function(d){ allOrders.push(Object.assign({ orderId: d.id }, d.data())); });
+
+            var soldEvents = []; // { name, size, qty, ts, orderId }
+            allOrders.forEach(function(o) {
+                var ts = o.confirmedTimestamp || o.timestamp || 0;
+                if (ts < fromTs || ts > toTs) return;
+                if (o.status !== 'confirmed' && o.status !== 'partial_refund' && o.status !== 'refunded') return;
+                (o.cart || []).forEach(function(it) {
+                    soldEvents.push({ name: it.name, size: it.size || '', qty: it.quantity, ts: ts, orderId: o.orderId });
+                });
+            });
+            if (!soldEvents.length) return issues;
+
+            // Edit Product log entries for this store. The activityLogs
+            // collection is global (not scoped under stores/{id}), so filter
+            // by storeId client-side like the rest of this file already does
+            // for orders/refunds/transfers.
+            var logSnap = await db.collection('activityLogs').where('storeId', '==', STATE.storeId).get();
+            var editRe = /^(.*) \(Stock: (-?\d+) → (-?\d+)\)/;
+            var editEvents = []; // { name, oldStock, newStock, ts, time, details }
+            logSnap.forEach(function(d) {
+                var l = d.data();
+                if (l.action !== 'Edit Product') return;
+                var ts = l.timestamp || 0;
+                if (ts < fromTs || ts > toTs + SALE_EDIT_WINDOW_MS) return; // allow edits slightly past "to" if the sale was near the end of range
+                var m = editRe.exec(l.details || '');
+                if (!m) return;
+                editEvents.push({ name: m[1], oldStock: parseInt(m[2], 10), newStock: parseInt(m[3], 10), ts: ts, time: l.time, details: l.details });
+            });
+            if (!editEvents.length) return issues;
+
+            // For each sale, flag the NEAREST following edit on the same
+            // product name (one row per sale, not every combination).
+            soldEvents.forEach(function(sale) {
+                var best = null;
+                editEvents.forEach(function(edit) {
+                    if (edit.name !== sale.name) return;
+                    if (edit.ts <= sale.ts) return;
+                    if (edit.ts - sale.ts > SALE_EDIT_WINDOW_MS) return;
+                    if (!best || edit.ts < best.ts) best = edit;
+                });
+                if (best) {
+                    issues.push({
+                        productName: sale.name, size: sale.size, qty: sale.qty,
+                        orderId: sale.orderId, saleTs: sale.ts,
+                        editTs: best.ts, editTime: best.time, editDetails: best.details
+                    });
+                }
+            });
+        } catch(e) { console.warn('Sale-then-edit check failed:', e.message); }
+        issues.sort(function(a,b){ return b.saleTs - a.saleTs; });
+        return issues;
+    }
+
+    function renderEditAfterSaleIssues(issues) {
+        var wrap = document.getElementById('reconcileEditAfterSale');
+        if (!wrap) return;
+        if (!issues.length) { wrap.innerHTML = ''; return; }
+        wrap.innerHTML = issues.map(function(i) {
+            var minsAfter = Math.round((i.editTs - i.saleTs) / 60000);
+            var gap = minsAfter < 60 ? (minsAfter + ' min later') : (Math.round(minsAfter/60) + ' hr later');
+            return '<div class="admin-card" style="padding:0.75rem 1rem;border-left:3px solid var(--danger)">' +
+                '<div><b>' + escHtml(i.productName) + '</b>' + (i.size ? ' (' + escHtml(i.size) + ')' : '') + '</div>' +
+                '<div style="font-size:0.82rem;margin:0.25rem 0">Sold ' + i.qty + ' in <code>' + escHtml(i.orderId) + '</code> at ' + escHtml(new Date(i.saleTs).toLocaleString()) + '</div>' +
+                '<div style="font-size:0.82rem;color:var(--gray-dark)">Then edited ' + gap + ' (' + escHtml(i.editTime || '') + '): <code>' + escHtml(i.editDetails) + '</code></div>' +
+                '</div>';
+        }).join('');
+    }
+
     // Check B: opening snapshot + movements should equal closing snapshot / live stock
     async function checkStockMovement(fromDate, toDate, fromTs, toTs) {
         var openingSnap = await db.collection('stores').doc(STATE.storeId).collection('stockSnapshots').doc(fromDate).get();
@@ -5959,14 +6118,37 @@ function sendToTelegram(order, callback) {
         }
         var opening = openingSnap.data().products || {};
 
+        // ── SNAPSHOT-TIME WINDOW, NOT CALENDAR-DAY WINDOW ──
+        // A snapshot is captured whenever the app first loads that day —
+        // or, via "Take Snapshot Now", at whatever moment someone clicks it,
+        // which can be hours into the day and OVERWRITES the earlier
+        // baseline. Either way, "opening" reflects stock as of that
+        // snapshot's actual timestamp, not literal midnight. If we still sum
+        // sold/refunded/transferred/adjusted from midnight onward, anything
+        // that happened between midnight and the snapshot gets counted
+        // TWICE — once already baked into the snapshot, once again in the
+        // movement totals — producing false mismatches for perfectly normal
+        // sales, refunds and transfers. So: use the snapshot's own
+        // `timestamp` as the effective lower bound whenever it's later than
+        // the calendar start of the day.
+        var effectiveFromTs = (typeof openingSnap.data().timestamp === 'number' && openingSnap.data().timestamp > fromTs)
+            ? openingSnap.data().timestamp : fromTs;
+
         var isToday = toDate === _todayStr();
         var closing = null;
+        var effectiveToTs = toTs;
         if (!isToday) {
             var closingSnap = await db.collection('stores').doc(STATE.storeId).collection('stockSnapshots').doc(_nextDateStr(toDate)).get();
             if (!closingSnap.exists) {
                 return { rows: [], note: 'No closing snapshot found for the end of ' + toDate + ' (would be dated ' + _nextDateStr(toDate) + '). Movement can only be checked once that day\'s opening snapshot exists.' };
             }
             closing = closingSnap.data().products || {};
+            // Same reasoning as above, mirrored for the upper bound: the
+            // closing snapshot reflects stock as of ITS capture time, not
+            // literal midnight at the end of toDate.
+            if (typeof closingSnap.data().timestamp === 'number' && closingSnap.data().timestamp < effectiveToTs) {
+                effectiveToTs = closingSnap.data().timestamp;
+            }
         }
 
         // Aggregate sold / refunded / transfer-out by our own productId+size
@@ -5980,7 +6162,7 @@ function sendToTelegram(order, callback) {
         archSnap.forEach(function(d){ soldOrders.push(d.data()); });
         soldOrders.forEach(function(o) {
             var ts = o.confirmedTimestamp || o.timestamp || 0;
-            if (ts < fromTs || ts > toTs) return;
+            if (ts < effectiveFromTs || ts > effectiveToTs) return;
             if (o.status !== 'confirmed' && o.status !== 'partial_refund' && o.status !== 'refunded') return;
             (o.cart || []).forEach(function(it){ addQty(sold, it.productId + '|' + (it.size||''), it.quantity); });
         });
@@ -5989,7 +6171,7 @@ function sendToTelegram(order, callback) {
         refundSnap.forEach(function(d) {
             var r = d.data();
             var ts = r.refundTimestamp || 0;
-            if (ts < fromTs || ts > toTs) return;
+            if (ts < effectiveFromTs || ts > effectiveToTs) return;
             (r.cart || []).forEach(function(it){ addQty(refunded, it.productId + '|' + (it.size||''), it.quantity); });
         });
 
@@ -5997,7 +6179,7 @@ function sendToTelegram(order, callback) {
         xferOutSnap.forEach(function(d) {
             var t = d.data();
             var ts = t.approvedAt || t.requestedAt || 0;
-            if (ts < fromTs || ts > toTs) return;
+            if (ts < effectiveFromTs || ts > effectiveToTs) return;
             addQty(transferOut, t.productId + '|' + (t.size||''), t.qty);
         });
 
@@ -6006,14 +6188,14 @@ function sendToTelegram(order, callback) {
         xferInSnap.forEach(function(d) {
             var t = d.data();
             var ts = t.approvedAt || t.requestedAt || 0;
-            if (ts < fromTs || ts > toTs) return;
+            if (ts < effectiveFromTs || ts > effectiveToTs) return;
             addQty(transferInByName, (t.productName||'') + '|' + (t.size||''), t.qty);
         });
 
         var adjSnap = await db.collection('stores').doc(STATE.storeId).collection('stockAdjustments').get();
         adjSnap.forEach(function(d) {
             var a = d.data();
-            if (a.timestamp < fromTs || a.timestamp > toTs) return;
+            if (a.timestamp < effectiveFromTs || a.timestamp > effectiveToTs) return;
             if (a.sizeDeltas && a.sizeDeltas.length) {
                 a.sizeDeltas.forEach(function(sd){ addQty(adjustments, a.productId + '|' + sd.size, sd.delta); });
             } else {
@@ -6070,7 +6252,15 @@ function sendToTelegram(order, callback) {
         });
 
         rows.sort(function(a,b){ if (a.diff !== 0 && b.diff === 0) return -1; if (a.diff === 0 && b.diff !== 0) return 1; return a.name.localeCompare(b.name); });
-        return { rows: rows, note: null };
+
+        var windowNote = null;
+        if (effectiveFromTs > fromTs || effectiveToTs < toTs) {
+            windowNote = 'Note: the ' + (effectiveFromTs > fromTs ? 'opening' : 'closing') +
+                ' snapshot for this range was taken partway through the day (' +
+                new Date(effectiveFromTs > fromTs ? effectiveFromTs : effectiveToTs).toLocaleString() +
+                '), so movement is measured from that moment, not midnight — otherwise anything before it would be counted twice.';
+        }
+        return { rows: rows, note: windowNote };
     }
 
     function renderReconcileMovementTable() {
