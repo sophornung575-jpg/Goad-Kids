@@ -1113,7 +1113,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                     </div>
                                     <div style="overflow-x:auto">
                                         <table class="inventory-table" style="font-size:0.8rem">
-                                            <thead><tr><th>Item</th><th>Opening</th><th>Sold</th><th>Refund</th><th>Xfer In</th><th>Xfer Out</th><th>Adj</th><th>Expected</th><th>Actual</th><th>Diff</th><th></th></tr></thead>
+                                            <thead><tr><th>Item</th><th>Opening</th><th>Sold</th><th>Refund</th><th>Xfer In</th><th>Xfer Out</th><th>Adj</th><th>Expected</th><th>Actual</th><th>Diff</th><th>Edit?</th><th></th></tr></thead>
                                             <tbody id="reconcileMovementBody"></tbody>
                                         </table>
                                     </div>
@@ -6151,6 +6151,27 @@ function sendToTelegram(order, callback) {
             }
         }
 
+        // Also pull "Edit Product" activity log entries in this same window, so
+        // we can point at the exact edit likely responsible for any mismatch
+        // row below — same log data used by the "sale followed by an edit"
+        // check, keyed here by product NAME (the log has no productId).
+        var editsByName = {}; // name -> [{ oldStock, newStock, ts, time, details }]
+        try {
+            var editLogSnap = await db.collection('activityLogs').where('storeId', '==', STATE.storeId).get();
+            var editRe = /^(.*) \(Stock: (-?\d+) \u2192 (-?\d+)\)/;
+            editLogSnap.forEach(function(d) {
+                var l = d.data();
+                if (l.action !== 'Edit Product') return;
+                var ts = l.timestamp || 0;
+                if (ts < effectiveFromTs || ts > effectiveToTs) return;
+                var m = editRe.exec(l.details || '');
+                if (!m) return;
+                var name = m[1];
+                if (!editsByName[name]) editsByName[name] = [];
+                editsByName[name].push({ oldStock: parseInt(m[2], 10), newStock: parseInt(m[3], 10), ts: ts, time: l.time, details: l.details });
+            });
+        } catch(e) { console.warn('Edit log lookup for movement table failed:', e.message); }
+
         // Aggregate sold / refunded / transfer-out by our own productId+size
         var sold = {}, refunded = {}, transferOut = {}, transferIn = {}, adjustments = {};
         function addQty(map, key, qty) { map[key] = (map[key]||0) + qty; }
@@ -6244,10 +6265,21 @@ function sendToTelegram(order, callback) {
 
             var expectedQty = openQty - soldQty + refQty + inQty - outQty + adjQty;
             var diff = actualQty - expectedQty;
+
+            // If this item has a mismatch, surface the nearest matching
+            // product edit in the window as the likely explanation — this is
+            // what lets you tell "someone edited this" apart from "stock is
+            // genuinely wrong" right in the same row, without hunting
+            // through the activity log separately.
+            var editHit = null;
+            if (diff !== 0 && editsByName[info.name] && editsByName[info.name].length) {
+                editHit = editsByName[info.name].slice().sort(function(a,b){ return b.ts - a.ts; })[0];
+            }
+
             rows.push({
                 productId: info.productId, name: info.name, size: info.size,
                 opening: openQty, sold: soldQty, refunded: refQty, transferIn: inQty, transferOut: outQty, adjustments: adjQty,
-                expected: expectedQty, actual: actualQty, diff: diff
+                expected: expectedQty, actual: actualQty, diff: diff, editHit: editHit
             });
         });
 
@@ -6267,15 +6299,23 @@ function sendToTelegram(order, callback) {
         var showAll = document.getElementById('reconcileShowAll').checked;
         var rows = showAll ? _reconcileMovementRows : _reconcileMovementRows.filter(function(r){ return r.diff !== 0; });
         var body = document.getElementById('reconcileMovementBody');
-        if (!rows.length) { body.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--gray);padding:1rem">Nothing to show</td></tr>'; return; }
+        if (!rows.length) { body.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--gray);padding:1rem">Nothing to show</td></tr>'; return; }
         body.innerHTML = rows.map(function(r) {
             var diffColor = r.diff === 0 ? 'var(--success)' : 'var(--danger)';
+            var editCell;
+            if (r.editHit) {
+                editCell = '<span style="color:var(--danger);font-weight:600" title="' + escHtml(r.editHit.details) + '"><i class="fas fa-pen"></i> ' + escHtml(r.editHit.oldStock + ' \u2192 ' + r.editHit.newStock) + '</span>' +
+                    '<div style="font-size:0.72rem;color:var(--gray)">' + escHtml(r.editHit.time || '') + '</div>';
+            } else {
+                editCell = r.diff !== 0 ? '<span style="color:var(--gray)">\u2014</span>' : '';
+            }
             return '<tr>' +
                 '<td>' + escHtml(r.name) + (r.size ? ' <small style="color:var(--gray)">(' + escHtml(r.size) + ')</small>' : '') + '</td>' +
                 '<td>' + r.opening + '</td><td>-' + r.sold + '</td><td>+' + r.refunded + '</td><td>+' + r.transferIn + '</td><td>-' + r.transferOut + '</td>' +
                 '<td>' + (r.adjustments >= 0 ? '+' : '') + r.adjustments + '</td>' +
                 '<td>' + r.expected + '</td><td>' + r.actual + '</td>' +
                 '<td style="font-weight:700;color:' + diffColor + '">' + (r.diff > 0 ? '+' : '') + r.diff + '</td>' +
+                '<td>' + editCell + '</td>' +
                 '<td><button class="btn btn-outline btn-small" onclick="jumpToInventoryItem(\'' + r.name.replace(/'/g,"\\'") + '\',\'' + (r.size||'').replace(/'/g,"\\'") + '\')" title="View this item"><i class="fas fa-search"></i></button></td>' +
                 '</tr>';
         }).join('');
