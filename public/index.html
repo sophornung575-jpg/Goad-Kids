@@ -1051,6 +1051,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                         <option value="orders">Orders password (orders only)</option>
                                         <option value="inventory">Inventory / Settings password</option>
                                         <option value="productedit">Product Edit/Delete password</option>
+                                        <option value="restock">Restock Settings password</option>
                                     </select>
                                 </div>
                                 <div class="form-group"><label>Current Password</label><input type="password" id="changePwCurrent" class="form-control" placeholder="Current password"></div>
@@ -3140,6 +3141,35 @@ function sendToTelegram(order, callback) {
         if (!cur || !np || !cf) { statusEl.innerHTML = '<span style="color:var(--danger)">All fields are required.</span>'; return; }
         if (np.length < 6) { statusEl.innerHTML = '<span style="color:var(--danger)">New password must be at least 6 characters.</span>'; return; }
         if (np !== cf) { statusEl.innerHTML = '<span style="color:var(--danger)">New passwords do not match.</span>'; return; }
+
+        // The restock tool's password lives in its own global doc (not tied
+        // to a store branch, since the restock tool is shared across all of
+        // them), so it's handled as its own path, separate from the
+        // per-store passwords below.
+        if (role === 'restock') {
+            var restockBtn = document.querySelector('[onclick="changePassword()"]');
+            if (restockBtn) restockBtn.disabled = true;
+            statusEl.innerHTML = '<span style="color:var(--gray)"><i class="fas fa-spinner fa-spin"></i> Saving...</span>';
+            try {
+                var restockDoc = db ? await db.collection('_admin_').doc('restockConfig').get() : null;
+                var currentRestockPw = (restockDoc && restockDoc.exists && restockDoc.data().password) ? restockDoc.data().password : 'restock123';
+                if (cur !== currentRestockPw) {
+                    statusEl.innerHTML = '<span style="color:var(--danger)">Current password is incorrect.</span>';
+                } else {
+                    if (db) await db.collection('_admin_').doc('restockConfig').set({ password: np, updatedAt: Date.now() }, { merge: true });
+                    statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Restock settings password changed!</span>';
+                    document.getElementById('changePwCurrent').value = '';
+                    document.getElementById('changePwNew').value = '';
+                    document.getElementById('changePwConfirm').value = '';
+                    logActivity('Password Changed', 'Role: restock');
+                }
+            } catch (e) {
+                statusEl.innerHTML = '<span style="color:var(--danger)">Failed: ' + e.message + '</span>';
+            }
+            if (restockBtn) restockBtn.disabled = false;
+            return;
+        }
+
         var passwords = getStoredPasswords();
         var key = role === 'full' ? 'fullPass' : role === 'orders' ? 'ordersPass' : role === 'productedit' ? 'productEditPass' : 'inventoryPass';
         var currentCorrect = passwords[key] || (role === 'productedit' ? (passwords.fullPass || 'admin123') : null);
