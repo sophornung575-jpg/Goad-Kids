@@ -66,6 +66,10 @@
   .status-filter-btn{ padding:6px 12px; border:2px solid var(--gray-light); background:#fff; border-radius:999px; font-size:0.78rem; font-weight:600; color:var(--gray-dark); cursor:pointer; font-family:inherit; }
   .status-filter-btn:hover{ border-color:var(--primary); color:var(--primary); }
   .status-filter-btn.active{ background:var(--primary); border-color:var(--primary); color:#fff; }
+  .category-filter{ display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .category-filter-btn{ padding:5px 11px; border:2px solid var(--gray-light); background:#fff; border-radius:999px; font-size:0.74rem; font-weight:600; color:var(--gray-dark); cursor:pointer; font-family:inherit; }
+  .category-filter-btn:hover{ border-color:var(--primary); color:var(--primary); }
+  .category-filter-btn.active{ background:var(--primary); border-color:var(--primary); color:#fff; }
   .select-all-row{ display:flex; align-items:center; gap:10px; padding-bottom:12px; margin-bottom:12px; border-bottom:1px solid var(--gray-light); font-size:0.85rem; font-weight:600; }
   .select-all-row input{ width:18px; height:18px; }
   .rl-item{ display:flex; gap:12px; align-items:center; border:1px solid var(--gray-light); border-radius:var(--radius); padding:10px; margin-bottom:10px; }
@@ -75,11 +79,13 @@
   .rl-item .rl-info{ flex:1; min-width:0; }
   .rl-item .rl-title{ font-size:0.85rem; font-weight:600; }
   .rl-item .rl-meta{ font-size:0.75rem; color:var(--gray-dark); margin-top:2px; }
-  .rl-item .rl-qty-row{ display:flex; align-items:center; gap:6px; margin-top:6px; font-size:0.78rem; }
-  .rl-item input.qty{ width:56px; padding:5px 6px; border:2px solid var(--gray-light); border-radius:5px; font-size:0.78rem; font-family:inherit; }
+  .rl-size-lines{ display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+  .rl-size-line{ display:flex; align-items:center; gap:6px; font-size:0.75rem; }
+  .rl-size-label{ flex:1; min-width:0; color:var(--gray-dark); word-break:break-word; }
+  .rl-item input.qty{ width:56px; flex-shrink:0; padding:5px 6px; border:2px solid var(--gray-light); border-radius:5px; font-size:0.78rem; font-family:inherit; }
+  .rl-size-remove{ background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.75rem; padding:2px; flex-shrink:0; font-family:inherit; }
   .rl-item .rl-actions{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; }
   .rl-item a{ color:var(--primary); text-decoration:none; font-size:0.78rem; font-weight:600; white-space:nowrap; }
-  .rl-item .remove{ background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.78rem; font-family:inherit; padding:2px; }
   .rl-item.is-received{ opacity:0.65; }
   .status-badge{ display:inline-block; font-size:0.65rem; font-weight:700; padding:2px 8px; border-radius:999px; margin:3px 0; }
   .status-pending{ background:var(--gray-light); color:var(--gray-dark); }
@@ -140,6 +146,9 @@
   .thumb-count{ position:absolute; bottom:4px; right:4px; background:rgba(0,0,0,0.55); color:#fff; font-size:0.62rem; font-weight:600; padding:1px 6px; border-radius:999px; }
   .card .body{ padding:10px; display:flex; flex-direction:column; gap:6px; flex:1; }
   .card .title{ font-size:0.8rem; font-weight:600; line-height:1.35; min-height:2.6em; }
+  .category-badge{ display:inline-block; font-size:0.6rem; font-weight:700; background:var(--primary-light); color:var(--primary-dark); padding:2px 7px; border-radius:999px; margin:2px 0; }
+  .category-picker{ margin:4px 0; }
+  .category-picker select{ width:100%; padding:4px 5px; border:2px solid var(--gray-light); border-radius:5px; font-size:0.7rem; font-family:inherit; }
   .card .price{ font-size:0.85rem; font-weight:700; color:var(--secondary-dark); }
   .card .meta{ font-size:0.7rem; color:var(--gray-dark); }
   .pick-row{ display:flex; gap:6px; }
@@ -233,6 +242,15 @@
         </div>
         <div class="admin-card-body">
           <input type="text" class="form-control" id="historyFilter" placeholder="Filter your saved products...">
+          <div class="category-filter" id="categoryFilter">
+            <button class="category-filter-btn active" data-cat="" onclick="setHistoryCategoryFilter('')">All</button>
+            <button class="category-filter-btn" data-cat="Girl Clothes" onclick="setHistoryCategoryFilter('Girl Clothes')">Girl Clothes</button>
+            <button class="category-filter-btn" data-cat="Boy Clothes" onclick="setHistoryCategoryFilter('Boy Clothes')">Boy Clothes</button>
+            <button class="category-filter-btn" data-cat="Baby Shirt" onclick="setHistoryCategoryFilter('Baby Shirt')">Baby Shirt</button>
+            <button class="category-filter-btn" data-cat="Dresses" onclick="setHistoryCategoryFilter('Dresses')">Dresses</button>
+            <button class="category-filter-btn" data-cat="Baby Accessories" onclick="setHistoryCategoryFilter('Baby Accessories')">Baby Accessories</button>
+            <button class="category-filter-btn" data-cat="Baby Shoes" onclick="setHistoryCategoryFilter('Baby Shoes')">Baby Shoes</button>
+          </div>
           <div class="grid" id="historyGrid" style="margin-top:14px;"></div>
           <div class="admin-empty" id="historyEmpty">No saved products yet. Search 1688 or add an item by link, and everything you find will show up here for next time.</div>
 
@@ -460,6 +478,7 @@ let restockList = [];
 let lastResults = [];
 let historyCache = [];
 let historyFilterText = '';
+let historyFilterCategory = '';
 let productIndex = {}; // id -> product, refreshed whenever search results or the Home catalog render, so addToRestock can find a product regardless of which grid it was clicked from
 
 function indexProducts(list){
@@ -693,8 +712,16 @@ function productCardHtml(p, opts){
       </div>
       <div class="body">
         <div class="title">${escapeHtml(p.title)}</div>
+        ${p.category ? `<span class="category-badge">${escapeHtml(p.category)}</span>` : ''}
         <div class="price">${escapeHtml(String(p.price))}</div>
         <div class="meta">MOQ ${escapeHtml(String(p.moq))} · ${escapeHtml(p.supplier)}</div>
+        ${opts.removable ? `
+        <div class="category-picker hidden" id="categoryPicker-${escapeHtml(p.id)}">
+          <select onchange="setProductCategory('${escapeHtml(p.id)}', this.value)">
+            <option value="">— Uncategorized —</option>
+            ${CATEGORIES.map(c => `<option value="${escapeHtml(c)}"${p.category === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+          </select>
+        </div>` : ''}
         ${p.sizes && p.sizes.length ? `
         <div class="size-qty-grid">
           ${p.sizes.map(s => `
@@ -726,9 +753,22 @@ function productCardHtml(p, opts){
 // A tap on the ⋮ reveals Remove — kept out of sight by default so it can't
 // be tapped by accident, and removing still asks for confirmation on top
 // of that, since catalog entries can be tedious to rebuild.
+const CATEGORIES = ['Girl Clothes', 'Boy Clothes', 'Baby Shirt', 'Dresses', 'Baby Accessories', 'Baby Shoes'];
+
 function toggleThumbMenu(id){
   const btn = document.getElementById('removeBtn-' + id);
   if(btn) btn.classList.toggle('hidden');
+  const picker = document.getElementById('categoryPicker-' + id);
+  if(picker) picker.classList.toggle('hidden');
+}
+
+function setProductCategory(id, category){
+  if(db){
+    db.collection('restockTool_history').doc(id).set({ category }, { merge: true });
+  } else {
+    const item = historyCache.find(p => p.id === id);
+    if(item){ item.category = category; renderHistory(); }
+  }
 }
 
 function confirmRemoveFromHistory(id){
@@ -773,9 +813,9 @@ function renderHistory(){
   indexProducts(historyCache);
   const grid = document.getElementById('historyGrid');
   const empty = document.getElementById('historyEmpty');
-  const filtered = historyFilterText
-    ? historyCache.filter(p => (p.title || '').toLowerCase().includes(historyFilterText))
-    : historyCache;
+  let filtered = historyCache;
+  if(historyFilterCategory) filtered = filtered.filter(p => p.category === historyFilterCategory);
+  if(historyFilterText) filtered = filtered.filter(p => (p.title || '').toLowerCase().includes(historyFilterText));
 
   if(filtered.length === 0){
     grid.innerHTML = '';
@@ -787,6 +827,14 @@ function renderHistory(){
   }
   empty.style.display = 'none';
   grid.innerHTML = filtered.map(p => productCardHtml(p, { removable: true })).join('');
+}
+
+function setHistoryCategoryFilter(category){
+  historyFilterCategory = category;
+  document.querySelectorAll('.category-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.cat === category);
+  });
+  renderHistory();
 }
 
 document.getElementById('historyFilter').addEventListener('input', e => {
@@ -1486,6 +1534,15 @@ function markAsReceived(docId){
   }
 }
 
+// Applies a status change to every size-line of the same product at once,
+// so staff don't have to click through each size separately.
+function markGroupOrdered(docIdsCsv){
+  docIdsCsv.split(',').forEach(id => markAsOrdered(id));
+}
+function markGroupReceived(docIdsCsv){
+  docIdsCsv.split(',').forEach(id => markAsReceived(id));
+}
+
 function removeFromRestock(docId){
   if(db && !docId.startsWith('local-')){
     db.collection('restockTool_items').doc(docId).delete();
@@ -1516,10 +1573,36 @@ function itemStatus(item){
   return 'pending';
 }
 
-function getFilteredRestockList(){
+// Groups restock list entries by product (url), since a single "Add to
+// list" click on a multi-size product creates one Firestore doc per size —
+// grouping them back together here is what lets the whole product share
+// one status and one set of actions instead of one per size.
+function groupRestockByProduct(list){
+  const groups = [];
+  const byKey = {};
+  list.forEach(item => {
+    const key = item.url || item.title;
+    if(!byKey[key]){
+      byKey[key] = { key, title: item.title, url: item.url, isSearchLink: item.isSearchLink, lines: [] };
+      groups.push(byKey[key]);
+    }
+    byKey[key].lines.push(item);
+  });
+  return groups;
+}
+
+// The group's status is taken from its first line — since status changes
+// are always applied to every line in the group together (see
+// markGroupOrdered/markGroupReceived), they stay in sync in practice.
+function groupStatus(group){
+  return itemStatus(group.lines[0]);
+}
+
+function getFilteredRestockGroups(){
+  const groups = groupRestockByProduct(restockList);
   return restockStatusFilter === 'all'
-    ? restockList
-    : restockList.filter(item => itemStatus(item) === restockStatusFilter);
+    ? groups
+    : groups.filter(g => groupStatus(g) === restockStatusFilter);
 }
 
 function setRestockFilter(status){
@@ -1538,13 +1621,14 @@ function renderRestock(){
   // drop selections for items that no longer exist
   selectedRestockIds = new Set([...selectedRestockIds].filter(id => restockList.some(i => i.docId === id)));
 
-  const counts = { all: restockList.length, pending: 0, sent: 0, ordered: 0, received: 0 };
-  restockList.forEach(item => counts[itemStatus(item)]++);
+  const allGroups = groupRestockByProduct(restockList);
+  const counts = { all: allGroups.length, pending: 0, sent: 0, ordered: 0, received: 0 };
+  allGroups.forEach(g => counts[groupStatus(g)]++);
   document.querySelectorAll('.status-filter-btn').forEach(btn => {
     btn.textContent = `${btn.dataset.label} (${counts[btn.dataset.status]})`;
   });
 
-  const filtered = getFilteredRestockList();
+  const filtered = getFilteredRestockGroups();
 
   if(filtered.length === 0){
     wrap.innerHTML = '';
@@ -1558,32 +1642,36 @@ function renderRestock(){
   }
   empty.style.display = 'none';
 
-  wrap.innerHTML = filtered.map(item => {
-    const images = getImages(item);
+  wrap.innerHTML = filtered.map(group => {
+    const images = getImages(group.lines[0]);
     const thumb = images.length
       ? `<img src="${escapeHtml(images[0])}" alt="" referrerpolicy="no-referrer" onerror="this.parentElement.textContent='No image'">`
       : 'No image';
-    const checked = selectedRestockIds.has(item.docId) ? 'checked' : '';
-    const status = itemStatus(item);
+    const docIdsCsv = group.lines.map(l => l.docId).join(',');
+    const groupChecked = group.lines.every(l => selectedRestockIds.has(l.docId));
+    const status = groupStatus(group);
     const statusLabel = status === 'received' ? 'Received' : (status === 'ordered' ? 'Ordered' : (status === 'sent' ? 'Sent' : 'Not sent'));
+    const sizeLines = group.lines.map(item => `
+      <div class="rl-size-line">
+        <span class="rl-size-label">${item.size ? escapeHtml(item.size) : 'Qty'}</span>
+        <input class="qty" type="number" min="1" value="${item.qty}" onchange="updateQty('${escapeHtml(item.docId)}', this.value)">
+        <button class="rl-size-remove" onclick="confirmRemoveFromRestock('${escapeHtml(item.docId)}')" title="Remove this size"><i class="fas fa-times"></i></button>
+      </div>
+    `).join('');
     return `
       <div class="rl-item${status === 'received' ? ' is-received' : ''}">
-        <input type="checkbox" ${checked} onchange="toggleRestockSelect('${escapeHtml(item.docId)}', this.checked)">
+        <input type="checkbox" ${groupChecked ? 'checked' : ''} onchange="toggleRestockGroupSelect('${docIdsCsv}', this.checked)">
         <div class="rl-thumb">${thumb}</div>
         <div class="rl-info">
-          <div class="rl-title">${escapeHtml(item.title)}${item.size ? ` — ${escapeHtml(item.size)}` : ''}</div>
+          <div class="rl-title">${escapeHtml(group.title)}</div>
           <span class="status-badge status-${status}">${statusLabel}</span>
-          <div class="rl-meta">${item.isSearchLink ? 'Search link' : 'Direct link'}</div>
-          <div class="rl-qty-row">
-            <span>Qty</span>
-            <input class="qty" type="number" min="1" value="${item.qty}" onchange="updateQty('${escapeHtml(item.docId)}', this.value)">
-          </div>
+          <div class="rl-meta">${group.isSearchLink ? 'Search link' : 'Direct link'}</div>
+          <div class="rl-size-lines">${sizeLines}</div>
         </div>
         <div class="rl-actions">
-          <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${item.isSearchLink ? 'Search on 1688 ↗' : 'Order on 1688 ↗'}</a>
-          ${status === 'ordered' ? `<button class="mark-received" onclick="markAsReceived('${escapeHtml(item.docId)}')">Mark received</button>` : ''}
-          ${(status === 'pending' || status === 'sent') ? `<button class="mark-ordered" onclick="markAsOrdered('${escapeHtml(item.docId)}')">Mark ordered</button>` : ''}
-          <button class="remove" onclick="confirmRemoveFromRestock('${escapeHtml(item.docId)}')">Remove</button>
+          <a href="${escapeHtml(group.url)}" target="_blank" rel="noopener">${group.isSearchLink ? 'Search on 1688 ↗' : 'Order on 1688 ↗'}</a>
+          ${status === 'ordered' ? `<button class="mark-received" onclick="markGroupReceived('${docIdsCsv}')">Mark received</button>` : ''}
+          ${(status === 'pending' || status === 'sent') ? `<button class="mark-ordered" onclick="markGroupOrdered('${docIdsCsv}')">Mark ordered</button>` : ''}
         </div>
       </div>
     `;
@@ -1599,18 +1687,26 @@ function toggleRestockSelect(docId, checked){
   updateSelectAllRestockState();
 }
 
+function toggleRestockGroupSelect(docIdsCsv, checked){
+  docIdsCsv.split(',').forEach(id => {
+    if(checked) selectedRestockIds.add(id); else selectedRestockIds.delete(id);
+  });
+  document.getElementById('sendTelegramBtn').disabled = selectedRestockIds.size === 0;
+  updateSelectAllRestockState();
+}
+
 function updateSelectAllRestockState(){
   const box = document.getElementById('selectAllRestock');
-  const visible = getFilteredRestockList();
-  box.checked = visible.length > 0 && visible.every(item => selectedRestockIds.has(item.docId));
+  const visibleIds = getFilteredRestockGroups().flatMap(g => g.lines.map(l => l.docId));
+  box.checked = visibleIds.length > 0 && visibleIds.every(id => selectedRestockIds.has(id));
 }
 
 document.getElementById('selectAllRestock').addEventListener('change', (e) => {
-  const visible = getFilteredRestockList();
+  const visibleIds = getFilteredRestockGroups().flatMap(g => g.lines.map(l => l.docId));
   if(e.target.checked){
-    visible.forEach(item => selectedRestockIds.add(item.docId));
+    visibleIds.forEach(id => selectedRestockIds.add(id));
   } else {
-    visible.forEach(item => selectedRestockIds.delete(item.docId));
+    visibleIds.forEach(id => selectedRestockIds.delete(id));
   }
   renderRestock();
 });
