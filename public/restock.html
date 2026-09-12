@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Restock Search — Goat Kids</title>
+<title>Restock Search — Goat Kids B2B</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -193,7 +193,7 @@
 
 <header>
   <div class="header-container">
-    <div class="logo"><i class="fas fa-truck-loading"></i> GOAT KIDS <span class="sub">Restock Search</span></div>
+    <div class="logo"><i class="fas fa-truck-loading"></i> GOAT KIDS B2B <span class="sub">Restock Search</span></div>
     <div style="display:flex; align-items:center; gap:12px;">
       <span class="mode-pill" id="modePill">Sample data</span>
       <a class="back-link" href="index.html"><i class="fas fa-arrow-left"></i> Back to B2B</a>
@@ -332,7 +332,7 @@
           <div class="note">
             <p>No token yet? Search uses sample data so the tool stays fully testable. Add a token and keyword search switches to real 1688 listings automatically.</p>
             <p>This scraper searches all of 1688 by keyword — it can't scope to one trusted shop, and "View all items" always stays on sample data since it can't browse a whole shop without a keyword.</p>
-            <p>Your token is saved in this browser only — private to this device, and never touches the main Goat Kids app. You'll need to paste it again on any other device.</p>
+            <p>Your token syncs across every device that opens this tool, the same way the store app's own Telegram settings do. That also means anyone with the page link could see it — worth knowing, since it's a real API credential.</p>
           </div>
         </div>
       </div>
@@ -365,7 +365,7 @@
           <div class="note">
             <p>Message @BotFather on Telegram, send <code>/newbot</code>, and follow the prompts — it gives you a bot token when it's done.</p>
             <p>To get your chat ID: message your new bot anything first, then open <code>https://api.telegram.org/bot&lt;your token&gt;/getUpdates</code> in a browser and look for the <code>"chat":{"id":...}</code> number.</p>
-            <p>Both are saved in this browser only — private to this device.</p>
+            <p>Both sync across every device that opens this tool — set them once and they'll show up everywhere. That also means anyone with the page link could see them.</p>
           </div>
         </div>
       </div>
@@ -424,6 +424,28 @@ function switchSection(name){
   document.getElementById('tabSearchBtn').classList.toggle('active', name === 'search');
   document.getElementById('tabRestockBtn').classList.toggle('active', name === 'restock');
   document.getElementById('tabSettingsBtn').classList.toggle('active', name === 'settings');
+}
+
+// ---------- Shared settings (Apify + Telegram) ----------
+// Synced through one Firestore doc so any device shows the same settings,
+// matching how the main store app already syncs its own Telegram config.
+// Writes are merge:true so setting one field never wipes out the others.
+function saveSharedConfig(partial){
+  if(!db) return;
+  db.collection('restockTool_config').doc('settings').set(partial, { merge: true })
+    .catch(err => console.warn('Shared settings save failed:', err));
+}
+
+function loadSharedConfig(){
+  if(!db) return;
+  db.collection('restockTool_config').doc('settings').get().then(doc => {
+    if(!doc.exists) return;
+    const cfg = doc.data();
+    if(cfg.apifyToken){ document.getElementById('apifyToken').value = cfg.apifyToken; localStorage.setItem('restockTool_apifyToken', cfg.apifyToken); }
+    if(cfg.apifyActor){ document.getElementById('apifyActor').value = cfg.apifyActor; localStorage.setItem('restockTool_apifyActor', cfg.apifyActor); }
+    if(cfg.tgToken){ document.getElementById('tgToken').value = cfg.tgToken; localStorage.setItem('restockTool_tgToken', cfg.tgToken); }
+    if(cfg.tgChatId){ document.getElementById('tgChatId').value = cfg.tgChatId; localStorage.setItem('restockTool_tgChatId', cfg.tgChatId); }
+  }).catch(err => console.warn('Shared settings load failed:', err));
 }
 
 function initFirestoreListeners(){
@@ -1187,48 +1209,59 @@ function updateCsvPreview(){
     : 'No values found in that column.';
 }
 
-document.getElementById('csvImportBtn').onclick = () => {
+document.getElementById('csvImportBtn').onclick = async () => {
   let importCount = 0;
+  let failCount = 0;
   const resultEl = document.getElementById('bulkImportResult');
+  resultEl.textContent = 'Saving...';
+  resultEl.style.display = 'block';
 
   if(csvOrderEntries){
-    csvOrderEntries.forEach(e => {
+    const writes = csvOrderEntries.map(e => {
       const id = e.offerId;
       const data = {
         title: e.title, price: e.price, moq: '—', supplier: e.supplier,
         image: '', url: e.url, sizes: e.sizes || [], isSearchLink: false
       };
       if(db){
-        db.collection('restockTool_history').doc(id).set({
+        return db.collection('restockTool_history').doc(id).set({
           ...data, savedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        }, { merge: true }).then(() => { importCount++; }).catch(err => { failCount++; console.warn('CSV import write failed:', id, err); });
       } else {
         historyCache = historyCache.filter(p => p.id !== id);
         historyCache.unshift({ id, ...data });
+        importCount++;
+        return Promise.resolve();
       }
     });
-    importCount = csvOrderEntries.length;
+    await Promise.all(writes);
     if(!db){ renderHistory(); }
-    resultEl.textContent = `Added ${importCount} product${importCount === 1 ? '' : 's'} from your order history to your catalog.`;
+    resultEl.textContent = failCount === 0
+      ? `Added ${importCount} product${importCount === 1 ? '' : 's'} from your order history to your catalog.`
+      : `Saved ${importCount} product${importCount === 1 ? '' : 's'}, but ${failCount} failed to save — likely a permissions issue. Check your Firestore rules are published, then try again.`;
   } else {
     const colIndex = parseInt(document.getElementById('csvColumnSelect').value);
     const names = [...new Set(csvNamesForColumn(colIndex))];
-    names.forEach(name => {
+    const writes = names.map(name => {
       const searchUrl = 'https://s.1688.com/selloffer/offer_search.htm?keywords=' + encodeURIComponent(name);
       const id = hashId(searchUrl);
       const data = { title: name, price: '—', moq: '—', supplier: '—', image: '', url: searchUrl, sizes: [], isSearchLink: true };
       if(db){
-        db.collection('restockTool_history').doc(id).set({
+        return db.collection('restockTool_history').doc(id).set({
           ...data, savedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        }, { merge: true }).then(() => { importCount++; }).catch(err => { failCount++; console.warn('CSV import write failed:', id, err); });
       } else {
         historyCache = historyCache.filter(p => p.id !== id);
         historyCache.unshift({ id, ...data });
+        importCount++;
+        return Promise.resolve();
       }
     });
-    importCount = names.length;
+    await Promise.all(writes);
     if(!db){ renderHistory(); }
-    resultEl.textContent = `Added ${importCount} item${importCount === 1 ? '' : 's'} from the file to your catalog.`;
+    resultEl.textContent = failCount === 0
+      ? `Added ${importCount} item${importCount === 1 ? '' : 's'} from the file to your catalog.`
+      : `Saved ${importCount} item${importCount === 1 ? '' : 's'}, but ${failCount} failed to save — likely a permissions issue. Check your Firestore rules are published, then try again.`;
   }
 
   document.getElementById('csvPreview').classList.add('hidden');
@@ -1382,6 +1415,10 @@ document.getElementById('selectAllRestock').addEventListener('change', (e) => {
 });
 
 // ---------- Telegram settings + sending ----------
+// Synced through Firestore (restockTool_config/settings) so it works across
+// devices without re-entering, matching the pattern the main store app
+// already uses for its own Telegram settings. localStorage is kept as an
+// offline fallback for whichever device saved it most recently.
 (function(){
   const tokenEl = document.getElementById('tgToken');
   const chatEl = document.getElementById('tgChatId');
@@ -1389,8 +1426,14 @@ document.getElementById('selectAllRestock').addEventListener('change', (e) => {
   const savedChat = localStorage.getItem('restockTool_tgChatId');
   if(savedToken) tokenEl.value = savedToken;
   if(savedChat) chatEl.value = savedChat;
-  tokenEl.addEventListener('change', () => localStorage.setItem('restockTool_tgToken', tokenEl.value.trim()));
-  chatEl.addEventListener('change', () => localStorage.setItem('restockTool_tgChatId', chatEl.value.trim()));
+  tokenEl.addEventListener('change', () => {
+    localStorage.setItem('restockTool_tgToken', tokenEl.value.trim());
+    saveSharedConfig({ tgToken: tokenEl.value.trim() });
+  });
+  chatEl.addEventListener('change', () => {
+    localStorage.setItem('restockTool_tgChatId', chatEl.value.trim());
+    saveSharedConfig({ tgChatId: chatEl.value.trim() });
+  });
 })();
 
 document.getElementById('sendTelegramBtn').onclick = async () => {
@@ -1452,9 +1495,10 @@ function escapeHtml(str){
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-// ---------- Apify settings persistence (this browser only) ----------
-// Saved to localStorage, not Firestore, so the token never leaves this
-// device / gets exposed to anyone else who opens the page.
+// ---------- Apify settings persistence ----------
+// Synced through Firestore (restockTool_config/settings), same as the
+// Telegram settings above — works across devices, localStorage kept as an
+// offline fallback.
 (function(){
   const tokenEl = document.getElementById('apifyToken');
   const actorEl = document.getElementById('apifyActor');
@@ -1462,13 +1506,20 @@ function escapeHtml(str){
   const savedActor = localStorage.getItem('restockTool_apifyActor');
   if(savedToken) tokenEl.value = savedToken;
   if(savedActor) actorEl.value = savedActor;
-  tokenEl.addEventListener('change', () => localStorage.setItem('restockTool_apifyToken', tokenEl.value.trim()));
-  actorEl.addEventListener('change', () => localStorage.setItem('restockTool_apifyActor', actorEl.value.trim()));
+  tokenEl.addEventListener('change', () => {
+    localStorage.setItem('restockTool_apifyToken', tokenEl.value.trim());
+    saveSharedConfig({ apifyToken: tokenEl.value.trim() });
+  });
+  actorEl.addEventListener('change', () => {
+    localStorage.setItem('restockTool_apifyActor', actorEl.value.trim());
+    saveSharedConfig({ apifyActor: actorEl.value.trim() });
+  });
 })();
 
 // ---------- init ----------
 if(db){
   initFirestoreListeners();
+  loadSharedConfig();
 } else {
   shops = [{ name: 'Supplier 1', id: '1381942494680' }];
   renderShops();
