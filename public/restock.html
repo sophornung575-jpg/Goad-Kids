@@ -189,6 +189,15 @@
   #csvImportBtn{ margin-top:8px; }
 
   .settings-label{ display:block; font-size:0.8rem; font-weight:600; color:var(--dark); margin:0 0 5px; }
+  .settings-lock{ display:flex; align-items:center; justify-content:center; padding:3rem 1rem; }
+  .settings-lock-card{ background:#fff; border:1px solid var(--gray-light); border-radius:var(--radius-lg); padding:2rem; max-width:320px; width:100%; text-align:center; }
+  .settings-lock-icon{ font-size:2rem; color:var(--primary); margin-bottom:0.5rem; }
+  .settings-lock-card h3{ margin:0 0 4px; font-size:1.05rem; color:var(--dark); }
+  .settings-lock-card p{ margin:0 0 1.25rem; font-size:0.85rem; color:var(--gray-dark); }
+  .settings-lock-input-row{ position:relative; margin-bottom:0.75rem; }
+  .settings-lock-input-row input{ padding-right:2.5rem; text-align:center; letter-spacing:2px; }
+  .settings-lock-input-row button{ position:absolute; right:0.6rem; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--gray); }
+  .settings-lock-error{ color:var(--danger); font-size:0.8rem; margin-bottom:0.75rem; min-height:1.2em; }
   .settings-label:not(:first-child){ margin-top:14px; }
   .note{ font-size:0.75rem; color:var(--gray-dark); margin-top:12px; line-height:1.5; }
   .note p{ margin:0 0 8px; }
@@ -326,6 +335,23 @@
     </div>
 
     <div id="settingsSection" class="hidden">
+
+      <div id="settingsLock" class="settings-lock">
+        <div class="settings-lock-card">
+          <div class="settings-lock-icon"><i class="fas fa-lock"></i></div>
+          <h3>Settings Protected</h3>
+          <p>Enter the settings password to continue</p>
+          <div class="settings-lock-input-row">
+            <input type="password" id="settingsLockInput" class="form-control" placeholder="Enter password" onkeydown="if(event.key==='Enter')unlockSettings()">
+            <button type="button" onclick="toggleSettingsLockVisibility()" id="settingsLockEye"><i class="fas fa-eye"></i></button>
+          </div>
+          <div class="settings-lock-error" id="settingsLockError"></div>
+          <button class="btn btn-primary" style="width:100%;" onclick="unlockSettings()"><i class="fas fa-unlock"></i> Unlock Settings</button>
+        </div>
+      </div>
+
+      <div id="settingsContent" class="hidden">
+
       <div class="admin-card">
         <div class="admin-card-header">
           <h1><i class="fas fa-server" style="color:var(--primary)"></i> Data source</h1>
@@ -375,6 +401,21 @@
             <p>Both sync across every device that opens this tool — set them once and they'll show up everywhere. That also means anyone with the page link could see them.</p>
           </div>
         </div>
+      </div>
+
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <h1><i class="fas fa-key" style="color:var(--primary)"></i> Change settings password</h1>
+          <p>Applies to everyone opening this tool</p>
+        </div>
+        <div class="admin-card-body">
+          <label for="settingsNewPassword" class="settings-label">New password</label>
+          <input type="text" class="form-control" id="settingsNewPassword" placeholder="Min 4 characters">
+          <button class="btn btn-outline" style="margin-top:10px;" onclick="changeSettingsPassword()"><i class="fas fa-save"></i> Save new password</button>
+          <div class="note" id="settingsPasswordStatus"></div>
+        </div>
+      </div>
+
       </div>
     </div>
   </div>
@@ -431,6 +472,59 @@ function switchSection(name){
   document.getElementById('tabSearchBtn').classList.toggle('active', name === 'search');
   document.getElementById('tabRestockBtn').classList.toggle('active', name === 'restock');
   document.getElementById('tabSettingsBtn').classList.toggle('active', name === 'settings');
+  if(name === 'settings') lockSettingsSection();
+}
+
+function lockSettingsSection(){
+  document.getElementById('settingsLock').classList.remove('hidden');
+  document.getElementById('settingsContent').classList.add('hidden');
+  const input = document.getElementById('settingsLockInput');
+  if(input) input.value = '';
+  const err = document.getElementById('settingsLockError');
+  if(err) err.textContent = '';
+}
+
+function unlockSettings(){
+  const input = document.getElementById('settingsLockInput');
+  const err = document.getElementById('settingsLockError');
+  const entered = input.value;
+  const correct = sharedSettingsPassword || DEFAULT_SETTINGS_PASSWORD;
+  if(entered === correct){
+    document.getElementById('settingsLock').classList.add('hidden');
+    document.getElementById('settingsContent').classList.remove('hidden');
+    input.value = '';
+    err.textContent = '';
+  } else {
+    err.textContent = 'Incorrect password';
+    input.value = '';
+    input.focus();
+  }
+}
+
+function toggleSettingsLockVisibility(){
+  const input = document.getElementById('settingsLockInput');
+  const eye = document.getElementById('settingsLockEye');
+  if(input.type === 'password'){
+    input.type = 'text';
+    eye.innerHTML = '<i class="fas fa-eye-slash"></i>';
+  } else {
+    input.type = 'password';
+    eye.innerHTML = '<i class="fas fa-eye"></i>';
+  }
+}
+
+function changeSettingsPassword(){
+  const input = document.getElementById('settingsNewPassword');
+  const status = document.getElementById('settingsPasswordStatus');
+  const newPw = input.value.trim();
+  if(newPw.length < 4){
+    status.innerHTML = '<p style="color:var(--danger)">Password must be at least 4 characters.</p>';
+    return;
+  }
+  sharedSettingsPassword = newPw;
+  saveSharedConfig({ settingsPassword: newPw });
+  status.innerHTML = '<p style="color:var(--success)">Password updated — takes effect for everyone next time they open Settings.</p>';
+  input.value = '';
 }
 
 // ---------- Shared settings (Apify + Telegram) ----------
@@ -443,16 +537,23 @@ function saveSharedConfig(partial){
     .catch(err => console.warn('Shared settings save failed:', err));
 }
 
+let sharedSettingsPassword = null; // null until Firestore answers — see unlockSettings()
+const DEFAULT_SETTINGS_PASSWORD = 'restock123';
+
 function loadSharedConfig(){
   if(!db) return;
   db.collection('restockTool_config').doc('settings').get().then(doc => {
+    sharedSettingsPassword = (doc.exists && doc.data().settingsPassword) ? doc.data().settingsPassword : DEFAULT_SETTINGS_PASSWORD;
     if(!doc.exists) return;
     const cfg = doc.data();
     if(cfg.apifyToken){ document.getElementById('apifyToken').value = cfg.apifyToken; localStorage.setItem('restockTool_apifyToken', cfg.apifyToken); }
     if(cfg.apifyActor){ document.getElementById('apifyActor').value = cfg.apifyActor; localStorage.setItem('restockTool_apifyActor', cfg.apifyActor); }
     if(cfg.tgToken){ document.getElementById('tgToken').value = cfg.tgToken; localStorage.setItem('restockTool_tgToken', cfg.tgToken); }
     if(cfg.tgChatId){ document.getElementById('tgChatId').value = cfg.tgChatId; localStorage.setItem('restockTool_tgChatId', cfg.tgChatId); }
-  }).catch(err => console.warn('Shared settings load failed:', err));
+  }).catch(err => {
+    console.warn('Shared settings load failed:', err);
+    sharedSettingsPassword = DEFAULT_SETTINGS_PASSWORD;
+  });
 }
 
 function initFirestoreListeners(){
