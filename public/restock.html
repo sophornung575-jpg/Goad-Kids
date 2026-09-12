@@ -80,13 +80,16 @@
   .rl-item .rl-actions{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; }
   .rl-item a{ color:var(--primary); text-decoration:none; font-size:0.78rem; font-weight:600; white-space:nowrap; }
   .rl-item .remove{ background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.78rem; font-family:inherit; padding:2px; }
-  .rl-item.is-ordered{ opacity:0.65; }
+  .rl-item.is-received{ opacity:0.65; }
   .status-badge{ display:inline-block; font-size:0.65rem; font-weight:700; padding:2px 8px; border-radius:999px; margin:3px 0; }
   .status-pending{ background:var(--gray-light); color:var(--gray-dark); }
   .status-sent{ background:#e6fffa; color:#2c7a7b; }
   .status-ordered{ background:#f0fff4; color:#276749; }
+  .status-received{ background:#ebf4ff; color:#2c5282; }
   .mark-ordered{ background:none; border:1px solid var(--success); color:var(--success); border-radius:5px; padding:3px 8px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
   .mark-ordered:hover{ background:var(--success); color:#fff; }
+  .mark-received{ background:none; border:1px solid var(--info); color:var(--info); border-radius:5px; padding:3px 8px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
+  .mark-received:hover{ background:var(--info); color:#fff; }
   .send-status{ font-size:0.82rem; margin-top:10px; padding:10px 12px; border-radius:var(--radius); display:none; }
   .send-status.ok{ background:#e6fffa; color:#2c7a7b; display:block; }
   .send-status.err{ background:#fff5f5; color:#c53030; display:block; }
@@ -306,6 +309,7 @@
             <button class="status-filter-btn" data-status="pending" data-label="Not sent" onclick="setRestockFilter('pending')">Not sent</button>
             <button class="status-filter-btn" data-status="sent" data-label="Sent" onclick="setRestockFilter('sent')">Sent</button>
             <button class="status-filter-btn" data-status="ordered" data-label="Ordered" onclick="setRestockFilter('ordered')">Ordered</button>
+            <button class="status-filter-btn" data-status="received" data-label="Received" onclick="setRestockFilter('received')">Received</button>
           </div>
           <div class="select-all-row">
             <input type="checkbox" id="selectAllRestock">
@@ -1289,6 +1293,18 @@ function markAsOrdered(docId){
   }
 }
 
+function markAsReceived(docId){
+  if(db && !docId.startsWith('local-')){
+    db.collection('restockTool_items').doc(docId).update({
+      status: 'received',
+      receivedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } else {
+    const item = restockList.find(i => i.docId === docId);
+    if(item){ item.status = 'received'; renderRestock(); }
+  }
+}
+
 function removeFromRestock(docId){
   if(db && !docId.startsWith('local-')){
     db.collection('restockTool_items').doc(docId).delete();
@@ -1313,7 +1329,10 @@ let selectedRestockIds = new Set();
 let restockStatusFilter = 'all';
 
 function itemStatus(item){
-  return item.status === 'ordered' ? 'ordered' : (item.status === 'sent' ? 'sent' : 'pending');
+  if(item.status === 'received') return 'received';
+  if(item.status === 'ordered') return 'ordered';
+  if(item.status === 'sent') return 'sent';
+  return 'pending';
 }
 
 function getFilteredRestockList(){
@@ -1338,7 +1357,7 @@ function renderRestock(){
   // drop selections for items that no longer exist
   selectedRestockIds = new Set([...selectedRestockIds].filter(id => restockList.some(i => i.docId === id)));
 
-  const counts = { all: restockList.length, pending: 0, sent: 0, ordered: 0 };
+  const counts = { all: restockList.length, pending: 0, sent: 0, ordered: 0, received: 0 };
   restockList.forEach(item => counts[itemStatus(item)]++);
   document.querySelectorAll('.status-filter-btn').forEach(btn => {
     btn.textContent = `${btn.dataset.label} (${counts[btn.dataset.status]})`;
@@ -1365,9 +1384,9 @@ function renderRestock(){
       : 'No image';
     const checked = selectedRestockIds.has(item.docId) ? 'checked' : '';
     const status = itemStatus(item);
-    const statusLabel = status === 'ordered' ? 'Ordered' : (status === 'sent' ? 'Sent' : 'Not sent');
+    const statusLabel = status === 'received' ? 'Received' : (status === 'ordered' ? 'Ordered' : (status === 'sent' ? 'Sent' : 'Not sent'));
     return `
-      <div class="rl-item${status === 'ordered' ? ' is-ordered' : ''}">
+      <div class="rl-item${status === 'received' ? ' is-received' : ''}">
         <input type="checkbox" ${checked} onchange="toggleRestockSelect('${escapeHtml(item.docId)}', this.checked)">
         <div class="rl-thumb">${thumb}</div>
         <div class="rl-info">
@@ -1381,7 +1400,8 @@ function renderRestock(){
         </div>
         <div class="rl-actions">
           <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${item.isSearchLink ? 'Search on 1688 ↗' : 'Order on 1688 ↗'}</a>
-          ${status !== 'ordered' ? `<button class="mark-ordered" onclick="markAsOrdered('${escapeHtml(item.docId)}')">Mark ordered</button>` : ''}
+          ${status === 'ordered' ? `<button class="mark-received" onclick="markAsReceived('${escapeHtml(item.docId)}')">Mark received</button>` : ''}
+          ${(status === 'pending' || status === 'sent') ? `<button class="mark-ordered" onclick="markAsOrdered('${escapeHtml(item.docId)}')">Mark ordered</button>` : ''}
           <button class="remove" onclick="confirmRemoveFromRestock('${escapeHtml(item.docId)}')">Remove</button>
         </div>
       </div>
