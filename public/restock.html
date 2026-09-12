@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Restock Search — Goat Kids B2B</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --primary:#667eea; --primary-light:#a3b4f6; --primary-dark:#5a67d8;
+    --secondary:#ed64a6; --secondary-dark:#b83280;
+    --success:#48bb78; --warning:#ecc94b; --danger:#f56565; --info:#4299e1;
+    --dark:#2d3748; --light:#f7fafc; --gray:#a0aec0; --gray-light:#e2e8f0; --gray-dark:#4a5568;
+    --radius:8px; --radius-lg:12px;
+    --shadow:0 1px 3px rgba(0,0,0,0.1); --shadow-lg:0 10px 15px rgba(0,0,0,0.1);
+  }
+  *{ box-sizing: border-box; }
+  .hidden{ display:none!important; }
+  body{
+    margin:0;
+    background:var(--light);
+    color:var(--dark);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    line-height:1.5;
+  }
+  header{
+    background:#fff;
+    box-shadow:0 1px 2px rgba(0,0,0,0.05);
+    position:sticky; top:0; z-index:100;
+  }
+  .header-container{
+    max-width:1400px; margin:0 auto; padding:1rem 1.5rem;
+    display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  }
+  .logo{ display:flex; align-items:center; gap:0.6rem; font-size:1.3rem; font-weight:700; color:var(--primary); }
+  .logo .sub{ font-size:0.78rem; font-weight:500; color:var(--gray-dark); }
+  .back-link{
+    display:inline-flex; align-items:center; gap:0.4rem;
+    font-size:0.85rem; font-weight:600; color:var(--primary); text-decoration:none;
+    padding:0.5rem 0.9rem; border:2px solid var(--primary); border-radius:var(--radius);
+  }
+  .back-link:hover{ background:var(--primary); color:#fff; }
+  .mode-pill{
+    flex-shrink:0; font-size:0.72rem; font-weight:600; padding:0.3rem 0.7rem;
+    border-radius:999px; background:var(--gray-light); color:var(--gray-dark); white-space:nowrap;
+  }
+  .mode-pill.live{ background:#e6fffa; color:#2c7a7b; }
+
+  main{
+    max-width:1100px; margin:0 auto;
+    padding:24px 1.5rem 60px;
+  }
+
+  .page-tabs{ display:flex; gap:0; border-bottom:2px solid var(--gray-light); margin-bottom:1.25rem; }
+  .page-tab{ padding:0.7rem 1.3rem; border:none; background:none; font-size:0.9rem; font-weight:600; cursor:pointer; color:var(--gray-dark); border-bottom:2px solid transparent; margin-bottom:-2px; font-family:inherit; display:inline-flex; align-items:center; gap:0.5rem; }
+  .page-tab:hover{ color:var(--primary); }
+  .page-tab.active{ color:var(--primary); border-bottom-color:var(--primary); }
+
+  .admin-card{ background:#fff; border:1px solid var(--gray-light); border-radius:var(--radius-lg); margin-bottom:1.5rem; overflow:hidden; }
+  .admin-card-header{ padding:1rem 1.25rem; background:var(--light); border-bottom:1px solid var(--gray-light); }
+  .restock-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+
+  .status-filter{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .status-filter-btn{ padding:6px 12px; border:2px solid var(--gray-light); background:#fff; border-radius:999px; font-size:0.78rem; font-weight:600; color:var(--gray-dark); cursor:pointer; font-family:inherit; }
+  .status-filter-btn:hover{ border-color:var(--primary); color:var(--primary); }
+  .status-filter-btn.active{ background:var(--primary); border-color:var(--primary); color:#fff; }
+  .select-all-row{ display:flex; align-items:center; gap:10px; padding-bottom:12px; margin-bottom:12px; border-bottom:1px solid var(--gray-light); font-size:0.85rem; font-weight:600; }
+  .select-all-row input{ width:18px; height:18px; }
+  .rl-item{ display:flex; gap:12px; align-items:center; border:1px solid var(--gray-light); border-radius:var(--radius); padding:10px; margin-bottom:10px; }
+  .rl-item input[type=checkbox]{ width:18px; height:18px; flex-shrink:0; }
+  .rl-item .rl-thumb{ width:56px; height:56px; flex-shrink:0; border-radius:6px; overflow:hidden; background:var(--light); display:flex; align-items:center; justify-content:center; color:var(--gray); font-size:9px; text-align:center; }
+  .rl-item .rl-thumb img{ width:100%; height:100%; object-fit:cover; }
+  .rl-item .rl-info{ flex:1; min-width:0; }
+  .rl-item .rl-title{ font-size:0.85rem; font-weight:600; }
+  .rl-item .rl-meta{ font-size:0.75rem; color:var(--gray-dark); margin-top:2px; }
+  .rl-item .rl-qty-row{ display:flex; align-items:center; gap:6px; margin-top:6px; font-size:0.78rem; }
+  .rl-item input.qty{ width:56px; padding:5px 6px; border:2px solid var(--gray-light); border-radius:5px; font-size:0.78rem; font-family:inherit; }
+  .rl-item .rl-actions{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; }
+  .rl-item a{ color:var(--primary); text-decoration:none; font-size:0.78rem; font-weight:600; white-space:nowrap; }
+  .rl-item .remove{ background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.78rem; font-family:inherit; padding:2px; }
+  .rl-item.is-ordered{ opacity:0.65; }
+  .status-badge{ display:inline-block; font-size:0.65rem; font-weight:700; padding:2px 8px; border-radius:999px; margin:3px 0; }
+  .status-pending{ background:var(--gray-light); color:var(--gray-dark); }
+  .status-sent{ background:#e6fffa; color:#2c7a7b; }
+  .status-ordered{ background:#f0fff4; color:#276749; }
+  .mark-ordered{ background:none; border:1px solid var(--success); color:var(--success); border-radius:5px; padding:3px 8px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
+  .mark-ordered:hover{ background:var(--success); color:#fff; }
+  .send-status{ font-size:0.82rem; margin-top:10px; padding:10px 12px; border-radius:var(--radius); display:none; }
+  .send-status.ok{ background:#e6fffa; color:#2c7a7b; display:block; }
+  .send-status.err{ background:#fff5f5; color:#c53030; display:block; }
+  .admin-card-header h1{ margin:0; font-size:1.15rem; font-weight:700; }
+  .admin-card-header p{ margin:0.3rem 0 0; color:var(--gray-dark); font-size:0.85rem; }
+  .admin-card-body{ padding:1.25rem; }
+
+  .search-bar{ display:flex; gap:10px; flex-wrap:wrap; }
+  .search-bar input[type=text]{ flex:1 1 220px; }
+  .form-control{ width:100%; padding:0.7rem 0.9rem; border:2px solid var(--gray-light); border-radius:var(--radius); font-size:0.95rem; font-family:inherit; }
+  .form-control:focus{ outline:none; border-color:var(--primary); }
+  select.form-control{ max-width:220px; background:#fff; }
+
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:0.5rem; padding:0.65rem 1.2rem; border:none; border-radius:var(--radius); font-size:0.9rem; font-weight:600; cursor:pointer; transition:all 0.2s; white-space:nowrap; font-family:inherit; }
+  .btn-primary{ background:var(--primary); color:#fff; }
+  .btn-primary:hover{ background:var(--primary-dark); }
+  .btn-outline{ background:transparent; border:2px solid var(--primary); color:var(--primary); padding:0.55rem 1.1rem; }
+  .btn-outline:hover{ background:var(--primary); color:#fff; }
+  .btn-outline:disabled{ border-color:var(--gray-light); color:var(--gray); cursor:not-allowed; }
+  .btn-outline:disabled:hover{ background:transparent; }
+  .btn-small{ padding:0.4rem 0.75rem; font-size:0.8rem; }
+  .hint{ font-size:0.8rem; color:var(--gray-dark); margin:10px 0 0; line-height:1.5; }
+
+  .shop-row{ display:flex; gap:8px; align-items:center; padding:7px 0; font-size:0.85rem; border-bottom:1px dashed var(--gray-light); }
+  .shop-row:last-of-type{ border-bottom:none; }
+  .shop-row .name{ font-weight:600; width:130px; flex-shrink:0; }
+  .shop-row .id{ color:var(--gray-dark); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .add-shop-row{ display:flex; gap:8px; margin-top:10px; }
+  .add-shop-row input{ padding:8px 10px; border:2px solid var(--gray-light); border-radius:6px; font-size:0.82rem; font-family:inherit; }
+  .add-shop-row input.name{ width:110px; }
+  .add-shop-row input.id{ flex:1; }
+
+  .results-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
+  .results-head h2{ margin:0; font-size:0.95rem; font-weight:700; }
+  .grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap:14px; }
+  .card{ border:1px solid var(--gray-light); border-radius:var(--radius); overflow:hidden; display:flex; flex-direction:column; }
+  .thumb{ aspect-ratio:1/1; background:var(--light); position:relative; overflow:hidden; }
+  .thumb-img{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:var(--gray); font-size:11.5px; }
+  .thumb-img img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .thumb-remove{ position:absolute; top:4px; right:32px; width:22px; height:22px; border-radius:50%; border:none; background:rgba(0,0,0,0.55); color:#fff; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .thumb-remove:hover{ background:var(--danger); }
+  .thumb-menu{ position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%; border:none; background:rgba(0,0,0,0.55); color:#fff; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .thumb-menu:hover{ background:rgba(0,0,0,0.75); }
+  .thumb-nav{ position:absolute; top:50%; transform:translateY(-50%); width:22px; height:22px; border-radius:50%; border:none; background:rgba(0,0,0,0.45); color:#fff; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .thumb-nav:hover{ background:rgba(0,0,0,0.7); }
+  .thumb-nav.prev{ left:4px; }
+  .thumb-nav.next{ right:4px; }
+  .thumb-count{ position:absolute; bottom:4px; right:4px; background:rgba(0,0,0,0.55); color:#fff; font-size:0.62rem; font-weight:600; padding:1px 6px; border-radius:999px; }
+  .card .body{ padding:10px; display:flex; flex-direction:column; gap:6px; flex:1; }
+  .card .title{ font-size:0.8rem; font-weight:600; line-height:1.35; min-height:2.6em; }
+  .card .price{ font-size:0.85rem; font-weight:700; color:var(--secondary-dark); }
+  .card .meta{ font-size:0.7rem; color:var(--gray-dark); }
+  .card .size-select{ padding:6px 7px; border:2px solid var(--gray-light); border-radius:5px; font-size:0.75rem; font-family:inherit; }
+  .pick-row{ display:flex; gap:6px; }
+  .pick-row .size-select{ flex:1; min-width:0; }
+  .pick-row .qty-select{ width:52px; flex-shrink:0; padding:6px 5px; border:2px solid var(--gray-light); border-radius:5px; font-size:0.75rem; font-family:inherit; }
+  .card .row{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:auto; }
+  .card .view{ font-size:0.72rem; color:var(--primary); text-decoration:none; font-weight:600; }
+  .card .add{ background:var(--secondary); color:#fff; border:none; border-radius:6px; padding:6px 10px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
+  .card .add:hover{ background:var(--secondary-dark); }
+  .add-photo{ margin-top:6px; }
+  .add-photo-toggle{ background:none; border:none; color:var(--primary); font-size:0.7rem; font-weight:600; cursor:pointer; padding:2px 0; font-family:inherit; }
+  .add-photo-toggle:hover{ text-decoration:underline; }
+  .add-photo-form{ display:flex; gap:6px; margin-top:6px; }
+  .add-photo-form.hidden{ display:none; }
+  .add-photo-input{ flex:1; min-width:0; padding:5px 7px; border:2px solid var(--gray-light); border-radius:5px; font-size:0.72rem; font-family:inherit; }
+  .add-photo-save{ background:var(--primary); color:#fff; border:none; border-radius:5px; padding:5px 9px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
+  .add-photo-save:hover{ background:var(--primary-dark); }
+  .admin-empty{ text-align:center; padding:2.5rem; color:var(--gray); font-size:0.85rem; }
+
+  .manual-add, .bulk-import{ margin-top:18px; }
+  .manual-add summary, .bulk-import summary{ cursor:pointer; font-size:0.85rem; color:var(--gray-dark); font-weight:600; list-style:none; padding:2px 0; }
+  .manual-add summary::-webkit-details-marker, .bulk-import summary::-webkit-details-marker{ display:none; }
+  .manual-add summary::before{ content:"Can't find it in search? Add an item by link ▸"; }
+  .manual-add[open] summary::before{ content:"Can't find it in search? Add an item by link ▾"; }
+  .bulk-import summary::before{ content:"Add multiple products at once ▸"; }
+  .bulk-import[open] summary::before{ content:"Add multiple products at once ▾"; }
+  .add-form{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:12px; }
+  .add-form input#itemUrl{ grid-column: 1 / -1; }
+  .add-form button{ grid-column: 1 / -1; }
+
+  .import-option{ margin-top:14px; }
+  .import-option h3{ margin:0 0 4px; font-size:0.8rem; font-weight:700; color:var(--dark); }
+  .import-divider{ display:flex; align-items:center; gap:10px; margin:18px 0; color:var(--gray); font-size:0.72rem; font-weight:600; }
+  .import-divider::before, .import-divider::after{ content:""; flex:1; border-top:1px dashed var(--gray-light); }
+  .bulk-form{ margin-top:10px; }
+  .bulk-form textarea{ width:100%; padding:0.7rem 0.9rem; border:2px solid var(--gray-light); border-radius:var(--radius); font-size:0.85rem; font-family:inherit; resize:vertical; }
+  .bulk-form textarea:focus{ outline:none; border-color:var(--primary); }
+  .bulk-form button{ margin-top:10px; }
+  .bulk-result{ font-size:0.8rem; color:var(--gray-dark); margin-top:8px; display:none; }
+  #csvPreview{ margin-top:10px; }
+  #csvColumnSelect{ max-width:260px; margin-top:6px; }
+  #csvPreviewText{ margin-top:8px; }
+  #csvImportBtn{ margin-top:8px; }
+
+  .settings-label{ display:block; font-size:0.8rem; font-weight:600; color:var(--dark); margin:0 0 5px; }
+  .settings-label:not(:first-child){ margin-top:14px; }
+  .note{ font-size:0.75rem; color:var(--gray-dark); margin-top:12px; line-height:1.5; }
+  .note p{ margin:0 0 8px; }
+  .note p:last-child{ margin-bottom:0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-container">
+    <div class="logo"><i class="fas fa-truck-loading"></i> GOAT KIDS B2B <span class="sub">Restock Search</span></div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span class="mode-pill" id="modePill">Sample data</span>
+      <a class="back-link" href="index.html"><i class="fas fa-arrow-left"></i> Back to B2B</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div>
+    <div class="page-tabs">
+      <button class="page-tab active" id="tabHomeBtn" onclick="switchSection('home')"><i class="fas fa-layer-group"></i> Home</button>
+      <button class="page-tab" id="tabSearchBtn" onclick="switchSection('search')"><i class="fas fa-search"></i> Search 1688</button>
+      <button class="page-tab" id="tabRestockBtn" onclick="switchSection('restock')"><i class="fas fa-clipboard-list"></i> Restock List</button>
+      <button class="page-tab" id="tabSettingsBtn" onclick="switchSection('settings')"><i class="fas fa-cog"></i> Settings</button>
+    </div>
+
+    <div id="homeSection">
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <h1><i class="fas fa-layer-group" style="color:var(--primary)"></i> Product catalog</h1>
+          <p>Everything found through search or added manually — pick straight from here without searching again.</p>
+        </div>
+        <div class="admin-card-body">
+          <input type="text" class="form-control" id="historyFilter" placeholder="Filter your saved products...">
+          <div class="grid" id="historyGrid" style="margin-top:14px;"></div>
+          <div class="admin-empty" id="historyEmpty">No saved products yet. Search 1688 or add an item by link, and everything you find will show up here for next time.</div>
+
+          <details class="bulk-import">
+            <summary></summary>
+            <div class="import-option">
+              <h3>Paste a list</h3>
+              <p class="hint">One per line — product links (a name before the link becomes the title), or plain product names with no link, like from a 1688 export. Names get a ready-made "Search on 1688" link since there's no exact product page to point to.</p>
+              <div class="bulk-form">
+                <textarea id="bulkUrls" rows="4" placeholder="Kids cotton dress  https://detail.1688.com/offer/1234567890.html&#10;https://detail.1688.com/offer/2345678901.html&#10;儿童棉质连衣裙&#10;..."></textarea>
+                <button class="btn btn-primary" id="bulkImportBtn"><i class="fas fa-file-import"></i> Import links</button>
+                <p class="bulk-result" id="bulkImportResult"></p>
+              </div>
+            </div>
+
+            <div class="import-divider"><span>or</span></div>
+
+            <div class="import-option">
+              <h3>Upload a file</h3>
+              <p class="hint">A CSV or Excel export — a 1688 order-history export is recognized automatically and brings in exact product links, price paid, and supplier.</p>
+              <input type="file" id="csvFile" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              <div id="csvPreview" class="hidden">
+                <label class="hint" for="csvColumnSelect">Which column has the item name?</label>
+                <select class="form-control" id="csvColumnSelect"></select>
+                <p class="hint" id="csvPreviewText"></p>
+                <button class="btn btn-primary btn-small" id="csvImportBtn">Import these items</button>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <div id="searchSection" class="hidden">
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <h1><i class="fas fa-search" style="color:var(--primary)"></i> Search suppliers</h1>
+          <p>Search trusted 1688 suppliers, build a restock list, then order directly on 1688.</p>
+        </div>
+        <div class="admin-card-body">
+          <div class="search-bar">
+            <input type="text" class="form-control" id="keyword" placeholder="Search a product, e.g. kids cotton socks">
+            <select class="form-control" id="shopFilter"></select>
+            <button class="btn btn-primary" id="searchBtn"><i class="fas fa-search"></i> Search</button>
+            <button class="btn btn-outline" id="browseBtn" title="Pick a specific shop to browse its full catalog" disabled>View all items</button>
+          </div>
+          <p class="hint" id="liveDataHint" style="display:none;">Live search covers all of 1688 by keyword — it doesn't filter to one trusted shop, and "View all items" still shows sample data since this scraper can't browse a whole shop without a keyword.</p>
+        </div>
+      </div>
+
+      <div class="admin-card">
+        <div class="admin-card-body">
+          <div class="results-head">
+            <h2 id="resultsLabel">Search a product to see results</h2>
+          </div>
+          <div class="grid" id="grid"></div>
+          <div class="admin-empty" id="emptyState">No results yet — try a search above.</div>
+
+          <details class="manual-add">
+            <summary></summary>
+            <p class="hint">If a supplier's item isn't showing up in search, paste its 1688 product link here to add it straight to your restock list. It'll also be saved to your Home catalog.</p>
+            <div class="add-form">
+              <input type="text" class="form-control" id="itemUrl" placeholder="1688 product link">
+              <input type="text" class="form-control" id="itemTitle" placeholder="Product name">
+              <input type="text" class="form-control" id="itemSize" placeholder="Size (optional)">
+              <input type="number" class="form-control" id="itemQty" min="1" value="1" placeholder="Qty">
+              <button class="btn btn-primary" id="addItemBtn"><i class="fas fa-plus"></i> Add to list</button>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <div id="restockSection" class="hidden">
+      <div class="admin-card">
+        <div class="admin-card-header restock-header">
+          <div>
+            <h1><i class="fas fa-clipboard-list" style="color:var(--primary)"></i> Restock list</h1>
+            <p>Select the items you're ready to order, then send them to Telegram.</p>
+          </div>
+          <button class="btn btn-primary" id="sendTelegramBtn" disabled><i class="fab fa-telegram-plane"></i> Send selected to Telegram</button>
+        </div>
+        <div class="admin-card-body">
+          <div class="status-filter" id="statusFilter">
+            <button class="status-filter-btn active" data-status="all" data-label="All" onclick="setRestockFilter('all')">All</button>
+            <button class="status-filter-btn" data-status="pending" data-label="Not sent" onclick="setRestockFilter('pending')">Not sent</button>
+            <button class="status-filter-btn" data-status="sent" data-label="Sent" onclick="setRestockFilter('sent')">Sent</button>
+            <button class="status-filter-btn" data-status="ordered" data-label="Ordered" onclick="setRestockFilter('ordered')">Ordered</button>
+          </div>
+          <div class="select-all-row">
+            <input type="checkbox" id="selectAllRestock">
+            <label for="selectAllRestock">Select all</label>
+          </div>
+          <div id="restockListWrap"></div>
+          <div class="admin-empty" id="restockListEmpty">Nothing added yet. Use "Add to list" on a product.</div>
+          <div class="send-status" id="sendStatus"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="settingsSection" class="hidden">
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <h1><i class="fas fa-server" style="color:var(--primary)"></i> Data source</h1>
+          <p>Controls for the Search 1688 tab</p>
+        </div>
+        <div class="admin-card-body">
+          <label for="apifyToken" class="settings-label">Apify API token</label>
+          <input type="text" class="form-control" id="apifyToken" placeholder="Paste your token here">
+          <label for="apifyActor" class="settings-label">Apify actor ID</label>
+          <input type="text" class="form-control" id="apifyActor" placeholder="e.g. zen-studio~1688-wholesale-scraper" value="zen-studio~1688-wholesale-scraper">
+          <div class="note">
+            <p>No token yet? Search uses sample data so the tool stays fully testable. Add a token and keyword search switches to real 1688 listings automatically.</p>
+            <p>This scraper searches all of 1688 by keyword — it can't scope to one trusted shop, and "View all items" always stays on sample data since it can't browse a whole shop without a keyword.</p>
+            <p>Your token is saved in this browser only — private to this device, and never touches the main Goat Kids app. You'll need to paste it again on any other device.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <h1><i class="fas fa-store" style="color:var(--primary)"></i> Trusted shops</h1>
+          <p>Shops you can filter searches to on the Search 1688 tab</p>
+        </div>
+        <div class="admin-card-body">
+          <div id="shopList"></div>
+          <div class="add-shop-row">
+            <input type="text" class="name" id="newShopName" placeholder="Shop nickname">
+            <input type="text" class="id" id="newShopId" placeholder="1688 shop ID (from the shop URL)">
+            <button class="btn btn-outline btn-small" id="addShopBtn">Add shop</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <h1><i class="fab fa-telegram-plane" style="color:var(--primary)"></i> Telegram</h1>
+          <p>Where the Restock List sends orders to</p>
+        </div>
+        <div class="admin-card-body">
+          <label for="tgToken" class="settings-label">Bot token</label>
+          <input type="text" class="form-control" id="tgToken" placeholder="Paste your bot token here">
+          <label for="tgChatId" class="settings-label">Chat ID</label>
+          <input type="text" class="form-control" id="tgChatId" placeholder="Paste your chat ID here">
+          <div class="note">
+            <p>Message @BotFather on Telegram, send <code>/newbot</code>, and follow the prompts — it gives you a bot token when it's done.</p>
+            <p>To get your chat ID: message your new bot anything first, then open <code>https://api.telegram.org/bot&lt;your token&gt;/getUpdates</code> in a browser and look for the <code>"chat":{"id":...}</code> number.</p>
+            <p>Both are saved in this browser only — private to this device.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script>
+// Same Firebase project as the Goat Kids retail store app, but this tool
+// only ever touches its own three collections below (restockTool_shops,
+// restockTool_items, restockTool_history) — it never reads or writes
+// stores/orders/products/transfers/refunds or anything else the store app uses.
+const firebaseConfig = {
+  apiKey: "AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU",
+  authDomain: "goat-kids-store.firebaseapp.com",
+  projectId: "goat-kids-store",
+  storageBucket: "goat-kids-store.firebasestorage.app",
+  messagingSenderId: "372035223463",
+  appId: "1:372035223463:web:a9948932607e81da2a4082"
+};
+let db = null;
+try{
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+}catch(e){
+  console.error('Firebase init error:', e);
+  db = null;
+}
+</script>
+<script>
+// ---------- state ----------
+// shops, restockList and historyCache are the local cache, kept in sync
+// with Firestore by the listeners in initFirestoreListeners(). If db
+// didn't connect (offline, bad config, etc.) they just behave as
+// session-only arrays like before.
+let shops = [];
+let restockList = [];
+let lastResults = [];
+let historyCache = [];
+let historyFilterText = '';
+let productIndex = {}; // id -> product, refreshed whenever search results or the Home catalog render, so addToRestock can find a product regardless of which grid it was clicked from
+
+function indexProducts(list){
+  list.forEach(p => { productIndex[p.id] = p; });
+}
+
+// ---------- page tabs (Home / Search) ----------
+function switchSection(name){
+  document.getElementById('homeSection').classList.toggle('hidden', name !== 'home');
+  document.getElementById('searchSection').classList.toggle('hidden', name !== 'search');
+  document.getElementById('restockSection').classList.toggle('hidden', name !== 'restock');
+  document.getElementById('settingsSection').classList.toggle('hidden', name !== 'settings');
+  document.getElementById('tabHomeBtn').classList.toggle('active', name === 'home');
+  document.getElementById('tabSearchBtn').classList.toggle('active', name === 'search');
+  document.getElementById('tabRestockBtn').classList.toggle('active', name === 'restock');
+  document.getElementById('tabSettingsBtn').classList.toggle('active', name === 'settings');
+}
+
+function initFirestoreListeners(){
+  db.collection('restockTool_shops').onSnapshot(snap => {
+    shops = snap.docs.map(d => ({ id: d.id, name: d.data().name }));
+    if(shops.length === 0){
+      // First run against an empty collection — seed the one known trusted shop.
+      db.collection('restockTool_shops').doc('1381942494680').set({ name: 'Supplier 1' });
+    }
+    renderShops();
+  }, err => {
+    console.error('Shops listener failed, falling back to local-only:', err);
+    db = null;
+    shops = [{ name: 'Supplier 1', id: '1381942494680' }];
+    renderShops();
+  });
+
+  db.collection('restockTool_items').orderBy('addedAt').onSnapshot(snap => {
+    restockList = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+    renderRestock();
+  }, err => {
+    console.error('Restock list listener failed, falling back to local-only:', err);
+    db = null;
+    renderRestock();
+  });
+
+  db.collection('restockTool_history').orderBy('savedAt', 'desc').onSnapshot(snap => {
+    historyCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderHistory();
+  }, err => {
+    console.error('History listener failed, falling back to local-only:', err);
+    renderHistory();
+  });
+}
+
+// ---------- shared product card ----------
+// Merges the legacy single-image field with the newer images array, so
+// older catalog entries never lose their photo when a second one is added.
+function getImages(p){
+  const arr = Array.isArray(p.images) ? p.images.slice() : [];
+  if(p.image && !arr.includes(p.image)) arr.push(p.image);
+  return arr;
+}
+
+let photoIndex = {}; // product id -> which photo is currently shown
+
+function cyclePhoto(e, id, delta){
+  e.stopPropagation();
+  const product = productIndex[id];
+  if(!product) return;
+  const images = getImages(product);
+  if(images.length < 2) return;
+  const cur = photoIndex[id] || 0;
+  const next = (cur + delta + images.length) % images.length;
+  photoIndex[id] = next;
+  const imgEl = document.getElementById('thumbimg-' + id);
+  if(imgEl) imgEl.src = images[next];
+  const countEl = document.getElementById('thumbcount-' + id);
+  if(countEl) countEl.textContent = (next + 1) + '/' + images.length;
+}
+
+function productCardHtml(p, opts){
+  opts = opts || {};
+  const images = getImages(p);
+  const startIdx = Math.min(photoIndex[p.id] || 0, Math.max(images.length - 1, 0));
+  const imgHtml = images.length
+    ? `<img id="thumbimg-${escapeHtml(p.id)}" src="${escapeHtml(images[startIdx])}" alt="" referrerpolicy="no-referrer" onerror="this.parentElement.textContent='No image'">`
+    : 'No image';
+
+  return `
+    <div class="card">
+      <div class="thumb">
+        <div class="thumb-img">${imgHtml}</div>
+        ${images.length > 1 ? `
+        <button class="thumb-nav prev" onclick="cyclePhoto(event,'${escapeHtml(p.id)}',-1)" title="Previous photo"><i class="fas fa-chevron-left"></i></button>
+        <button class="thumb-nav next" onclick="cyclePhoto(event,'${escapeHtml(p.id)}',1)" title="Next photo"><i class="fas fa-chevron-right"></i></button>
+        <span class="thumb-count" id="thumbcount-${escapeHtml(p.id)}">${startIdx + 1}/${images.length}</span>` : ''}
+        ${opts.removable ? `
+        <button class="thumb-menu" onclick="event.stopPropagation();toggleThumbMenu('${escapeHtml(p.id)}')" title="More options"><i class="fas fa-ellipsis-v"></i></button>
+        <button class="thumb-remove hidden" id="removeBtn-${escapeHtml(p.id)}" onclick="event.stopPropagation();confirmRemoveFromHistory('${escapeHtml(p.id)}')" title="Remove from catalog"><i class="fas fa-times"></i></button>` : ''}
+      </div>
+      <div class="body">
+        <div class="title">${escapeHtml(p.title)}</div>
+        <div class="price">${escapeHtml(String(p.price))}</div>
+        <div class="meta">MOQ ${escapeHtml(String(p.moq))} · ${escapeHtml(p.supplier)}</div>
+        <div class="pick-row">
+          ${p.sizes && p.sizes.length ? `
+          <select class="size-select">
+            ${p.sizes.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
+          </select>` : ''}
+          <input type="number" class="qty-select" min="1" value="1" title="Quantity to order">
+        </div>
+        <div class="row">
+          <a class="view" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">${p.isSearchLink ? 'Search on 1688' : 'View on 1688'}</a>
+          <button class="add" onclick="addToRestock('${escapeHtml(p.id)}', this)">Add to list</button>
+        </div>
+        ${opts.removable ? `
+        <div class="add-photo">
+          <button class="add-photo-toggle" onclick="toggleAddPhoto('${escapeHtml(p.id)}')">${images.length ? '+ Add another photo' : '+ Add photo link'}</button>
+          <div class="add-photo-form hidden" id="addPhotoForm-${escapeHtml(p.id)}">
+            <input type="text" class="add-photo-input" id="addPhotoInput-${escapeHtml(p.id)}" placeholder="Paste image link">
+            <button class="add-photo-save" onclick="savePhotoLink('${escapeHtml(p.id)}')">Save</button>
+          </div>
+        </div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// A tap on the ⋮ reveals Remove — kept out of sight by default so it can't
+// be tapped by accident, and removing still asks for confirmation on top
+// of that, since catalog entries can be tedious to rebuild.
+function toggleThumbMenu(id){
+  const btn = document.getElementById('removeBtn-' + id);
+  if(btn) btn.classList.toggle('hidden');
+}
+
+function confirmRemoveFromHistory(id){
+  if(confirm('Remove this product from your catalog? This can\'t be undone.')){
+    removeFromHistory(id);
+  }
+}
+
+// Lets staff paste an image link straight from 1688 (right-click the
+// photo on the product page → "Copy image address") onto a catalog item —
+// simpler than the bookmarklet for a handful of items. Adds to the
+// item's photo list rather than replacing it, so more than one photo
+// can build up over time.
+function toggleAddPhoto(id){
+  const form = document.getElementById('addPhotoForm-' + id);
+  if(form) form.classList.toggle('hidden');
+}
+
+function savePhotoLink(id){
+  const input = document.getElementById('addPhotoInput-' + id);
+  const url = input.value.trim();
+  if(!url) return;
+  if(db){
+    db.collection('restockTool_history').doc(id).set({
+      images: firebase.firestore.FieldValue.arrayUnion(url)
+    }, { merge: true });
+  } else {
+    const item = historyCache.find(p => p.id === id);
+    if(item){
+      item.images = Array.isArray(item.images) ? item.images : [];
+      if(!item.images.includes(url)) item.images.push(url);
+      renderHistory();
+    }
+  }
+  input.value = '';
+  const form = document.getElementById('addPhotoForm-' + id);
+  if(form) form.classList.add('hidden');
+}
+
+// ---------- Home catalog ----------
+function renderHistory(){
+  indexProducts(historyCache);
+  const grid = document.getElementById('historyGrid');
+  const empty = document.getElementById('historyEmpty');
+  const filtered = historyFilterText
+    ? historyCache.filter(p => (p.title || '').toLowerCase().includes(historyFilterText))
+    : historyCache;
+
+  if(filtered.length === 0){
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    empty.textContent = historyCache.length === 0
+      ? 'No saved products yet. Search 1688 or add an item by link, and everything you find will show up here for next time.'
+      : 'No saved products match that filter.';
+    return;
+  }
+  empty.style.display = 'none';
+  grid.innerHTML = filtered.map(p => productCardHtml(p, { removable: true })).join('');
+}
+
+document.getElementById('historyFilter').addEventListener('input', e => {
+  historyFilterText = e.target.value.trim().toLowerCase();
+  renderHistory();
+});
+
+function removeFromHistory(id){
+  if(db){
+    db.collection('restockTool_history').doc(id).delete();
+  } else {
+    historyCache = historyCache.filter(p => p.id !== id);
+    renderHistory();
+  }
+}
+
+// Saves live search results (never sample/placeholder data) into the
+// shared Home catalog, keyed by each product's own 1688 offer ID so
+// re-finding the same item on a later search just bumps it to the top
+// instead of creating a duplicate.
+function saveToHistory(products){
+  if(!db) return;
+  products.forEach(p => {
+    if(!p.hasStableId) return;
+    db.collection('restockTool_history').doc(String(p.id)).set({
+      title: p.title, price: p.price, moq: p.moq, supplier: p.supplier,
+      images: p.image ? [p.image] : [], url: p.url, sizes: p.sizes || [],
+      savedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+}
+
+// ---------- shop list UI ----------
+function renderShops(){
+  const list = document.getElementById('shopList');
+  list.innerHTML = shops.map(s => `
+    <div class="shop-row">
+      <span class="name">${escapeHtml(s.name)}</span>
+      <span class="id">${escapeHtml(s.id)}</span>
+      <button class="btn btn-outline btn-small" onclick="removeShop('${escapeHtml(s.id)}')">Remove</button>
+    </div>
+  `).join('');
+
+  const filter = document.getElementById('shopFilter');
+  const current = filter.value;
+  filter.innerHTML = `<option value="all">All trusted shops</option>` +
+    shops.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('');
+  if ([...filter.options].some(o => o.value === current)) filter.value = current;
+  updateBrowseBtnState();
+}
+
+function updateBrowseBtnState(){
+  const filter = document.getElementById('shopFilter');
+  document.getElementById('browseBtn').disabled = (filter.value === 'all');
+}
+
+function removeShop(id){
+  if(db){
+    db.collection('restockTool_shops').doc(id).delete();
+  } else {
+    shops = shops.filter(s => s.id !== id);
+    renderShops();
+  }
+}
+
+document.getElementById('addShopBtn').onclick = () => {
+  const name = document.getElementById('newShopName').value.trim();
+  const id = document.getElementById('newShopId').value.trim();
+  if(!name || !id){ return; }
+  if(db){
+    db.collection('restockTool_shops').doc(id).set({ name });
+  } else {
+    shops.push({ name, id });
+    renderShops();
+  }
+  document.getElementById('newShopName').value = '';
+  document.getElementById('newShopId').value = '';
+};
+
+// ---------- search ----------
+document.getElementById('searchBtn').onclick = () => {
+  const keyword = document.getElementById('keyword').value.trim();
+  if(!keyword){ return; }
+  performSearch(keyword);
+};
+document.getElementById('browseBtn').onclick = () => {
+  const shopId = document.getElementById('shopFilter').value;
+  if(shopId === 'all'){ return; }
+  performSearch(''); // empty keyword = browse the selected shop's full catalog
+};
+document.getElementById('shopFilter').addEventListener('change', updateBrowseBtnState);
+document.getElementById('keyword').addEventListener('keydown', e => {
+  if(e.key === 'Enter'){
+    const keyword = document.getElementById('keyword').value.trim();
+    if(keyword) performSearch(keyword);
+  }
+});
+
+async function performSearch(keyword){
+  const shopId = document.getElementById('shopFilter').value;
+  const browsing = !keyword;
+
+  document.getElementById('resultsLabel').textContent = browsing ? 'Loading shop catalog…' : 'Searching…';
+  document.getElementById('grid').innerHTML = '';
+  document.getElementById('emptyState').style.display = 'none';
+
+  const token = document.getElementById('apifyToken').value.trim();
+  let results;
+  if(token && keyword){
+    // Live data only applies to keyword search — this actor has no
+    // "browse a whole shop" mode, so browsing always uses sample data.
+    setMode(true);
+    try{
+      results = await fetchFromApify(keyword, token);
+      saveToHistory(results);
+    }catch(err){
+      console.error('Apify search failed, falling back to sample data:', err);
+      results = generateMockResults(keyword, shopId);
+      setMode(false);
+    }
+  } else {
+    setMode(false);
+    results = generateMockResults(keyword, shopId);
+  }
+
+  lastResults = results;
+  renderResults(results, keyword, shopId);
+}
+
+function setMode(live){
+  const pill = document.getElementById('modePill');
+  pill.textContent = live ? 'Live 1688 data' : 'Sample data';
+  pill.className = 'mode-pill' + (live ? ' live' : '');
+  document.getElementById('liveDataHint').style.display = live ? 'block' : 'none';
+}
+
+// Real Apify call for zen-studio/1688-wholesale-scraper. Uses the
+// "run-sync-get-dataset-items" endpoint so results come back in one request.
+// Confirmed input/output schema (Sept 2026) — see apify.com/zen-studio/1688-wholesale-scraper.
+// If you switch to a different actor, this function and mapProduct() below
+// will need matching adjustments to its actual field names.
+async function fetchFromApify(keyword, token){
+  const actor = document.getElementById('apifyActor').value.trim();
+  const url = `https://api.apify.com/v2/acts/${encodeURIComponent(actor)}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`;
+  const body = {
+    keywords: [keyword],
+    maxResults: 24,
+    includeSkuDetails: true // needed so size/colour variants come back for the size picker
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if(!res.ok){ throw new Error('Apify request failed: ' + res.status); }
+  const data = await res.json();
+  // Offers the actor couldn't retrieve come back as {offerId, error} — skip those.
+  return data.filter(item => !item.error).map(mapProduct);
+}
+
+function mapProduct(raw){
+  return {
+    id: raw.offerId || String(Math.random()),
+    hasStableId: !!raw.offerId, // only items with a real 1688 offer ID get saved to the Home catalog
+    title: raw.title || 'Untitled product',
+    price: formatPrice(raw.price),
+    moq: (raw.minOrderQuantity != null) ? `${raw.minOrderQuantity} ${raw.unit || ''}`.trim() : '—',
+    supplier: (raw.supplier && raw.supplier.companyName) || '—',
+    image: (raw.images && raw.images[0]) || '',
+    url: raw.detailUrl || '#',
+    sizes: extractSizes(raw)
+  };
+}
+
+function formatPrice(price){
+  if(!price || price.min == null) return '—';
+  const symbol = price.currency === 'CNY' ? '¥' : (price.currency ? price.currency + ' ' : '');
+  const min = Number(price.min).toFixed(2);
+  if(price.max == null || price.max === price.min) return `${symbol}${min}`;
+  return `${symbol}${min}–${Number(price.max).toFixed(2)}`;
+}
+
+// Size (and similar variant) info lives under skuDetails.properties, each
+// shaped like { name: "颜色"/"尺码"/etc, values: [{ name, imageUrl }] } —
+// only present when includeSkuDetails is true. Picks whichever property
+// looks like a size, falling back to none (the card just won't show a
+// size picker in that case).
+function extractSizes(raw){
+  const props = raw.skuDetails && raw.skuDetails.properties;
+  if(!Array.isArray(props)) return [];
+  const sizeProp = props.find(p => /size|尺码|尺寸|码/i.test(p.name || ''));
+  if(!sizeProp || !Array.isArray(sizeProp.values)) return [];
+  return sizeProp.values.map(v => v.name).filter(Boolean);
+}
+
+// ---------- sample data ----------
+const KID_SIZES = ['80cm','90cm','100cm','110cm','120cm','130cm'];
+
+const CATALOG_ITEMS = [
+  { name: 'Kids cotton T-shirt', price: '¥12.50 / pc', moq: '50 pcs' },
+  { name: 'Toddler socks, 3-pack', price: '¥6.80 / pack', moq: '100 packs' },
+  { name: 'Girls floral dress', price: '¥27.00 / pc', moq: '20 pcs' },
+  { name: 'Boys shorts set', price: '¥18.90 / pc', moq: '30 pcs' },
+  { name: 'Baby onesie, plain colours', price: '¥11.10 / pc', moq: '60 pcs' },
+  { name: 'Kids winter jacket', price: '¥42.00 / pc', moq: '15 pcs' },
+  { name: 'School uniform polo', price: '¥15.40 / pc', moq: '40 pcs' },
+  { name: 'Kids pyjama set', price: '¥19.60 / pc', moq: '25 pcs' },
+  { name: 'Toddler hat & mitten set', price: '¥8.90 / set', moq: '50 sets' },
+  { name: 'Kids denim overalls', price: '¥24.30 / pc', moq: '20 pcs' },
+  { name: 'Girls hair accessory pack', price: '¥4.20 / pack', moq: '100 packs' },
+  { name: 'Kids swim shorts', price: '¥13.70 / pc', moq: '40 pcs' }
+];
+
+function generateMockResults(keyword, shopId){
+  const shop = shops.find(s => s.id === shopId);
+  const supplierName = shop ? shop.name : 'Sample Supplier';
+
+  if(!keyword){
+    return CATALOG_ITEMS.map((it, i) => ({
+      id: 'sample-' + i,
+      hasStableId: false,
+      title: it.name,
+      price: it.price,
+      moq: it.moq,
+      supplier: supplierName,
+      image: '',
+      url: 'https://www.1688.com/',
+      sizes: KID_SIZES
+    }));
+  }
+
+  const suffixes = ['basic pack', 'cotton, size run', 'wholesale carton', 'premium line', 'seasonal print', 'plain colours'];
+  const prices = ['¥12.50 / pc', '¥18.90 / pc', '¥9.20 / pc', '¥27.00 / pc', '¥15.40 / pc', '¥11.10 / pc'];
+  const moqs = ['50 pcs', '30 pcs', '100 pcs', '20 pcs', '40 pcs', '60 pcs'];
+  return suffixes.map((suffix, i) => ({
+    id: 'sample-' + i,
+    hasStableId: false,
+    title: `${keyword} — ${suffix}`,
+    price: prices[i],
+    moq: moqs[i],
+    supplier: supplierName,
+    image: '',
+    url: 'https://www.1688.com/',
+    sizes: KID_SIZES
+  }));
+}
+
+// ---------- results rendering ----------
+function renderResults(results, keyword, shopId){
+  const grid = document.getElementById('grid');
+  const empty = document.getElementById('emptyState');
+  const label = document.getElementById('resultsLabel');
+
+  indexProducts(results);
+
+  if(keyword){
+    label.textContent = `Results for "${keyword}" (${results.length})`;
+  } else {
+    const shop = shops.find(s => s.id === shopId);
+    label.textContent = `All items in ${shop ? shop.name : 'shop'} (${results.length})`;
+  }
+
+  if(results.length === 0){
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    empty.textContent = 'No results found — try a different keyword or shop.';
+    return;
+  }
+  empty.style.display = 'none';
+
+  grid.innerHTML = results.map(p => productCardHtml(p, { removable: false })).join('');
+}
+
+// ---------- restock list ----------
+function addToRestock(id, btnEl){
+  const product = productIndex[id];
+  if(!product) return;
+  const card = btnEl ? btnEl.closest('.card') : null;
+  const sizeSelect = card ? card.querySelector('.size-select') : null;
+  const qtySelect = card ? card.querySelector('.qty-select') : null;
+  const size = sizeSelect ? sizeSelect.value : null;
+  const qtyFromInput = qtySelect ? parseInt(qtySelect.value) : NaN;
+  const qty = !isNaN(qtyFromInput) && qtyFromInput > 0
+    ? qtyFromInput
+    : (product.moq && !isNaN(parseInt(product.moq)) ? parseInt(product.moq) : 1);
+  const item = {
+    ...product,
+    size,
+    qty
+  };
+  if(db){
+    item.addedAt = firebase.firestore.FieldValue.serverTimestamp();
+    db.collection('restockTool_items').add(item);
+  } else {
+    restockList.push({ ...item, docId: 'local-' + Date.now() });
+    renderRestock();
+  }
+}
+
+// Manual add-by-link, for items found outside of search results. Also
+// keeps a copy in the Home catalog so it's easy to find again later.
+function hashId(str){
+  let h = 0;
+  for(let i = 0; i < str.length; i++){ h = (h * 31 + str.charCodeAt(i)) >>> 0; }
+  return 'm' + h.toString(36);
+}
+
+document.getElementById('addItemBtn').onclick = () => {
+  const url = document.getElementById('itemUrl').value.trim();
+  const title = document.getElementById('itemTitle').value.trim();
+  const size = document.getElementById('itemSize').value.trim();
+  const qtyRaw = document.getElementById('itemQty').value.trim();
+  const qty = parseInt(qtyRaw);
+
+  if(!url){ return; }
+
+  const item = {
+    url,
+    title: title || url,
+    size: size || null,
+    qty: isNaN(qty) || qty < 1 ? 1 : qty
+  };
+
+  if(db){
+    item.addedAt = firebase.firestore.FieldValue.serverTimestamp();
+    db.collection('restockTool_items').add(item);
+    db.collection('restockTool_history').doc(hashId(url)).set({
+      title: item.title, price: '—', moq: '—', supplier: '—',
+      image: '', url, sizes: [],
+      savedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  } else {
+    restockList.push({ ...item, docId: 'local-' + Date.now() });
+    renderRestock();
+  }
+
+  document.getElementById('itemUrl').value = '';
+  document.getElementById('itemTitle').value = '';
+  document.getElementById('itemSize').value = '';
+  document.getElementById('itemQty').value = '1';
+};
+
+// Bulk import: paste many 1688 links at once (optionally with a name before
+// each one) straight into the Home catalog. No scraping — just parsing
+// whatever text was pasted, so it works the same on phone or computer.
+document.getElementById('bulkImportBtn').onclick = () => {
+  const raw = document.getElementById('bulkUrls').value;
+  const urlPattern = /https?:\/\/[^\s"'<>]*1688\.com[^\s"'<>]*/i;
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+
+  let entries = [];
+  lines.forEach(line => {
+    const m = line.match(urlPattern);
+    if(m){
+      const url = m[0];
+      const title = line.replace(url, '').replace(/^[\s|,\-–:]+|[\s|,\-–:]+$/g, '').trim();
+      entries.push({ url, title: title || url, isSearchLink: false });
+    } else {
+      // No link on this line — treat it as a bare product name (e.g. from
+      // a 1688 export that only lists names) and link to a 1688 search for
+      // that name instead of a specific product page.
+      const name = line.replace(/^[\s|,\-–:]+|[\s|,\-–:]+$/g, '').trim();
+      if(!name) return;
+      const searchUrl = 'https://s.1688.com/selloffer/offer_search.htm?keywords=' + encodeURIComponent(name);
+      entries.push({ url: searchUrl, title: name, isSearchLink: true });
+    }
+  });
+
+  // de-dupe by url within this paste (two identical names produce the
+  // same generated search url, so this also naturally de-dupes names)
+  const seen = new Set();
+  entries = entries.filter(e => {
+    if(seen.has(e.url)) return false;
+    seen.add(e.url);
+    return true;
+  });
+
+  const resultEl = document.getElementById('bulkImportResult');
+  if(entries.length === 0){
+    resultEl.textContent = 'Nothing usable found in that text.';
+    resultEl.style.display = 'block';
+    return;
+  }
+
+  entries.forEach(e => {
+    const id = hashId(e.url);
+    const data = {
+      title: e.title, price: '—', moq: '—', supplier: '—',
+      image: '', url: e.url, sizes: [], isSearchLink: e.isSearchLink
+    };
+    if(db){
+      db.collection('restockTool_history').doc(id).set({
+        ...data, savedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    } else {
+      historyCache = historyCache.filter(p => p.id !== id);
+      historyCache.unshift({ id, ...data });
+    }
+  });
+  if(!db){ renderHistory(); }
+
+  const linkCount = entries.filter(e => !e.isSearchLink).length;
+  const nameCount = entries.filter(e => e.isSearchLink).length;
+  const parts = [];
+  if(linkCount) parts.push(`${linkCount} link${linkCount === 1 ? '' : 's'}`);
+  if(nameCount) parts.push(`${nameCount} name${nameCount === 1 ? '' : 's'} (as searches)`);
+  resultEl.textContent = `Added ${parts.join(' and ')} to your catalog.`;
+  resultEl.style.display = 'block';
+  document.getElementById('bulkUrls').value = '';
+};
+
+// ---------- CSV / Excel upload ----------
+// Exports vary in layout. First we check for a format we recognize by its
+// exact headers (a 1688 order-history export, which conveniently includes
+// the real Offer ID for each product — so we can build exact product
+// links and pull in price/supplier too, not just a name). If it's not
+// that, we fall back to a generic "which column has the name" picker that
+// scores every column by how name-like its values look, and always shows
+// a preview before importing so nothing goes in silently wrong.
+let csvRows = [];
+let csvOrderEntries = null; // set when a recognized order-export format is detected
+
+const ORDER_EXPORT_HEADERS = { title: '货品标题', price: '单价(元)', supplier: '卖家公司名', offerId: 'Offer ID' };
+
+function looksLikeHeaderRow(row){
+  return row.every(cell => (cell || '').toString().length < 30) &&
+         row.some(cell => /name|title|item|product|名称|商品|标题|品名/i.test((cell || '').toString()));
+}
+
+function csvHasHeader(){
+  return csvRows.length > 1 && looksLikeHeaderRow(csvRows[0]);
+}
+
+function columnScore(colIndex){
+  let score = 0;
+  const start = csvHasHeader() ? 1 : 0;
+  for(let i = start; i < csvRows.length; i++){
+    const val = ((csvRows[i][colIndex] || '') + '').trim();
+    if(val && isNaN(val) && val.length >= 2) score++;
+  }
+  return score;
+}
+
+// Strips a trailing variant descriptor like " 颜色: 杏色 适合身高: 110码/4Y"
+// off a product title, so the many size/colour rows for one product
+// collapse down to a single clean name.
+function stripVariantSuffix(title){
+  const m = title.match(/\s*(颜色|尺码|适合身高|规格)[:：]/);
+  return m ? title.slice(0, m.index) : title;
+}
+
+// Looks for the exact header set of a 1688 order-history export. Returns
+// deduped {title, price, supplier, url, offerId} entries (one per unique
+// Offer ID) if found, otherwise null.
+function detectOrderExport(){
+  if(csvRows.length < 2) return null;
+  const header = csvRows[0].map(h => (h || '').toString().trim());
+  const idx = {};
+  for(const key in ORDER_EXPORT_HEADERS){
+    idx[key] = header.indexOf(ORDER_EXPORT_HEADERS[key]);
+  }
+  if(idx.title === -1 || idx.offerId === -1) return null;
+
+  // Each row is one size/colour variant of an order — group by Offer ID so
+  // the many rows for one product collapse into one entry, with every
+  // distinct variant text (e.g. "颜色: 杏色 适合身高: 110码/4Y") collected
+  // into that product's sizes list rather than thrown away.
+  const grouped = {};
+  for(let i = 1; i < csvRows.length; i++){
+    const row = csvRows[i];
+    const offerId = ((row[idx.offerId] || '') + '').trim();
+    const rawTitle = ((row[idx.title] || '') + '').trim();
+    if(!offerId || !rawTitle) continue;
+
+    if(!grouped[offerId]){
+      grouped[offerId] = {
+        offerId,
+        title: stripVariantSuffix(rawTitle),
+        price: idx.price > -1 && row[idx.price] !== undefined && row[idx.price] !== '' ? ('¥' + row[idx.price]) : '—',
+        supplier: idx.supplier > -1 && row[idx.supplier] ? ((row[idx.supplier] || '') + '').trim() : '—',
+        url: 'https://detail.1688.com/offer/' + offerId + '.html',
+        sizesSet: new Set()
+      };
+    }
+    const variant = rawTitle.slice(grouped[offerId].title.length).trim().replace(/^[\s,;、]+/, '');
+    if(variant) grouped[offerId].sizesSet.add(variant);
+  }
+
+  const entries = Object.values(grouped).map(e => ({
+    offerId: e.offerId, title: e.title, price: e.price, supplier: e.supplier, url: e.url,
+    sizes: Array.from(e.sizesSet)
+  }));
+  return entries.length ? entries : null;
+}
+
+document.getElementById('csvFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const isExcel = /\.xlsx?$/i.test(file.name);
+
+  if(isExcel){
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try{
+        const wb = XLSX.read(evt.target.result, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        csvRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+        handleParsedRows();
+      }catch(err){
+        alert('Could not read that Excel file: ' + err.message);
+      }
+    };
+    reader.onerror = () => alert('Could not read that file.');
+    reader.readAsArrayBuffer(file);
+  } else {
+    Papa.parse(file, {
+      skipEmptyLines: true,
+      complete: (results) => {
+        csvRows = results.data;
+        handleParsedRows();
+      },
+      error: (err) => alert('Could not read that file: ' + err.message)
+    });
+  }
+});
+
+function handleParsedRows(){
+  if(!csvRows || csvRows.length === 0){
+    alert('That file appears to be empty.');
+    return;
+  }
+
+  csvOrderEntries = detectOrderExport();
+  if(csvOrderEntries){
+    document.getElementById('csvColumnSelect').style.display = 'none';
+    document.querySelector('label[for="csvColumnSelect"]').style.display = 'none';
+    const preview = csvOrderEntries.slice(0, 5).map(e => e.title).join(', ');
+    document.getElementById('csvPreviewText').textContent =
+      `Detected a 1688 order export — found ${csvOrderEntries.length} distinct product${csvOrderEntries.length === 1 ? '' : 's'} across your orders (e.g. ${preview}${csvOrderEntries.length > 5 ? ', ...' : ''}). These will get exact product links, price paid, supplier, and the sizes/colours you ordered.`;
+  } else {
+    document.getElementById('csvColumnSelect').style.display = '';
+    document.querySelector('label[for="csvColumnSelect"]').style.display = '';
+    setupCsvColumnPicker();
+  }
+  document.getElementById('csvPreview').classList.remove('hidden');
+}
+
+function setupCsvColumnPicker(){
+  const numCols = Math.max(...csvRows.map(r => r.length));
+  const hasHeader = csvHasHeader();
+  const headerRow = hasHeader ? csvRows[0] : null;
+
+  let bestCol = 0, bestScore = -1;
+  for(let c = 0; c < numCols; c++){
+    const s = columnScore(c);
+    if(s > bestScore){ bestScore = s; bestCol = c; }
+  }
+
+  const select = document.getElementById('csvColumnSelect');
+  select.innerHTML = '';
+  for(let c = 0; c < numCols; c++){
+    const label = (headerRow && headerRow[c]) ? headerRow[c] : `Column ${c + 1}`;
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = label;
+    if(c === bestCol) opt.selected = true;
+    select.appendChild(opt);
+  }
+
+  select.onchange = updateCsvPreview;
+  updateCsvPreview();
+}
+
+function csvNamesForColumn(colIndex){
+  const start = csvHasHeader() ? 1 : 0;
+  return csvRows.slice(start)
+    .map(r => ((r[colIndex] || '') + '').trim())
+    .filter(Boolean);
+}
+
+function updateCsvPreview(){
+  const colIndex = parseInt(document.getElementById('csvColumnSelect').value);
+  const names = csvNamesForColumn(colIndex);
+  const preview = names.slice(0, 5).join(', ');
+  document.getElementById('csvPreviewText').textContent = names.length
+    ? `Found ${names.length} item${names.length === 1 ? '' : 's'} — e.g. ${preview}${names.length > 5 ? ', ...' : ''}`
+    : 'No values found in that column.';
+}
+
+document.getElementById('csvImportBtn').onclick = () => {
+  let importCount = 0;
+  const resultEl = document.getElementById('bulkImportResult');
+
+  if(csvOrderEntries){
+    csvOrderEntries.forEach(e => {
+      const id = e.offerId;
+      const data = {
+        title: e.title, price: e.price, moq: '—', supplier: e.supplier,
+        image: '', url: e.url, sizes: e.sizes || [], isSearchLink: false
+      };
+      if(db){
+        db.collection('restockTool_history').doc(id).set({
+          ...data, savedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      } else {
+        historyCache = historyCache.filter(p => p.id !== id);
+        historyCache.unshift({ id, ...data });
+      }
+    });
+    importCount = csvOrderEntries.length;
+    if(!db){ renderHistory(); }
+    resultEl.textContent = `Added ${importCount} product${importCount === 1 ? '' : 's'} from your order history to your catalog.`;
+  } else {
+    const colIndex = parseInt(document.getElementById('csvColumnSelect').value);
+    const names = [...new Set(csvNamesForColumn(colIndex))];
+    names.forEach(name => {
+      const searchUrl = 'https://s.1688.com/selloffer/offer_search.htm?keywords=' + encodeURIComponent(name);
+      const id = hashId(searchUrl);
+      const data = { title: name, price: '—', moq: '—', supplier: '—', image: '', url: searchUrl, sizes: [], isSearchLink: true };
+      if(db){
+        db.collection('restockTool_history').doc(id).set({
+          ...data, savedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      } else {
+        historyCache = historyCache.filter(p => p.id !== id);
+        historyCache.unshift({ id, ...data });
+      }
+    });
+    importCount = names.length;
+    if(!db){ renderHistory(); }
+    resultEl.textContent = `Added ${importCount} item${importCount === 1 ? '' : 's'} from the file to your catalog.`;
+  }
+
+  document.getElementById('csvPreview').classList.add('hidden');
+  document.getElementById('csvFile').value = '';
+  csvRows = [];
+  csvOrderEntries = null;
+  resultEl.style.display = 'block';
+};
+
+function confirmRemoveFromRestock(docId){
+  if(confirm('Remove this item from the restock list? This can\'t be undone.')){
+    removeFromRestock(docId);
+  }
+}
+
+function markAsOrdered(docId){
+  if(db && !docId.startsWith('local-')){
+    db.collection('restockTool_items').doc(docId).update({
+      status: 'ordered',
+      orderedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } else {
+    const item = restockList.find(i => i.docId === docId);
+    if(item){ item.status = 'ordered'; renderRestock(); }
+  }
+}
+
+function removeFromRestock(docId){
+  if(db && !docId.startsWith('local-')){
+    db.collection('restockTool_items').doc(docId).delete();
+  } else {
+    restockList = restockList.filter(item => item.docId !== docId);
+    renderRestock();
+  }
+}
+
+function updateQty(docId, val){
+  const n = parseInt(val);
+  const qty = isNaN(n) ? 1 : n;
+  if(db && !docId.startsWith('local-')){
+    db.collection('restockTool_items').doc(docId).update({ qty });
+  } else {
+    const item = restockList.find(item => item.docId === docId);
+    if(item) item.qty = qty;
+  }
+}
+
+let selectedRestockIds = new Set();
+let restockStatusFilter = 'all';
+
+function itemStatus(item){
+  return item.status === 'ordered' ? 'ordered' : (item.status === 'sent' ? 'sent' : 'pending');
+}
+
+function getFilteredRestockList(){
+  return restockStatusFilter === 'all'
+    ? restockList
+    : restockList.filter(item => itemStatus(item) === restockStatusFilter);
+}
+
+function setRestockFilter(status){
+  restockStatusFilter = status;
+  document.querySelectorAll('.status-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.status === status);
+  });
+  renderRestock();
+}
+
+function renderRestock(){
+  const wrap = document.getElementById('restockListWrap');
+  const empty = document.getElementById('restockListEmpty');
+  const sendBtn = document.getElementById('sendTelegramBtn');
+
+  // drop selections for items that no longer exist
+  selectedRestockIds = new Set([...selectedRestockIds].filter(id => restockList.some(i => i.docId === id)));
+
+  const counts = { all: restockList.length, pending: 0, sent: 0, ordered: 0 };
+  restockList.forEach(item => counts[itemStatus(item)]++);
+  document.querySelectorAll('.status-filter-btn').forEach(btn => {
+    btn.textContent = `${btn.dataset.label} (${counts[btn.dataset.status]})`;
+  });
+
+  const filtered = getFilteredRestockList();
+
+  if(filtered.length === 0){
+    wrap.innerHTML = '';
+    empty.style.display = 'block';
+    empty.textContent = restockList.length === 0
+      ? 'Nothing added yet. Use "Add to list" on a product.'
+      : 'No items match this filter.';
+    sendBtn.disabled = selectedRestockIds.size === 0;
+    updateSelectAllRestockState();
+    return;
+  }
+  empty.style.display = 'none';
+
+  wrap.innerHTML = filtered.map(item => {
+    const images = getImages(item);
+    const thumb = images.length
+      ? `<img src="${escapeHtml(images[0])}" alt="" referrerpolicy="no-referrer" onerror="this.parentElement.textContent='No image'">`
+      : 'No image';
+    const checked = selectedRestockIds.has(item.docId) ? 'checked' : '';
+    const status = itemStatus(item);
+    const statusLabel = status === 'ordered' ? 'Ordered' : (status === 'sent' ? 'Sent' : 'Not sent');
+    return `
+      <div class="rl-item${status === 'ordered' ? ' is-ordered' : ''}">
+        <input type="checkbox" ${checked} onchange="toggleRestockSelect('${escapeHtml(item.docId)}', this.checked)">
+        <div class="rl-thumb">${thumb}</div>
+        <div class="rl-info">
+          <div class="rl-title">${escapeHtml(item.title)}${item.size ? ` — ${escapeHtml(item.size)}` : ''}</div>
+          <span class="status-badge status-${status}">${statusLabel}</span>
+          <div class="rl-meta">${item.isSearchLink ? 'Search link' : 'Direct link'}</div>
+          <div class="rl-qty-row">
+            <span>Qty</span>
+            <input class="qty" type="number" min="1" value="${item.qty}" onchange="updateQty('${escapeHtml(item.docId)}', this.value)">
+          </div>
+        </div>
+        <div class="rl-actions">
+          <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${item.isSearchLink ? 'Search on 1688 ↗' : 'Order on 1688 ↗'}</a>
+          ${status !== 'ordered' ? `<button class="mark-ordered" onclick="markAsOrdered('${escapeHtml(item.docId)}')">Mark ordered</button>` : ''}
+          <button class="remove" onclick="confirmRemoveFromRestock('${escapeHtml(item.docId)}')">Remove</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  sendBtn.disabled = selectedRestockIds.size === 0;
+  updateSelectAllRestockState();
+}
+
+function toggleRestockSelect(docId, checked){
+  if(checked) selectedRestockIds.add(docId); else selectedRestockIds.delete(docId);
+  document.getElementById('sendTelegramBtn').disabled = selectedRestockIds.size === 0;
+  updateSelectAllRestockState();
+}
+
+function updateSelectAllRestockState(){
+  const box = document.getElementById('selectAllRestock');
+  const visible = getFilteredRestockList();
+  box.checked = visible.length > 0 && visible.every(item => selectedRestockIds.has(item.docId));
+}
+
+document.getElementById('selectAllRestock').addEventListener('change', (e) => {
+  const visible = getFilteredRestockList();
+  if(e.target.checked){
+    visible.forEach(item => selectedRestockIds.add(item.docId));
+  } else {
+    visible.forEach(item => selectedRestockIds.delete(item.docId));
+  }
+  renderRestock();
+});
+
+// ---------- Telegram settings + sending ----------
+(function(){
+  const tokenEl = document.getElementById('tgToken');
+  const chatEl = document.getElementById('tgChatId');
+  const savedToken = localStorage.getItem('restockTool_tgToken');
+  const savedChat = localStorage.getItem('restockTool_tgChatId');
+  if(savedToken) tokenEl.value = savedToken;
+  if(savedChat) chatEl.value = savedChat;
+  tokenEl.addEventListener('change', () => localStorage.setItem('restockTool_tgToken', tokenEl.value.trim()));
+  chatEl.addEventListener('change', () => localStorage.setItem('restockTool_tgChatId', chatEl.value.trim()));
+})();
+
+document.getElementById('sendTelegramBtn').onclick = async () => {
+  const token = document.getElementById('tgToken').value.trim();
+  const chatId = document.getElementById('tgChatId').value.trim();
+  const statusEl = document.getElementById('sendStatus');
+
+  if(!token || !chatId){
+    statusEl.className = 'send-status err';
+    statusEl.textContent = 'Add your Telegram bot token and chat ID first (in the settings below).';
+    return;
+  }
+
+  const items = restockList.filter(i => selectedRestockIds.has(i.docId));
+  if(items.length === 0) return;
+
+  const lines = items.map((item, i) =>
+    `${i + 1}. ${item.title}${item.size ? ' — ' + item.size : ''} — Qty ${item.qty}\n${item.url}`
+  );
+  const text = `📦 Goat Kids Restock List (${items.length} item${items.length === 1 ? '' : 's'})\n\n` + lines.join('\n\n');
+  const url = `https://api.telegram.org/bot${encodeURIComponent(token)}/sendMessage?chat_id=${encodeURIComponent(chatId)}&text=${encodeURIComponent(text)}`;
+
+  const sendBtn = document.getElementById('sendTelegramBtn');
+  sendBtn.disabled = true;
+  statusEl.className = 'send-status';
+  statusEl.textContent = '';
+
+  try{
+    // Telegram's CORS support is inconsistent, so this fires in no-cors
+    // mode: the message still gets delivered even if the browser can't
+    // read a confirmation back, but that also means a genuine failure
+    // (bad token, bad chat ID) can't be detected from here either.
+    await fetch(url, { mode: 'no-cors' });
+    statusEl.className = 'send-status ok';
+    statusEl.textContent = 'Sent — check your Telegram chat to confirm it arrived (this page can\'t fully verify delivery due to how Telegram\'s API responds to browsers).';
+
+    items.forEach(item => {
+      if(db && !item.docId.startsWith('local-')){
+        db.collection('restockTool_items').doc(item.docId).update({
+          status: 'sent',
+          sentAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } else {
+        item.status = 'sent';
+      }
+    });
+    if(!db) renderRestock();
+  }catch(err){
+    statusEl.className = 'send-status err';
+    statusEl.textContent = 'Could not reach Telegram — check your internet connection and try again.';
+  }
+  sendBtn.disabled = selectedRestockIds.size === 0;
+};
+
+// ---------- utils ----------
+function escapeHtml(str){
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ---------- Apify settings persistence (this browser only) ----------
+// Saved to localStorage, not Firestore, so the token never leaves this
+// device / gets exposed to anyone else who opens the page.
+(function(){
+  const tokenEl = document.getElementById('apifyToken');
+  const actorEl = document.getElementById('apifyActor');
+  const savedToken = localStorage.getItem('restockTool_apifyToken');
+  const savedActor = localStorage.getItem('restockTool_apifyActor');
+  if(savedToken) tokenEl.value = savedToken;
+  if(savedActor) actorEl.value = savedActor;
+  tokenEl.addEventListener('change', () => localStorage.setItem('restockTool_apifyToken', tokenEl.value.trim()));
+  actorEl.addEventListener('change', () => localStorage.setItem('restockTool_apifyActor', actorEl.value.trim()));
+})();
+
+// ---------- init ----------
+if(db){
+  initFirestoreListeners();
+} else {
+  shops = [{ name: 'Supplier 1', id: '1381942494680' }];
+  renderShops();
+  renderRestock();
+  renderHistory();
+}
+
+</script>
+
+</body>
+</html>
