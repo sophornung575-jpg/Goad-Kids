@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Restock Search — Goat Kids </title>
+<title>Restock Search — Goat Kids</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -142,10 +142,13 @@
   .card .title{ font-size:0.8rem; font-weight:600; line-height:1.35; min-height:2.6em; }
   .card .price{ font-size:0.85rem; font-weight:700; color:var(--secondary-dark); }
   .card .meta{ font-size:0.7rem; color:var(--gray-dark); }
-  .card .size-select{ padding:6px 7px; border:2px solid var(--gray-light); border-radius:5px; font-size:0.75rem; font-family:inherit; }
   .pick-row{ display:flex; gap:6px; }
-  .pick-row .size-select{ flex:1; min-width:0; }
-  .pick-row .qty-select{ width:52px; flex-shrink:0; padding:6px 5px; border:2px solid var(--gray-light); border-radius:5px; font-size:0.75rem; font-family:inherit; }
+  .pick-row .qty-select{ width:100%; flex-shrink:0; padding:6px 5px; border:2px solid var(--gray-light); border-radius:5px; font-size:0.75rem; font-family:inherit; }
+  .size-qty-grid{ display:flex; flex-direction:column; gap:4px; max-height:150px; overflow-y:auto; padding:2px; }
+  .size-qty-item{ display:flex; align-items:center; gap:6px; }
+  .size-qty-item label{ flex:1; min-width:0; font-size:0.66rem; line-height:1.3; color:var(--gray-dark); word-break:break-word; }
+  .size-qty-item input{ width:38px; flex-shrink:0; padding:3px 4px; border:2px solid var(--gray-light); border-radius:4px; font-size:0.7rem; font-family:inherit; text-align:center; }
+  .size-qty-item input:focus{ outline:none; border-color:var(--primary); }
   .card .row{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:auto; }
   .card .view{ font-size:0.72rem; color:var(--primary); text-decoration:none; font-weight:600; }
   .card .add{ background:var(--secondary); color:#fff; border:none; border-radius:6px; padding:6px 10px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
@@ -199,7 +202,7 @@
     <div class="logo"><i class="fas fa-truck-loading"></i> GOAT KIDS <span class="sub">Restock Search</span></div>
     <div style="display:flex; align-items:center; gap:12px;">
       <span class="mode-pill" id="modePill">Sample data</span>
-      <a class="back-link" href="index.html"><i class="fas fa-arrow-left"></i> Back </a>
+      <a class="back-link" href="index.html"><i class="fas fa-arrow-left"></i> Back to store</a>
     </div>
   </div>
 </header>
@@ -535,13 +538,17 @@ function productCardHtml(p, opts){
         <div class="title">${escapeHtml(p.title)}</div>
         <div class="price">${escapeHtml(String(p.price))}</div>
         <div class="meta">MOQ ${escapeHtml(String(p.moq))} · ${escapeHtml(p.supplier)}</div>
+        ${p.sizes && p.sizes.length ? `
+        <div class="size-qty-grid">
+          ${p.sizes.map(s => `
+          <div class="size-qty-item">
+            <label title="${escapeHtml(s)}">${escapeHtml(s)}</label>
+            <input type="number" class="size-qty-input" min="0" value="0" data-size="${escapeHtml(s)}">
+          </div>`).join('')}
+        </div>` : `
         <div class="pick-row">
-          ${p.sizes && p.sizes.length ? `
-          <select class="size-select">
-            ${p.sizes.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
-          </select>` : ''}
           <input type="number" class="qty-select" min="1" value="1" title="Quantity to order">
-        </div>
+        </div>`}
         <div class="row">
           <a class="view" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">${p.isSearchLink ? 'Search on 1688' : 'View on 1688'}</a>
           <button class="add" onclick="addToRestock('${escapeHtml(p.id)}', this)">Add to list</button>
@@ -902,18 +909,35 @@ function addToRestock(id, btnEl){
   const product = productIndex[id];
   if(!product) return;
   const card = btnEl ? btnEl.closest('.card') : null;
-  const sizeSelect = card ? card.querySelector('.size-select') : null;
+
+  const sizeQtyInputs = card ? card.querySelectorAll('.size-qty-input') : [];
+  if(sizeQtyInputs.length){
+    // One entry per size that has a quantity entered — all added together
+    // in a single click instead of one size at a time.
+    let addedCount = 0;
+    sizeQtyInputs.forEach(inp => {
+      const qty = parseInt(inp.value) || 0;
+      if(qty <= 0) return;
+      addedCount++;
+      const item = { ...product, size: inp.dataset.size, qty };
+      if(db){
+        item.addedAt = firebase.firestore.FieldValue.serverTimestamp();
+        db.collection('restockTool_items').add(item);
+      } else {
+        restockList.push({ ...item, docId: 'local-' + Date.now() + '-' + Math.random().toString(36).slice(2) });
+      }
+      inp.value = '0';
+    });
+    if(!db && addedCount){ renderRestock(); }
+    return;
+  }
+
   const qtySelect = card ? card.querySelector('.qty-select') : null;
-  const size = sizeSelect ? sizeSelect.value : null;
   const qtyFromInput = qtySelect ? parseInt(qtySelect.value) : NaN;
   const qty = !isNaN(qtyFromInput) && qtyFromInput > 0
     ? qtyFromInput
     : (product.moq && !isNaN(parseInt(product.moq)) ? parseInt(product.moq) : 1);
-  const item = {
-    ...product,
-    size,
-    qty
-  };
+  const item = { ...product, size: null, qty };
   if(db){
     item.addedAt = firebase.firestore.FieldValue.serverTimestamp();
     db.collection('restockTool_items').add(item);
