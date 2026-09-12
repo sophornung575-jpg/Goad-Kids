@@ -405,13 +405,17 @@
 
       <div class="admin-card">
         <div class="admin-card-header">
-          <h1><i class="fas fa-key" style="color:var(--primary)"></i> Change settings password</h1>
+          <h1><i class="fas fa-shield-alt" style="color:var(--primary)"></i> Change Password</h1>
           <p>Applies to everyone opening this tool</p>
         </div>
         <div class="admin-card-body">
-          <label for="settingsNewPassword" class="settings-label">New password</label>
-          <input type="text" class="form-control" id="settingsNewPassword" placeholder="Min 4 characters">
-          <button class="btn btn-outline" style="margin-top:10px;" onclick="changeSettingsPassword()"><i class="fas fa-save"></i> Save new password</button>
+          <label for="settingsCurrentPassword" class="settings-label">Current Password</label>
+          <input type="password" class="form-control" id="settingsCurrentPassword" placeholder="Current password">
+          <label for="settingsNewPassword" class="settings-label">New Password</label>
+          <input type="password" class="form-control" id="settingsNewPassword" placeholder="Min 4 characters">
+          <label for="settingsConfirmPassword" class="settings-label">Confirm New</label>
+          <input type="password" class="form-control" id="settingsConfirmPassword" placeholder="Repeat new password">
+          <button class="btn btn-outline" style="margin-top:10px; width:100%;" onclick="changeSettingsPassword()"><i class="fas fa-key"></i> Change Password</button>
           <div class="note" id="settingsPasswordStatus"></div>
         </div>
       </div>
@@ -484,11 +488,27 @@ function lockSettingsSection(){
   if(err) err.textContent = '';
 }
 
-function unlockSettings(){
+async function unlockSettings(){
   const input = document.getElementById('settingsLockInput');
   const err = document.getElementById('settingsLockError');
+  const btn = document.querySelector('#settingsLock .btn-primary');
   const entered = input.value;
-  const correct = sharedSettingsPassword || DEFAULT_SETTINGS_PASSWORD;
+
+  let correct = DEFAULT_SETTINGS_PASSWORD;
+  if(db){
+    btn.disabled = true;
+    try{
+      const doc = await db.collection('_admin_').doc('restockConfig').get();
+      if(doc.exists && doc.data().password){
+        correct = doc.data().password;
+        sharedSettingsPassword = correct; // keep the cache in sync too
+      }
+    }catch(e){
+      console.warn('Password check failed, falling back to default:', e);
+    }
+    btn.disabled = false;
+  }
+
   if(entered === correct){
     document.getElementById('settingsLock').classList.add('hidden');
     document.getElementById('settingsContent').classList.remove('hidden');
@@ -513,18 +533,49 @@ function toggleSettingsLockVisibility(){
   }
 }
 
-function changeSettingsPassword(){
-  const input = document.getElementById('settingsNewPassword');
+async function changeSettingsPassword(){
+  const curInput = document.getElementById('settingsCurrentPassword');
+  const newInput = document.getElementById('settingsNewPassword');
+  const confirmInput = document.getElementById('settingsConfirmPassword');
   const status = document.getElementById('settingsPasswordStatus');
-  const newPw = input.value.trim();
-  if(newPw.length < 4){
-    status.innerHTML = '<p style="color:var(--danger)">Password must be at least 4 characters.</p>';
+  const current = curInput.value;
+  const newPw = newInput.value.trim();
+  const confirmPw = confirmInput.value.trim();
+
+  if(!current){
+    status.innerHTML = '<p style="color:var(--danger)">Enter the current password.</p>';
     return;
   }
+  if(newPw.length < 4){
+    status.innerHTML = '<p style="color:var(--danger)">New password must be at least 4 characters.</p>';
+    return;
+  }
+  if(newPw !== confirmPw){
+    status.innerHTML = '<p style="color:var(--danger)">New password and confirmation don\'t match.</p>';
+    return;
+  }
+
+  let correct = DEFAULT_SETTINGS_PASSWORD;
+  if(db){
+    try{
+      const doc = await db.collection('_admin_').doc('restockConfig').get();
+      if(doc.exists && doc.data().password) correct = doc.data().password;
+    }catch(e){ console.warn('Current password check failed:', e); }
+  }
+  if(current !== correct){
+    status.innerHTML = '<p style="color:var(--danger)">Current password is incorrect.</p>';
+    return;
+  }
+
   sharedSettingsPassword = newPw;
-  saveSharedConfig({ settingsPassword: newPw });
-  status.innerHTML = '<p style="color:var(--success)">Password updated — takes effect for everyone next time they open Settings.</p>';
-  input.value = '';
+  if(db){
+    db.collection('_admin_').doc('restockConfig').set({ password: newPw, updatedAt: Date.now() }, { merge: true })
+      .catch(err => console.warn('Password save failed:', err));
+  }
+  status.innerHTML = '<p style="color:var(--success)">Password changed — takes effect for everyone next time they open Settings.</p>';
+  curInput.value = '';
+  newInput.value = '';
+  confirmInput.value = '';
 }
 
 // ---------- Shared settings (Apify + Telegram) ----------
@@ -543,15 +594,20 @@ const DEFAULT_SETTINGS_PASSWORD = 'restock123';
 function loadSharedConfig(){
   if(!db) return;
   db.collection('restockTool_config').doc('settings').get().then(doc => {
-    sharedSettingsPassword = (doc.exists && doc.data().settingsPassword) ? doc.data().settingsPassword : DEFAULT_SETTINGS_PASSWORD;
     if(!doc.exists) return;
     const cfg = doc.data();
     if(cfg.apifyToken){ document.getElementById('apifyToken').value = cfg.apifyToken; localStorage.setItem('restockTool_apifyToken', cfg.apifyToken); }
     if(cfg.apifyActor){ document.getElementById('apifyActor').value = cfg.apifyActor; localStorage.setItem('restockTool_apifyActor', cfg.apifyActor); }
     if(cfg.tgToken){ document.getElementById('tgToken').value = cfg.tgToken; localStorage.setItem('restockTool_tgToken', cfg.tgToken); }
     if(cfg.tgChatId){ document.getElementById('tgChatId').value = cfg.tgChatId; localStorage.setItem('restockTool_tgChatId', cfg.tgChatId); }
+  }).catch(err => console.warn('Shared settings load failed:', err));
+
+  // The settings password lives separately, in _admin_/restockConfig, so the
+  // main store app's own "Change Password" screen can manage it too.
+  db.collection('_admin_').doc('restockConfig').get().then(doc => {
+    sharedSettingsPassword = (doc.exists && doc.data().password) ? doc.data().password : DEFAULT_SETTINGS_PASSWORD;
   }).catch(err => {
-    console.warn('Shared settings load failed:', err);
+    console.warn('Restock password load failed:', err);
     sharedSettingsPassword = DEFAULT_SETTINGS_PASSWORD;
   });
 }
