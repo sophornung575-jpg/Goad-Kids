@@ -42,6 +42,7 @@
     padding:0.5rem 0.9rem; border:2px solid var(--primary); border-radius:var(--radius);
   }
   .back-link:hover{ background:var(--primary); color:#fff; }
+  .lang-select{ padding:0.4rem 0.6rem; border:2px solid var(--gray-light); border-radius:var(--radius); font-size:0.8rem; font-family:inherit; background:#fff; color:var(--dark); cursor:pointer; }
   .mode-pill{
     flex-shrink:0; font-size:0.72rem; font-weight:600; padding:0.3rem 0.7rem;
     border-radius:999px; background:var(--gray-light); color:var(--gray-dark); white-space:nowrap;
@@ -211,6 +212,38 @@
   .note{ font-size:0.75rem; color:var(--gray-dark); margin-top:12px; line-height:1.5; }
   .note p{ margin:0 0 8px; }
   .note p:last-child{ margin-bottom:0; }
+
+  /* ---------- Mobile (iPhone-width screens) ---------- */
+  @media (max-width: 640px){
+    .header-container{ padding:0.75rem 1rem; gap:8px; }
+    .logo{ font-size:1.05rem; }
+    .logo .sub{ display:block; font-size:0.68rem; }
+    .back-link{ padding:0.4rem 0.7rem; font-size:0.78rem; }
+    main{ padding:16px 0.85rem 50px; }
+
+    .page-tabs{ overflow-x:auto; -webkit-overflow-scrolling:touch; flex-wrap:nowrap; }
+    .page-tab{ padding:0.6rem 0.85rem; font-size:0.78rem; white-space:nowrap; flex-shrink:0; }
+
+    .grid{ grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap:10px; }
+
+    .search-bar{ flex-direction:column; }
+    .search-bar input[type=text], .search-bar select, .search-bar button{ width:100%; flex:none; }
+
+    .restock-header{ flex-direction:column; align-items:stretch; }
+    .restock-header button{ width:100%; }
+
+    .status-filter, .category-filter{ gap:6px; }
+    .status-filter-btn, .category-filter-btn{ padding:5px 9px; font-size:0.7rem; }
+
+    .rl-item{ flex-wrap:wrap; }
+    .rl-item .rl-thumb{ width:44px; height:44px; }
+    .rl-item .rl-actions{ flex-direction:row; flex-wrap:wrap; align-items:center; width:100%; margin-left:56px; }
+
+    .add-form{ grid-template-columns: 1fr; }
+    .add-form input#itemUrl{ grid-column: 1; }
+
+    .size-qty-grid{ max-height:none; }
+  }
 </style>
 </head>
 <body>
@@ -219,8 +252,13 @@
   <div class="header-container">
     <div class="logo"><i class="fas fa-truck-loading"></i> GOAT KIDS <span class="sub">Restock Search</span></div>
     <div style="display:flex; align-items:center; gap:12px;">
-      <span class="mode-pill" id="modePill">Sample data</span>
-      <a class="back-link" href="index.html"><i class="fas fa-arrow-left"></i> Back to store</a>
+      <select id="langSelect" class="lang-select">
+        <option value="en">English</option>
+        <option value="kh">ខ្មែរ</option>
+        <option value="zh">中文</option>
+      </select>
+      <span class="mode-pill" id="modePill" data-t="modePillSample">Sample data</span>
+      <a class="back-link" href="index.html"><i class="fas fa-arrow-left"></i> <span data-t="backToStore">Back to store</span></a>
     </div>
   </div>
 </header>
@@ -228,55 +266,55 @@
 <main>
   <div>
     <div class="page-tabs">
-      <button class="page-tab active" id="tabHomeBtn" onclick="switchSection('home')"><i class="fas fa-layer-group"></i> Home</button>
-      <button class="page-tab" id="tabSearchBtn" onclick="switchSection('search')"><i class="fas fa-search"></i> Search 1688</button>
-      <button class="page-tab" id="tabRestockBtn" onclick="switchSection('restock')"><i class="fas fa-clipboard-list"></i> Restock List</button>
-      <button class="page-tab" id="tabSettingsBtn" onclick="switchSection('settings')"><i class="fas fa-cog"></i> Settings</button>
+      <button class="page-tab active" id="tabHomeBtn" onclick="switchSection('home')"><i class="fas fa-layer-group"></i> <span data-t="tabHome">Home</span></button>
+      <button class="page-tab" id="tabSearchBtn" onclick="switchSection('search')"><i class="fas fa-search"></i> <span data-t="tabSearch">Search 1688</span></button>
+      <button class="page-tab" id="tabRestockBtn" onclick="switchSection('restock')"><i class="fas fa-clipboard-list"></i> <span data-t="tabRestockList">Restock List</span></button>
+      <button class="page-tab" id="tabSettingsBtn" onclick="switchSection('settings')"><i class="fas fa-cog"></i> <span data-t="tabSettings">Settings</span></button>
     </div>
 
     <div id="homeSection">
       <div class="admin-card">
         <div class="admin-card-header">
-          <h1><i class="fas fa-layer-group" style="color:var(--primary)"></i> Product catalog</h1>
-          <p>Everything found through search or added manually — pick straight from here without searching again.</p>
+          <h1><i class="fas fa-layer-group" style="color:var(--primary)"></i> <span data-t="homeTitle">Product catalog</span></h1>
+          <p data-t="homeDesc">Everything found through search or added manually — pick straight from here without searching again.</p>
         </div>
         <div class="admin-card-body">
-          <input type="text" class="form-control" id="historyFilter" placeholder="Filter your saved products...">
+          <input type="text" class="form-control" id="historyFilter" data-t-ph="filterPlaceholder" placeholder="Filter your saved products...">
           <div class="category-filter" id="categoryFilter">
-            <button class="category-filter-btn active" data-cat="" onclick="setHistoryCategoryFilter('')">All</button>
-            <button class="category-filter-btn" data-cat="Girl Clothes" onclick="setHistoryCategoryFilter('Girl Clothes')">Girl Clothes</button>
-            <button class="category-filter-btn" data-cat="Boy Clothes" onclick="setHistoryCategoryFilter('Boy Clothes')">Boy Clothes</button>
-            <button class="category-filter-btn" data-cat="Baby Shirt" onclick="setHistoryCategoryFilter('Baby Shirt')">Baby Shirt</button>
-            <button class="category-filter-btn" data-cat="Dresses" onclick="setHistoryCategoryFilter('Dresses')">Dresses</button>
-            <button class="category-filter-btn" data-cat="Baby Accessories" onclick="setHistoryCategoryFilter('Baby Accessories')">Baby Accessories</button>
-            <button class="category-filter-btn" data-cat="Baby Shoes" onclick="setHistoryCategoryFilter('Baby Shoes')">Baby Shoes</button>
+            <button class="category-filter-btn active" data-cat="" onclick="setHistoryCategoryFilter('')" data-t="catAll">All</button>
+            <button class="category-filter-btn" data-cat="Girl Clothes" onclick="setHistoryCategoryFilter('Girl Clothes')" data-t="catGirlClothes">Girl Clothes</button>
+            <button class="category-filter-btn" data-cat="Boy Clothes" onclick="setHistoryCategoryFilter('Boy Clothes')" data-t="catBoyClothes">Boy Clothes</button>
+            <button class="category-filter-btn" data-cat="Baby Shirt" onclick="setHistoryCategoryFilter('Baby Shirt')" data-t="catBabyShirt">Baby Shirt</button>
+            <button class="category-filter-btn" data-cat="Dresses" onclick="setHistoryCategoryFilter('Dresses')" data-t="catDresses">Dresses</button>
+            <button class="category-filter-btn" data-cat="Baby Accessories" onclick="setHistoryCategoryFilter('Baby Accessories')" data-t="catBabyAccessories">Baby Accessories</button>
+            <button class="category-filter-btn" data-cat="Baby Shoes" onclick="setHistoryCategoryFilter('Baby Shoes')" data-t="catBabyShoes">Baby Shoes</button>
           </div>
           <div class="grid" id="historyGrid" style="margin-top:14px;"></div>
-          <div class="admin-empty" id="historyEmpty">No saved products yet. Search 1688 or add an item by link, and everything you find will show up here for next time.</div>
+          <div class="admin-empty" id="historyEmpty" data-t="emptyHistoryDefault">No saved products yet. Search 1688 or add an item by link, and everything you find will show up here for next time.</div>
 
           <details class="bulk-import">
             <summary></summary>
             <div class="import-option">
-              <h3>Paste a list</h3>
-              <p class="hint">One per line — product links (a name before the link becomes the title), or plain product names with no link, like from a 1688 export. Names get a ready-made "Search on 1688" link since there's no exact product page to point to.</p>
+              <h3 data-t="pasteListHeading">Paste a list</h3>
+              <p class="hint" data-t="pasteListHint">One per line — product links (a name before the link becomes the title), or plain product names with no link, like from a 1688 export. Names get a ready-made "Search on 1688" link since there's no exact product page to point to.</p>
               <div class="bulk-form">
                 <textarea id="bulkUrls" rows="4" placeholder="Kids cotton dress  https://detail.1688.com/offer/1234567890.html&#10;https://detail.1688.com/offer/2345678901.html&#10;儿童棉质连衣裙&#10;..."></textarea>
-                <button class="btn btn-primary" id="bulkImportBtn"><i class="fas fa-file-import"></i> Import links</button>
+                <button class="btn btn-primary" id="bulkImportBtn"><i class="fas fa-file-import"></i> <span data-t="importLinksBtn">Import links</span></button>
                 <p class="bulk-result" id="bulkImportResult"></p>
               </div>
             </div>
 
-            <div class="import-divider"><span>or</span></div>
+            <div class="import-divider"><span data-t="orDivider">or</span></div>
 
             <div class="import-option">
-              <h3>Upload a file</h3>
-              <p class="hint">A CSV or Excel export — a 1688 order-history export is recognized automatically and brings in exact product links, price paid, and supplier.</p>
+              <h3 data-t="uploadFileHeading">Upload a file</h3>
+              <p class="hint" data-t="uploadFileHint">A CSV or Excel export — a 1688 order-history export is recognized automatically and brings in exact product links, price paid, and supplier.</p>
               <input type="file" id="csvFile" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
               <div id="csvPreview" class="hidden">
-                <label class="hint" for="csvColumnSelect">Which column has the item name?</label>
+                <label class="hint" for="csvColumnSelect" data-t="whichColumnLabel">Which column has the item name?</label>
                 <select class="form-control" id="csvColumnSelect"></select>
                 <p class="hint" id="csvPreviewText"></p>
-                <button class="btn btn-primary btn-small" id="csvImportBtn">Import these items</button>
+                <button class="btn btn-primary btn-small" id="csvImportBtn" data-t="importItemsBtn">Import these items</button>
               </div>
             </div>
           </details>
@@ -287,37 +325,37 @@
     <div id="searchSection" class="hidden">
       <div class="admin-card">
         <div class="admin-card-header">
-          <h1><i class="fas fa-search" style="color:var(--primary)"></i> Search suppliers</h1>
-          <p>Search trusted 1688 suppliers, build a restock list, then order directly on 1688.</p>
+          <h1><i class="fas fa-search" style="color:var(--primary)"></i> <span data-t="searchTitle">Search suppliers</span></h1>
+          <p data-t="searchDesc">Search trusted 1688 suppliers, build a restock list, then order directly on 1688.</p>
         </div>
         <div class="admin-card-body">
           <div class="search-bar">
-            <input type="text" class="form-control" id="keyword" placeholder="Search a product, e.g. kids cotton socks">
+            <input type="text" class="form-control" id="keyword" data-t-ph="searchPlaceholder" placeholder="Search a product, e.g. kids cotton socks">
             <select class="form-control" id="shopFilter"></select>
-            <button class="btn btn-primary" id="searchBtn"><i class="fas fa-search"></i> Search</button>
-            <button class="btn btn-outline" id="browseBtn" title="Pick a specific shop to browse its full catalog" disabled>View all items</button>
+            <button class="btn btn-primary" id="searchBtn"><i class="fas fa-search"></i> <span data-t="searchBtnLabel">Search</span></button>
+            <button class="btn btn-outline" id="browseBtn" title="Pick a specific shop to browse its full catalog" disabled data-t="viewAllBtn">View all items</button>
           </div>
-          <p class="hint" id="liveDataHint" style="display:none;">Live search covers all of 1688 by keyword — it doesn't filter to one trusted shop, and "View all items" still shows sample data since this scraper can't browse a whole shop without a keyword.</p>
+          <p class="hint" id="liveDataHint" style="display:none;" data-t="liveDataHint">Live search covers all of 1688 by keyword — it doesn't filter to one trusted shop, and "View all items" still shows sample data since this scraper can't browse a whole shop without a keyword.</p>
         </div>
       </div>
 
       <div class="admin-card">
         <div class="admin-card-body">
           <div class="results-head">
-            <h2 id="resultsLabel">Search a product to see results</h2>
+            <h2 id="resultsLabel" data-t="resultsLabelDefault">Search a product to see results</h2>
           </div>
           <div class="grid" id="grid"></div>
-          <div class="admin-empty" id="emptyState">No results yet — try a search above.</div>
+          <div class="admin-empty" id="emptyState" data-t="noResultsYet">No results yet — try a search above.</div>
 
           <details class="manual-add">
             <summary></summary>
-            <p class="hint">If a supplier's item isn't showing up in search, paste its 1688 product link here to add it straight to your restock list. It'll also be saved to your Home catalog.</p>
+            <p class="hint" data-t="manualAddHint">If a supplier's item isn't showing up in search, paste its 1688 product link here to add it straight to your restock list. It'll also be saved to your Home catalog.</p>
             <div class="add-form">
-              <input type="text" class="form-control" id="itemUrl" placeholder="1688 product link">
-              <input type="text" class="form-control" id="itemTitle" placeholder="Product name">
-              <input type="text" class="form-control" id="itemSize" placeholder="Size (optional)">
-              <input type="number" class="form-control" id="itemQty" min="1" value="1" placeholder="Qty">
-              <button class="btn btn-primary" id="addItemBtn"><i class="fas fa-plus"></i> Add to list</button>
+              <input type="text" class="form-control" id="itemUrl" data-t-ph="itemUrlPh" placeholder="1688 product link">
+              <input type="text" class="form-control" id="itemTitle" data-t-ph="itemTitlePh" placeholder="Product name">
+              <input type="text" class="form-control" id="itemSize" data-t-ph="itemSizePh" placeholder="Size (optional)">
+              <input type="number" class="form-control" id="itemQty" min="1" value="1" data-t-ph="itemQtyPh" placeholder="Qty">
+              <button class="btn btn-primary" id="addItemBtn"><i class="fas fa-plus"></i> <span data-t="addToListBtn">Add to list</span></button>
             </div>
           </details>
         </div>
@@ -328,25 +366,25 @@
       <div class="admin-card">
         <div class="admin-card-header restock-header">
           <div>
-            <h1><i class="fas fa-clipboard-list" style="color:var(--primary)"></i> Restock list</h1>
-            <p>Select the items you're ready to order, then send them to Telegram.</p>
+            <h1><i class="fas fa-clipboard-list" style="color:var(--primary)"></i> <span data-t="restockListTitle">Restock list</span></h1>
+            <p data-t="restockListDesc">Select the items you're ready to order, then send them to Telegram.</p>
           </div>
-          <button class="btn btn-primary" id="sendTelegramBtn" disabled><i class="fab fa-telegram-plane"></i> Send selected to Telegram</button>
+          <button class="btn btn-primary" id="sendTelegramBtn" disabled><i class="fab fa-telegram-plane"></i> <span data-t="sendTelegramBtnLabel">Send selected to Telegram</span></button>
         </div>
         <div class="admin-card-body">
           <div class="status-filter" id="statusFilter">
-            <button class="status-filter-btn active" data-status="all" data-label="All" onclick="setRestockFilter('all')">All</button>
-            <button class="status-filter-btn" data-status="pending" data-label="Not sent" onclick="setRestockFilter('pending')">Not sent</button>
-            <button class="status-filter-btn" data-status="sent" data-label="Sent" onclick="setRestockFilter('sent')">Sent</button>
-            <button class="status-filter-btn" data-status="ordered" data-label="Ordered" onclick="setRestockFilter('ordered')">Ordered</button>
-            <button class="status-filter-btn" data-status="received" data-label="Received" onclick="setRestockFilter('received')">Received</button>
+            <button class="status-filter-btn active" data-status="all" data-label="All" data-label-key="statusAll" onclick="setRestockFilter('all')">All</button>
+            <button class="status-filter-btn" data-status="pending" data-label="Not sent" data-label-key="statusPending" onclick="setRestockFilter('pending')">Not sent</button>
+            <button class="status-filter-btn" data-status="sent" data-label="Sent" data-label-key="statusSent" onclick="setRestockFilter('sent')">Sent</button>
+            <button class="status-filter-btn" data-status="ordered" data-label="Ordered" data-label-key="statusOrdered" onclick="setRestockFilter('ordered')">Ordered</button>
+            <button class="status-filter-btn" data-status="received" data-label="Received" data-label-key="statusReceived" onclick="setRestockFilter('received')">Received</button>
           </div>
           <div class="select-all-row">
             <input type="checkbox" id="selectAllRestock">
-            <label for="selectAllRestock">Select all</label>
+            <label for="selectAllRestock" data-t="selectAllLabel">Select all</label>
           </div>
           <div id="restockListWrap"></div>
-          <div class="admin-empty" id="restockListEmpty">Nothing added yet. Use "Add to list" on a product.</div>
+          <div class="admin-empty" id="restockListEmpty" data-t="emptyRestockDefault">Nothing added yet. Use "Add to list" on a product.</div>
           <div class="send-status" id="sendStatus"></div>
         </div>
       </div>
@@ -357,14 +395,14 @@
       <div id="settingsLock" class="settings-lock">
         <div class="settings-lock-card">
           <div class="settings-lock-icon"><i class="fas fa-lock"></i></div>
-          <h3>Settings Protected</h3>
-          <p>Enter the settings password to continue</p>
+          <h3 data-t="settingsProtectedTitle">Settings Protected</h3>
+          <p data-t="settingsProtectedDesc">Enter the settings password to continue</p>
           <div class="settings-lock-input-row">
-            <input type="password" id="settingsLockInput" class="form-control" placeholder="Enter password" onkeydown="if(event.key==='Enter')unlockSettings()">
+            <input type="password" id="settingsLockInput" class="form-control" data-t-ph="enterPasswordPh" placeholder="Enter password" onkeydown="if(event.key==='Enter')unlockSettings()">
             <button type="button" onclick="toggleSettingsLockVisibility()" id="settingsLockEye"><i class="fas fa-eye"></i></button>
           </div>
           <div class="settings-lock-error" id="settingsLockError"></div>
-          <button class="btn btn-primary" style="width:100%;" onclick="unlockSettings()"><i class="fas fa-unlock"></i> Unlock Settings</button>
+          <button class="btn btn-primary" style="width:100%;" onclick="unlockSettings()"><i class="fas fa-unlock"></i> <span data-t="unlockBtn">Unlock Settings</span></button>
         </div>
       </div>
 
@@ -372,68 +410,68 @@
 
       <div class="admin-card">
         <div class="admin-card-header">
-          <h1><i class="fas fa-server" style="color:var(--primary)"></i> Data source</h1>
-          <p>Controls for the Search 1688 tab</p>
+          <h1><i class="fas fa-server" style="color:var(--primary)"></i> <span data-t="dataSourceTitle">Data source</span></h1>
+          <p data-t="dataSourceDesc">Controls for the Search 1688 tab</p>
         </div>
         <div class="admin-card-body">
-          <label for="apifyToken" class="settings-label">Apify API token</label>
-          <input type="text" class="form-control" id="apifyToken" placeholder="Paste your token here">
-          <label for="apifyActor" class="settings-label">Apify actor ID</label>
+          <label for="apifyToken" class="settings-label" data-t="apifyTokenLabel">Apify API token</label>
+          <input type="text" class="form-control" id="apifyToken" data-t-ph="apifyTokenPh" placeholder="Paste your token here">
+          <label for="apifyActor" class="settings-label" data-t="apifyActorLabel">Apify actor ID</label>
           <input type="text" class="form-control" id="apifyActor" placeholder="e.g. zen-studio~1688-wholesale-scraper" value="zen-studio~1688-wholesale-scraper">
           <div class="note">
-            <p>No token yet? Search uses sample data so the tool stays fully testable. Add a token and keyword search switches to real 1688 listings automatically.</p>
-            <p>This scraper searches all of 1688 by keyword — it can't scope to one trusted shop, and "View all items" always stays on sample data since it can't browse a whole shop without a keyword.</p>
-            <p>Your token syncs across every device that opens this tool, the same way the store app's own Telegram settings do. That also means anyone with the page link could see it — worth knowing, since it's a real API credential.</p>
+            <p data-t="dataSourceNote1">No token yet? Search uses sample data so the tool stays fully testable. Add a token and keyword search switches to real 1688 listings automatically.</p>
+            <p data-t="dataSourceNote2">This scraper searches all of 1688 by keyword — it can't scope to one trusted shop, and "View all items" always stays on sample data since it can't browse a whole shop without a keyword.</p>
+            <p data-t="dataSourceNote3">Your token syncs across every device that opens this tool, the same way the store app's own Telegram settings do. That also means anyone with the page link could see it — worth knowing, since it's a real API credential.</p>
           </div>
         </div>
       </div>
 
       <div class="admin-card">
         <div class="admin-card-header">
-          <h1><i class="fas fa-store" style="color:var(--primary)"></i> Trusted shops</h1>
-          <p>Shops you can filter searches to on the Search 1688 tab</p>
+          <h1><i class="fas fa-store" style="color:var(--primary)"></i> <span data-t="trustedShopsTitle">Trusted shops</span></h1>
+          <p data-t="trustedShopsDesc">Shops you can filter searches to on the Search 1688 tab</p>
         </div>
         <div class="admin-card-body">
           <div id="shopList"></div>
           <div class="add-shop-row">
-            <input type="text" class="name" id="newShopName" placeholder="Shop nickname">
-            <input type="text" class="id" id="newShopId" placeholder="1688 shop ID (from the shop URL)">
-            <button class="btn btn-outline btn-small" id="addShopBtn">Add shop</button>
+            <input type="text" class="name" id="newShopName" data-t-ph="shopNicknamePh" placeholder="Shop nickname">
+            <input type="text" class="id" id="newShopId" data-t-ph="shopIdPh" placeholder="1688 shop ID (from the shop URL)">
+            <button class="btn btn-outline btn-small" id="addShopBtn" data-t="addShopBtnLabel">Add shop</button>
           </div>
         </div>
       </div>
 
       <div class="admin-card">
         <div class="admin-card-header">
-          <h1><i class="fab fa-telegram-plane" style="color:var(--primary)"></i> Telegram</h1>
-          <p>Where the Restock List sends orders to</p>
+          <h1><i class="fab fa-telegram-plane" style="color:var(--primary)"></i> <span data-t="telegramTitle">Telegram</span></h1>
+          <p data-t="telegramDesc">Where the Restock List sends orders to</p>
         </div>
         <div class="admin-card-body">
-          <label for="tgToken" class="settings-label">Bot token</label>
-          <input type="text" class="form-control" id="tgToken" placeholder="Paste your bot token here">
-          <label for="tgChatId" class="settings-label">Chat ID</label>
-          <input type="text" class="form-control" id="tgChatId" placeholder="Paste your chat ID here">
+          <label for="tgToken" class="settings-label" data-t="botTokenLabel">Bot token</label>
+          <input type="text" class="form-control" id="tgToken" data-t-ph="botTokenPh" placeholder="Paste your bot token here">
+          <label for="tgChatId" class="settings-label" data-t="chatIdLabel">Chat ID</label>
+          <input type="text" class="form-control" id="tgChatId" data-t-ph="chatIdPh" placeholder="Paste your chat ID here">
           <div class="note">
-            <p>Message @BotFather on Telegram, send <code>/newbot</code>, and follow the prompts — it gives you a bot token when it's done.</p>
-            <p>To get your chat ID: message your new bot anything first, then open <code>https://api.telegram.org/bot&lt;your token&gt;/getUpdates</code> in a browser and look for the <code>"chat":{"id":...}</code> number.</p>
-            <p>Both sync across every device that opens this tool — set them once and they'll show up everywhere. That also means anyone with the page link could see them.</p>
+            <p data-t="telegramNote1">Message @BotFather on Telegram, send <code>/newbot</code>, and follow the prompts — it gives you a bot token when it's done.</p>
+            <p data-t="telegramNote2">To get your chat ID: message your new bot anything first, then open <code>https://api.telegram.org/bot&lt;your token&gt;/getUpdates</code> in a browser and look for the <code>"chat":{"id":...}</code> number.</p>
+            <p data-t="telegramNote3">Both sync across every device that opens this tool — set them once and they'll show up everywhere. That also means anyone with the page link could see them.</p>
           </div>
         </div>
       </div>
 
       <div class="admin-card">
         <div class="admin-card-header">
-          <h1><i class="fas fa-shield-alt" style="color:var(--primary)"></i> Change Password</h1>
-          <p>Applies to everyone opening this tool</p>
+          <h1><i class="fas fa-shield-alt" style="color:var(--primary)"></i> <span data-t="changePasswordTitle">Change Password</span></h1>
+          <p data-t="changePasswordDesc">Applies to everyone opening this tool</p>
         </div>
         <div class="admin-card-body">
-          <label for="settingsCurrentPassword" class="settings-label">Current Password</label>
-          <input type="password" class="form-control" id="settingsCurrentPassword" placeholder="Current password">
-          <label for="settingsNewPassword" class="settings-label">New Password</label>
-          <input type="password" class="form-control" id="settingsNewPassword" placeholder="Min 4 characters">
-          <label for="settingsConfirmPassword" class="settings-label">Confirm New</label>
-          <input type="password" class="form-control" id="settingsConfirmPassword" placeholder="Repeat new password">
-          <button class="btn btn-outline" style="margin-top:10px; width:100%;" onclick="changeSettingsPassword()"><i class="fas fa-key"></i> Change Password</button>
+          <label for="settingsCurrentPassword" class="settings-label" data-t="currentPasswordLabel">Current Password</label>
+          <input type="password" class="form-control" id="settingsCurrentPassword" data-t-ph="currentPasswordPh" placeholder="Current password">
+          <label for="settingsNewPassword" class="settings-label" data-t="newPasswordLabel">New Password</label>
+          <input type="password" class="form-control" id="settingsNewPassword" data-t-ph="newPasswordPh" placeholder="Min 4 characters">
+          <label for="settingsConfirmPassword" class="settings-label" data-t="confirmNewLabel">Confirm New</label>
+          <input type="password" class="form-control" id="settingsConfirmPassword" data-t-ph="confirmNewPh" placeholder="Repeat new password">
+          <button class="btn btn-outline" style="margin-top:10px; width:100%;" onclick="changeSettingsPassword()"><i class="fas fa-key"></i> <span data-t="changePasswordBtn">Change Password</span></button>
           <div class="note" id="settingsPasswordStatus"></div>
         </div>
       </div>
@@ -468,6 +506,183 @@ try{
 }
 </script>
 <script>
+// ---------- translations ----------
+const TRANSLATIONS = {
+  en: {
+    backToStore: 'Back to store', modePillSample: 'Sample data', modePillLive: 'Live 1688 data',
+    tabHome: 'Home', tabSearch: 'Search 1688', tabRestockList: 'Restock List', tabSettings: 'Settings',
+    homeTitle: 'Product catalog', homeDesc: "Everything found through search or added manually — pick straight from here without searching again.",
+    filterPlaceholder: 'Filter your saved products...',
+    catAll: 'All', catGirlClothes: 'Girl Clothes', catBoyClothes: 'Boy Clothes', catBabyShirt: 'Baby Shirt', catDresses: 'Dresses', catBabyAccessories: 'Baby Accessories', catBabyShoes: 'Baby Shoes',
+    emptyHistoryDefault: 'No saved products yet. Search 1688 or add an item by link, and everything you find will show up here for next time.',
+    noProductsMatchFilter: 'No saved products match that filter.',
+    pasteListHeading: 'Paste a list',
+    pasteListHint: 'One per line — product links (a name before the link becomes the title), or plain product names with no link, like from a 1688 export. Names get a ready-made "Search on 1688" link since there\'s no exact product page to point to.',
+    importLinksBtn: 'Import links', orDivider: 'or',
+    uploadFileHeading: 'Upload a file',
+    uploadFileHint: 'A CSV or Excel export — a 1688 order-history export is recognized automatically and brings in exact product links, price paid, and supplier.',
+    whichColumnLabel: 'Which column has the item name?', importItemsBtn: 'Import these items',
+    searchTitle: 'Search suppliers', searchDesc: 'Search trusted 1688 suppliers, build a restock list, then order directly on 1688.',
+    searchPlaceholder: 'Search a product, e.g. kids cotton socks', searchBtnLabel: 'Search', viewAllBtn: 'View all items',
+    liveDataHint: 'Live search covers all of 1688 by keyword — it doesn\'t filter to one trusted shop, and "View all items" still shows sample data since this scraper can\'t browse a whole shop without a keyword.',
+    resultsLabelDefault: 'Search a product to see results', noResultsYet: 'No results yet — try a search above.',
+    manualAddHint: "If a supplier's item isn't showing up in search, paste its 1688 product link here to add it straight to your restock list. It'll also be saved to your Home catalog.",
+    itemUrlPh: '1688 product link', itemTitlePh: 'Product name', itemSizePh: 'Size (optional)', itemQtyPh: 'Qty', addToListBtn: 'Add to list',
+    restockListTitle: 'Restock list', restockListDesc: "Select the items you're ready to order, then send them to Telegram.",
+    sendTelegramBtnLabel: 'Send selected to Telegram',
+    statusAll: 'All', statusPending: 'Not sent', statusSent: 'Sent', statusOrdered: 'Ordered', statusReceived: 'Received',
+    selectAllLabel: 'Select all', emptyRestockDefault: 'Nothing added yet. Use "Add to list" on a product.',
+    noItemsMatchFilter: 'No items match this filter.',
+    settingsProtectedTitle: 'Settings Protected', settingsProtectedDesc: 'Enter the settings password to continue',
+    enterPasswordPh: 'Enter password', unlockBtn: 'Unlock Settings', incorrectPasswordMsg: 'Incorrect password',
+    dataSourceTitle: 'Data source', dataSourceDesc: 'Controls for the Search 1688 tab',
+    apifyTokenLabel: 'Apify API token', apifyTokenPh: 'Paste your token here', apifyActorLabel: 'Apify actor ID',
+    dataSourceNote1: 'No token yet? Search uses sample data so the tool stays fully testable. Add a token and keyword search switches to real 1688 listings automatically.',
+    dataSourceNote2: 'This scraper searches all of 1688 by keyword — it can\'t scope to one trusted shop, and "View all items" always stays on sample data since it can\'t browse a whole shop without a keyword.',
+    dataSourceNote3: "Your token syncs across every device that opens this tool, the same way the store app's own Telegram settings do. That also means anyone with the page link could see it — worth knowing, since it's a real API credential.",
+    trustedShopsTitle: 'Trusted shops', trustedShopsDesc: 'Shops you can filter searches to on the Search 1688 tab',
+    shopNicknamePh: 'Shop nickname', shopIdPh: '1688 shop ID (from the shop URL)', addShopBtnLabel: 'Add shop',
+    telegramTitle: 'Telegram', telegramDesc: 'Where the Restock List sends orders to',
+    botTokenLabel: 'Bot token', botTokenPh: 'Paste your bot token here', chatIdLabel: 'Chat ID', chatIdPh: 'Paste your chat ID here',
+    telegramNote1: 'Message @BotFather on Telegram, send <code>/newbot</code>, and follow the prompts — it gives you a bot token when it\'s done.',
+    telegramNote2: 'To get your chat ID: message your new bot anything first, then open <code>https://api.telegram.org/bot&lt;your token&gt;/getUpdates</code> in a browser and look for the <code>"chat":{"id":...}</code> number.',
+    telegramNote3: "Both sync across every device that opens this tool — set them once and they'll show up everywhere. That also means anyone with the page link could see them.",
+    changePasswordTitle: 'Change Password', changePasswordDesc: 'Applies to everyone opening this tool',
+    currentPasswordLabel: 'Current Password', currentPasswordPh: 'Current password',
+    newPasswordLabel: 'New Password', newPasswordPh: 'Min 4 characters',
+    confirmNewLabel: 'Confirm New', confirmNewPh: 'Repeat new password', changePasswordBtn: 'Change Password',
+    moqLabel: 'MOQ', viewOn1688: 'View on 1688', searchOn1688: 'Search on 1688',
+    orderOn1688Arrow: 'Order on 1688 ↗', searchOn1688Arrow: 'Search on 1688 ↗',
+    markOrderedBtn: 'Mark ordered', markReceivedBtn: 'Mark received', qtyShort: 'Qty',
+    searchLinkLabel: 'Search link', directLinkLabel: 'Direct link', uncategorizedOption: '— Uncategorized —'
+  },
+  kh: {
+    backToStore: 'ត្រឡប់ទៅហាង', modePillSample: 'ទិន្នន័យគំរូ', modePillLive: 'ទិន្នន័យផ្ទាល់ 1688',
+    tabHome: 'ទំព័រដើម', tabSearch: 'ស្វែងរក 1688', tabRestockList: 'បញ្ជីបញ្ជាទិញ', tabSettings: 'ការកំណត់',
+    homeTitle: 'កាតាឡុកផលិតផល', homeDesc: 'អ្វីៗគ្រប់យ៉ាងដែលបានរកឃើញតាមរយៈការស្វែងរក ឬបានបន្ថែមដោយដៃ — ជ្រើសរើសពីទីនេះដោយផ្ទាល់ដោយមិនចាំបាច់ស្វែងរកម្តងទៀត។',
+    filterPlaceholder: 'ត្រងផលិតផលដែលបានរក្សាទុករបស់អ្នក...',
+    catAll: 'ទាំងអស់', catGirlClothes: 'សម្លៀកបំពាក់ក្មេងស្រី', catBoyClothes: 'សម្លៀកបំពាក់ក្មេងប្រុស', catBabyShirt: 'អាវកូនក្មេង', catDresses: 'រ៉ូប', catBabyAccessories: 'គ្រឿងបន្លាស់កូនក្មេង', catBabyShoes: 'ស្បែកជើងកូនក្មេង',
+    emptyHistoryDefault: 'មិនទាន់មានផលិតផលរក្សាទុកនៅឡើយទេ។ ស្វែងរក 1688 ឬបន្ថែមទំនិញតាមតំណ រួចអ្វីៗដែលអ្នករកឃើញនឹងបង្ហាញនៅទីនេះសម្រាប់លើកក្រោយ។',
+    noProductsMatchFilter: 'គ្មានផលិតផលដែលបានរក្សាទុកត្រូវនឹងតម្រងនោះទេ។',
+    pasteListHeading: 'បិទភ្ជាប់បញ្ជី',
+    pasteListHint: 'មួយបន្ទាត់ក្នុងមួយ — តំណទំនិញ (ឈ្មោះមុនតំណនឹងក្លាយជាចំណងជើង) ឬឈ្មោះទំនិញធម្មតាដោយគ្មានតំណ ដូចជាពីការនាំចេញ 1688។ ឈ្មោះនឹងទទួលបានតំណ "ស្វែងរកនៅ 1688" ដោយស្វ័យប្រវត្តិ។',
+    importLinksBtn: 'នាំចូលតំណ', orDivider: 'ឬ',
+    uploadFileHeading: 'ផ្ទុកឯកសារឡើង',
+    uploadFileHint: 'ការនាំចេញ CSV ឬ Excel — ការនាំចេញប្រវត្តិការបញ្ជាទិញ 1688 ត្រូវបានសម្គាល់ដោយស្វ័យប្រវត្តិ និងនាំចូលតំណទំនិញច្បាស់លាស់ តម្លៃដែលបានបង់ និងអ្នកផ្គត់ផ្គង់។',
+    whichColumnLabel: 'ជួរឈរមួយណាមានឈ្មោះទំនិញ?', importItemsBtn: 'នាំចូលទំនិញទាំងនេះ',
+    searchTitle: 'ស្វែងរកអ្នកផ្គត់ផ្គង់', searchDesc: 'ស្វែងរកអ្នកផ្គត់ផ្គង់ 1688 ដែលទុកចិត្ត បង្កើតបញ្ជីបញ្ជាទិញ រួចបញ្ជាទិញដោយផ្ទាល់នៅលើ 1688។',
+    searchPlaceholder: 'ស្វែងរកទំនិញ ឧទាហរណ៍ ស្រោមជើងកូនក្មេង', searchBtnLabel: 'ស្វែងរក', viewAllBtn: 'មើលទំនិញទាំងអស់',
+    liveDataHint: 'ការស្វែងរកផ្ទាល់គ្របដណ្តប់ 1688 ទាំងអស់តាមពាក្យគន្លឹះ — វាមិនត្រងចំពោះហាងណាមួយទេ ហើយ "មើលទំនិញទាំងអស់" នៅតែបង្ហាញទិន្នន័យគំរូ ព្រោះកម្មវិធីនេះមិនអាចរុករកហាងទាំងមូលដោយគ្មានពាក្យគន្លឹះបានទេ។',
+    resultsLabelDefault: 'ស្វែងរកទំនិញដើម្បីមើលលទ្ធផល', noResultsYet: 'មិនទាន់មានលទ្ធផលនៅឡើយទេ — សាកល្បងស្វែងរកខាងលើ។',
+    manualAddHint: 'ប្រសិនបើទំនិញរបស់អ្នកផ្គត់ផ្គង់មិនបង្ហាញនៅក្នុងលទ្ធផលស្វែងរក សូមបិទភ្ជាប់តំណទំនិញ 1688 នៅទីនេះដើម្បីបន្ថែមវាដោយផ្ទាល់ទៅបញ្ជីបញ្ជាទិញរបស់អ្នក។ វានឹងត្រូវបានរក្សាទុកទៅកាតាឡុកទំព័រដើមផងដែរ។',
+    itemUrlPh: 'តំណទំនិញ 1688', itemTitlePh: 'ឈ្មោះទំនិញ', itemSizePh: 'ទំហំ (ស្រេចចិត្ត)', itemQtyPh: 'ចំនួន', addToListBtn: 'បន្ថែមទៅបញ្ជី',
+    restockListTitle: 'បញ្ជីបញ្ជាទិញ', restockListDesc: 'ជ្រើសរើសទំនិញដែលអ្នកត្រៀមខ្លួនបញ្ជាទិញ រួចផ្ញើវាទៅ Telegram។',
+    sendTelegramBtnLabel: 'ផ្ញើទំនិញដែលបានជ្រើសរើសទៅ Telegram',
+    statusAll: 'ទាំងអស់', statusPending: 'មិនទាន់ផ្ញើ', statusSent: 'បានផ្ញើ', statusOrdered: 'បានបញ្ជាទិញ', statusReceived: 'បានទទួល',
+    selectAllLabel: 'ជ្រើសរើសទាំងអស់', emptyRestockDefault: 'មិនទាន់មានអ្វីត្រូវបានបន្ថែមនៅឡើយទេ។ ប្រើ "បន្ថែមទៅបញ្ជី" នៅលើទំនិញមួយ។',
+    noItemsMatchFilter: 'គ្មានទំនិញត្រូវនឹងតម្រងនេះទេ។',
+    settingsProtectedTitle: 'ការកំណត់ត្រូវបានការពារ', settingsProtectedDesc: 'បញ្ចូលពាក្យសម្ងាត់ការកំណត់ដើម្បីបន្ត',
+    enterPasswordPh: 'បញ្ចូលពាក្យសម្ងាត់', unlockBtn: 'ដោះសោការកំណត់', incorrectPasswordMsg: 'ពាក្យសម្ងាត់មិនត្រឹមត្រូវ',
+    dataSourceTitle: 'ប្រភពទិន្នន័យ', dataSourceDesc: 'ការគ្រប់គ្រងសម្រាប់ផ្ទាំងស្វែងរក 1688',
+    apifyTokenLabel: 'Apify API token', apifyTokenPh: 'បិទភ្ជាប់ token របស់អ្នកនៅទីនេះ', apifyActorLabel: 'Apify actor ID',
+    dataSourceNote1: 'មិនទាន់មាន token ទេឬ? ការស្វែងរកប្រើទិន្នន័យគំរូ ដើម្បីឲ្យកម្មវិធីនៅតែសាកល្បងបានពេញលេញ។ បន្ថែម token មួយ ការស្វែងរកតាមពាក្យគន្លឹះនឹងប្តូរទៅជាទិន្នន័យ 1688 ពិតប្រាកដដោយស្វ័យប្រវត្តិ។',
+    dataSourceNote2: 'កម្មវិធីនេះស្វែងរកទូទាំង 1688 តាមពាក្យគន្លឹះ — វាមិនអាចកំណត់ចំពោះហាងណាមួយបានទេ ហើយ "មើលទំនិញទាំងអស់" នៅតែប្រើទិន្នន័យគំរូជានិច្ច ព្រោះវាមិនអាចរុករកហាងទាំងមូលដោយគ្មានពាក្យគន្លឹះបានទេ។',
+    dataSourceNote3: 'token របស់អ្នកធ្វើសមកាលកម្មនៅគ្រប់ឧបករណ៍ដែលបើកកម្មវិធីនេះ ដូចការកំណត់ Telegram របស់កម្មវិធីហាងដែរ។ នោះមានន័យថាអ្នកណាដែលមានតំណទំព័រក៏អាចមើលឃើញវាដែរ — សំខាន់ដឹងទុក ព្រោះវាជា API credential ពិតប្រាកដ។',
+    trustedShopsTitle: 'ហាងគួរទុកចិត្ត', trustedShopsDesc: 'ហាងដែលអ្នកអាចត្រងការស្វែងរកទៅផ្ទាំងស្វែងរក 1688',
+    shopNicknamePh: 'ឈ្មោះហៅក្រៅហាង', shopIdPh: 'លេខសម្គាល់ហាង 1688 (ពី URL ហាង)', addShopBtnLabel: 'បន្ថែមហាង',
+    telegramTitle: 'Telegram', telegramDesc: 'កន្លែងដែលបញ្ជីបញ្ជាទិញផ្ញើការបញ្ជាទិញទៅ',
+    botTokenLabel: 'Bot token', botTokenPh: 'បិទភ្ជាប់ bot token របស់អ្នកនៅទីនេះ', chatIdLabel: 'Chat ID', chatIdPh: 'បិទភ្ជាប់ chat ID របស់អ្នកនៅទីនេះ',
+    telegramNote1: 'ផ្ញើសារទៅ @BotFather នៅលើ Telegram វាយ <code>/newbot</code> រួចធ្វើតាមការណែនាំ — វានឹងផ្តល់ bot token ឲ្យអ្នកនៅពេលចប់។',
+    telegramNote2: 'ដើម្បីទទួលបាន chat ID របស់អ្នក: ផ្ញើសារទៅ bot ថ្មីរបស់អ្នកជាមុនសិន រួចបើក <code>https://api.telegram.org/bot&lt;token របស់អ្នក&gt;/getUpdates</code> នៅក្នុងកម្មវិធីរុករក ហើយស្វែងរកលេខ <code>"chat":{"id":...}</code>។',
+    telegramNote3: 'ទាំងពីរធ្វើសមកាលកម្មនៅគ្រប់ឧបករណ៍ដែលបើកកម្មវិធីនេះ — កំណត់វាម្តង ហើយវានឹងបង្ហាញនៅគ្រប់ទីកន្លែង។ នោះមានន័យថាអ្នកណាដែលមានតំណទំព័រក៏អាចមើលឃើញវាដែរ។',
+    changePasswordTitle: 'ប្តូរពាក្យសម្ងាត់', changePasswordDesc: 'អនុវត្តចំពោះអ្នកគ្រប់គ្នាដែលបើកកម្មវិធីនេះ',
+    currentPasswordLabel: 'ពាក្យសម្ងាត់បច្ចុប្បន្ន', currentPasswordPh: 'ពាក្យសម្ងាត់បច្ចុប្បន្ន',
+    newPasswordLabel: 'ពាក្យសម្ងាត់ថ្មី', newPasswordPh: 'អប្បបរមា ៤ តួអក្សរ',
+    confirmNewLabel: 'បញ្ជាក់ពាក្យសម្ងាត់ថ្មី', confirmNewPh: 'វាយពាក្យសម្ងាត់ថ្មីម្តងទៀត', changePasswordBtn: 'ប្តូរពាក្យសម្ងាត់',
+    moqLabel: 'ចំនួនបញ្ជាទិញអប្បបរមា', viewOn1688: 'មើលនៅ 1688', searchOn1688: 'ស្វែងរកនៅ 1688',
+    orderOn1688Arrow: 'កម្មង់នៅ 1688 ↗', searchOn1688Arrow: 'ស្វែងរកនៅ 1688 ↗',
+    markOrderedBtn: 'សម្គាល់ថាបានបញ្ជាទិញ', markReceivedBtn: 'សម្គាល់ថាបានទទួល', qtyShort: 'ចំនួន',
+    searchLinkLabel: 'តំណស្វែងរក', directLinkLabel: 'តំណផ្ទាល់', uncategorizedOption: '— មិនទាន់មានប្រភេទ —'
+  },
+  zh: {
+    backToStore: '返回商店', modePillSample: '示例数据', modePillLive: '1688实时数据',
+    tabHome: '首页', tabSearch: '搜索1688', tabRestockList: '补货清单', tabSettings: '设置',
+    homeTitle: '产品目录', homeDesc: '所有通过搜索找到或手动添加的商品——直接从这里选择，无需重新搜索。',
+    filterPlaceholder: '筛选已保存的产品...',
+    catAll: '全部', catGirlClothes: '女童服装', catBoyClothes: '男童服装', catBabyShirt: '婴儿上衣', catDresses: '连衣裙', catBabyAccessories: '婴儿配件', catBabyShoes: '婴儿鞋',
+    emptyHistoryDefault: '尚未保存任何产品。搜索1688或通过链接添加商品，之后您找到的一切都会显示在这里。',
+    noProductsMatchFilter: '没有符合该筛选条件的已保存产品。',
+    pasteListHeading: '粘贴列表',
+    pasteListHint: '每行一个——商品链接（链接前的名称将作为标题），或不带链接的普通商品名称（如来自1688导出）。名称会自动生成"搜索1688"链接。',
+    importLinksBtn: '导入链接', orDivider: '或',
+    uploadFileHeading: '上传文件',
+    uploadFileHint: 'CSV或Excel导出文件——1688订单历史导出会被自动识别，并带入准确的商品链接、支付价格和供应商信息。',
+    whichColumnLabel: '哪一列包含商品名称？', importItemsBtn: '导入这些商品',
+    searchTitle: '搜索供应商', searchDesc: '搜索信任的1688供应商，创建补货清单，然后直接在1688下单。',
+    searchPlaceholder: '搜索产品，例如儿童棉袜', searchBtnLabel: '搜索', viewAllBtn: '查看所有商品',
+    liveDataHint: '实时搜索按关键词覆盖整个1688——不会筛选到单一信任店铺，"查看所有商品"仍显示示例数据，因为该抓取工具无法在没有关键词的情况下浏览整个店铺。',
+    resultsLabelDefault: '搜索产品以查看结果', noResultsYet: '暂无结果——请尝试上方搜索。',
+    manualAddHint: '如果供应商的商品未出现在搜索结果中，请在此粘贴其1688商品链接，直接添加到您的补货清单。它也会保存到您的首页目录中。',
+    itemUrlPh: '1688商品链接', itemTitlePh: '产品名称', itemSizePh: '尺码（可选）', itemQtyPh: '数量', addToListBtn: '添加到清单',
+    restockListTitle: '补货清单', restockListDesc: '选择您准备订购的商品，然后发送到Telegram。',
+    sendTelegramBtnLabel: '将所选发送到Telegram',
+    statusAll: '全部', statusPending: '未发送', statusSent: '已发送', statusOrdered: '已订购', statusReceived: '已收货',
+    selectAllLabel: '全选', emptyRestockDefault: '尚未添加任何内容。请在产品上使用"添加到清单"。',
+    noItemsMatchFilter: '没有符合此筛选条件的商品。',
+    settingsProtectedTitle: '设置已受保护', settingsProtectedDesc: '输入设置密码以继续',
+    enterPasswordPh: '输入密码', unlockBtn: '解锁设置', incorrectPasswordMsg: '密码错误',
+    dataSourceTitle: '数据来源', dataSourceDesc: '搜索1688标签页的控制项',
+    apifyTokenLabel: 'Apify API 令牌', apifyTokenPh: '在此粘贴您的令牌', apifyActorLabel: 'Apify actor ID',
+    dataSourceNote1: '还没有令牌？搜索将使用示例数据，让工具保持完全可测试。添加令牌后，关键词搜索会自动切换到真实的1688列表。',
+    dataSourceNote2: '此抓取工具按关键词搜索整个1688——无法限定到单一信任店铺，"查看所有商品"始终显示示例数据，因为它无法在没有关键词的情况下浏览整个店铺。',
+    dataSourceNote3: '您的令牌会同步到打开此工具的每台设备，就像商店应用自己的Telegram设置一样。这也意味着任何拥有该页面链接的人都可能看到它——值得注意，因为这是真实的API凭证。',
+    trustedShopsTitle: '信任的店铺', trustedShopsDesc: '您可以在搜索1688标签页筛选到的店铺',
+    shopNicknamePh: '店铺昵称', shopIdPh: '1688店铺ID（来自店铺网址）', addShopBtnLabel: '添加店铺',
+    telegramTitle: 'Telegram', telegramDesc: '补货清单发送订单的位置',
+    botTokenLabel: '机器人令牌', botTokenPh: '在此粘贴您的机器人令牌', chatIdLabel: '聊天ID', chatIdPh: '在此粘贴您的聊天ID',
+    telegramNote1: '在Telegram上给@BotFather发消息，发送<code>/newbot</code>，然后按提示操作——完成后会给您一个机器人令牌。',
+    telegramNote2: '获取聊天ID：先给您的新机器人发送任意消息，然后在浏览器中打开<code>https://api.telegram.org/bot&lt;您的令牌&gt;/getUpdates</code>，查找<code>"chat":{"id":...}</code>数字。',
+    telegramNote3: '两者都会同步到打开此工具的每台设备——设置一次，就会在所有地方显示。这也意味着任何拥有该页面链接的人都可能看到它们。',
+    changePasswordTitle: '修改密码', changePasswordDesc: '适用于打开此工具的所有人',
+    currentPasswordLabel: '当前密码', currentPasswordPh: '当前密码',
+    newPasswordLabel: '新密码', newPasswordPh: '至少4个字符',
+    confirmNewLabel: '确认新密码', confirmNewPh: '再次输入新密码', changePasswordBtn: '修改密码',
+    moqLabel: '起订量', viewOn1688: '查看1688', searchOn1688: '搜索1688',
+    orderOn1688Arrow: '在1688下单 ↗', searchOn1688Arrow: '搜索1688 ↗',
+    markOrderedBtn: '标记为已订购', markReceivedBtn: '标记为已收货', qtyShort: '数量',
+    searchLinkLabel: '搜索链接', directLinkLabel: '直接链接', uncategorizedOption: '— 未分类 —'
+  }
+};
+
+let currentLang = localStorage.getItem('restockTool_lang') || 'en';
+
+function t(key){
+  return (TRANSLATIONS[currentLang] && TRANSLATIONS[currentLang][key]) || TRANSLATIONS.en[key] || key;
+}
+
+function applyTranslations(){
+  document.querySelectorAll('[data-t]').forEach(el => {
+    el.innerHTML = t(el.dataset.t);
+  });
+  document.querySelectorAll('[data-t-ph]').forEach(el => {
+    el.placeholder = t(el.dataset.tPh);
+  });
+  document.querySelectorAll('[data-label-key]').forEach(el => {
+    el.dataset.label = t(el.dataset.labelKey);
+  });
+  document.getElementById('langSelect').value = currentLang;
+  renderHistory();
+  renderRestock();
+}
+
+function setLanguage(lang){
+  currentLang = lang;
+  localStorage.setItem('restockTool_lang', lang);
+  applyTranslations();
+}
+
+document.getElementById('langSelect').addEventListener('change', e => setLanguage(e.target.value));
+
 // ---------- state ----------
 // shops, restockList and historyCache are the local cache, kept in sync
 // with Firestore by the listeners in initFirestoreListeners(). If db
@@ -712,14 +927,14 @@ function productCardHtml(p, opts){
       </div>
       <div class="body">
         <div class="title">${escapeHtml(p.title)}</div>
-        ${p.category ? `<span class="category-badge">${escapeHtml(p.category)}</span>` : ''}
+        ${p.category ? `<span class="category-badge">${escapeHtml(categoryLabel(p.category))}</span>` : ''}
         <div class="price">${escapeHtml(String(p.price))}</div>
-        <div class="meta">MOQ ${escapeHtml(String(p.moq))} · ${escapeHtml(p.supplier)}</div>
+        <div class="meta">${t('moqLabel')} ${escapeHtml(String(p.moq))} · ${escapeHtml(p.supplier)}</div>
         ${opts.removable ? `
         <div class="category-picker hidden" id="categoryPicker-${escapeHtml(p.id)}">
           <select onchange="setProductCategory('${escapeHtml(p.id)}', this.value)">
-            <option value="">— Uncategorized —</option>
-            ${CATEGORIES.map(c => `<option value="${escapeHtml(c)}"${p.category === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+            <option value="">${t('uncategorizedOption')}</option>
+            ${CATEGORIES.map(c => `<option value="${escapeHtml(c)}"${p.category === c ? ' selected' : ''}>${escapeHtml(categoryLabel(c))}</option>`).join('')}
           </select>
         </div>` : ''}
         ${p.sizes && p.sizes.length ? `
@@ -734,8 +949,8 @@ function productCardHtml(p, opts){
           <input type="number" class="qty-select" min="1" value="1" title="Quantity to order">
         </div>`}
         <div class="row">
-          <a class="view" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">${p.isSearchLink ? 'Search on 1688' : 'View on 1688'}</a>
-          <button class="add" onclick="addToRestock('${escapeHtml(p.id)}', this)">Add to list</button>
+          <a class="view" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">${p.isSearchLink ? t('searchOn1688') : t('viewOn1688')}</a>
+          <button class="add" onclick="addToRestock('${escapeHtml(p.id)}', this)">${t('addToListBtn')}</button>
         </div>
         ${opts.removable ? `
         <div class="add-photo">
@@ -754,6 +969,15 @@ function productCardHtml(p, opts){
 // be tapped by accident, and removing still asks for confirmation on top
 // of that, since catalog entries can be tedious to rebuild.
 const CATEGORIES = ['Girl Clothes', 'Boy Clothes', 'Baby Shirt', 'Dresses', 'Baby Accessories', 'Baby Shoes'];
+const CATEGORY_KEY_MAP = {
+  'Girl Clothes': 'catGirlClothes', 'Boy Clothes': 'catBoyClothes', 'Baby Shirt': 'catBabyShirt',
+  'Dresses': 'catDresses', 'Baby Accessories': 'catBabyAccessories', 'Baby Shoes': 'catBabyShoes'
+};
+// Categories are always stored in English (matching the store app's own
+// category values) — this only translates them for display.
+function categoryLabel(category){
+  return CATEGORY_KEY_MAP[category] ? t(CATEGORY_KEY_MAP[category]) : category;
+}
 
 function toggleThumbMenu(id){
   const btn = document.getElementById('removeBtn-' + id);
@@ -821,8 +1045,8 @@ function renderHistory(){
     grid.innerHTML = '';
     empty.style.display = 'block';
     empty.textContent = historyCache.length === 0
-      ? 'No saved products yet. Search 1688 or add an item by link, and everything you find will show up here for next time.'
-      : 'No saved products match that filter.';
+      ? t('emptyHistoryDefault')
+      : t('noProductsMatchFilter');
     return;
   }
   empty.style.display = 'none';
@@ -966,7 +1190,8 @@ async function performSearch(keyword){
 
 function setMode(live){
   const pill = document.getElementById('modePill');
-  pill.textContent = live ? 'Live 1688 data' : 'Sample data';
+  pill.textContent = live ? t('modePillLive') : t('modePillSample');
+  pill.dataset.t = live ? 'modePillLive' : 'modePillSample';
   pill.className = 'mode-pill' + (live ? ' live' : '');
   document.getElementById('liveDataHint').style.display = live ? 'block' : 'none';
 }
@@ -1634,8 +1859,8 @@ function renderRestock(){
     wrap.innerHTML = '';
     empty.style.display = 'block';
     empty.textContent = restockList.length === 0
-      ? 'Nothing added yet. Use "Add to list" on a product.'
-      : 'No items match this filter.';
+      ? t('emptyRestockDefault')
+      : t('noItemsMatchFilter');
     sendBtn.disabled = selectedRestockIds.size === 0;
     updateSelectAllRestockState();
     return;
@@ -1650,10 +1875,10 @@ function renderRestock(){
     const docIdsCsv = group.lines.map(l => l.docId).join(',');
     const groupChecked = group.lines.every(l => selectedRestockIds.has(l.docId));
     const status = groupStatus(group);
-    const statusLabel = status === 'received' ? 'Received' : (status === 'ordered' ? 'Ordered' : (status === 'sent' ? 'Sent' : 'Not sent'));
+    const statusLabel = status === 'received' ? t('statusReceived') : (status === 'ordered' ? t('statusOrdered') : (status === 'sent' ? t('statusSent') : t('statusPending')));
     const sizeLines = group.lines.map(item => `
       <div class="rl-size-line">
-        <span class="rl-size-label">${item.size ? escapeHtml(item.size) : 'Qty'}</span>
+        <span class="rl-size-label">${item.size ? escapeHtml(item.size) : t('qtyShort')}</span>
         <input class="qty" type="number" min="1" value="${item.qty}" onchange="updateQty('${escapeHtml(item.docId)}', this.value)">
         <button class="rl-size-remove" onclick="confirmRemoveFromRestock('${escapeHtml(item.docId)}')" title="Remove this size"><i class="fas fa-times"></i></button>
       </div>
@@ -1665,13 +1890,13 @@ function renderRestock(){
         <div class="rl-info">
           <div class="rl-title">${escapeHtml(group.title)}</div>
           <span class="status-badge status-${status}">${statusLabel}</span>
-          <div class="rl-meta">${group.isSearchLink ? 'Search link' : 'Direct link'}</div>
+          <div class="rl-meta">${group.isSearchLink ? t('searchLinkLabel') : t('directLinkLabel')}</div>
           <div class="rl-size-lines">${sizeLines}</div>
         </div>
         <div class="rl-actions">
-          <a href="${escapeHtml(group.url)}" target="_blank" rel="noopener">${group.isSearchLink ? 'Search on 1688 ↗' : 'Order on 1688 ↗'}</a>
-          ${status === 'ordered' ? `<button class="mark-received" onclick="markGroupReceived('${docIdsCsv}')">Mark received</button>` : ''}
-          ${(status === 'pending' || status === 'sent') ? `<button class="mark-ordered" onclick="markGroupOrdered('${docIdsCsv}')">Mark ordered</button>` : ''}
+          <a href="${escapeHtml(group.url)}" target="_blank" rel="noopener">${group.isSearchLink ? t('searchOn1688Arrow') : t('orderOn1688Arrow')}</a>
+          ${status === 'ordered' ? `<button class="mark-received" onclick="markGroupReceived('${docIdsCsv}')">${t('markReceivedBtn')}</button>` : ''}
+          ${(status === 'pending' || status === 'sent') ? `<button class="mark-ordered" onclick="markGroupOrdered('${docIdsCsv}')">${t('markOrderedBtn')}</button>` : ''}
         </div>
       </div>
     `;
@@ -1814,6 +2039,7 @@ function escapeHtml(str){
 })();
 
 // ---------- init ----------
+applyTranslations();
 if(db){
   initFirestoreListeners();
   loadSharedConfig();
