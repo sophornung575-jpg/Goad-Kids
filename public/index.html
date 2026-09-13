@@ -4041,25 +4041,29 @@ function sendToTelegram(order, callback) {
         var confirmed = getReportConfirmed();
         if (!confirmed.length) { console.log('No confirmed orders loaded for the current report period. Open the Reports tab and pick a date range first.'); return; }
 
-        var byProduct = {};
+        var byKey = {};
         confirmed.forEach(function(o) {
+            var storeLabel = o._sourceStoreName || 'Current Store';
             (o.cart || []).forEach(function(it) {
                 var pid = it.productId;
-                if (!byProduct[pid]) byProduct[pid] = { name: it.name || pid, qty: 0, revenue: 0 };
-                byProduct[pid].qty += it.quantity || 0;
-                byProduct[pid].revenue += (it.subtotal != null ? it.subtotal : (it.price || 0) * (it.quantity || 0));
+                var key = (o._sourceStoreId || 'current') + '|' + pid;
+                if (!byKey[key]) byKey[key] = { name: it.name || pid, store: storeLabel, qty: 0, revenue: 0, order: o, pid: pid };
+                byKey[key].qty += it.quantity || 0;
+                byKey[key].revenue += (it.subtotal != null ? it.subtotal : (it.price || 0) * (it.quantity || 0));
             });
         });
 
-        var rows = Object.keys(byProduct).map(function(pid) {
-            var cost = getProductCost(pid);
-            var p = findProduct(pid);
+        var rows = Object.keys(byKey).map(function(key) {
+            var row = byKey[key];
+            var cost = getReportProductCost(row.order, row.pid);
+            var p = findReportProduct(row.order, row.pid);
             return {
-                'Product': byProduct[pid].name,
-                'Qty Sold': byProduct[pid].qty,
-                'Revenue': '$' + byProduct[pid].revenue.toFixed(2),
-                'Cost/Unit': p ? (cost > 0 ? '$' + cost.toFixed(2) : '⚠️ MISSING') : '❌ NOT IN THIS STORE',
-                'Total Cost': p && cost > 0 ? '$' + (cost * byProduct[pid].qty).toFixed(2) : '$0.00 (missing!)'
+                'Store': row.store,
+                'Product': row.name,
+                'Qty Sold': row.qty,
+                'Revenue': '$' + row.revenue.toFixed(2),
+                'Cost/Unit': p ? (cost > 0 ? '$' + cost.toFixed(2) : '⚠️ MISSING') : '❌ NOT IN THAT STORE\'S CATALOG',
+                'Total Cost': p && cost > 0 ? '$' + (cost * row.qty).toFixed(2) : '$0.00 (missing!)'
             };
         });
 
@@ -6784,6 +6788,7 @@ function sendToTelegram(order, callback) {
     // REPORTS — query Firebase directly
     var _reportData = [];
     var _reportRefunds = [];
+    var _reportProductsByStore = {}; // storeId -> products array, populated in All Branches mode so cost lookups use the right branch's catalog
 
     async function loadReportData() {
         // Show/hide the All Branches toggle — Main Store full admin only
@@ -6825,6 +6830,7 @@ function sendToTelegram(order, callback) {
 
                 var allOrders = [];
                 var allRefunds = [];
+                _reportProductsByStore = {};
 
                 await Promise.all(stores.map(async function(s) {
                     try {
@@ -6838,6 +6844,13 @@ function sendToTelegram(order, callback) {
                             .where('refundTimestamp', '>=', startTs).where('refundTimestamp', '<=', endTs).get();
                         refSnap.forEach(function(d) { allRefunds.push(Object.assign({}, d.data(), { refundId: d.id, _sourceStoreId: s.id, _sourceStoreName: s.name })); });
                     } catch(re) { console.warn('Refunds fetch failed for ' + s.id + ':', re.message); }
+
+                    try {
+                        var prodSnap = await db.collection('stores').doc(s.id).collection('products').get();
+                        var plist = [];
+                        prodSnap.forEach(function(d) { var dt = d.data(); plist.push(Object.assign({}, dt, { id: d.id })); });
+                        _reportProductsByStore[s.id] = plist;
+                    } catch(pe) { console.warn('Products fetch failed for ' + s.id + ':', pe.message); }
                 }));
 
                 // Archived orders — filter by storeId since this collection is shared across all stores
@@ -6858,6 +6871,7 @@ function sendToTelegram(order, callback) {
                 _reportRefunds = allRefunds;
             } else {
                 if (scopeLabel) scopeLabel.style.display = 'none';
+                _reportProductsByStore = {};
                 var results = [];
                 var refundResults = [];
                 // Query active orders from stores/{storeId}/orders
@@ -7114,6 +7128,23 @@ function sendToTelegram(order, callback) {
         return (p && p.costPrice != null && p.costPrice !== '') ? Number(p.costPrice) : 0;
     }
 
+    // Same as getProductCost, but for report rows that may come from a different branch (All Branches
+    // mode). Looks up the item in the catalog of the branch it was actually sold from, instead of
+    // whichever store you're currently logged into.
+    function findReportProduct(order, pid) {
+        var storeId = order && order._sourceStoreId;
+        if (storeId && _reportProductsByStore[storeId]) {
+            var list = _reportProductsByStore[storeId];
+            for (var i = 0; i < list.length; i++) { if (list[i].id === pid) return list[i]; }
+            return null;
+        }
+        return findProduct(pid); // single-store report mode: current store's catalog
+    }
+    function getReportProductCost(order, pid) {
+        var p = findReportProduct(order, pid);
+        return (p && p.costPrice != null && p.costPrice !== '') ? Number(p.costPrice) : 0;
+    }
+
     function renderFinancialAnalysis() {
         var confirmed = getReportConfirmed();
         var revenue = 0, cogs = 0;
@@ -7124,7 +7155,7 @@ function sendToTelegram(order, callback) {
             var orderCost = 0;
             for (var j = 0; j < (o.cart||[]).length; j++) {
                 var it = o.cart[j];
-                orderCost += getProductCost(it.productId) * (it.quantity || 0);
+                orderCost += getReportProductCost(o, it.productId) * (it.quantity || 0);
             }
             revenue += orderRevenue; cogs += orderCost;
             var od = new Date(o.confirmedTimestamp || o.timestamp || Date.now());
