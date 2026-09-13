@@ -3970,6 +3970,114 @@ function sendToTelegram(order, callback) {
         }
     }
 
+    // ONE-TIME DIAGNOSTIC: for products in Goat Kids 271 that have a cost set but found no exact
+    // name/slug match in a target store, look for similar-but-not-identical names in that target
+    // store so you can tell "just named differently" apart from "not actually stocked there".
+    // Run from console (Main Store or any store, doesn't matter which one you're logged into):
+    //   findCostNameMismatches('GOAT-1979')                 -> checks against Main Store
+    //   findCostNameMismatches('GOAT-GOAT-KIDS-PH-6012')     -> checks against Goat Kids PH
+    async function findCostNameMismatches(targetStoreId) {
+        if (!db) { console.error('Firebase offline'); return; }
+        var SOURCE_STORE = 'GOAT-GOAT-KIDS-271-0889';
+
+        function simplify(s) {
+            return (s || '').toLowerCase().replace(/[^a-z0-9\u1780-\u17ff]+/g, '');
+        }
+
+        try {
+            var srcSnap = await db.collection('stores').doc(SOURCE_STORE).collection('products').get();
+            var srcItems = [];
+            srcSnap.forEach(function(d) {
+                var dt = d.data();
+                if (dt.costPrice != null && dt.costPrice !== '') {
+                    srcItems.push({ name: dt.name || '', slug: dt.slug || '', costPrice: dt.costPrice, simple: simplify(dt.slug || dt.name) });
+                }
+            });
+
+            var tgtSnap = await db.collection('stores').doc(targetStoreId).collection('products').get();
+            var tgtItems = [];
+            tgtSnap.forEach(function(d) {
+                var dt = d.data();
+                tgtItems.push({ id: d.id, name: dt.name || d.id, slug: dt.slug || '', simple: simplify(dt.slug || dt.name) });
+            });
+
+            console.log('═══════════════════════════════════════════════════════');
+            console.log('NAME-MISMATCH CHECK vs ' + targetStoreId);
+            console.log('═══════════════════════════════════════════════════════');
+
+            var anyFound = false;
+            srcItems.forEach(function(src) {
+                var exactHit = tgtItems.some(function(t) { return t.simple === src.simple; });
+                if (exactHit) return; // already matched by the real migration, skip
+
+                var candidates = tgtItems.filter(function(t) {
+                    if (!t.simple || !src.simple) return false;
+                    return t.simple.indexOf(src.simple) !== -1 || src.simple.indexOf(t.simple) !== -1;
+                });
+
+                anyFound = true;
+                if (candidates.length) {
+                    console.log('\\n🔎 "' + src.name + '" ($' + src.costPrice + ') — possible match(es) in ' + targetStoreId + ':');
+                    candidates.forEach(function(c) { console.log('     → "' + c.name + '" (id: ' + c.id + ')'); });
+                } else {
+                    console.log('\\n❌ "' + src.name + '" ($' + src.costPrice + ') — no similar product found at all. Probably not stocked in this store.');
+                }
+            });
+
+            if (!anyFound) console.log('No unmatched items to check — everything already matched exactly.');
+            console.log('\\n═══════════════════════════════════════════════════════');
+            console.log('Tip: for a real near-match, either rename the product in ' + targetStoreId + ' to match 271 name/slug and re-run copyCostPricesFromStore271(), or just open the product in ' + targetStoreId + ' and type in the Cost of Production manually.');
+        } catch (e) {
+            console.error('Mismatch check failed:', e);
+        }
+    }
+
+    // ONE-TIME DIAGNOSTIC: lists every item SOLD in the currently-loaded report period (whatever
+    // date range the Reports tab is showing right now — e.g. "This Month"), how many units sold,
+    // and whether that product currently has a Cost of Production set or not.
+    // Just open the Reports tab, make sure the period you want is showing, then run in console:
+    //   reportItemsCostStatus()
+    function reportItemsCostStatus() {
+        var confirmed = getReportConfirmed();
+        if (!confirmed.length) { console.log('No confirmed orders loaded for the current report period. Open the Reports tab and pick a date range first.'); return; }
+
+        var byProduct = {};
+        confirmed.forEach(function(o) {
+            (o.cart || []).forEach(function(it) {
+                var pid = it.productId;
+                if (!byProduct[pid]) byProduct[pid] = { name: it.name || pid, qty: 0, revenue: 0 };
+                byProduct[pid].qty += it.quantity || 0;
+                byProduct[pid].revenue += (it.subtotal != null ? it.subtotal : (it.price || 0) * (it.quantity || 0));
+            });
+        });
+
+        var rows = Object.keys(byProduct).map(function(pid) {
+            var cost = getProductCost(pid);
+            var p = findProduct(pid);
+            return {
+                'Product': byProduct[pid].name,
+                'Qty Sold': byProduct[pid].qty,
+                'Revenue': '$' + byProduct[pid].revenue.toFixed(2),
+                'Cost/Unit': p ? (cost > 0 ? '$' + cost.toFixed(2) : '⚠️ MISSING') : '❌ NOT IN THIS STORE',
+                'Total Cost': p && cost > 0 ? '$' + (cost * byProduct[pid].qty).toFixed(2) : '$0.00 (missing!)'
+            };
+        });
+
+        rows.sort(function(a, b) { return (a['Cost/Unit'].indexOf('⚠️') !== -1 || a['Cost/Unit'].indexOf('❌') !== -1) ? -1 : 1; });
+
+        console.log('═══════════════════════════════════════════════════════');
+        console.log('ITEMS SOLD THIS PERIOD — COST STATUS (' + rows.length + ' distinct products)');
+        console.log('═══════════════════════════════════════════════════════');
+        console.table(rows);
+
+        var missing = rows.filter(function(r) { return r['Cost/Unit'].indexOf('MISSING') !== -1 || r['Cost/Unit'].indexOf('NOT IN') !== -1; });
+        if (missing.length) {
+            console.log('⚠️  ' + missing.length + ' product(s) sold this period have NO cost set — their cost is being counted as $0, which understates your Cost of Goods Sold and overstates profit.');
+        } else {
+            console.log('✅ Every item sold this period has a cost set. Cost of Goods Sold should be accurate.');
+        }
+    }
+
     // Direct stock correction tool — set a specific size qty directly
     // Usage: fixBranchStock('GOAT-1979', 'p1771234567890', '90', 15)
     // For products without sizes: fixBranchStock('GOAT-1979', 'p1771234567890', null, 15)
