@@ -1289,6 +1289,19 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                             </table>
                         </div>
                         <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem" id="customerIndexHint">Tap "Build Customer History" once to classify existing customers accurately.</p>
+                        <h4 style="margin:1.2rem 0 0.5rem;font-size:0.95rem">Daily Breakdown</h4>
+                        <div style="overflow-x:auto">
+                            <table style="width:100%;border-collapse:collapse;font-size:0.88rem">
+                                <thead><tr style="background:var(--gray-light);text-align:left">
+                                    <th style="padding:0.6rem 0.8rem">Date</th>
+                                    <th style="padding:0.6rem 0.8rem">New</th>
+                                    <th style="padding:0.6rem 0.8rem">Repeat</th>
+                                    <th style="padding:0.6rem 0.8rem">Running Month New</th>
+                                    <th style="padding:0.6rem 0.8rem">Running Month Repeat</th>
+                                </tr></thead>
+                                <tbody id="customerTypeDailyList"><tr><td colspan="5" style="text-align:center;color:var(--gray);padding:1rem">No data</td></tr></tbody>
+                            </table>
+                        </div>
                     </div>
 
                     <!-- FACEBOOK ADS PERFORMANCE -->
@@ -3851,10 +3864,10 @@ function sendToTelegram(order, callback) {
     // Usage (browser console, while app is loaded and online): copyCostPricesFromStore271()
     async function copyCostPricesFromStore271() {
         if (!db) { console.error('Firebase offline'); return; }
-        var SOURCE_STORE = 'GOAT-KIDS-271-0889';
+        var SOURCE_STORE = 'GOAT-GOAT-KIDS-271-0889';
         var TARGET_STORES = [
             { id: 'GOAT-1979', name: 'Main Store' },
-            { id: 'GOAT-KIDS-PH-6012', name: 'Goat Kids PH' }
+            { id: 'GOAT-GOAT-KIDS-PH-6012', name: 'Goat Kids PH' }
         ];
         if (!confirm('This will copy Cost of Production values from Goat Kids 271 to Main Store and Goat Kids PH, matching products by name.\n\nExisting cost prices in the target stores WILL be overwritten. Continue?')) return;
 
@@ -3932,7 +3945,7 @@ function sendToTelegram(order, callback) {
             showToast('Cost prices copied to ' + totalUpdated + ' product(s). See console for details.', 'success');
 
             // If we're currently sitting on one of the target stores, refresh local state so the UI reflects it immediately
-            if (STATE.storeId === 'GOAT-1979' || STATE.storeId === 'GOAT-KIDS-PH-6012') {
+            if (STATE.storeId === 'GOAT-1979' || STATE.storeId === 'GOAT-GOAT-KIDS-PH-6012') {
                 var freshSnap = await db.collection('stores').doc(STATE.storeId).collection('products').get();
                 var fresh = [];
                 freshSnap.forEach(function(d) {
@@ -7131,11 +7144,18 @@ function sendToTelegram(order, callback) {
         }
         var confirmed = getReportConfirmed();
         var stats = { newC: {revenue:0, orders:0, customers: {}}, repeatC: {revenue:0, orders:0, customers: {}} };
+        var byDay = {}; // dateKey -> {newSet:{}, repeatSet:{}, sortDate}
         for (var i = 0; i < confirmed.length; i++) {
             var o = confirmed[i], k = customerKeyOf(o);
             if (!k) continue;
-            var bucket = _reportCustomerTypes.repeatSet[k] ? stats.repeatC : stats.newC;
+            var isRepeat = !!_reportCustomerTypes.repeatSet[k];
+            var bucket = isRepeat ? stats.repeatC : stats.newC;
             bucket.revenue += o.total || 0; bucket.orders++; bucket.customers[k] = true;
+
+            var od = new Date(o.confirmedTimestamp || o.timestamp || Date.now());
+            var dk = formatDate(od);
+            if (!byDay[dk]) byDay[dk] = { newSet: {}, repeatSet: {}, sortDate: od };
+            if (isRepeat) byDay[dk].repeatSet[k] = true; else byDay[dk].newSet[k] = true;
         }
         var newCount = Object.keys(stats.newC.customers).length, repeatCount = Object.keys(stats.repeatC.customers).length;
         var elN2 = document.getElementById('reportNewCustomers'); if (elN2) elN2.textContent = newCount;
@@ -7146,6 +7166,34 @@ function sendToTelegram(order, callback) {
         if (listEl) listEl.innerHTML = html;
         if (hint) hint.textContent = 'Based on each customer\'s first-ever order. Tap "Build Customer History" once so older customers classify correctly.';
         STATE._reportNewCustomerCount = newCount;
+
+        // Daily new-vs-repeat breakdown, oldest first, with running per-month totals —
+        // mirrors the daily profit table so the month can be tracked day by day.
+        var dayTbody = document.getElementById('customerTypeDailyList');
+        var dayKeys = Object.keys(byDay).sort(function(a,b){ return byDay[a].sortDate - byDay[b].sortDate; });
+        var dailyRows = [];
+        if (dayTbody) {
+            if (!dayKeys.length) {
+                dayTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>';
+            } else {
+                var dayHtml = '', runNewByMonth = {}, runRepeatByMonth = {};
+                for (var di = 0; di < dayKeys.length; di++) {
+                    var dEntry = byDay[dayKeys[di]];
+                    var dNew = Object.keys(dEntry.newSet).length, dRepeat = Object.keys(dEntry.repeatSet).length;
+                    var dmk = monthKey(dEntry.sortDate);
+                    runNewByMonth[dmk] = (runNewByMonth[dmk] || 0) + dNew;
+                    runRepeatByMonth[dmk] = (runRepeatByMonth[dmk] || 0) + dRepeat;
+                    dailyRows.push({ date: dayKeys[di], newCount: dNew, repeatCount: dRepeat, runNew: runNewByMonth[dmk], runRepeat: runRepeatByMonth[dmk] });
+                    dayHtml += '<tr><td style="padding:0.5rem 0.8rem;font-weight:600">' + dayKeys[di] + '</td>' +
+                        '<td style="padding:0.5rem 0.8rem;color:#4299e1">' + dNew + '</td>' +
+                        '<td style="padding:0.5rem 0.8rem;color:#9f7aea">' + dRepeat + '</td>' +
+                        '<td style="padding:0.5rem 0.8rem;color:var(--gray)">' + runNewByMonth[dmk] + '</td>' +
+                        '<td style="padding:0.5rem 0.8rem;color:var(--gray)">' + runRepeatByMonth[dmk] + '</td></tr>';
+                }
+                dayTbody.innerHTML = dayHtml;
+            }
+        }
+        STATE._reportCustomerDailyRows = dailyRows;
     }
 
     function indexOrderIntoMap(order, map) {
@@ -7332,6 +7380,45 @@ function sendToTelegram(order, callback) {
                     escCSV(rf.customerName||''), escCSV(rf.customerPhone||''),
                     (rf.refundAmount||0).toFixed(2), escCSV(rf.refundReason||'')
                 ].join(',') + '\n';
+            }
+        }
+
+        if (_reportCustomerTypes) {
+            csv += '\nCustomers (New vs Repeat)\n';
+            csv += 'Customer Name,Phone,Type,Orders,Revenue\n';
+            var custRows = {};
+            for (var ci = 0; ci < confirmed.length; ci++) {
+                var co = confirmed[ci], ck = customerKeyOf(co);
+                if (!ck) continue;
+                if (!custRows[ck]) {
+                    custRows[ck] = {
+                        name: co.customerName || '', phone: co.customerPhone || '',
+                        type: _reportCustomerTypes.repeatSet[ck] ? 'Repeat' : 'New',
+                        orders: 0, revenue: 0
+                    };
+                }
+                custRows[ck].orders++; custRows[ck].revenue += co.total || 0;
+            }
+            var custKeys = Object.keys(custRows).sort(function(x,y){ return custRows[y].revenue - custRows[x].revenue; });
+            if (!custKeys.length) {
+                csv += 'No data for this period\n';
+            } else {
+                for (var cj = 0; cj < custKeys.length; cj++) {
+                    var cr = custRows[custKeys[cj]];
+                    csv += escCSV(cr.name) + ',' + escCSV(cr.phone) + ',' + cr.type + ',' + cr.orders + ',$' + cr.revenue.toFixed(2) + '\n';
+                }
+            }
+
+            csv += '\nNew vs Repeat by Day\n';
+            csv += 'Date,New,Repeat,Running Month New,Running Month Repeat\n';
+            var dailyRows = STATE._reportCustomerDailyRows || [];
+            if (!dailyRows.length) {
+                csv += 'No data for this period\n';
+            } else {
+                for (var dj = 0; dj < dailyRows.length; dj++) {
+                    var drow = dailyRows[dj];
+                    csv += escCSV(drow.date) + ',' + drow.newCount + ',' + drow.repeatCount + ',' + drow.runNew + ',' + drow.runRepeat + '\n';
+                }
             }
         }
 
