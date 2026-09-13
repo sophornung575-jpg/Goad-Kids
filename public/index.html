@@ -1304,15 +1304,25 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         </div>
                     </div>
 
+                    <!-- REVENUE BY CHANNEL -->
+                    <div class="chart-card" style="margin-top:1.5rem">
+                        <h3><i class="fas fa-store" style="color:var(--primary)"></i> Revenue by Channel</h3>
+                        <div class="reports-grid">
+                            <div class="stat-card" style="border-left:4px solid #718096"><div class="stat-icon" style="background:rgba(113,128,150,0.1)"><i class="fas fa-shop" style="color:#718096"></i></div><div class="stat-info"><h3 id="channelWalkinRevenue" style="color:#718096">$0.00</h3><p>Walk-in / Shop (Pickup)</p></div></div>
+                            <div class="stat-card" style="border-left:4px solid #1877f2"><div class="stat-icon" style="background:rgba(24,119,242,0.1)"><i class="fab fa-facebook" style="color:#1877f2"></i></div><div class="stat-info"><h3 id="channelFbRevenue" style="color:#1877f2">$0.00</h3><p>Facebook / Delivery</p></div></div>
+                        </div>
+                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem">Split by shipping method: "Pickup" counts as walk-in shop revenue; "Phnom Penh" and "Province" deliveries count as Facebook-driven revenue.</p>
+                    </div>
+
                     <!-- FACEBOOK ADS PERFORMANCE -->
                     <div class="chart-card" style="margin-top:1.5rem">
                         <h3><i class="fab fa-facebook" style="color:#1877f2"></i> Facebook Ads Performance</h3>
                         <div class="reports-grid">
                             <div class="stat-card" style="border-left:4px solid #1877f2"><div class="stat-icon" style="background:rgba(24,119,242,0.1)"><i class="fas fa-bullhorn" style="color:#1877f2"></i></div><div class="stat-info"><h3 id="fbAdSpend" style="color:#1877f2">$0.00</h3><p>Ad Spend</p></div></div>
-                            <div class="stat-card" style="border-left:4px solid #38a169"><div class="stat-icon" style="background:rgba(56,161,105,0.1)"><i class="fas fa-arrow-trend-up" style="color:#38a169"></i></div><div class="stat-info"><h3 id="fbROAS" style="color:#38a169">—</h3><p>ROAS (Revenue ÷ Spend)</p></div></div>
+                            <div class="stat-card" style="border-left:4px solid #38a169"><div class="stat-icon" style="background:rgba(56,161,105,0.1)"><i class="fas fa-arrow-trend-up" style="color:#38a169"></i></div><div class="stat-info"><h3 id="fbROAS" style="color:#38a169">—</h3><p>ROAS (Delivery Revenue ÷ Spend)</p></div></div>
                             <div class="stat-card" style="border-left:4px solid #ed8936"><div class="stat-icon" style="background:rgba(237,137,54,0.1)"><i class="fas fa-user-tag" style="color:#ed8936"></i></div><div class="stat-info"><h3 id="fbCostPerNewCustomer" style="color:#ed8936">—</h3><p>Cost per New Customer</p></div></div>
                         </div>
-                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem">Based on the Facebook Ads figure in Live Expense Summary above and new customers acquired in this period.</p>
+                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem">ROAS now uses only Facebook / Delivery revenue (Phnom Penh + Province orders), not walk-in shop sales, against the Facebook Ads figure in Live Expense Summary above.</p>
                     </div>
                     </div><!-- end reportContent -->
                 </div><!-- end adminReportsTab -->
@@ -7247,9 +7257,16 @@ function sendToTelegram(order, callback) {
     function renderFacebookAdsAnalysis() {
         var exp = sumExpensesForPeriod();
         var confirmed = getReportConfirmed();
-        var revenue = 0; for (var i=0;i<confirmed.length;i++) revenue += confirmed[i].total || 0;
+        var walkinRevenue = 0, fbRevenue = 0;
+        for (var i=0;i<confirmed.length;i++) {
+            var sm = confirmed[i].shippingMethod || 'Pickup';
+            if (sm === 'Pickup') walkinRevenue += confirmed[i].total || 0;
+            else fbRevenue += confirmed[i].total || 0;
+        }
+        var elWalkin = document.getElementById('channelWalkinRevenue'); if (elWalkin) elWalkin.textContent = '$' + walkinRevenue.toFixed(2);
+        var elFbRev = document.getElementById('channelFbRevenue'); if (elFbRev) elFbRev.textContent = '$' + fbRevenue.toFixed(2);
         var elSpend = document.getElementById('fbAdSpend'); if (elSpend) elSpend.textContent = '$' + exp.facebookAds.toFixed(2);
-        var roas = exp.facebookAds > 0 ? (revenue / exp.facebookAds) : 0;
+        var roas = exp.facebookAds > 0 ? (fbRevenue / exp.facebookAds) : 0;
         var elRoas = document.getElementById('fbROAS'); if (elRoas) elRoas.textContent = exp.facebookAds > 0 ? roas.toFixed(1) + 'x' : '—';
         var newCount = STATE._reportNewCustomerCount || 0;
         var cpnc = (exp.facebookAds > 0 && newCount > 0) ? (exp.facebookAds / newCount) : null;
