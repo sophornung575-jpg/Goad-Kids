@@ -1330,7 +1330,8 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                             <div class="stat-card" style="border-left:4px solid #38a169"><div class="stat-icon" style="background:rgba(56,161,105,0.1)"><i class="fas fa-arrow-trend-up" style="color:#38a169"></i></div><div class="stat-info"><h3 id="fbROAS" style="color:#38a169">—</h3><p>ROAS (Delivery Revenue ÷ Spend)</p></div></div>
                             <div class="stat-card" style="border-left:4px solid #ed8936"><div class="stat-icon" style="background:rgba(237,137,54,0.1)"><i class="fas fa-user-tag" style="color:#ed8936"></i></div><div class="stat-info"><h3 id="fbCostPerNewCustomer" style="color:#ed8936">—</h3><p>Cost per New Customer</p></div></div>
                         </div>
-                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem">ROAS now uses only Facebook / Delivery revenue (Phnom Penh + Province orders), not walk-in shop sales, against the Facebook Ads figure in Live Expense Summary above.</p>
+                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem">ROAS now uses only Facebook / Delivery revenue (Phnom Penh + Province orders), not walk-in shop sales. Ad Spend above is prorated to today — each month's total (entered in Live Expense Summary) divided evenly across its days, summed only for the days in this report so far — not the full month's amount.</p>
+                        <div class="chart-container" style="margin-top:1rem"><canvas id="fbAdsTrendChart"></canvas></div>
                         <div style="overflow-x:auto;margin-top:0.8rem">
                             <table style="width:100%;border-collapse:collapse;font-size:0.88rem">
                                 <thead><tr style="background:var(--gray-light);text-align:left">
@@ -7469,7 +7470,6 @@ function sendToTelegram(order, callback) {
     }
 
     function renderFacebookAdsAnalysis() {
-        var exp = sumExpensesForPeriod();
         var confirmed = getReportConfirmed();
         var walkinRevenue = 0, fbRevenue = 0;
         for (var i=0;i<confirmed.length;i++) {
@@ -7479,18 +7479,39 @@ function sendToTelegram(order, callback) {
         }
         var elWalkin = document.getElementById('channelWalkinRevenue'); if (elWalkin) elWalkin.textContent = '$' + walkinRevenue.toFixed(2);
         var elFbRev = document.getElementById('channelFbRevenue'); if (elFbRev) elFbRev.textContent = '$' + fbRevenue.toFixed(2);
-        var elSpend = document.getElementById('fbAdSpend'); if (elSpend) elSpend.textContent = '$' + exp.facebookAds.toFixed(2);
-        var roas = exp.facebookAds > 0 ? (fbRevenue / exp.facebookAds) : 0;
-        var elRoas = document.getElementById('fbROAS'); if (elRoas) elRoas.textContent = exp.facebookAds > 0 ? roas.toFixed(1) + 'x' : '—';
+
+        // Ad Spend is only entered per-month, so — same fix as Net Profit — don't charge the
+        // WHOLE month's spend against a partial period's revenue. Sum only the prorated daily
+        // shares for the days actually covered by this report (from the same rows the daily
+        // table below and the Financial Analysis section use).
+        var rows = STATE._reportDailyRows || [];
+        var periodAdSpend = 0;
+        for (var s = 0; s < rows.length; s++) periodAdSpend += rows[s].fbSpendShare;
+
+        var elSpend = document.getElementById('fbAdSpend'); if (elSpend) elSpend.textContent = '$' + periodAdSpend.toFixed(2);
+        var roas = periodAdSpend > 0 ? (fbRevenue / periodAdSpend) : 0;
+        var elRoas = document.getElementById('fbROAS'); if (elRoas) elRoas.textContent = periodAdSpend > 0 ? roas.toFixed(1) + 'x' : '—';
         var newCount = STATE._reportNewCustomerCount || 0;
-        var cpnc = (exp.facebookAds > 0 && newCount > 0) ? (exp.facebookAds / newCount) : null;
+        var cpnc = (periodAdSpend > 0 && newCount > 0) ? (periodAdSpend / newCount) : null;
         var elCpnc = document.getElementById('fbCostPerNewCustomer'); if (elCpnc) elCpnc.textContent = cpnc != null ? '$' + cpnc.toFixed(2) : '—';
+
+        // Trend chart: Ad Spend (Day) vs Delivery Revenue (Day), same rows as the table below.
+        var ctx = document.getElementById('fbAdsTrendChart');
+        if (ctx) {
+            if (STATE.charts.fbAdsTrendChart) STATE.charts.fbAdsTrendChart.destroy();
+            var labels = rows.length ? rows.map(function(r){ return r.dateLabel; }) : ['No Data'];
+            var spendData = rows.length ? rows.map(function(r){ return r.fbSpendShare; }) : [0];
+            var fbRevData = rows.length ? rows.map(function(r){ return r.fbRevenue; }) : [0];
+            STATE.charts.fbAdsTrendChart = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [
+                { label: 'Ad Spend (Day) $', data: spendData, borderColor: '#1877f2', backgroundColor: 'rgba(24,119,242,0.08)', fill: false, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#1877f2' },
+                { label: 'Delivery Revenue (Day) $', data: fbRevData, borderColor: '#38a169', backgroundColor: 'rgba(56,161,105,0.1)', fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#38a169' }
+            ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { padding: 12, usePointStyle: true } } }, scales: { y: { ticks: { callback: function(v){return '$'+v;} } } } } });
+        }
 
         // Day-by-day: each day's share of that month's Ad Spend (prorated, since Ad Spend is
         // only entered per-month) against that same day's Delivery revenue.
         var dailyTbody = document.getElementById('fbAdsDailyList');
         if (dailyTbody) {
-            var rows = STATE._reportDailyRows || [];
             if (!rows.length) {
                 dailyTbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>';
             } else {
