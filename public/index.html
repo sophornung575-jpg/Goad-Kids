@@ -1331,6 +1331,18 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                             <div class="stat-card" style="border-left:4px solid #ed8936"><div class="stat-icon" style="background:rgba(237,137,54,0.1)"><i class="fas fa-user-tag" style="color:#ed8936"></i></div><div class="stat-info"><h3 id="fbCostPerNewCustomer" style="color:#ed8936">—</h3><p>Cost per New Customer</p></div></div>
                         </div>
                         <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem">ROAS now uses only Facebook / Delivery revenue (Phnom Penh + Province orders), not walk-in shop sales, against the Facebook Ads figure in Live Expense Summary above.</p>
+                        <div style="overflow-x:auto;margin-top:0.8rem">
+                            <table style="width:100%;border-collapse:collapse;font-size:0.88rem">
+                                <thead><tr style="background:var(--gray-light);text-align:left">
+                                    <th style="padding:0.6rem 0.8rem">Date</th>
+                                    <th style="padding:0.6rem 0.8rem">Ad Spend (Day)</th>
+                                    <th style="padding:0.6rem 0.8rem">Delivery Revenue (Day)</th>
+                                    <th style="padding:0.6rem 0.8rem">ROAS (Day)</th>
+                                </tr></thead>
+                                <tbody id="fbAdsDailyList"><tr><td colspan="4" style="text-align:center;color:var(--gray);padding:1rem">No data</td></tr></tbody>
+                            </table>
+                        </div>
+                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-circle-info"></i> Ad Spend is only entered per-month, so each month's total is divided evenly across its calendar days to compare against that day's Delivery Revenue.</p>
                     </div>
                     </div><!-- end reportContent -->
                 </div><!-- end adminReportsTab -->
@@ -7168,30 +7180,25 @@ function sendToTelegram(order, callback) {
             revenue += orderRevenue; cogs += orderCost;
             var od = new Date(o.confirmedTimestamp || o.timestamp || Date.now());
             var dk = formatDate(od);
-            if (!byDay[dk]) byDay[dk] = { revenue: 0, cogs: 0, sortDate: od };
+            if (!byDay[dk]) byDay[dk] = { revenue: 0, cogs: 0, walkinRevenue: 0, fbRevenue: 0, sortDate: od };
             byDay[dk].revenue += orderRevenue;
             byDay[dk].cogs += orderCost;
+            var sm = o.shippingMethod || 'Pickup';
+            if (sm === 'Pickup') byDay[dk].walkinRevenue += orderRevenue; else byDay[dk].fbRevenue += orderRevenue;
         }
         var grossProfit = revenue - cogs;
-        var exp = sumExpensesForPeriod();
-        var netProfit = grossProfit - exp.total;
 
-        var elC = document.getElementById('reportCOGS'); if (elC) elC.textContent = '$' + cogs.toFixed(2);
-        var elG = document.getElementById('reportGrossProfit'); if (elG) elG.textContent = '$' + grossProfit.toFixed(2);
-        var elGM = document.getElementById('reportGrossMargin'); if (elGM) elGM.textContent = revenue > 0 ? '(' + ((grossProfit/revenue)*100).toFixed(1) + '%)' : '';
-        var npEl = document.getElementById('reportNetProfit');
-        if (npEl) { npEl.textContent = '$' + netProfit.toFixed(2); npEl.style.color = netProfit >= 0 ? '#667eea' : 'var(--danger)'; }
-        var elNM = document.getElementById('reportNetMargin'); if (elNM) elNM.textContent = revenue > 0 ? '(' + ((netProfit/revenue)*100).toFixed(1) + '%)' : '';
-
-        // Daily breakdown, oldest first, with a running total per month —
-        // so the month can be monitored day by day as it progresses.
-        // Expenses are only tracked per-month (not per-day), so each day's Net Profit
-        // prorates that day's share of its month's total expenses evenly across the
-        // number of calendar days in that month.
+        // Expenses are only entered per-month, so a partial period (e.g. "month to date")
+        // must NOT be charged the whole month's expense against only part of a month's revenue.
+        // Build the day-by-day rows FIRST (prorating each month's expense evenly across its
+        // calendar days), then sum only the days actually in this report period — this keeps
+        // the top summary cards consistent with the daily table/chart below them.
         var monthlyExpenseTotal = {};
+        var monthlyFbSpend = {};
         Object.keys(_reportExpenses).forEach(function(mk) {
             var e = _reportExpenses[mk] || {};
             monthlyExpenseTotal[mk] = (Number(e.facility)||0) + (Number(e.salaries)||0) + (Number(e.facebookAds)||0) + (Number(e.other)||0);
+            monthlyFbSpend[mk] = Number(e.facebookAds) || 0;
         });
         function daysInMonthKey(mk) {
             var parts = mk.split('-'); var y = +parts[0], m = +parts[1];
@@ -7201,25 +7208,38 @@ function sendToTelegram(order, callback) {
         var tbody = document.getElementById('dailyProfitList');
 
         // Build the shared per-day rows (revenue, cogs, gross/net profit, running totals) once,
-        // so both the daily table and the Net Profit Trend chart use identical numbers.
+        // so the top cards, the daily table, and the Net Profit Trend chart all use identical numbers.
         var dailyRows = [], runningNetByMonth = {}, runningExpByMonth = {};
+        var periodExpenseTotal = 0, periodNetProfit = 0;
         for (var k = 0; k < days.length; k++) {
             var d = byDay[days[k]];
             var gp = d.revenue - d.cogs;
             var mk = monthKey(d.sortDate);
             var monthExp = monthlyExpenseTotal[mk] || 0;
             var dailyExpShare = monthExp / daysInMonthKey(mk);
+            var fbSpendShare = (monthlyFbSpend[mk] || 0) / daysInMonthKey(mk);
             var np = gp - dailyExpShare;
             runningNetByMonth[mk] = (runningNetByMonth[mk] || 0) + np;
             runningExpByMonth[mk] = (runningExpByMonth[mk] || 0) + dailyExpShare;
+            periodExpenseTotal += dailyExpShare;
+            periodNetProfit += np;
             dailyRows.push({
                 dateLabel: days[k], sortDate: d.sortDate, mk: mk,
                 revenue: d.revenue, cogs: d.cogs, grossProfit: gp,
+                walkinRevenue: d.walkinRevenue, fbRevenue: d.fbRevenue, fbSpendShare: fbSpendShare,
                 dailyExpShare: dailyExpShare, netProfit: np,
                 runningNet: runningNetByMonth[mk], runningExp: runningExpByMonth[mk]
             });
         }
         STATE._reportDailyRows = dailyRows;
+        var netProfit = periodNetProfit;
+
+        var elC = document.getElementById('reportCOGS'); if (elC) elC.textContent = '$' + cogs.toFixed(2);
+        var elG = document.getElementById('reportGrossProfit'); if (elG) elG.textContent = '$' + grossProfit.toFixed(2);
+        var elGM = document.getElementById('reportGrossMargin'); if (elGM) elGM.textContent = revenue > 0 ? '(' + ((grossProfit/revenue)*100).toFixed(1) + '%)' : '';
+        var npEl = document.getElementById('reportNetProfit');
+        if (npEl) { npEl.textContent = '$' + netProfit.toFixed(2); npEl.style.color = netProfit >= 0 ? '#667eea' : 'var(--danger)'; }
+        var elNM = document.getElementById('reportNetMargin'); if (elNM) elNM.textContent = revenue > 0 ? '(' + ((netProfit/revenue)*100).toFixed(1) + '%)' : '';
 
         if (!tbody) return;
         if (!days.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>'; return; }
@@ -7465,6 +7485,27 @@ function sendToTelegram(order, callback) {
         var newCount = STATE._reportNewCustomerCount || 0;
         var cpnc = (exp.facebookAds > 0 && newCount > 0) ? (exp.facebookAds / newCount) : null;
         var elCpnc = document.getElementById('fbCostPerNewCustomer'); if (elCpnc) elCpnc.textContent = cpnc != null ? '$' + cpnc.toFixed(2) : '—';
+
+        // Day-by-day: each day's share of that month's Ad Spend (prorated, since Ad Spend is
+        // only entered per-month) against that same day's Delivery revenue.
+        var dailyTbody = document.getElementById('fbAdsDailyList');
+        if (dailyTbody) {
+            var rows = STATE._reportDailyRows || [];
+            if (!rows.length) {
+                dailyTbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>';
+            } else {
+                var html = '';
+                for (var r = 0; r < rows.length; r++) {
+                    var row = rows[r];
+                    var dayRoas = row.fbSpendShare > 0 ? (row.fbRevenue / row.fbSpendShare) : null;
+                    html += '<tr><td style="padding:0.5rem 0.8rem;font-weight:600">' + row.dateLabel + '</td>' +
+                        '<td style="padding:0.5rem 0.8rem;color:#1877f2">$' + row.fbSpendShare.toFixed(2) + '</td>' +
+                        '<td style="padding:0.5rem 0.8rem">$' + row.fbRevenue.toFixed(2) + '</td>' +
+                        '<td style="padding:0.5rem 0.8rem;font-weight:600;color:#38a169">' + (dayRoas != null ? dayRoas.toFixed(1) + 'x' : '—') + '</td></tr>';
+                }
+                dailyTbody.innerHTML = html;
+            }
+        }
     }
 
     function exportReportCSV() {
