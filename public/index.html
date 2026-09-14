@@ -1248,6 +1248,13 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-circle-info"></i> Cost is calculated from each product's current Cost of Production (set under Inventory → edit product). Net Profit splits each month's total expenses evenly across its calendar days, since expenses are only tracked per-month, not per-day.</p>
                     </div>
 
+                    <!-- NET PROFIT TREND -->
+                    <div class="chart-card" style="margin-top:1.5rem">
+                        <h3><i class="fas fa-chart-line" style="color:var(--info)"></i> Net Profit Trend (Month to Date)</h3>
+                        <div class="chart-container"><canvas id="netProfitTrendChart"></canvas></div>
+                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-circle-info"></i> Running Net Profit and running Expenses, day by day, resetting at the start of each calendar month — so you can see how expenses eat into profit as the month progresses.</p>
+                    </div>
+
                     <!-- LIVE EXPENSE SUMMARY -->
                     <div class="chart-card" style="margin-top:1.5rem">
                         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem">
@@ -6949,7 +6956,7 @@ function sendToTelegram(order, callback) {
         el.innerHTML = html;
     }
 
-    function renderReports() { updateReportStats(); renderCategoryChart(); renderTopItemsChart(); renderRevenueTrendChart(); renderStockChart(); renderTopItemsList(); renderCustomerBreakdown(); renderStoreBreakdown(); renderFinancialAnalysis(); renderExpenseSummary(); renderCustomerTypeBreakdown(); renderFacebookAdsAnalysis(); }
+    function renderReports() { updateReportStats(); renderCategoryChart(); renderTopItemsChart(); renderRevenueTrendChart(); renderStockChart(); renderTopItemsList(); renderCustomerBreakdown(); renderStoreBreakdown(); renderFinancialAnalysis(); renderNetProfitTrendChart(); renderExpenseSummary(); renderCustomerTypeBreakdown(); renderFacebookAdsAnalysis(); }
 
     function updateReportStats() {
         var confirmed = getReportConfirmed();
@@ -7192,9 +7199,10 @@ function sendToTelegram(order, callback) {
         }
         var days = Object.keys(byDay).sort(function(a,b){ return byDay[a].sortDate - byDay[b].sortDate; });
         var tbody = document.getElementById('dailyProfitList');
-        if (!tbody) return;
-        if (!days.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>'; return; }
-        var html = '', runningNetByMonth = {};
+
+        // Build the shared per-day rows (revenue, cogs, gross/net profit, running totals) once,
+        // so both the daily table and the Net Profit Trend chart use identical numbers.
+        var dailyRows = [], runningNetByMonth = {}, runningExpByMonth = {};
         for (var k = 0; k < days.length; k++) {
             var d = byDay[days[k]];
             var gp = d.revenue - d.cogs;
@@ -7203,14 +7211,42 @@ function sendToTelegram(order, callback) {
             var dailyExpShare = monthExp / daysInMonthKey(mk);
             var np = gp - dailyExpShare;
             runningNetByMonth[mk] = (runningNetByMonth[mk] || 0) + np;
-            html += '<tr><td style="padding:0.5rem 0.8rem;font-weight:600">' + days[k] + '</td>' +
-                '<td style="padding:0.5rem 0.8rem">$' + d.revenue.toFixed(2) + '</td>' +
-                '<td style="padding:0.5rem 0.8rem;color:#ed8936">$' + d.cogs.toFixed(2) + '</td>' +
-                '<td style="padding:0.5rem 0.8rem;color:' + (gp >= 0 ? '#38a169' : 'var(--danger)') + '">$' + gp.toFixed(2) + '</td>' +
-                '<td style="padding:0.5rem 0.8rem;font-weight:600;color:' + (np >= 0 ? '#667eea' : 'var(--danger)') + '">$' + np.toFixed(2) + '</td>' +
-                '<td style="padding:0.5rem 0.8rem;color:var(--gray)">$' + runningNetByMonth[mk].toFixed(2) + '</td></tr>';
+            runningExpByMonth[mk] = (runningExpByMonth[mk] || 0) + dailyExpShare;
+            dailyRows.push({
+                dateLabel: days[k], sortDate: d.sortDate, mk: mk,
+                revenue: d.revenue, cogs: d.cogs, grossProfit: gp,
+                dailyExpShare: dailyExpShare, netProfit: np,
+                runningNet: runningNetByMonth[mk], runningExp: runningExpByMonth[mk]
+            });
+        }
+        STATE._reportDailyRows = dailyRows;
+
+        if (!tbody) return;
+        if (!days.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>'; return; }
+        var html = '';
+        for (var r = 0; r < dailyRows.length; r++) {
+            var row = dailyRows[r];
+            html += '<tr><td style="padding:0.5rem 0.8rem;font-weight:600">' + row.dateLabel + '</td>' +
+                '<td style="padding:0.5rem 0.8rem">$' + row.revenue.toFixed(2) + '</td>' +
+                '<td style="padding:0.5rem 0.8rem;color:#ed8936">$' + row.cogs.toFixed(2) + '</td>' +
+                '<td style="padding:0.5rem 0.8rem;color:' + (row.grossProfit >= 0 ? '#38a169' : 'var(--danger)') + '">$' + row.grossProfit.toFixed(2) + '</td>' +
+                '<td style="padding:0.5rem 0.8rem;font-weight:600;color:' + (row.netProfit >= 0 ? '#667eea' : 'var(--danger)') + '">$' + row.netProfit.toFixed(2) + '</td>' +
+                '<td style="padding:0.5rem 0.8rem;color:var(--gray)">$' + row.runningNet.toFixed(2) + '</td></tr>';
         }
         tbody.innerHTML = html;
+    }
+
+    function renderNetProfitTrendChart() {
+        var ctx = document.getElementById('netProfitTrendChart'); if (!ctx) return;
+        if (STATE.charts.netProfitTrendChart) STATE.charts.netProfitTrendChart.destroy();
+        var rows = STATE._reportDailyRows || [];
+        var labels = rows.length ? rows.map(function(r){ return r.dateLabel; }) : ['No Data'];
+        var netData = rows.length ? rows.map(function(r){ return r.runningNet; }) : [0];
+        var expData = rows.length ? rows.map(function(r){ return r.runningExp; }) : [0];
+        STATE.charts.netProfitTrendChart = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [
+            { label: 'Running Net Profit ($)', data: netData, borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.1)', fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#667eea' },
+            { label: 'Running Expenses ($)', data: expData, borderColor: '#ed8936', backgroundColor: 'rgba(237,137,54,0.08)', fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#ed8936' }
+        ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { padding: 12, usePointStyle: true } } }, scales: { y: { ticks: { callback: function(v){return '$'+v;} } } } } });
     }
 
     function openExpenseModal() {
