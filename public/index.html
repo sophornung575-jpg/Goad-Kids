@@ -1239,12 +1239,13 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                     <th style="padding:0.6rem 0.8rem">Revenue</th>
                                     <th style="padding:0.6rem 0.8rem">Cost (COGS)</th>
                                     <th style="padding:0.6rem 0.8rem">Gross Profit</th>
-                                    <th style="padding:0.6rem 0.8rem">Running Total (Month)</th>
+                                    <th style="padding:0.6rem 0.8rem">Net Profit</th>
+                                    <th style="padding:0.6rem 0.8rem">Running Net (Month)</th>
                                 </tr></thead>
-                                <tbody id="dailyProfitList"><tr><td colspan="5" style="text-align:center;color:var(--gray);padding:1rem">No data</td></tr></tbody>
+                                <tbody id="dailyProfitList"><tr><td colspan="6" style="text-align:center;color:var(--gray);padding:1rem">No data</td></tr></tbody>
                             </table>
                         </div>
-                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-circle-info"></i> Cost is calculated from each product's current Cost of Production (set under Inventory → edit product).</p>
+                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-circle-info"></i> Cost is calculated from each product's current Cost of Production (set under Inventory → edit product). Net Profit splits each month's total expenses evenly across its calendar days, since expenses are only tracked per-month, not per-day.</p>
                     </div>
 
                     <!-- LIVE EXPENSE SUMMARY -->
@@ -6988,7 +6989,7 @@ function sendToTelegram(order, callback) {
         var ctx = document.getElementById('categoryChart'); if (!ctx) return;
         if (STATE.charts.categoryChart) STATE.charts.categoryChart.destroy();
         var confirmed = getReportConfirmed(); var cs = {};
-        for (var i = 0; i < confirmed.length; i++) { for (var j = 0; j < (confirmed[i].cart||[]).length; j++) { var it = confirmed[i].cart[j], p = findProduct(it.productId), c = p ? p.category : (it.category || 'Unknown'); if (!cs[c]) cs[c] = 0; cs[c] += (it.price * it.quantity); } }
+        for (var i = 0; i < confirmed.length; i++) { for (var j = 0; j < (confirmed[i].cart||[]).length; j++) { var it = confirmed[i].cart[j], p = findReportProduct(confirmed[i], it.productId), c = p ? p.category : (it.category || 'Unknown'); if (!cs[c]) cs[c] = 0; cs[c] += (it.price * it.quantity); } }
         var cats = Object.keys(cs), vals = Object.values(cs);
         var colors = ['#667eea','#48bb78','#ed64a6','#ecc94b','#4299e1','#f56565','#e65100','#9f7aea'];
         STATE.charts.categoryChart = new Chart(ctx, { type: 'doughnut', data: { labels: cats.length ? cats : ['No Data'], datasets: [{ data: cats.length ? vals : [1], backgroundColor: cats.length ? colors.slice(0,cats.length) : ['#e2e8f0'], borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { padding: 15, usePointStyle: true } } } } });
@@ -7177,21 +7178,37 @@ function sendToTelegram(order, callback) {
 
         // Daily breakdown, oldest first, with a running total per month —
         // so the month can be monitored day by day as it progresses.
+        // Expenses are only tracked per-month (not per-day), so each day's Net Profit
+        // prorates that day's share of its month's total expenses evenly across the
+        // number of calendar days in that month.
+        var monthlyExpenseTotal = {};
+        Object.keys(_reportExpenses).forEach(function(mk) {
+            var e = _reportExpenses[mk] || {};
+            monthlyExpenseTotal[mk] = (Number(e.facility)||0) + (Number(e.salaries)||0) + (Number(e.facebookAds)||0) + (Number(e.other)||0);
+        });
+        function daysInMonthKey(mk) {
+            var parts = mk.split('-'); var y = +parts[0], m = +parts[1];
+            return new Date(y, m, 0).getDate();
+        }
         var days = Object.keys(byDay).sort(function(a,b){ return byDay[a].sortDate - byDay[b].sortDate; });
         var tbody = document.getElementById('dailyProfitList');
         if (!tbody) return;
-        if (!days.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>'; return; }
-        var html = '', runningByMonth = {};
+        if (!days.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>'; return; }
+        var html = '', runningNetByMonth = {};
         for (var k = 0; k < days.length; k++) {
             var d = byDay[days[k]];
             var gp = d.revenue - d.cogs;
             var mk = monthKey(d.sortDate);
-            runningByMonth[mk] = (runningByMonth[mk] || 0) + gp;
+            var monthExp = monthlyExpenseTotal[mk] || 0;
+            var dailyExpShare = monthExp / daysInMonthKey(mk);
+            var np = gp - dailyExpShare;
+            runningNetByMonth[mk] = (runningNetByMonth[mk] || 0) + np;
             html += '<tr><td style="padding:0.5rem 0.8rem;font-weight:600">' + days[k] + '</td>' +
                 '<td style="padding:0.5rem 0.8rem">$' + d.revenue.toFixed(2) + '</td>' +
                 '<td style="padding:0.5rem 0.8rem;color:#ed8936">$' + d.cogs.toFixed(2) + '</td>' +
-                '<td style="padding:0.5rem 0.8rem;font-weight:600;color:' + (gp >= 0 ? '#38a169' : 'var(--danger)') + '">$' + gp.toFixed(2) + '</td>' +
-                '<td style="padding:0.5rem 0.8rem;color:var(--gray)">$' + runningByMonth[mk].toFixed(2) + '</td></tr>';
+                '<td style="padding:0.5rem 0.8rem;color:' + (gp >= 0 ? '#38a169' : 'var(--danger)') + '">$' + gp.toFixed(2) + '</td>' +
+                '<td style="padding:0.5rem 0.8rem;font-weight:600;color:' + (np >= 0 ? '#667eea' : 'var(--danger)') + '">$' + np.toFixed(2) + '</td>' +
+                '<td style="padding:0.5rem 0.8rem;color:var(--gray)">$' + runningNetByMonth[mk].toFixed(2) + '</td></tr>';
         }
         tbody.innerHTML = html;
     }
