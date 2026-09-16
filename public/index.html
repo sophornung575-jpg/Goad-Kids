@@ -6858,26 +6858,33 @@ function sendToTelegram(order, callback) {
     // by a flag doc so it doesn't re-query the log on every load.
     async function backfillRestockDatesFromLogs() {
         if (!db || !STATE.firebaseOnline) return;
-        var needsFix = STATE.products.filter(function(p) { return !p.addedAt && !p.lastRestockDate; });
-        if (!needsFix.length) return;
+        if (!STATE.products.length) return;
         try {
-            var flagDoc = await db.collection('_admin_').doc('restockBackfill_' + STATE.storeId).get();
-            if (flagDoc.exists) return; // already ran for this store
+            // v2: supersedes the earlier flag, which incorrectly used ANY edit
+            // (price changes, count corrections, etc.) as a restock signal.
+            // This re-derives every product's dates from scratch so it also
+            // repairs anything the old logic already wrote wrong.
+            var flagDoc = await db.collection('_admin_').doc('restockBackfillV2_' + STATE.storeId).get();
+            if (flagDoc.exists) return; // already ran (correctly) for this store
         } catch (e) { return; }
 
         try {
             var logSnap = await db.collection('activityLogs').where('storeId', '==', STATE.storeId).get();
-            var editsByName = {};  // name -> latest 'Edit Product' timestamp
-            var addsByName = {};   // name -> 'Add Product' timestamp
+            var restocksByName = {}; // name -> latest timestamp of an edit reasoned "New stock received"
+            var addsByName = {};     // name -> earliest 'Add Product' timestamp (true creation date)
             logSnap.forEach(function(d) {
                 var l = d.data();
                 var ts = l.timestamp || 0;
                 if (!ts || !l.details) return;
                 if (l.action === 'Edit Product') {
+                    // Only a genuine restock resets the age clock — matches the
+                    // exact reason string saveEditProduct() logs, same rule it
+                    // already applies going forward.
+                    if (l.details.indexOf('| Reason: New stock received') === -1) return;
                     var i = l.details.indexOf(' (Stock:');
                     if (i === -1) return;
                     var name = l.details.slice(0, i);
-                    if (!editsByName[name] || ts > editsByName[name]) editsByName[name] = ts;
+                    if (!restocksByName[name] || ts > restocksByName[name]) restocksByName[name] = ts;
                 } else if (l.action === 'Add Product') {
                     var j = l.details.indexOf(' ($');
                     if (j === -1) return;
@@ -6887,20 +6894,39 @@ function sendToTelegram(order, callback) {
             });
 
             var batch = db.batch();
-            var matched = 0;
-            needsFix.forEach(function(p) {
-                var found = editsByName[p.name] || addsByName[p.name] || null;
-                if (!found) return;
-                p.addedAt = found;
-                p.lastRestockDate = found;
-                matched++;
+            var writes = 0;
+            STATE.products.forEach(function(p) {
+                var correctRestock = restocksByName[p.name] || 0;
+                var newAdded = p.addedAt, newRestock = p.lastRestockDate, changed = false;
+
+                // lastRestockDate is only ever legitimately set two ways in this
+                // app: equal to addedAt at creation, or via a genuine
+                // "New stock received" edit. If the stored value is neither —
+                // it can only be leftover from the earlier buggy backfill
+                // (which used ANY edit reason) — recompute it. Never touches
+                // a value that's already consistent with either legit source.
+                if (p.lastRestockDate && p.lastRestockDate !== p.addedAt && p.lastRestockDate !== correctRestock) {
+                    newRestock = correctRestock; // real restock date if one exists, else 0 (falls back to addedAt)
+                    changed = true;
+                }
+                // Only fill addedAt when it's genuinely unknown (0) — never
+                // overwrite an existing value, even if the log has since aged
+                // out or been cleared.
+                if (!p.addedAt && addsByName[p.name]) {
+                    newAdded = addsByName[p.name];
+                    changed = true;
+                }
+                if (!changed) return;
+                p.addedAt = newAdded;
+                p.lastRestockDate = newRestock;
+                writes++;
                 batch.update(db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id), {
-                    addedAt: found, lastRestockDate: found
+                    addedAt: newAdded, lastRestockDate: newRestock
                 });
             });
-            if (matched) { await batch.commit(); saveProducts(); }
-            await db.collection('_admin_').doc('restockBackfill_' + STATE.storeId).set({
-                done: true, at: Date.now(), matched: matched, total: needsFix.length
+            if (writes) { await batch.commit(); saveProducts(); }
+            await db.collection('_admin_').doc('restockBackfillV2_' + STATE.storeId).set({
+                done: true, at: Date.now(), corrected: writes, total: STATE.products.length
             });
             renderInventory();
         } catch (e) { console.warn('Restock date backfill failed:', e.message); }
