@@ -3758,6 +3758,7 @@ function sendToTelegram(order, callback) {
             renderHistory();
             updateAdminBadges();
             checkAndPushRestockAlerts(); // auto-adds fast-selling, low-stock items to the restock.html list
+            backfillRestockDatesFromLogs(); // one-time: recover real addedAt/lastRestockDate for legacy products from activity log history
             showStatus('Synced', 'online');
             var warn = document.getElementById('localDataWarning');
             if (warn) warn.remove();
@@ -6836,8 +6837,73 @@ function sendToTelegram(order, callback) {
     // falling back to when it was first added if it's never been restocked since.
     function getStockAgeDays(p) {
         var base = p.lastRestockDate || p.addedAt || 0;
-        if (!base) return 0;
+        // No known date at all (legacy product predating this field, and the
+        // one-time log backfill below found no matching history either) —
+        // treat as already overdue rather than "just added", since we have
+        // no evidence it's actually new.
+        if (!base) return Infinity;
         return Math.floor((Date.now() - base) / 86400000);
+    }
+
+    // One-time repair for stores whose products predate the addedAt/
+    // lastRestockDate fields (so Firestore has 0 for them, not a real date).
+    // Instead of guessing a date, recover the real one from this store's own
+    // activity log: the most recent "Edit Product" entry for that product
+    // name if one exists, else its original "Add Product" entry, matched by
+    // name the same way the reconciliation "sale followed by edit" check
+    // does (the log has no productId, only the name baked into the details
+    // string). Products with no matching log entry at all are left alone —
+    // getStockAgeDays() above already treats that as "already overdue" per
+    // your call, rather than inventing a date. Runs once per store, guarded
+    // by a flag doc so it doesn't re-query the log on every load.
+    async function backfillRestockDatesFromLogs() {
+        if (!db || !STATE.firebaseOnline) return;
+        var needsFix = STATE.products.filter(function(p) { return !p.addedAt && !p.lastRestockDate; });
+        if (!needsFix.length) return;
+        try {
+            var flagDoc = await db.collection('_admin_').doc('restockBackfill_' + STATE.storeId).get();
+            if (flagDoc.exists) return; // already ran for this store
+        } catch (e) { return; }
+
+        try {
+            var logSnap = await db.collection('activityLogs').where('storeId', '==', STATE.storeId).get();
+            var editsByName = {};  // name -> latest 'Edit Product' timestamp
+            var addsByName = {};   // name -> 'Add Product' timestamp
+            logSnap.forEach(function(d) {
+                var l = d.data();
+                var ts = l.timestamp || 0;
+                if (!ts || !l.details) return;
+                if (l.action === 'Edit Product') {
+                    var i = l.details.indexOf(' (Stock:');
+                    if (i === -1) return;
+                    var name = l.details.slice(0, i);
+                    if (!editsByName[name] || ts > editsByName[name]) editsByName[name] = ts;
+                } else if (l.action === 'Add Product') {
+                    var j = l.details.indexOf(' ($');
+                    if (j === -1) return;
+                    var aname = l.details.slice(0, j);
+                    if (!addsByName[aname] || ts < addsByName[aname]) addsByName[aname] = ts;
+                }
+            });
+
+            var batch = db.batch();
+            var matched = 0;
+            needsFix.forEach(function(p) {
+                var found = editsByName[p.name] || addsByName[p.name] || null;
+                if (!found) return;
+                p.addedAt = found;
+                p.lastRestockDate = found;
+                matched++;
+                batch.update(db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id), {
+                    addedAt: found, lastRestockDate: found
+                });
+            });
+            if (matched) { await batch.commit(); saveProducts(); }
+            await db.collection('_admin_').doc('restockBackfill_' + STATE.storeId).set({
+                done: true, at: Date.now(), matched: matched, total: needsFix.length
+            });
+            renderInventory();
+        } catch (e) { console.warn('Restock date backfill failed:', e.message); }
     }
 
     function isPromotionDue(p) {
