@@ -998,6 +998,39 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                 </div>
                             </div>
                         </div>
+                        <!-- Inventory Control Rules -->
+                        <div class="admin-card">
+                            <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-sliders-h" style="color:var(--primary)"></i> Inventory Control Rules</div></div>
+                            <div class="admin-card-body">
+                                <p style="font-size:0.83rem;color:var(--gray);margin-bottom:1rem">These formulas control the flags shown in Inventory: "Promotion Due" for slow movers and "Needs Restock" for fast movers running low. Edit the numbers to tune them.</p>
+                                <div style="background:#fff3cd;border:1px solid #ffe69c;border-radius:8px;padding:0.7rem;margin-bottom:0.75rem">
+                                    <div style="font-weight:700;font-size:0.82rem;color:#856404;margin-bottom:6px"><i class="fas fa-tag"></i> Promotion Trigger (Slow Movers)</div>
+                                    <div class="form-group" style="margin-bottom:0">
+                                        <label style="font-size:0.8rem">Flag for promotion after this many days since last restock</label>
+                                        <input type="number" id="rulePromotionThresholdDays" class="form-control" min="1" placeholder="e.g. 14">
+                                    </div>
+                                </div>
+                                <div style="background:rgba(72,187,120,0.08);border:1px solid rgba(72,187,120,0.3);border-radius:8px;padding:0.7rem;margin-bottom:0.75rem">
+                                    <div style="font-weight:700;font-size:0.82rem;color:#2f855a;margin-bottom:6px"><i class="fas fa-truck-loading"></i> Restock Trigger (Fast Movers)</div>
+                                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                                        <div class="form-group" style="margin-bottom:0.5rem">
+                                            <label style="font-size:0.8rem">Sales window (days)</label>
+                                            <input type="number" id="ruleFastSellWindowDays" class="form-control" min="1" placeholder="e.g. 7">
+                                        </div>
+                                        <div class="form-group" style="margin-bottom:0.5rem">
+                                            <label style="font-size:0.8rem">Min units sold in window</label>
+                                            <input type="number" id="ruleFastSellMinUnits" class="form-control" min="1" placeholder="e.g. 5">
+                                        </div>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom:0">
+                                        <label style="font-size:0.8rem">Low stock threshold (units remaining)</label>
+                                        <input type="number" id="ruleLowStockThreshold" class="form-control" min="0" placeholder="e.g. 3">
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary w-full" onclick="saveInventoryRules()"><i class="fas fa-save"></i> Save Rules</button>
+                                <div id="inventoryRulesStatus" style="font-size:0.8rem;margin-top:6px"></div>
+                            </div>
+                        </div>
                         <!-- Telegram Settings -->
                         <div class="admin-card">
                             <div class="admin-card-header"><div class="admin-card-title"><i class="fab fa-telegram-plane" style="color:#0088cc"></i> Telegram Notifications</div></div>
@@ -2045,6 +2078,7 @@ function sendToTelegram(order, callback) {
         selectedProduct: null,
         charts: {},
         dateFilter: 'today',
+        inventoryRules: { promotionThresholdDays: 14, fastSellWindowDays: 7, fastSellMinUnits: 5, lowStockThreshold: 3 },
         customStartDate: null,
         customEndDate: null,
         loginAttempts: JSON.parse(localStorage.getItem('goatLoginAttempts') || '{}'),
@@ -3612,6 +3646,10 @@ function sendToTelegram(order, callback) {
     async function loadData() {
         // ── STEP 1: Load localStorage IMMEDIATELY so shop shows at once ──
         loadLocal();
+        try {
+            var cachedRules = JSON.parse(localStorage.getItem('goatInventoryRules') || 'null');
+            if (cachedRules) STATE.inventoryRules = Object.assign({}, STATE.inventoryRules, cachedRules);
+        } catch (e) {}
         renderProducts();
         renderInventory();
 
@@ -3634,11 +3672,13 @@ function sendToTelegram(order, callback) {
                     images: dt.images || [],
                     sizes: dt.sizes || [],
                     addedAt: dt.addedAt || 0,
+                    lastRestockDate: dt.lastRestockDate || dt.addedAt || 0,
                     active: dt.active !== false
                 }));
             });
             if (p.length) { STATE.products = p; saveProducts(); }
             localStorage.setItem('goatDeletedProducts', '[]');
+            loadInventoryRules(); // non-blocking; re-renders inventory once rules arrive
 
             // ── Orders ──
             // NOTE: previously this fetched the ENTIRE order history unbounded, every
@@ -3717,6 +3757,7 @@ function sendToTelegram(order, callback) {
             renderPending();
             renderHistory();
             updateAdminBadges();
+            checkAndPushRestockAlerts(); // auto-adds fast-selling, low-stock items to the restock.html list
             showStatus('Synced', 'online');
             var warn = document.getElementById('localDataWarning');
             if (warn) warn.remove();
@@ -4458,7 +4499,7 @@ function sendToTelegram(order, callback) {
         var imgs = STATE.newProductImages.length ? STATE.newProductImages.slice() : ['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'];
         var t = 0;
         for (var i = 0; i < STATE.newProductSizes.length; i++) { t += STATE.newProductSizes[i].qty; }
-        STATE.products.push({ id: 'p' + Date.now(), name: n, slug: makeSlug(n), price: pr, costPrice: cost, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice(), addedAt: Date.now(), active: true });
+        STATE.products.push({ id: 'p' + Date.now(), name: n, slug: makeSlug(n), price: pr, costPrice: cost, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice(), addedAt: Date.now(), lastRestockDate: Date.now(), active: true });
         saveProducts();
         logActivity('Add Product', n + ' ($' + pr + ')' + (cost !== null ? ' | Cost: $' + cost.toFixed(2) : ''));
         if (STATE.firebaseOnline) syncToFirebase();
@@ -4673,6 +4714,9 @@ function sendToTelegram(order, callback) {
         p.images = newImages;
         p.sizes = finalSizes;
         p.stock = (p.sizes && p.sizes.length) ? getTotalStock(p) : finalStock;
+        // Age clock for the Promotion Due flag only resets on a genuine restock,
+        // not on count corrections, transfers, or other reasons.
+        if (reason === 'New stock received') p.lastRestockDate = Date.now();
 
         // Save locally first — instant, never blocked by network.
         saveProducts();
@@ -5780,6 +5824,7 @@ function sendToTelegram(order, callback) {
             // Load branch list for Main Store only
             if (STATE.storeId === 'GOAT-1979') loadBranchListAdmin();
             else { var bc = document.getElementById('manageBranchesCard'); if (bc) bc.style.display = 'none'; }
+            populateInventoryRulesForm();
             // Populate Telegram settings
             var savedToken = localStorage.getItem('goatTgToken') || '';
             var savedChat = localStorage.getItem('goatTgChatId') || '';
@@ -6712,7 +6757,10 @@ function sendToTelegram(order, callback) {
             } else { sizeHtml = '<span style="color:var(--gray);font-size:0.72rem">—</span>'; }
             h += '<tr>' +
                 '<td><img src="' + img + '" onclick="openLightbox(\'' + img.replace(/'/g, "\\'") + '\')" style="width:84px;height:84px;object-fit:cover;border-radius:10px;cursor:zoom-in;display:block" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=200\'"></td>' +
-                '<td style="max-width:110px"><strong style="font-size:0.78rem">' + p.name + '</strong></td>' +
+                '<td style="max-width:110px"><strong style="font-size:0.78rem">' + p.name + '</strong>' +
+                (isPromotionDue(p) ? '<br><span style="display:inline-block;margin-top:2px;font-size:0.62rem;font-weight:700;color:#856404;background:#fff3cd;border-radius:4px;padding:1px 5px" title="' + getStockAgeDays(p) + ' days since last restock"><i class="fas fa-tag"></i> Promotion Due</span>' : '') +
+                (isRestockDue(p) ? '<br><span style="display:inline-block;margin-top:2px;font-size:0.62rem;font-weight:700;color:#fff;background:var(--danger);border-radius:4px;padding:1px 5px"><i class="fas fa-truck-loading"></i> Needs Restock</span>' : '') +
+                '</td>' +
                 '<td><span class="product-category ' + getCategoryDisplay(p.category) + '" style="font-size:0.65rem;padding:0.1rem 0.4rem">' + p.category + '</span></td>' +
                 '<td style="font-weight:600;font-size:0.78rem">$' + p.price.toFixed(2) +
                 (p.costPrice != null ? '<br><span style="font-weight:400;font-size:0.68rem;color:var(--gray)">Cost $' + Number(p.costPrice).toFixed(2) + '</span>' +
@@ -6734,6 +6782,123 @@ function sendToTelegram(order, callback) {
         var searchSize = document.getElementById('inventorySearchSize') ? document.getElementById('inventorySearchSize').value.toUpperCase().trim() : '';
         renderFilteredInventory(STATE.products, searchSize);
         updateSearchResults(STATE.products.length, searchSize);
+    }
+
+    // =============================================
+    // INVENTORY CONTROL RULES (promotion / restock flags)
+    // =============================================
+    async function loadInventoryRules() {
+        // Local cache first so flags work instantly even before Firebase responds.
+        try {
+            var cached = JSON.parse(localStorage.getItem('goatInventoryRules') || 'null');
+            if (cached) STATE.inventoryRules = Object.assign({}, STATE.inventoryRules, cached);
+        } catch (e) {}
+        if (!db || !STATE.firebaseOnline) return;
+        try {
+            var doc = await db.collection('_admin_').doc('inventoryRules').get();
+            if (doc.exists) {
+                STATE.inventoryRules = Object.assign({}, STATE.inventoryRules, doc.data());
+                localStorage.setItem('goatInventoryRules', JSON.stringify(STATE.inventoryRules));
+            }
+        } catch (e) { console.warn('Inventory rules load failed:', e.message); }
+        renderInventory();
+    }
+
+    async function saveInventoryRules() {
+        var r = {
+            promotionThresholdDays: parseInt(document.getElementById('rulePromotionThresholdDays').value, 10) || STATE.inventoryRules.promotionThresholdDays,
+            fastSellWindowDays: parseInt(document.getElementById('ruleFastSellWindowDays').value, 10) || STATE.inventoryRules.fastSellWindowDays,
+            fastSellMinUnits: parseInt(document.getElementById('ruleFastSellMinUnits').value, 10) || STATE.inventoryRules.fastSellMinUnits,
+            lowStockThreshold: (function(){ var v = parseInt(document.getElementById('ruleLowStockThreshold').value, 10); return isNaN(v) ? STATE.inventoryRules.lowStockThreshold : v; })()
+        };
+        STATE.inventoryRules = r;
+        localStorage.setItem('goatInventoryRules', JSON.stringify(r));
+        var statusEl = document.getElementById('inventoryRulesStatus');
+        try {
+            if (db) await db.collection('_admin_').doc('inventoryRules').set(r, { merge: true });
+            if (statusEl) statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Rules saved.</span>';
+            logActivity('Inventory Rules Updated', 'Promo: ' + r.promotionThresholdDays + 'd | Fast-sell: ' + r.fastSellMinUnits + ' in ' + r.fastSellWindowDays + 'd | Low stock: ' + r.lowStockThreshold);
+        } catch (e) {
+            if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger)">Save failed: ' + e.message + '</span>';
+        }
+        renderInventory();
+    }
+
+    function populateInventoryRulesForm() {
+        var r = STATE.inventoryRules;
+        var a = document.getElementById('rulePromotionThresholdDays'); if (a) a.value = r.promotionThresholdDays;
+        var b = document.getElementById('ruleFastSellWindowDays'); if (b) b.value = r.fastSellWindowDays;
+        var c = document.getElementById('ruleFastSellMinUnits'); if (c) c.value = r.fastSellMinUnits;
+        var d = document.getElementById('ruleLowStockThreshold'); if (d) d.value = r.lowStockThreshold;
+    }
+
+    // Days since this product last received new stock (reason: "New stock received"),
+    // falling back to when it was first added if it's never been restocked since.
+    function getStockAgeDays(p) {
+        var base = p.lastRestockDate || p.addedAt || 0;
+        if (!base) return 0;
+        return Math.floor((Date.now() - base) / 86400000);
+    }
+
+    function isPromotionDue(p) {
+        return getStockAgeDays(p) >= (STATE.inventoryRules.promotionThresholdDays || 14);
+    }
+
+    // Sums confirmed sales of this product within the trailing window (days).
+    function getUnitsSoldInWindow(productId, windowDays) {
+        var cutoff = Date.now() - windowDays * 86400000;
+        var total = 0;
+        var orders = STATE.confirmedOrders || [];
+        for (var i = 0; i < orders.length; i++) {
+            var o = orders[i];
+            var ts = o.confirmedTimestamp || o.timestamp || 0;
+            if (ts < cutoff) continue;
+            for (var j = 0; j < (o.cart || []).length; j++) {
+                if (o.cart[j].productId === productId) total += o.cart[j].quantity || 0;
+            }
+        }
+        return total;
+    }
+
+    function isRestockDue(p) {
+        var rules = STATE.inventoryRules;
+        var sold = getUnitsSoldInWindow(p.id, rules.fastSellWindowDays || 7);
+        return sold >= (rules.fastSellMinUnits || 5) && getTotalStock(p) <= (rules.lowStockThreshold != null ? rules.lowStockThreshold : 3);
+    }
+
+    // Pushes products that just crossed the restock trigger into restock.html's
+    // shared list (same Firebase project, restockTool_items collection). Only
+    // fires once per product while a not-yet-received auto-flagged entry for it
+    // is still sitting on the list, so this can run on every data load without
+    // creating duplicates.
+    async function checkAndPushRestockAlerts() {
+        if (!db || !STATE.firebaseOnline) return;
+        try {
+            var existingSnap = await db.collection('restockTool_items').where('autoFlagged', '==', true).get();
+            var alreadyFlagged = {};
+            existingSnap.forEach(function(d) {
+                var it = d.data();
+                if (it.status === 'received') return; // safe to flag again once it's been restocked
+                if (it.sourceProductId) alreadyFlagged[it.sourceProductId] = true;
+            });
+            for (var i = 0; i < STATE.products.length; i++) {
+                var p = STATE.products[i];
+                if (!p.active || alreadyFlagged[p.id] || !isRestockDue(p)) continue;
+                await db.collection('restockTool_items').add({
+                    title: p.name,
+                    image: (p.images && p.images[0]) || '',
+                    images: p.images || [],
+                    size: null,
+                    qty: STATE.inventoryRules.fastSellMinUnits || 5,
+                    supplier: 'Auto-flagged from Store — fast seller, low stock',
+                    sourceProductId: p.id,
+                    sourceApp: 'goat-kids-store',
+                    autoFlagged: true,
+                    addedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                alreadyFlagged[p.id] = true;
+            }
+        } catch (e) { console.warn('Auto restock push failed:', e.message); }
     }
 
     // =============================================
@@ -6973,21 +7138,23 @@ function sendToTelegram(order, callback) {
 
     function updateReportStats() {
         var confirmed = getReportConfirmed();
-        var tr = 0; for (var i = 0; i < confirmed.length; i++) { tr += confirmed[i].total || 0; }
-        document.getElementById('reportTotalRevenue').textContent = '$' + tr.toFixed(2);
-        document.getElementById('reportTotalOrders').textContent = confirmed.length;
-        var is = 0; for (var j = 0; j < confirmed.length; j++) { for (var k = 0; k < (confirmed[j].cart||[]).length; k++) is += confirmed[j].cart[k].quantity || 0; }
-        document.getElementById('reportItemsSold').textContent = is;
-        var cs = new Set();
-        for (var l = 0; l < confirmed.length; l++) { if (confirmed[l].customerPhone || confirmed[l].customerName) cs.add(confirmed[l].customerPhone || confirmed[l].customerName); }
-        document.getElementById('reportTotalCustomers').textContent = cs.size;
-        // Refund stats
+        // Refund stats — calculated first so it can be subtracted from revenue below
         var refTotal = 0;
         for (var r = 0; r < _reportRefunds.length; r++) { refTotal += _reportRefunds[r].refundAmount || 0; }
         var refEl = document.getElementById('reportTotalRefunds');
         var refCnt = document.getElementById('reportRefundCount');
         if (refEl) refEl.textContent = '$' + refTotal.toFixed(2);
         if (refCnt) refCnt.textContent = _reportRefunds.length;
+
+        var tr = 0; for (var i = 0; i < confirmed.length; i++) { tr += confirmed[i].total || 0; }
+        var netRevenue = tr - refTotal;
+        document.getElementById('reportTotalRevenue').textContent = '$' + netRevenue.toFixed(2);
+        document.getElementById('reportTotalOrders').textContent = confirmed.length;
+        var is = 0; for (var j = 0; j < confirmed.length; j++) { for (var k = 0; k < (confirmed[j].cart||[]).length; k++) is += confirmed[j].cart[k].quantity || 0; }
+        document.getElementById('reportItemsSold').textContent = is;
+        var cs = new Set();
+        for (var l = 0; l < confirmed.length; l++) { if (confirmed[l].customerPhone || confirmed[l].customerName) cs.add(confirmed[l].customerPhone || confirmed[l].customerName); }
+        document.getElementById('reportTotalCustomers').textContent = cs.size;
         // Payment method breakdown: Cash vs QR Code
         var cashTotal = 0, cashCount = 0, qrTotal = 0, qrCount = 0;
         for (var pm = 0; pm < confirmed.length; pm++) {
@@ -7186,6 +7353,25 @@ function sendToTelegram(order, callback) {
             byDay[dk].cogs += orderCost;
             var sm = o.shippingMethod || 'Pickup';
             if (sm === 'Pickup') byDay[dk].walkinRevenue += orderRevenue; else byDay[dk].fbRevenue += orderRevenue;
+        }
+        // Subtract refunds on the day the refund happened (not the original sale day),
+        // and reverse the COGS for the refunded items since stock is restored on refund.
+        for (var rf = 0; rf < _reportRefunds.length; rf++) {
+            var ref = _reportRefunds[rf];
+            var refAmt = ref.refundAmount || 0;
+            var refCost = 0;
+            for (var rc = 0; rc < (ref.cart||[]).length; rc++) {
+                var rit = ref.cart[rc];
+                refCost += getReportProductCost(ref.originalOrder || {}, rit.productId) * (rit.quantity || 0);
+            }
+            revenue -= refAmt; cogs -= refCost;
+            var rfd = new Date(ref.refundTimestamp || Date.now());
+            var rdk = formatDate(rfd);
+            if (!byDay[rdk]) byDay[rdk] = { revenue: 0, cogs: 0, walkinRevenue: 0, fbRevenue: 0, sortDate: rfd };
+            byDay[rdk].revenue -= refAmt;
+            byDay[rdk].cogs -= refCost;
+            var rsm = (ref.originalOrder && ref.originalOrder.shippingMethod) || 'Pickup';
+            if (rsm === 'Pickup') byDay[rdk].walkinRevenue -= refAmt; else byDay[rdk].fbRevenue -= refAmt;
         }
         var grossProfit = revenue - cogs;
 
