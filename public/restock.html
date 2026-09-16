@@ -1806,9 +1806,9 @@ function groupRestockByProduct(list){
   const groups = [];
   const byKey = {};
   list.forEach(item => {
-    const key = item.url || item.title;
+    const key = item.url || (item.sourceStoreName ? item.title + '__' + item.sourceStoreName : item.title);
     if(!byKey[key]){
-      byKey[key] = { key, title: item.title, url: item.url, isSearchLink: item.isSearchLink, lines: [] };
+      byKey[key] = { key, title: item.title, url: item.url, isSearchLink: item.isSearchLink, sourceStoreName: item.sourceStoreName, lines: [] };
       groups.push(byKey[key]);
     }
     byKey[key].lines.push(item);
@@ -1890,11 +1890,12 @@ function renderRestock(){
         <div class="rl-info">
           <div class="rl-title">${escapeHtml(group.title)}</div>
           <span class="status-badge status-${status}">${statusLabel}</span>
+          ${group.sourceStoreName ? `<span class="status-badge" style="background:#e0e7ff;color:#3730a3"><i class="fas fa-store"></i> ${escapeHtml(group.sourceStoreName)}</span>` : ''}
           <div class="rl-meta">${group.isSearchLink ? t('searchLinkLabel') : t('directLinkLabel')}</div>
           <div class="rl-size-lines">${sizeLines}</div>
         </div>
         <div class="rl-actions">
-          <a href="${escapeHtml(group.url)}" target="_blank" rel="noopener">${group.isSearchLink ? t('searchOn1688Arrow') : t('orderOn1688Arrow')}</a>
+          ${group.url ? `<a href="${escapeHtml(group.url)}" target="_blank" rel="noopener">${group.isSearchLink ? t('searchOn1688Arrow') : t('orderOn1688Arrow')}</a>` : ''}
           ${status === 'ordered' ? `<button class="mark-received" onclick="markGroupReceived('${docIdsCsv}')">${t('markReceivedBtn')}</button>` : ''}
           ${(status === 'pending' || status === 'sent') ? `<button class="mark-ordered" onclick="markGroupOrdered('${docIdsCsv}')">${t('markOrderedBtn')}</button>` : ''}
         </div>
