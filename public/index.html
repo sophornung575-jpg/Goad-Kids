@@ -6867,10 +6867,12 @@ function sendToTelegram(order, callback) {
     }
 
     // Pushes products that just crossed the restock trigger into restock.html's
-    // shared list (same Firebase project, restockTool_items collection). Only
-    // fires once per product while a not-yet-received auto-flagged entry for it
-    // is still sitting on the list, so this can run on every data load without
-    // creating duplicates.
+    // shared list (same Firebase project, restockTool_items collection). Checks
+    // only THIS device's own store data — no cross-branch fetching, so it stays
+    // fast — and tags the item with which store flagged it (sourceStoreId/Name)
+    // so restock.html can show that as its own column. Only fires once per
+    // product+store while a not-yet-received auto-flagged entry for it is still
+    // sitting on the list, so this can run on every data load without duplicating.
     async function checkAndPushRestockAlerts() {
         if (!db || !STATE.firebaseOnline) return;
         try {
@@ -6879,24 +6881,27 @@ function sendToTelegram(order, callback) {
             existingSnap.forEach(function(d) {
                 var it = d.data();
                 if (it.status === 'received') return; // safe to flag again once it's been restocked
-                if (it.sourceProductId) alreadyFlagged[it.sourceProductId] = true;
+                if (it.sourceProductId && it.sourceStoreId) alreadyFlagged[it.sourceStoreId + '|' + it.sourceProductId] = true;
             });
             for (var i = 0; i < STATE.products.length; i++) {
                 var p = STATE.products[i];
-                if (!p.active || alreadyFlagged[p.id] || !isRestockDue(p)) continue;
+                var flagKey = STATE.storeId + '|' + p.id;
+                if (!p.active || alreadyFlagged[flagKey] || !isRestockDue(p)) continue;
                 await db.collection('restockTool_items').add({
                     title: p.name,
                     image: (p.images && p.images[0]) || '',
                     images: p.images || [],
                     size: null,
                     qty: STATE.inventoryRules.fastSellMinUnits || 5,
-                    supplier: 'Auto-flagged from Store — fast seller, low stock',
+                    supplier: 'Auto-flagged — fast seller, low stock',
                     sourceProductId: p.id,
+                    sourceStoreId: STATE.storeId,
+                    sourceStoreName: STATE.storeName || STATE.storeId,
                     sourceApp: 'goat-kids-store',
                     autoFlagged: true,
                     addedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
-                alreadyFlagged[p.id] = true;
+                alreadyFlagged[flagKey] = true;
             }
         } catch (e) { console.warn('Auto restock push failed:', e.message); }
     }
