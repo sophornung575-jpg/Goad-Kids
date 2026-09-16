@@ -170,6 +170,8 @@
         .admin-tabs{display:flex;border-bottom:2px solid var(--gray-light);background:var(--light);overflow-x:auto}
         .admin-tab{flex:1;min-width:fit-content;padding:0.9rem 1.5rem;border:none;background:none;font-size:0.95rem;font-weight:600;cursor:pointer;color:var(--gray-dark);display:flex;align-items:center;justify-content:center;gap:0.5rem;transition:all 0.2s;position:relative;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap}
         .admin-tab:hover{color:var(--primary);background:rgba(102,126,234,0.03)}.admin-tab.active{color:var(--primary);border-bottom-color:var(--primary);background:#fff}
+        .admin-tab-link{flex:1;min-width:fit-content;padding:0.9rem 1.5rem;border:none;background:none;font-size:0.95rem;font-weight:600;cursor:pointer;color:var(--gray-dark);display:flex;align-items:center;justify-content:center;gap:0.5rem;transition:all 0.2s;position:relative;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;text-decoration:none}
+        .admin-tab-link:hover{color:var(--primary);background:rgba(102,126,234,0.03)}
         .admin-tab-badge{background:var(--gray);color:#fff;font-size:0.7rem;padding:0.15rem 0.45rem;border-radius:10px;min-width:20px;text-align:center}
         .admin-tab.active .admin-tab-badge{background:var(--primary)}.admin-tab-content{display:none;padding:1.5rem}.admin-tab-content.active{display:block}
         .admin-card{background:#fff;border:1px solid var(--gray-light);border-radius:var(--radius-lg);margin-bottom:1.5rem;overflow:hidden}
@@ -581,6 +583,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                 <div class="admin-tabs">
                     <button class="admin-tab active" onclick="switchAdminTab('orders')"><i class="fas fa-clipboard-list"></i> <span data-translate="orders">Orders</span><span class="admin-tab-badge" id="ordersBadge">0</span></button>
                     <button class="admin-tab" onclick="switchAdminTab('inventory')"><i class="fas fa-boxes"></i> <span data-translate="inventory">Inventory</span><span class="admin-tab-badge" id="inventoryBadge">0</span></button>
+                    <a class="admin-tab-link" href="restock.html" title="Search 1688 suppliers and build a restock list"><i class="fas fa-truck-loading"></i> <span>Restock</span></a>
                     <button class="admin-tab" onclick="switchAdminTab('reports')"><i class="fas fa-chart-bar"></i> <span data-translate="reports">Reports</span></button>
                 </div>
 
@@ -638,6 +641,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         <button class="inv-subbtn" onclick="switchInvTab('add',this)"><i class="fas fa-plus"></i> <span data-translate="addNew">Add New</span></button>
                         <button class="inv-subbtn" onclick="switchInvTab('transfer',this)"><i class="fas fa-exchange-alt"></i> <span data-translate="transfer">Transfer</span> <span id="transferBadge" style="display:none;background:var(--danger);color:#fff;border-radius:999px;font-size:0.7rem;padding:1px 6px;margin-left:4px">0</span></button>
                         <button class="inv-subbtn" id="branchStockTabBtn" onclick="switchInvTab('branchstock',this)" style="display:none"><i class="fas fa-warehouse"></i> <span data-translate="branchStock">Branch Stock</span></button>
+                        <button class="inv-subbtn" onclick="switchInvTab('reconcile',this)"><i class="fas fa-balance-scale"></i> <span data-translate="reconcile">Reconcile</span><span id="reconcileBadge" style="display:none;background:var(--danger);color:#fff;border-radius:999px;font-size:0.7rem;padding:1px 6px;margin-left:4px">0</span></button>
                         <button class="inv-subbtn" onclick="switchInvTab('settings',this)"><i class="fas fa-cog"></i> <span data-translate="settings">Settings</span></button>
                     </div>
 
@@ -702,6 +706,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                             <div class="add-product-grid">
                                 <div class="form-group"><label data-translate="productName">Product Name</label><input type="text" id="productName" class="form-control" data-translate="enterProductName" placeholder="Enter product name"></div>
                                 <div class="form-group"><label data-translate="priceUsd">Price ($)</label><input type="number" id="productPrice" class="form-control" placeholder="0.00" step="0.01"></div>
+                                <div class="form-group"><label data-translate="costPriceUsd">Cost of Production ($)</label><input type="number" id="productCostPrice" class="form-control" placeholder="0.00" step="0.01" min="0"><small style="color:var(--gray);font-size:0.72rem" data-translate="costPriceHint">What it costs you to make/stock this item (optional)</small></div>
                                 <div class="form-group"><label data-translate="category">Category</label>
                                     <select id="productCategory" class="form-control">
                                         <option value="" data-translate="selectLbl">Select</option>
@@ -930,7 +935,9 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                     </div>
                                     <button class="btn btn-outline btn-small" style="margin-top:8px;color:var(--gray)" onclick="resetStoreSelection()"><i class="fas fa-redo"></i> Reset Store Selection</button>
                                 </div>
-                                <div class="store-info-item"><small>Cloud Sync</small><button class="btn btn-success w-full" onclick="syncToFirebase()"><i class="fas fa-cloud-upload-alt"></i> Sync to Cloud</button></div>
+                                <div class="store-info-item"><small>Cloud Sync</small><button class="btn btn-success w-full" onclick="syncToFirebase()"><i class="fas fa-cloud-upload-alt"></i> Sync to Cloud</button>
+                                    <button class="btn btn-outline btn-small w-full" style="margin-top:6px" onclick="copyCostPricesFromStore271()"><i class="fas fa-dollar-sign"></i> Copy Cost Prices from Goat Kids 271 → All Stores</button>
+                                </div>
                                 <div class="store-info-item">
                                     <small>This Store Name</small>
                                     <div style="display:flex;gap:6px;margin-top:4px">
@@ -1044,6 +1051,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                         <option value="orders">Orders password (orders only)</option>
                                         <option value="inventory">Inventory / Settings password</option>
                                         <option value="productedit">Product Edit/Delete password</option>
+                                        <option value="restock">Restock Settings password</option>
                                     </select>
                                 </div>
                                 <div class="form-group"><label>Current Password</label><input type="password" id="changePwCurrent" class="form-control" placeholder="Current password"></div>
@@ -1067,6 +1075,62 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                             </div>
                         </div>
                         </div><!-- end settingsContent -->
+                    </div>
+
+                    <!-- RECONCILE SUB-TAB -->
+                    <div id="invReconcileTab" class="inv-subtab">
+                        <div class="admin-card">
+                            <div class="admin-card-header">
+                                <div class="admin-card-title"><i class="fas fa-balance-scale" style="color:var(--primary)"></i> Stock Reconciliation</div>
+                                <button class="btn btn-outline btn-small" onclick="takeSnapshotNow()"><i class="fas fa-camera"></i> Take Snapshot Now</button>
+                            </div>
+                            <div class="admin-card-body">
+                                <p style="font-size:0.83rem;color:var(--gray);margin-bottom:0.75rem">Checks three things for the date range you pick: (1) sales that were confirmed but never deducted from stock, (2) whether total stock movement (sold, refunded, transferred) actually matches what happened to stock levels, and (3) products that were manually edited shortly after a sale — the edit can silently overwrite the sale's deduction if it wasn't reloaded first. Movement checking needs a daily opening snapshot — snapshots start being recorded automatically once this feature is live, so historical ranges before that won't have data yet.</p>
+                                <div id="reconcileSnapshotInfo" style="font-size:0.8rem;color:var(--gray-dark);margin-bottom:0.75rem"></div>
+                                <div class="inv-filter-row" style="align-items:flex-end">
+                                    <div style="flex:1;min-width:130px">
+                                        <small style="color:var(--gray)">From</small>
+                                        <input type="date" id="reconcileDateFrom" class="form-control" style="font-size:0.85rem">
+                                    </div>
+                                    <div style="flex:1;min-width:130px">
+                                        <small style="color:var(--gray)">To</small>
+                                        <input type="date" id="reconcileDateTo" class="form-control" style="font-size:0.85rem">
+                                    </div>
+                                    <button class="btn btn-outline btn-small" onclick="setReconcileRange('today')">Today</button>
+                                    <button class="btn btn-outline btn-small" onclick="setReconcileRange('week')">Last 7d</button>
+                                    <button class="btn btn-outline btn-small" onclick="setReconcileRange('month')">This Month</button>
+                                    <button class="btn btn-primary btn-small" onclick="runStockReconciliation()"><i class="fas fa-play"></i> Run Check</button>
+                                </div>
+                                <div id="reconcileSummary" style="margin-top:1rem"></div>
+
+                                <!-- Section A: Orders not deducted -->
+                                <div id="reconcileOrderIssuesWrap" style="display:none;margin-top:1rem">
+                                    <div style="font-weight:700;color:var(--danger);margin-bottom:0.5rem"><i class="fas fa-exclamation-triangle"></i> Sales Not Deducted From Stock</div>
+                                    <div id="reconcileOrderIssues" style="display:grid;gap:0.5rem"></div>
+                                </div>
+
+                                <!-- Section B: Stock movement mismatches -->
+                                <div id="reconcileMovementWrap" style="display:none;margin-top:1.5rem">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.5rem">
+                                        <div style="font-weight:700;color:var(--danger)"><i class="fas fa-exclamation-triangle"></i> Stock Movement Mismatches</div>
+                                        <label style="font-size:0.8rem;color:var(--gray-dark);display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="reconcileShowAll" onchange="renderReconcileMovementTable()"> Show all checked items</label>
+                                    </div>
+                                    <div style="overflow-x:auto">
+                                        <table class="inventory-table" style="font-size:0.8rem">
+                                            <thead><tr><th>Item</th><th>Opening</th><th>Sold</th><th>Refund</th><th>Xfer In</th><th>Xfer Out</th><th>Adj</th><th>Expected</th><th>Actual</th><th>Diff</th><th>Edit?</th><th></th></tr></thead>
+                                            <tbody id="reconcileMovementBody"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <!-- Section C: Sale followed by a manual stock edit -->
+                                <div id="reconcileEditAfterSaleWrap" style="display:none;margin-top:1.5rem">
+                                    <div style="font-weight:700;color:var(--danger);margin-bottom:0.5rem"><i class="fas fa-exclamation-triangle"></i> Sale(s) Followed By A Stock Edit</div>
+                                    <p style="font-size:0.78rem;color:var(--gray);margin:0 0 0.5rem">A manual product edit happened after a sale for the same item. If that edit's browser tab hadn't reloaded the product first, it may have overwritten the sale's deduction. Worth a quick check.</p>
+                                    <div id="reconcileEditAfterSale" style="display:grid;gap:0.5rem"></div>
+                                </div>
+                                <div id="reconcileEmptyState" style="display:none;text-align:center;color:var(--gray);padding:1.5rem"><i class="fas fa-check-circle" style="color:var(--success)"></i><p>No issues found for this range.</p></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1159,6 +1223,128 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                             </table>
                         </div>
                     </div>
+
+                    <!-- FINANCIAL ANALYSIS -->
+                    <div class="chart-card" style="margin-top:1.5rem">
+                        <h3><i class="fas fa-coins" style="color:#48bb78"></i> Financial Analysis</h3>
+                        <div class="reports-grid" style="margin-bottom:1rem">
+                            <div class="stat-card" style="border-left:4px solid #ed8936"><div class="stat-icon" style="background:rgba(237,137,54,0.1)"><i class="fas fa-industry" style="color:#ed8936"></i></div><div class="stat-info"><h3 id="reportCOGS" style="color:#ed8936">$0.00</h3><p>Cost of Goods Sold</p></div></div>
+                            <div class="stat-card" style="border-left:4px solid #38a169"><div class="stat-icon" style="background:rgba(56,161,105,0.1)"><i class="fas fa-chart-line" style="color:#38a169"></i></div><div class="stat-info"><h3 id="reportGrossProfit" style="color:#38a169">$0.00</h3><p>Gross Profit <span id="reportGrossMargin" style="font-weight:400;font-size:0.7rem"></span></p></div></div>
+                            <div class="stat-card" style="border-left:4px solid #667eea"><div class="stat-icon" style="background:rgba(102,126,234,0.1)"><i class="fas fa-sack-dollar" style="color:#667eea"></i></div><div class="stat-info"><h3 id="reportNetProfit" style="color:#667eea">$0.00</h3><p>Net Profit <span id="reportNetMargin" style="font-weight:400;font-size:0.7rem"></span> (after expenses)</p></div></div>
+                        </div>
+                        <div style="overflow-x:auto">
+                            <table style="width:100%;border-collapse:collapse;font-size:0.88rem">
+                                <thead><tr style="background:var(--gray-light);text-align:left">
+                                    <th style="padding:0.6rem 0.8rem">Date</th>
+                                    <th style="padding:0.6rem 0.8rem">Revenue</th>
+                                    <th style="padding:0.6rem 0.8rem">Cost (COGS)</th>
+                                    <th style="padding:0.6rem 0.8rem">Gross Profit</th>
+                                    <th style="padding:0.6rem 0.8rem">Net Profit</th>
+                                    <th style="padding:0.6rem 0.8rem">Running Net (Month)</th>
+                                </tr></thead>
+                                <tbody id="dailyProfitList"><tr><td colspan="6" style="text-align:center;color:var(--gray);padding:1rem">No data</td></tr></tbody>
+                            </table>
+                        </div>
+                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-circle-info"></i> Cost is calculated from each product's current Cost of Production (set under Inventory → edit product). Net Profit splits each month's total expenses evenly across its calendar days, since expenses are only tracked per-month, not per-day.</p>
+                    </div>
+
+                    <!-- FINANCIAL TREND BY DAY -->
+                    <div class="chart-card" style="margin-top:1.5rem">
+                        <h3><i class="fas fa-chart-line" style="color:var(--info)"></i> Revenue, Expenses & Net Profit — By Day</h3>
+                        <div class="chart-container"><canvas id="netProfitTrendChart"></canvas></div>
+                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-circle-info"></i> Expenses are only entered per-month, so each month's total is divided evenly across its calendar days to give a daily figure to compare against that day's Revenue and resulting Net Profit.</p>
+                    </div>
+
+                    <!-- LIVE EXPENSE SUMMARY -->
+                    <div class="chart-card" style="margin-top:1.5rem">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem">
+                            <h3 style="margin:0"><i class="fas fa-receipt" style="color:var(--danger)"></i> Live Expense Summary — <span id="expensePeriodLabel">this period</span></h3>
+                            <button class="btn btn-outline btn-small" onclick="openExpenseModal()"><i class="fas fa-pen"></i> Edit Expenses</button>
+                        </div>
+                        <div style="overflow-x:auto;margin-top:0.75rem">
+                            <table style="width:100%;border-collapse:collapse;font-size:0.9rem">
+                                <tbody id="expenseSummaryList">
+                                    <tr style="border-bottom:1px solid var(--gray-light)"><td style="padding:0.5rem 0.8rem;font-weight:700">Total Expenses ($)</td><td style="padding:0.5rem 0.8rem;text-align:right;font-weight:700" id="expTotal">$0.00</td></tr>
+                                    <tr style="border-bottom:1px solid var(--gray-light)"><td style="padding:0.5rem 0.8rem">Facility / Operating ($)</td><td style="padding:0.5rem 0.8rem;text-align:right" id="expFacility">-</td></tr>
+                                    <tr style="border-bottom:1px solid var(--gray-light)"><td style="padding:0.5rem 0.8rem">Salaries ($)</td><td style="padding:0.5rem 0.8rem;text-align:right" id="expSalaries">-</td></tr>
+                                    <tr style="border-bottom:1px solid var(--gray-light)"><td style="padding:0.5rem 0.8rem">Facebook Ads ($)</td><td style="padding:0.5rem 0.8rem;text-align:right" id="expFacebook">-</td></tr>
+                                    <tr style="border-bottom:1px solid var(--gray-light)"><td style="padding:0.5rem 0.8rem">Other Expenses ($)</td><td style="padding:0.5rem 0.8rem;text-align:right" id="expOther">-</td></tr>
+                                    <tr><td style="padding:0.5rem 0.8rem">Expense % of Live Sales</td><td style="padding:0.5rem 0.8rem;text-align:right" id="expPctSales">-</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- NEW VS REPEAT CUSTOMERS -->
+                    <div class="chart-card" style="margin-top:1.5rem">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem">
+                            <h3 style="margin:0"><i class="fas fa-user-plus" style="color:var(--primary)"></i> New vs Repeat Customers</h3>
+                            <button class="btn btn-outline btn-small" onclick="backfillCustomerIndex()"><i class="fas fa-database"></i> Build Customer History</button>
+                        </div>
+                        <div class="reports-grid" style="margin:1rem 0">
+                            <div class="stat-card" style="border-left:4px solid #4299e1"><div class="stat-icon" style="background:rgba(66,153,225,0.1)"><i class="fas fa-user-plus" style="color:#4299e1"></i></div><div class="stat-info"><h3 id="reportNewCustomers" style="color:#4299e1">0</h3><p>New Customers</p></div></div>
+                            <div class="stat-card" style="border-left:4px solid #9f7aea"><div class="stat-icon" style="background:rgba(159,122,234,0.1)"><i class="fas fa-user-check" style="color:#9f7aea"></i></div><div class="stat-info"><h3 id="reportRepeatCustomers" style="color:#9f7aea">0</h3><p>Repeat Customers</p></div></div>
+                        </div>
+                        <div style="overflow-x:auto">
+                            <table style="width:100%;border-collapse:collapse;font-size:0.88rem">
+                                <thead><tr style="background:var(--gray-light);text-align:left">
+                                    <th style="padding:0.6rem 0.8rem">Type</th>
+                                    <th style="padding:0.6rem 0.8rem">Customers</th>
+                                    <th style="padding:0.6rem 0.8rem">Orders</th>
+                                    <th style="padding:0.6rem 0.8rem">Revenue</th>
+                                </tr></thead>
+                                <tbody id="customerTypeList"><tr><td colspan="4" style="text-align:center;color:var(--gray);padding:1rem">No data</td></tr></tbody>
+                            </table>
+                        </div>
+                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem" id="customerIndexHint">Tap "Build Customer History" once to classify existing customers accurately.</p>
+                        <h4 style="margin:1.2rem 0 0.5rem;font-size:0.95rem">Daily Breakdown</h4>
+                        <div style="overflow-x:auto">
+                            <table style="width:100%;border-collapse:collapse;font-size:0.88rem">
+                                <thead><tr style="background:var(--gray-light);text-align:left">
+                                    <th style="padding:0.6rem 0.8rem">Date</th>
+                                    <th style="padding:0.6rem 0.8rem">New</th>
+                                    <th style="padding:0.6rem 0.8rem">Repeat</th>
+                                    <th style="padding:0.6rem 0.8rem">Running Month New</th>
+                                    <th style="padding:0.6rem 0.8rem">Running Month Repeat</th>
+                                </tr></thead>
+                                <tbody id="customerTypeDailyList"><tr><td colspan="5" style="text-align:center;color:var(--gray);padding:1rem">No data</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- REVENUE BY CHANNEL -->
+                    <div class="chart-card" style="margin-top:1.5rem">
+                        <h3><i class="fas fa-store" style="color:var(--primary)"></i> Revenue by Channel</h3>
+                        <div class="reports-grid">
+                            <div class="stat-card" style="border-left:4px solid #718096"><div class="stat-icon" style="background:rgba(113,128,150,0.1)"><i class="fas fa-shop" style="color:#718096"></i></div><div class="stat-info"><h3 id="channelWalkinRevenue" style="color:#718096">$0.00</h3><p>Walk-in / Shop (Pickup)</p></div></div>
+                            <div class="stat-card" style="border-left:4px solid #1877f2"><div class="stat-icon" style="background:rgba(24,119,242,0.1)"><i class="fab fa-facebook" style="color:#1877f2"></i></div><div class="stat-info"><h3 id="channelFbRevenue" style="color:#1877f2">$0.00</h3><p>Facebook / Delivery</p></div></div>
+                        </div>
+                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem">Split by shipping method: "Pickup" counts as walk-in shop revenue; "Phnom Penh" and "Province" deliveries count as Facebook-driven revenue.</p>
+                    </div>
+
+                    <!-- FACEBOOK ADS PERFORMANCE -->
+                    <div class="chart-card" style="margin-top:1.5rem">
+                        <h3><i class="fab fa-facebook" style="color:#1877f2"></i> Facebook Ads Performance</h3>
+                        <div class="reports-grid">
+                            <div class="stat-card" style="border-left:4px solid #1877f2"><div class="stat-icon" style="background:rgba(24,119,242,0.1)"><i class="fas fa-bullhorn" style="color:#1877f2"></i></div><div class="stat-info"><h3 id="fbAdSpend" style="color:#1877f2">$0.00</h3><p>Ad Spend</p></div></div>
+                            <div class="stat-card" style="border-left:4px solid #38a169"><div class="stat-icon" style="background:rgba(56,161,105,0.1)"><i class="fas fa-arrow-trend-up" style="color:#38a169"></i></div><div class="stat-info"><h3 id="fbROAS" style="color:#38a169">—</h3><p>ROAS (Delivery Revenue ÷ Spend)</p></div></div>
+                            <div class="stat-card" style="border-left:4px solid #ed8936"><div class="stat-icon" style="background:rgba(237,137,54,0.1)"><i class="fas fa-user-tag" style="color:#ed8936"></i></div><div class="stat-info"><h3 id="fbCostPerNewCustomer" style="color:#ed8936">—</h3><p>Cost per New Customer</p></div></div>
+                        </div>
+                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem">ROAS now uses only Facebook / Delivery revenue (Phnom Penh + Province orders), not walk-in shop sales. Ad Spend above is prorated to today — each month's total (entered in Live Expense Summary) divided evenly across its days, summed only for the days in this report so far — not the full month's amount.</p>
+                        <div class="chart-container" style="margin-top:1rem"><canvas id="fbAdsTrendChart"></canvas></div>
+                        <div style="overflow-x:auto;margin-top:0.8rem">
+                            <table style="width:100%;border-collapse:collapse;font-size:0.88rem">
+                                <thead><tr style="background:var(--gray-light);text-align:left">
+                                    <th style="padding:0.6rem 0.8rem">Date</th>
+                                    <th style="padding:0.6rem 0.8rem">Ad Spend (Day)</th>
+                                    <th style="padding:0.6rem 0.8rem">Delivery Revenue (Day)</th>
+                                    <th style="padding:0.6rem 0.8rem">ROAS (Day)</th>
+                                </tr></thead>
+                                <tbody id="fbAdsDailyList"><tr><td colspan="4" style="text-align:center;color:var(--gray);padding:1rem">No data</td></tr></tbody>
+                            </table>
+                        </div>
+                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-circle-info"></i> Ad Spend is only entered per-month, so each month's total is divided evenly across its calendar days to compare against that day's Delivery Revenue.</p>
+                    </div>
                     </div><!-- end reportContent -->
                 </div><!-- end adminReportsTab -->
             </div>
@@ -1247,6 +1433,29 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                 <div style="display:flex;gap:0.5rem;margin-top:1rem">
                     <button class="btn btn-outline" onclick="closeRefundModal()" style="flex:1">Cancel</button>
                     <button class="btn btn-danger" onclick="confirmRefund()" style="flex:2"><i class="fas fa-undo"></i> Confirm Refund</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- EXPENSE ENTRY MODAL -->
+    <div class="modal-overlay" id="expenseModal" onclick="if(event.target===this)closeExpenseModal()">
+        <div class="modal" style="max-width:420px;width:94%" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 style="margin:0"><i class="fas fa-receipt"></i> Monthly Expenses</h3>
+                <button class="modal-close" onclick="closeExpenseModal()">✕</button>
+            </div>
+            <div class="modal-body" style="padding:1rem">
+                <div class="form-group">
+                    <label style="font-size:0.85rem;font-weight:600">Month</label>
+                    <input type="month" id="expenseMonthInput" class="form-control" onchange="loadExpenseModalValues()">
+                </div>
+                <div class="form-group"><label style="font-size:0.85rem;font-weight:600">Facility / Operating ($)</label><input type="number" id="expInputFacility" class="form-control" min="0" step="0.01" placeholder="0.00"></div>
+                <div class="form-group"><label style="font-size:0.85rem;font-weight:600">Salaries ($)</label><input type="number" id="expInputSalaries" class="form-control" min="0" step="0.01" placeholder="0.00"></div>
+                <div class="form-group"><label style="font-size:0.85rem;font-weight:600">Facebook Ads ($)</label><input type="number" id="expInputFacebook" class="form-control" min="0" step="0.01" placeholder="0.00"></div>
+                <div class="form-group"><label style="font-size:0.85rem;font-weight:600">Other Expenses ($)</label><input type="number" id="expInputOther" class="form-control" min="0" step="0.01" placeholder="0.00"></div>
+                <div style="display:flex;gap:0.5rem;margin-top:1rem">
+                    <button class="btn btn-outline" onclick="closeExpenseModal()" style="flex:1">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveExpenses()" style="flex:2"><i class="fas fa-save"></i> Save</button>
                 </div>
             </div>
         </div>
@@ -1354,6 +1563,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                 </select>
             </div>
             <div class="form-group"><label>Price ($)</label><input type="number" id="editProductPrice" class="form-control" step="0.01"></div>
+            <div class="form-group"><label>Cost of Production ($)</label><input type="number" id="editProductCostPrice" class="form-control" step="0.01" min="0" placeholder="0.00"><small style="color:var(--gray);font-size:0.72rem">What it costs you to make/stock this item (optional)</small></div>
             <div class="form-group"><label>Images</label>
                 <div class="image-preview-container" id="editImagePreviewContainer"></div>
                 <div class="flex gap-2 mt-4"><input type="text" id="editImageUrlInput" class="form-control" placeholder="Add image URL"><button class="btn btn-outline btn-small" onclick="addEditImageUrl()">Add</button></div>
@@ -1897,6 +2107,7 @@ function sendToTelegram(order, callback) {
             accessoriesShort:'Accessories',shoesShort:'Shoes',
             imgCol:'Img',productCol:'Product',catCol:'Cat',totalCol:'Total',actCol:'Act',
             enterProductName:'Enter product name',priceUsd:'Price ($)',
+            costPriceUsd:'Cost of Production ($)',costPriceHint:'What it costs you to make/stock this item (optional)',profitMargin:'Margin',
             sizePlaceholder:'Size',qtyPlaceholder:'Qty',clickToUpload:'Click to upload',
             max5:'Max 5',imageUrl:'Image URL',addProductBtn:'Add Product',
             storeContext:'Store Context',thisDevice:'This Device',defaultPartner:'Default Partner',
@@ -1960,6 +2171,7 @@ function sendToTelegram(order, callback) {
             accessoriesShort:'គ្រឿងបន្លាស់',shoesShort:'ស្បែកជើង',
             imgCol:'រូបភាព',productCol:'ផលិតផល',catCol:'ប្រភេទ',totalCol:'សរុប',actCol:'សកម្មភាព',
             enterProductName:'បញ្ចូលឈ្មោះផលិតផល',priceUsd:'តម្លៃ ($)',
+            costPriceUsd:'ថ្លៃដើមផលិតកម្ម ($)',costPriceHint:'ថ្លៃដើមផលិត/ស្តុកទំនិញនេះ (ស្រេចចិត្ត)',profitMargin:'ចំណេញ',
             sizePlaceholder:'ទំហំ',qtyPlaceholder:'ចំនួន',clickToUpload:'ចុចដើម្បីផ្ទុកឡើង',
             max5:'អតិបរមា 5',imageUrl:'តំណរូបភាព',addProductBtn:'បន្ថែមផលិតផល',
             storeContext:'បរិបទហាង',thisDevice:'ឧបករណ៍នេះ',defaultPartner:'ដៃគូលំនាំដើម',
@@ -2066,7 +2278,7 @@ function sendToTelegram(order, callback) {
         for (var i = 0; i < STATE.products.length; i++) {
             var p = STATE.products[i];
             db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({
-                name: p.name, price: p.price, stock: p.stock, category: p.category,
+                name: p.name, price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), stock: p.stock, category: p.category,
                 images: p.images || [], sizes: p.sizes || [], active: true,
                 updatedAt: new Date().toISOString()
             }, { merge: true }).catch(function(e){ console.warn('Product sync failed:', e); });
@@ -2411,6 +2623,8 @@ function sendToTelegram(order, callback) {
             clearInventorySearch(); renderInventory();
             // Ensure Products sub-tab is active by default
             switchInvTab('products', document.querySelector('.inv-subbtn'));
+            // Fire-and-forget: capture today's opening stock snapshot if not already done today
+            maybeCaptureOpeningSnapshot();
         }
         else if (tab === 'reports') {
             document.querySelectorAll('.admin-tab')[2].classList.add('active');
@@ -3072,6 +3286,35 @@ function sendToTelegram(order, callback) {
         if (!cur || !np || !cf) { statusEl.innerHTML = '<span style="color:var(--danger)">All fields are required.</span>'; return; }
         if (np.length < 6) { statusEl.innerHTML = '<span style="color:var(--danger)">New password must be at least 6 characters.</span>'; return; }
         if (np !== cf) { statusEl.innerHTML = '<span style="color:var(--danger)">New passwords do not match.</span>'; return; }
+
+        // The restock tool's password lives in its own global doc (not tied
+        // to a store branch, since the restock tool is shared across all of
+        // them), so it's handled as its own path, separate from the
+        // per-store passwords below.
+        if (role === 'restock') {
+            var restockBtn = document.querySelector('[onclick="changePassword()"]');
+            if (restockBtn) restockBtn.disabled = true;
+            statusEl.innerHTML = '<span style="color:var(--gray)"><i class="fas fa-spinner fa-spin"></i> Saving...</span>';
+            try {
+                var restockDoc = db ? await db.collection('_admin_').doc('restockConfig').get() : null;
+                var currentRestockPw = (restockDoc && restockDoc.exists && restockDoc.data().password) ? restockDoc.data().password : 'restock123';
+                if (cur !== currentRestockPw) {
+                    statusEl.innerHTML = '<span style="color:var(--danger)">Current password is incorrect.</span>';
+                } else {
+                    if (db) await db.collection('_admin_').doc('restockConfig').set({ password: np, updatedAt: Date.now() }, { merge: true });
+                    statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Restock settings password changed!</span>';
+                    document.getElementById('changePwCurrent').value = '';
+                    document.getElementById('changePwNew').value = '';
+                    document.getElementById('changePwConfirm').value = '';
+                    logActivity('Password Changed', 'Role: restock');
+                }
+            } catch (e) {
+                statusEl.innerHTML = '<span style="color:var(--danger)">Failed: ' + e.message + '</span>';
+            }
+            if (restockBtn) restockBtn.disabled = false;
+            return;
+        }
+
         var passwords = getStoredPasswords();
         var key = role === 'full' ? 'fullPass' : role === 'orders' ? 'ordersPass' : role === 'productedit' ? 'productEditPass' : 'inventoryPass';
         var currentCorrect = passwords[key] || (role === 'productedit' ? (passwords.fullPass || 'admin123') : null);
@@ -3535,7 +3778,7 @@ function sendToTelegram(order, callback) {
         try {
             for (var i = 0; i < STATE.products.length; i++) {
                 var p = STATE.products[i];
-                await db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({ name: p.name, slug: p.slug || makeSlug(p.name), price: p.price, stock: p.stock, category: p.category, images: p.images || [], sizes: p.sizes || [], active: true, updatedAt: new Date().toISOString() }, { merge: true });
+                await db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({ name: p.name, slug: p.slug || makeSlug(p.name), price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), stock: p.stock, category: p.category, images: p.images || [], sizes: p.sizes || [], active: true, updatedAt: new Date().toISOString() }, { merge: true });
             }
             // Delete products that were deleted locally
             var deleted = JSON.parse(localStorage.getItem('goatDeletedProducts') || '[]');
@@ -3644,6 +3887,219 @@ function sendToTelegram(order, callback) {
             console.log('═══════════════════════════════════════════════════════');
         } catch(e) {
             console.error('Reconciliation failed:', e);
+        }
+    }
+
+    // One-time migration: copy Cost of Production from Goat Kids 271 to Main Store & Goat Kids PH
+    // Matches products by slug (falls back to name-derived slug). 271's cost always wins on conflict.
+    // Usage (browser console, while app is loaded and online): copyCostPricesFromStore271()
+    async function copyCostPricesFromStore271() {
+        if (!db) { console.error('Firebase offline'); return; }
+        var SOURCE_STORE = 'GOAT-GOAT-KIDS-271-0889';
+        var TARGET_STORES = [
+            { id: 'GOAT-1979', name: 'Main Store' },
+            { id: 'GOAT-GOAT-KIDS-PH-6012', name: 'Goat Kids PH' }
+        ];
+        if (!confirm('This will copy Cost of Production values from Goat Kids 271 to Main Store and Goat Kids PH, matching products by name.\n\nExisting cost prices in the target stores WILL be overwritten. Continue?')) return;
+
+        console.log('═══════════════════════════════════════════════════════');
+        console.log('COPYING COST PRICES FROM GOAT KIDS 271 → OTHER STORES');
+        console.log('═══════════════════════════════════════════════════════');
+
+        function normKey(name, slug) {
+            return (slug && slug.trim()) ? slug.trim().toLowerCase() : makeSlug(name || '');
+        }
+
+        try {
+            var srcSnap = await db.collection('stores').doc(SOURCE_STORE).collection('products').get();
+            var srcMap = {};
+            var srcCount = 0;
+            srcSnap.forEach(function(d) {
+                var dt = d.data();
+                if (dt.costPrice != null && dt.costPrice !== '') {
+                    srcMap[normKey(dt.name, dt.slug)] = { name: dt.name || '', costPrice: dt.costPrice };
+                    srcCount++;
+                }
+            });
+            console.log('Found ' + srcCount + ' products with a cost set in Goat Kids 271.');
+            if (!srcCount) { console.log('Nothing to copy. Done.'); return; }
+
+            var totalUpdated = 0;
+            var unmatchedByStore = {};
+
+            for (var t = 0; t < TARGET_STORES.length; t++) {
+                var store = TARGET_STORES[t];
+                console.log('\n── ' + store.name + ' (' + store.id + ') ──');
+                var tgtSnap = await db.collection('stores').doc(store.id).collection('products').get();
+                var matches = [];
+                var matchedKeys = {};
+
+                tgtSnap.forEach(function(d) {
+                    var dt = d.data();
+                    var key = normKey(dt.name, dt.slug);
+                    var src = srcMap[key];
+                    if (src) {
+                        matches.push({ id: d.id, name: dt.name || d.id, costPrice: src.costPrice });
+                        matchedKeys[key] = true;
+                    }
+                });
+
+                for (var i = 0; i < matches.length; i += 400) {
+                    var chunk = matches.slice(i, i + 400);
+                    var batch = db.batch();
+                    chunk.forEach(function(m) {
+                        var ref = db.collection('stores').doc(store.id).collection('products').doc(m.id);
+                        batch.update(ref, { costPrice: m.costPrice, updatedAt: new Date().toISOString() });
+                    });
+                    await batch.commit();
+                }
+
+                matches.forEach(function(m) { console.log('  ✅ ' + m.name + ' → $' + Number(m.costPrice).toFixed(2)); });
+                console.log(store.name + ': updated ' + matches.length + ' product(s).');
+                totalUpdated += matches.length;
+
+                var missing = [];
+                Object.keys(srcMap).forEach(function(k) { if (!matchedKeys[k]) missing.push(srcMap[k].name); });
+                unmatchedByStore[store.name] = missing;
+            }
+
+            console.log('\n═══════════════════════════════════════════════════════');
+            console.log('DONE. Total cost prices copied: ' + totalUpdated);
+            Object.keys(unmatchedByStore).forEach(function(storeName) {
+                var list = unmatchedByStore[storeName];
+                if (list.length) {
+                    console.log('\n⚠️  Not found in ' + storeName + ' (name/slug did not match any product there):');
+                    list.forEach(function(n) { console.log('   - ' + n); });
+                }
+            });
+            console.log('═══════════════════════════════════════════════════════');
+            showToast('Cost prices copied to ' + totalUpdated + ' product(s). See console for details.', 'success');
+
+            // If we're currently sitting on one of the target stores, refresh local state so the UI reflects it immediately
+            if (STATE.storeId === 'GOAT-1979' || STATE.storeId === 'GOAT-GOAT-KIDS-PH-6012') {
+                var freshSnap = await db.collection('stores').doc(STATE.storeId).collection('products').get();
+                var fresh = [];
+                freshSnap.forEach(function(d) {
+                    var dt = d.data();
+                    fresh.push(Object.assign({}, dt, { id: d.id, name: dt.name || '', slug: dt.slug || makeSlug(dt.name||''), price: dt.price||0, stock: dt.stock||0, category: dt.category||'', images: dt.images||[], sizes: dt.sizes||[], active: dt.active !== false }));
+                });
+                if (fresh.length) { STATE.products = fresh; saveProducts(); renderInventory(); renderProducts(); }
+            }
+        } catch (e) {
+            console.error('Cost price copy failed:', e);
+            showToast('Copy failed - check console', 'error');
+        }
+    }
+
+    // ONE-TIME DIAGNOSTIC: for products in Goat Kids 271 that have a cost set but found no exact
+    // name/slug match in a target store, look for similar-but-not-identical names in that target
+    // store so you can tell "just named differently" apart from "not actually stocked there".
+    // Run from console (Main Store or any store, doesn't matter which one you're logged into):
+    //   findCostNameMismatches('GOAT-1979')                 -> checks against Main Store
+    //   findCostNameMismatches('GOAT-GOAT-KIDS-PH-6012')     -> checks against Goat Kids PH
+    async function findCostNameMismatches(targetStoreId) {
+        if (!db) { console.error('Firebase offline'); return; }
+        var SOURCE_STORE = 'GOAT-GOAT-KIDS-271-0889';
+
+        function simplify(s) {
+            return (s || '').toLowerCase().replace(/[^a-z0-9\u1780-\u17ff]+/g, '');
+        }
+
+        try {
+            var srcSnap = await db.collection('stores').doc(SOURCE_STORE).collection('products').get();
+            var srcItems = [];
+            srcSnap.forEach(function(d) {
+                var dt = d.data();
+                if (dt.costPrice != null && dt.costPrice !== '') {
+                    srcItems.push({ name: dt.name || '', slug: dt.slug || '', costPrice: dt.costPrice, simple: simplify(dt.slug || dt.name) });
+                }
+            });
+
+            var tgtSnap = await db.collection('stores').doc(targetStoreId).collection('products').get();
+            var tgtItems = [];
+            tgtSnap.forEach(function(d) {
+                var dt = d.data();
+                tgtItems.push({ id: d.id, name: dt.name || d.id, slug: dt.slug || '', simple: simplify(dt.slug || dt.name) });
+            });
+
+            console.log('═══════════════════════════════════════════════════════');
+            console.log('NAME-MISMATCH CHECK vs ' + targetStoreId);
+            console.log('═══════════════════════════════════════════════════════');
+
+            var anyFound = false;
+            srcItems.forEach(function(src) {
+                var exactHit = tgtItems.some(function(t) { return t.simple === src.simple; });
+                if (exactHit) return; // already matched by the real migration, skip
+
+                var candidates = tgtItems.filter(function(t) {
+                    if (!t.simple || !src.simple) return false;
+                    return t.simple.indexOf(src.simple) !== -1 || src.simple.indexOf(t.simple) !== -1;
+                });
+
+                anyFound = true;
+                if (candidates.length) {
+                    console.log('\\n🔎 "' + src.name + '" ($' + src.costPrice + ') — possible match(es) in ' + targetStoreId + ':');
+                    candidates.forEach(function(c) { console.log('     → "' + c.name + '" (id: ' + c.id + ')'); });
+                } else {
+                    console.log('\\n❌ "' + src.name + '" ($' + src.costPrice + ') — no similar product found at all. Probably not stocked in this store.');
+                }
+            });
+
+            if (!anyFound) console.log('No unmatched items to check — everything already matched exactly.');
+            console.log('\\n═══════════════════════════════════════════════════════');
+            console.log('Tip: for a real near-match, either rename the product in ' + targetStoreId + ' to match 271 name/slug and re-run copyCostPricesFromStore271(), or just open the product in ' + targetStoreId + ' and type in the Cost of Production manually.');
+        } catch (e) {
+            console.error('Mismatch check failed:', e);
+        }
+    }
+
+    // ONE-TIME DIAGNOSTIC: lists every item SOLD in the currently-loaded report period (whatever
+    // date range the Reports tab is showing right now — e.g. "This Month"), how many units sold,
+    // and whether that product currently has a Cost of Production set or not.
+    // Just open the Reports tab, make sure the period you want is showing, then run in console:
+    //   reportItemsCostStatus()
+    function reportItemsCostStatus() {
+        var confirmed = getReportConfirmed();
+        if (!confirmed.length) { console.log('No confirmed orders loaded for the current report period. Open the Reports tab and pick a date range first.'); return; }
+
+        var byKey = {};
+        confirmed.forEach(function(o) {
+            var storeLabel = o._sourceStoreName || 'Current Store';
+            (o.cart || []).forEach(function(it) {
+                var pid = it.productId;
+                var key = (o._sourceStoreId || 'current') + '|' + pid;
+                if (!byKey[key]) byKey[key] = { name: it.name || pid, store: storeLabel, qty: 0, revenue: 0, order: o, pid: pid };
+                byKey[key].qty += it.quantity || 0;
+                byKey[key].revenue += (it.subtotal != null ? it.subtotal : (it.price || 0) * (it.quantity || 0));
+            });
+        });
+
+        var rows = Object.keys(byKey).map(function(key) {
+            var row = byKey[key];
+            var cost = getReportProductCost(row.order, row.pid);
+            var p = findReportProduct(row.order, row.pid);
+            return {
+                'Store': row.store,
+                'Product': row.name,
+                'Qty Sold': row.qty,
+                'Revenue': '$' + row.revenue.toFixed(2),
+                'Cost/Unit': p ? (cost > 0 ? '$' + cost.toFixed(2) : '⚠️ MISSING') : '❌ NOT IN THAT STORE\'S CATALOG',
+                'Total Cost': p && cost > 0 ? '$' + (cost * row.qty).toFixed(2) : '$0.00 (missing!)'
+            };
+        });
+
+        rows.sort(function(a, b) { return (a['Cost/Unit'].indexOf('⚠️') !== -1 || a['Cost/Unit'].indexOf('❌') !== -1) ? -1 : 1; });
+
+        console.log('═══════════════════════════════════════════════════════');
+        console.log('ITEMS SOLD THIS PERIOD — COST STATUS (' + rows.length + ' distinct products)');
+        console.log('═══════════════════════════════════════════════════════');
+        console.table(rows);
+
+        var missing = rows.filter(function(r) { return r['Cost/Unit'].indexOf('MISSING') !== -1 || r['Cost/Unit'].indexOf('NOT IN') !== -1; });
+        if (missing.length) {
+            console.log('⚠️  ' + missing.length + ' product(s) sold this period have NO cost set — their cost is being counted as $0, which understates your Cost of Goods Sold and overstates profit.');
+        } else {
+            console.log('✅ Every item sold this period has a cost set. Cost of Goods Sold should be accurate.');
         }
     }
 
@@ -3992,17 +4448,22 @@ function sendToTelegram(order, callback) {
     function addProduct() {
         var n = document.getElementById('productName').value.trim();
         var pr = parseFloat(document.getElementById('productPrice').value);
+        var costEl = document.getElementById('productCostPrice');
+        var costRaw = costEl ? costEl.value.trim() : '';
+        var cost = costRaw === '' ? null : parseFloat(costRaw);
         var c = document.getElementById('productCategory').value;
         if (!n || isNaN(pr) || pr <= 0 || !c) { showToast('Fill all fields', 'error'); return; }
+        if (cost !== null && (isNaN(cost) || cost < 0)) { showToast('Enter a valid cost of production', 'error'); return; }
         if (!STATE.newProductSizes.length) { showToast('Add at least one size', 'error'); return; }
         var imgs = STATE.newProductImages.length ? STATE.newProductImages.slice() : ['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'];
         var t = 0;
         for (var i = 0; i < STATE.newProductSizes.length; i++) { t += STATE.newProductSizes[i].qty; }
-        STATE.products.push({ id: 'p' + Date.now(), name: n, slug: makeSlug(n), price: pr, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice(), addedAt: Date.now(), active: true });
+        STATE.products.push({ id: 'p' + Date.now(), name: n, slug: makeSlug(n), price: pr, costPrice: cost, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice(), addedAt: Date.now(), active: true });
         saveProducts();
-        logActivity('Add Product', n + ' ($' + pr + ')');
+        logActivity('Add Product', n + ' ($' + pr + ')' + (cost !== null ? ' | Cost: $' + cost.toFixed(2) : ''));
         if (STATE.firebaseOnline) syncToFirebase();
         document.getElementById('productName').value = ''; document.getElementById('productPrice').value = ''; document.getElementById('productCategory').value = '';
+        if (costEl) costEl.value = '';
         STATE.newProductSizes = []; STATE.newProductImages = [];
         renderNewProductSizes(); renderImagePreviews();
         renderProducts(); renderInventory(); updateAdminBadges();
@@ -4045,6 +4506,8 @@ function sendToTelegram(order, callback) {
         document.getElementById('editProductName').value = p.name;
         document.getElementById('editProductCategory').value = p.category;
         document.getElementById('editProductPrice').value = p.price;
+        var editCostEl = document.getElementById('editProductCostPrice');
+        if (editCostEl) editCostEl.value = (p.costPrice != null && p.costPrice !== '') ? p.costPrice : '';
         var reasonEl = document.getElementById('editRevisionReason');
         var customEl = document.getElementById('editRevisionReasonCustom');
         if (reasonEl) reasonEl.value = '';
@@ -4097,39 +4560,58 @@ function sendToTelegram(order, callback) {
         renderEditSizes();
     }
 
-    function saveEditProduct() {
+    async function saveEditProduct() {
         var pid = document.getElementById('editProductId').value;
         var p = null;
         for (var i = 0; i < STATE.products.length; i++) { if (STATE.products[i].id === pid) { p = STATE.products[i]; break; } }
         if (!p) return;
 
-        // Capture old stock for comparison
+        // Capture old stock for comparison — this is what THIS TAB currently
+        // believes the stock is, which can be hours stale if the tab has been
+        // open a long time (e.g. during a slow recount session) while sales
+        // were confirmed elsewhere in the meantime.
         var oldSizes = p.sizes ? p.sizes.map(function(s){ return Object.assign({}, s); }) : [];
         var oldStock = p.stock || 0;
 
-        p.name = document.getElementById('editProductName').value.trim() || p.name;
-        p.slug = makeSlug(p.name);
-        p.category = document.getElementById('editProductCategory').value;
-        p.price = parseFloat(document.getElementById('editProductPrice').value);
-        p.images = STATE.editProductImages.slice();
+        // Read the modal's fields into local variables first — don't mutate
+        // `p` yet. We need to know what the user INTENDED before we check
+        // whether stock moved on the server underneath us.
+        var newName = document.getElementById('editProductName').value.trim() || p.name;
+        var newSlug = makeSlug(newName);
+        var newCategory = document.getElementById('editProductCategory').value;
+        var newPrice = parseFloat(document.getElementById('editProductPrice').value);
+        var newCostPrice = (typeof p.costPrice !== 'undefined') ? p.costPrice : null;
+        var editCostVal = document.getElementById('editProductCostPrice');
+        if (editCostVal) {
+            var costRaw2 = editCostVal.value.trim();
+            if (costRaw2 === '') { newCostPrice = null; }
+            else {
+                var cost2 = parseFloat(costRaw2);
+                if (isNaN(cost2) || cost2 < 0) { showToast('Enter a valid cost of production', 'error'); return; }
+                newCostPrice = cost2;
+            }
+        }
+        var newImages = STATE.editProductImages.slice();
 
+        var newSizes = oldSizes, newStockIntent = oldStock;
         if (STATE._editSizes && STATE._editSizes.length) {
             var nameInputs = document.querySelectorAll('.edit-size-name');
             var qtyInputs = document.querySelectorAll('.edit-size-qty');
-            for (var j = 0; j < STATE._editSizes.length; j++) {
-                if (nameInputs[j]) STATE._editSizes[j].name = nameInputs[j].value.trim() || STATE._editSizes[j].name;
-                if (qtyInputs[j]) STATE._editSizes[j].qty = parseInt(qtyInputs[j].value) || 0;
-            }
-            p.sizes = STATE._editSizes.slice();
+            newSizes = STATE._editSizes.map(function(s, j) {
+                return {
+                    name: (nameInputs[j] ? (nameInputs[j].value.trim() || s.name) : s.name),
+                    qty: (qtyInputs[j] ? (parseInt(qtyInputs[j].value) || 0) : s.qty)
+                };
+            });
+            newStockIntent = newSizes.reduce(function(t, s){ return t + (s.qty || 0); }, 0);
         }
-        p.stock = getTotalStock(p);
 
-        // Check if stock changed
-        var stockChanged = p.stock !== oldStock;
-        if (!stockChanged && p.sizes) {
-            for (var k = 0; k < p.sizes.length; k++) {
-                var oldSz = oldSizes.find(function(s){ return s.name === p.sizes[k].name; });
-                if (!oldSz || oldSz.qty !== p.sizes[k].qty) { stockChanged = true; break; }
+        // Did the person editing actually mean to change stock?
+        var stockChanged = newStockIntent !== oldStock;
+        if (!stockChanged) {
+            for (var k = 0; k < newSizes.length; k++) {
+                var oldSz = oldSizes.find(function(s){ return s.name === newSizes[k].name; });
+                if (!oldSz || oldSz.qty !== newSizes[k].qty) { stockChanged = true; break; }
             }
         }
 
@@ -4147,10 +4629,66 @@ function sendToTelegram(order, callback) {
             return;
         }
 
+        // ── LIVE STOCK CONFLICT CHECK ──
+        // Stock is the one field on a product that can change every few
+        // seconds (a sale, a refund, a transfer) — unlike name/price/images,
+        // which only ever change from this same modal. Before we write OUR
+        // stock/sizes over Firestore, ask Firestore what's actually there
+        // RIGHT NOW. If it doesn't match what this tab had cached (oldStock),
+        // something else touched this product since we loaded it, and
+        // blindly pushing our numbers would silently erase that — which is
+        // exactly what happened to several Sept 9 sales during a long
+        // recount session. So: if the live number has moved, we keep the
+        // live stock/sizes instead of overwriting them, and only apply the
+        // user's OTHER edits (name/price/category/images). If the user was
+        // also deliberately trying to change stock in this same save, that's
+        // a genuine conflict — we still don't guess, we keep the live value
+        // and tell them to reopen and re-enter the count against the current
+        // number.
+        var finalStock = newStockIntent, finalSizes = newSizes;
+        var stockConflict = false, liveStockAtCheck = oldStock;
+        if (db) {
+            try {
+                var liveSnap = await db.collection('stores').doc(STATE.storeId).collection('products').doc(pid).get();
+                if (liveSnap.exists) {
+                    var liveData = liveSnap.data();
+                    liveStockAtCheck = (liveData.stock != null) ? liveData.stock : oldStock;
+                    if (liveStockAtCheck !== oldStock) {
+                        stockConflict = true;
+                        finalStock = liveStockAtCheck;
+                        finalSizes = liveData.sizes || oldSizes;
+                    }
+                }
+            } catch (e) {
+                console.warn('Live stock check failed — proceeding with local values:', e);
+            }
+        }
+
+        // Now apply everything to the local product object.
+        p.name = newName;
+        p.slug = newSlug;
+        p.category = newCategory;
+        p.price = newPrice;
+        p.costPrice = newCostPrice;
+        p.images = newImages;
+        p.sizes = finalSizes;
+        p.stock = (p.sizes && p.sizes.length) ? getTotalStock(p) : finalStock;
+
         // Save locally first — instant, never blocked by network.
         saveProducts();
         var logNote = p.name + ' (Stock: ' + oldStock + ' → ' + p.stock + ')' + (reason ? ' | Reason: ' + reason : '');
         logActivity('Edit Product', logNote);
+
+        if (stockConflict && stockChanged) {
+            showToast('⚠️ Stock changed on the server since you opened this (now ' + liveStockAtCheck + ') — your stock edit was NOT applied, to avoid overwriting a sale or transfer. Other changes were saved. Reopen to re-enter the count.', 'error');
+        } else if (stockConflict) {
+            showToast('Note: stock moved elsewhere while this was open — kept the live number (' + liveStockAtCheck + ').', 'info');
+        }
+
+        // Record a structured stock adjustment only when OUR edit is what
+        // actually changed the stored stock (not when we just deferred to
+        // a live conflicting value someone else already wrote).
+        if (stockChanged && !stockConflict) { recordStockAdjustment(p, oldSizes, oldStock, reason); }
 
         // Sync to Firebase in the background — always attempt if db exists
         // (don't gate on STATE.firebaseOnline, which can be a stale
@@ -4158,7 +4696,7 @@ function sendToTelegram(order, callback) {
         // flushProductSyncQueue() retries it automatically once reconnected —
         // the edit is never silently lost even though we don't block on it.
         var productSyncPayload = {
-            name: p.name, slug: p.slug, price: p.price, stock: p.stock, category: p.category,
+            name: p.name, slug: p.slug, price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), stock: p.stock, category: p.category,
             images: p.images || [], sizes: p.sizes || [], active: true,
             updatedAt: new Date().toISOString()
         };
@@ -4194,8 +4732,10 @@ function sendToTelegram(order, callback) {
             } catch(e3) {}
         }
 
-        // Send Telegram if stock changed
-        if (stockChanged) {
+        // Send Telegram if stock changed (and it was actually OUR change that
+        // took effect — not a case where we deferred to a live value someone
+        // else already wrote, which would make this alert misleading).
+        if (stockChanged && !stockConflict) {
             var sizeLines = (p.sizes || []).map(function(s){ return '  ' + s.name + ': ' + s.qty; }).join('\n');
             var msg = '📦 <b>STOCK REVISED</b>\n\n' +
                 '🏷️ ' + p.name + '\n' +
@@ -4761,6 +5301,9 @@ function sendToTelegram(order, callback) {
         } else {
             queueOfflineSync(oid, confirmedOrder, stockUpdates);
         }
+        // Record this customer's first-ever order date (for New vs Repeat
+        // reporting) — fire-and-forget, never blocks order confirmation.
+        updateCustomerIndexOnConfirm(confirmedOrder);
     }
 
     // ── Offline sync queue: retries failed Firebase writes when connection returns ──
@@ -5108,6 +5651,7 @@ function sendToTelegram(order, callback) {
         if (tab === 'products') renderInventory();
         if (tab === 'transfer') initTransferTab();
         if (tab === 'branchstock') initBranchStockTab();
+        if (tab === 'reconcile') initReconcileTab();
         if (tab === 'settings') {
             // Always lock when switching to settings
             lockSettings();
@@ -5573,6 +6117,523 @@ function sendToTelegram(order, callback) {
     }
 
     // =============================================
+    // =============================================
+    // STOCK RECONCILIATION
+    // Two checks over a chosen date range:
+    //  A) Orders confirmed but never deducted from stock (data integrity bug)
+    //  B) Stock movement audit: opening snapshot + sold/refunded/transferred
+    //     should equal the closing snapshot (or live stock, for "today")
+    // Requires a daily opening snapshot, captured automatically once this
+    // feature ships (see maybeCaptureOpeningSnapshot), plus a manual
+    // "Take Snapshot Now" button for correcting the baseline after a
+    // physical stock count.
+    // =============================================
+
+    function _dateStr(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+    function _todayStr() { return _dateStr(new Date()); }
+    function _nextDateStr(dateStr) { var d = new Date(dateStr + 'T00:00:00'); d.setDate(d.getDate() + 1); return _dateStr(d); }
+
+    async function maybeCaptureOpeningSnapshot() {
+        if (!db || !STATE.storeId) return;
+        var todayStr = _todayStr();
+        var marker = localStorage.getItem('goatSnapshotDate_' + STATE.storeId);
+        if (marker === todayStr) return; // already captured today from this device
+        try {
+            var ref = db.collection('stores').doc(STATE.storeId).collection('stockSnapshots').doc(todayStr);
+            var existing = await ref.get();
+            if (existing.exists) { localStorage.setItem('goatSnapshotDate_' + STATE.storeId, todayStr); return; } // another device already captured it
+            await saveSnapshotNow(todayStr);
+        } catch(e) { console.warn('Opening snapshot capture failed:', e.message); }
+    }
+
+    async function saveSnapshotNow(dateStr) {
+        var productsMap = {};
+        STATE.products.forEach(function(p) {
+            var sizesMap = {};
+            if (p.sizes && p.sizes.length) p.sizes.forEach(function(s){ sizesMap[s.name] = s.qty || 0; });
+            productsMap[p.id] = { name: p.name, sizes: sizesMap, stock: getTotalStock(p) };
+        });
+        var snap = { date: dateStr, timestamp: Date.now(), takenBy: STATE.adminRole || 'system', products: productsMap };
+        await db.collection('stores').doc(STATE.storeId).collection('stockSnapshots').doc(dateStr).set(snap);
+        localStorage.setItem('goatSnapshotDate_' + STATE.storeId, dateStr);
+        return snap;
+    }
+
+    async function takeSnapshotNow() {
+        if (!db) { showToast('Firebase offline — cannot take snapshot', 'error'); return; }
+        var todayStr = _todayStr();
+        if (!confirm('Take a stock snapshot now for today (' + todayStr + ')?\n\nThis overwrites any existing snapshot for today and becomes the new baseline for reconciliation. Use this right after a physical stock count.')) return;
+        try {
+            await saveSnapshotNow(todayStr);
+            logActivity('Stock Snapshot', 'Manual snapshot taken for ' + todayStr);
+            showToast('📸 Snapshot saved for ' + todayStr, 'success');
+            var infoEl = document.getElementById('reconcileSnapshotInfo');
+            if (infoEl) infoEl.textContent = 'Snapshot for ' + todayStr + ' saved just now.';
+        } catch(e) { showToast('Snapshot failed: ' + e.message, 'error'); }
+    }
+
+    async function recordStockAdjustment(p, oldSizes, oldStock, reason) {
+        if (!db || !STATE.storeId) return;
+        try {
+            var sizeDeltas = [];
+            if (p.sizes && p.sizes.length) {
+                p.sizes.forEach(function(s) {
+                    var old = oldSizes.find(function(o){ return o.name === s.name; });
+                    var oldQty = old ? (old.qty || 0) : 0;
+                    if (oldQty !== s.qty) sizeDeltas.push({ size: s.name, oldQty: oldQty, newQty: s.qty, delta: s.qty - oldQty });
+                });
+            }
+            var adj = {
+                productId: p.id, productName: p.name,
+                oldStock: oldStock, newStock: p.stock, totalDelta: p.stock - oldStock,
+                sizeDeltas: sizeDeltas, reason: reason || '',
+                timestamp: Date.now(), timeStr: new Date().toLocaleString(),
+                user: STATE.adminRole || 'admin'
+            };
+            await db.collection('stores').doc(STATE.storeId).collection('stockAdjustments').add(adj);
+        } catch(e) { console.warn('Stock adjustment log failed:', e.message); }
+    }
+
+    function initReconcileTab() {
+        var fromEl = document.getElementById('reconcileDateFrom'), toEl = document.getElementById('reconcileDateTo');
+        if (fromEl && !fromEl.value) { var t = _todayStr(); fromEl.value = t; toEl.value = t; }
+        var infoEl = document.getElementById('reconcileSnapshotInfo');
+        if (infoEl && db && STATE.storeId) {
+            db.collection('stores').doc(STATE.storeId).collection('stockSnapshots').doc(_todayStr()).get()
+                .then(function(s){ infoEl.textContent = s.exists ? ('Today\'s opening snapshot: saved ' + new Date(s.data().timestamp).toLocaleTimeString() + '.') : 'No snapshot for today yet — one is taken automatically, or click "Take Snapshot Now".'; })
+                .catch(function(){ infoEl.textContent = ''; });
+        }
+    }
+
+    function setReconcileRange(range) {
+        var now = new Date(), from;
+        var to = _todayStr();
+        if (range === 'today') { from = to; }
+        else if (range === 'week') { var d = new Date(now); d.setDate(d.getDate() - 6); from = _dateStr(d); }
+        else if (range === 'month') { from = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01'; }
+        document.getElementById('reconcileDateFrom').value = from;
+        document.getElementById('reconcileDateTo').value = to;
+    }
+
+    var _reconcileMovementRows = []; // cached rows from the last run, for the "show all" toggle
+
+    async function runStockReconciliation() {
+        if (!db) { showToast('Firebase offline — reconciliation needs a connection', 'error'); return; }
+        var fromDate = document.getElementById('reconcileDateFrom').value;
+        var toDate = document.getElementById('reconcileDateTo').value;
+        if (!fromDate || !toDate) { showToast('Pick both dates', 'error'); return; }
+        if (fromDate > toDate) { showToast('"From" must be before "To"', 'error'); return; }
+
+        var summaryEl = document.getElementById('reconcileSummary');
+        summaryEl.innerHTML = '<div style="text-align:center;color:var(--gray);padding:1rem"><i class="fas fa-spinner fa-spin"></i> Checking ' + fromDate + ' → ' + toDate + '...</div>';
+        document.getElementById('reconcileOrderIssuesWrap').style.display = 'none';
+        document.getElementById('reconcileMovementWrap').style.display = 'none';
+        document.getElementById('reconcileEditAfterSaleWrap').style.display = 'none';
+        document.getElementById('reconcileEmptyState').style.display = 'none';
+
+        var fromTs = new Date(fromDate + 'T00:00:00').getTime();
+        var toTs = new Date(toDate + 'T23:59:59').getTime();
+
+        try {
+            var orderIssues = await checkUndeductedOrders(fromTs, toTs);
+            var movement = await checkStockMovement(fromDate, toDate, fromTs, toTs);
+            var editAfterSaleIssues = await checkSaleFollowedByEdit(fromTs, toTs);
+
+            renderOrderIssues(orderIssues);
+            _reconcileMovementRows = movement.rows;
+            document.getElementById('reconcileShowAll').checked = false;
+            renderReconcileMovementTable();
+            renderEditAfterSaleIssues(editAfterSaleIssues);
+
+            var mismatchCount = movement.rows.filter(function(r){ return r.diff !== 0; }).length;
+            var badge = document.getElementById('reconcileBadge');
+            var totalIssues = orderIssues.length + mismatchCount + editAfterSaleIssues.length;
+            if (badge) { badge.style.display = totalIssues > 0 ? 'inline-block' : 'none'; badge.textContent = totalIssues; }
+
+            var parts = [];
+            parts.push('<div style="display:flex;gap:1rem;flex-wrap:wrap">');
+            parts.push('<div class="admin-card" style="flex:1;min-width:160px;padding:0.75rem 1rem"><div style="font-size:1.4rem;font-weight:700;color:' + (orderIssues.length ? 'var(--danger)' : 'var(--success)') + '">' + orderIssues.length + '</div><div style="font-size:0.8rem;color:var(--gray)">Sale(s) not deducted</div></div>');
+            parts.push('<div class="admin-card" style="flex:1;min-width:160px;padding:0.75rem 1rem"><div style="font-size:1.4rem;font-weight:700;color:' + (mismatchCount ? 'var(--danger)' : 'var(--success)') + '">' + mismatchCount + '</div><div style="font-size:0.8rem;color:var(--gray)">Item(s) with stock mismatch</div></div>');
+            parts.push('<div class="admin-card" style="flex:1;min-width:160px;padding:0.75rem 1rem"><div style="font-size:1.4rem;font-weight:700;color:' + (editAfterSaleIssues.length ? 'var(--danger)' : 'var(--success)') + '">' + editAfterSaleIssues.length + '</div><div style="font-size:0.8rem;color:var(--gray)">Sale(s) followed by an edit</div></div>');
+            parts.push('<div class="admin-card" style="flex:1;min-width:160px;padding:0.75rem 1rem"><div style="font-size:1.4rem;font-weight:700;color:var(--gray-dark)">' + movement.rows.length + '</div><div style="font-size:0.8rem;color:var(--gray)">Item(s) checked</div></div>');
+            parts.push('</div>');
+            if (movement.note) parts.push('<div style="font-size:0.8rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-info-circle"></i> ' + movement.note + '</div>');
+            summaryEl.innerHTML = parts.join('');
+
+            if (orderIssues.length) document.getElementById('reconcileOrderIssuesWrap').style.display = 'block';
+            if (movement.rows.length) document.getElementById('reconcileMovementWrap').style.display = 'block';
+            if (editAfterSaleIssues.length) document.getElementById('reconcileEditAfterSaleWrap').style.display = 'block';
+            if (!orderIssues.length && mismatchCount === 0 && !editAfterSaleIssues.length) document.getElementById('reconcileEmptyState').style.display = 'block';
+        } catch(e) {
+            console.error('Reconciliation failed:', e);
+            summaryEl.innerHTML = '<div style="color:var(--danger);padding:1rem">Check failed: ' + e.message + '</div>';
+        }
+    }
+
+    // Check A: confirmed orders whose stockDeducted flag never got set
+    async function checkUndeductedOrders(fromTs, toTs) {
+        var issues = [];
+        var seen = {};
+        // Live (un-archived) orders for this store
+        try {
+            var liveSnap = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
+            liveSnap.forEach(function(d) {
+                var o = Object.assign({ orderId: d.id }, d.data());
+                var ts = o.confirmedTimestamp || o.timestamp || 0;
+                if (ts < fromTs || ts > toTs) return;
+                if (o.status !== 'confirmed' && o.status !== 'partial_refund' && o.status !== 'refunded') return;
+                if (o.stockDeducted === true) return;
+                if (seen[o.orderId]) return; seen[o.orderId] = true;
+                issues.push(o);
+            });
+        } catch(e) { console.warn('Live order scan failed:', e.message); }
+        // Archived orders for this store
+        try {
+            var archSnap = await db.collection('archivedOrders').where('storeId', '==', STATE.storeId).get();
+            archSnap.forEach(function(d) {
+                var o = Object.assign({ orderId: d.id }, d.data());
+                var ts = o.confirmedTimestamp || o.timestamp || 0;
+                if (ts < fromTs || ts > toTs) return;
+                if (o.status !== 'confirmed' && o.status !== 'partial_refund' && o.status !== 'refunded') return;
+                if (o.stockDeducted === true) return;
+                if (seen[o.orderId]) return; seen[o.orderId] = true;
+                issues.push(o);
+            });
+        } catch(e) { console.warn('Archived order scan failed:', e.message); }
+        issues.sort(function(a,b){ return (b.confirmedTimestamp||b.timestamp||0) - (a.confirmedTimestamp||a.timestamp||0); });
+        return issues;
+    }
+
+    function renderOrderIssues(issues) {
+        var wrap = document.getElementById('reconcileOrderIssues');
+        if (!issues.length) { wrap.innerHTML = ''; return; }
+        wrap.innerHTML = issues.map(function(o) {
+            var items = (o.cart || []).map(function(c){ return c.quantity + '× ' + escHtml(c.name) + (c.size ? ' (' + escHtml(c.size) + ')' : ''); }).join(', ');
+            var flagState = (o.stockDeducted === undefined) ? 'field missing entirely (never set)' : 'set to ' + JSON.stringify(o.stockDeducted);
+            return '<div class="admin-card" style="padding:0.75rem 1rem;border-left:3px solid var(--danger)">' +
+                '<div><b>' + escHtml(o.orderId) + '</b> <span style="color:var(--gray);font-size:0.8rem">confirmed ' + escHtml(o.confirmedAt || o.orderDate || 'unknown time') + '</span></div>' +
+                '<div style="font-size:0.85rem;margin:0.25rem 0">' + items + '</div>' +
+                '<div style="font-size:0.78rem;color:var(--gray-dark)">Status: <code>' + escHtml(o.status||'') + '</code> · <code>stockDeducted</code> ' + flagState + ' · Total: $' + (o.total||0).toFixed(2) + ' · Customer: ' + escHtml(o.customerName||'—') + '</div>' +
+                '</div>';
+        }).join('');
+    }
+
+    // Check C: a sale, then a manual "Edit Product" on the SAME product name
+    // shortly after. The edit modal always writes stock from whatever it had
+    // loaded — if that browser tab loaded the product before the sale synced,
+    // saving (even for an unrelated field) can silently overwrite the sale's
+    // deduction. We can't prove that happened from the activity log alone
+    // (it only stores product name + before/after text, not a productId), but
+    // any edit that lands soon after a sale on the same item is worth a human
+    // glance — this is what caught the Sept 9 incident in the first place.
+    var SALE_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000; // look up to 24h after the sale
+    async function checkSaleFollowedByEdit(fromTs, toTs) {
+        var issues = [];
+        try {
+            var allOrders = [];
+            var liveSnap = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
+            liveSnap.forEach(function(d){ allOrders.push(Object.assign({ orderId: d.id }, d.data())); });
+            var archSnap = await db.collection('archivedOrders').where('storeId', '==', STATE.storeId).get();
+            archSnap.forEach(function(d){ allOrders.push(Object.assign({ orderId: d.id }, d.data())); });
+
+            var soldEvents = []; // { name, size, qty, ts, orderId }
+            allOrders.forEach(function(o) {
+                var ts = o.confirmedTimestamp || o.timestamp || 0;
+                if (ts < fromTs || ts > toTs) return;
+                if (o.status !== 'confirmed' && o.status !== 'partial_refund' && o.status !== 'refunded') return;
+                (o.cart || []).forEach(function(it) {
+                    soldEvents.push({ name: it.name, size: it.size || '', qty: it.quantity, ts: ts, orderId: o.orderId });
+                });
+            });
+            if (!soldEvents.length) return issues;
+
+            // Edit Product log entries for this store. The activityLogs
+            // collection is global (not scoped under stores/{id}), so filter
+            // by storeId client-side like the rest of this file already does
+            // for orders/refunds/transfers.
+            var logSnap = await db.collection('activityLogs').where('storeId', '==', STATE.storeId).get();
+            var editRe = /^(.*) \(Stock: (-?\d+) → (-?\d+)\)/;
+            var editEvents = []; // { name, oldStock, newStock, ts, time, details }
+            logSnap.forEach(function(d) {
+                var l = d.data();
+                if (l.action !== 'Edit Product') return;
+                var ts = l.timestamp || 0;
+                if (ts < fromTs || ts > toTs + SALE_EDIT_WINDOW_MS) return; // allow edits slightly past "to" if the sale was near the end of range
+                var m = editRe.exec(l.details || '');
+                if (!m) return;
+                var oldS = parseInt(m[2], 10), newS = parseInt(m[3], 10);
+                if (oldS === newS) return; // stock unchanged by this edit (e.g. the live-conflict
+                                            // check preserved it) — nothing was actually overwritten,
+                                            // so it is not a real risk worth flagging
+                editEvents.push({ name: m[1], oldStock: oldS, newStock: newS, ts: ts, time: l.time, details: l.details });
+            });
+            if (!editEvents.length) return issues;
+
+            // For each sale, flag the NEAREST following edit on the same
+            // product name (one row per sale, not every combination).
+            soldEvents.forEach(function(sale) {
+                var best = null;
+                editEvents.forEach(function(edit) {
+                    if (edit.name !== sale.name) return;
+                    if (edit.ts <= sale.ts) return;
+                    if (edit.ts - sale.ts > SALE_EDIT_WINDOW_MS) return;
+                    if (!best || edit.ts < best.ts) best = edit;
+                });
+                if (best) {
+                    issues.push({
+                        productName: sale.name, size: sale.size, qty: sale.qty,
+                        orderId: sale.orderId, saleTs: sale.ts,
+                        editTs: best.ts, editTime: best.time, editDetails: best.details
+                    });
+                }
+            });
+        } catch(e) { console.warn('Sale-then-edit check failed:', e.message); }
+        issues.sort(function(a,b){ return b.saleTs - a.saleTs; });
+        return issues;
+    }
+
+    function renderEditAfterSaleIssues(issues) {
+        var wrap = document.getElementById('reconcileEditAfterSale');
+        if (!wrap) return;
+        if (!issues.length) { wrap.innerHTML = ''; return; }
+        wrap.innerHTML = issues.map(function(i) {
+            var minsAfter = Math.round((i.editTs - i.saleTs) / 60000);
+            var gap = minsAfter < 60 ? (minsAfter + ' min later') : (Math.round(minsAfter/60) + ' hr later');
+            return '<div class="admin-card" style="padding:0.75rem 1rem;border-left:3px solid var(--danger)">' +
+                '<div><b>' + escHtml(i.productName) + '</b>' + (i.size ? ' (' + escHtml(i.size) + ')' : '') + '</div>' +
+                '<div style="font-size:0.82rem;margin:0.25rem 0">Sold ' + i.qty + ' in <code>' + escHtml(i.orderId) + '</code> at ' + escHtml(new Date(i.saleTs).toLocaleString()) + '</div>' +
+                '<div style="font-size:0.82rem;color:var(--gray-dark)">Then edited ' + gap + ' (' + escHtml(i.editTime || '') + '): <code>' + escHtml(i.editDetails) + '</code></div>' +
+                '</div>';
+        }).join('');
+    }
+
+    // Check B: opening snapshot + movements should equal closing snapshot / live stock
+    async function checkStockMovement(fromDate, toDate, fromTs, toTs) {
+        var openingSnap = await db.collection('stores').doc(STATE.storeId).collection('stockSnapshots').doc(fromDate).get();
+        if (!openingSnap.exists) {
+            return { rows: [], note: 'No opening snapshot for ' + fromDate + ' yet, so stock movement can\'t be checked for this range. Snapshots are captured automatically going forward — try a range starting today or later, or click "Take Snapshot Now".' };
+        }
+        var opening = openingSnap.data().products || {};
+
+        // ── SNAPSHOT-TIME WINDOW, NOT CALENDAR-DAY WINDOW ──
+        // A snapshot is captured whenever the app first loads that day —
+        // or, via "Take Snapshot Now", at whatever moment someone clicks it,
+        // which can be hours into the day and OVERWRITES the earlier
+        // baseline. Either way, "opening" reflects stock as of that
+        // snapshot's actual timestamp, not literal midnight. If we still sum
+        // sold/refunded/transferred/adjusted from midnight onward, anything
+        // that happened between midnight and the snapshot gets counted
+        // TWICE — once already baked into the snapshot, once again in the
+        // movement totals — producing false mismatches for perfectly normal
+        // sales, refunds and transfers. So: use the snapshot's own
+        // `timestamp` as the effective lower bound whenever it's later than
+        // the calendar start of the day.
+        var effectiveFromTs = (typeof openingSnap.data().timestamp === 'number' && openingSnap.data().timestamp > fromTs)
+            ? openingSnap.data().timestamp : fromTs;
+
+        var isToday = toDate === _todayStr();
+        var closing = null;
+        var effectiveToTs = toTs;
+        if (!isToday) {
+            var closingSnap = await db.collection('stores').doc(STATE.storeId).collection('stockSnapshots').doc(_nextDateStr(toDate)).get();
+            if (!closingSnap.exists) {
+                return { rows: [], note: 'No closing snapshot found for the end of ' + toDate + ' (would be dated ' + _nextDateStr(toDate) + '). Movement can only be checked once that day\'s opening snapshot exists.' };
+            }
+            closing = closingSnap.data().products || {};
+            // Same reasoning as above, mirrored for the upper bound: the
+            // closing snapshot reflects stock as of ITS capture time, not
+            // literal midnight at the end of toDate.
+            if (typeof closingSnap.data().timestamp === 'number' && closingSnap.data().timestamp < effectiveToTs) {
+                effectiveToTs = closingSnap.data().timestamp;
+            }
+        }
+
+        // Also pull "Edit Product" activity log entries in this same window, so
+        // we can point at the exact edit likely responsible for any mismatch
+        // row below — same log data used by the "sale followed by an edit"
+        // check, keyed here by product NAME (the log has no productId).
+        var editsByName = {}; // name -> [{ oldStock, newStock, ts, time, details }]
+        try {
+            var editLogSnap = await db.collection('activityLogs').where('storeId', '==', STATE.storeId).get();
+            var editRe = /^(.*) \(Stock: (-?\d+) \u2192 (-?\d+)\)/;
+            editLogSnap.forEach(function(d) {
+                var l = d.data();
+                if (l.action !== 'Edit Product') return;
+                var ts = l.timestamp || 0;
+                if (ts < effectiveFromTs || ts > effectiveToTs) return;
+                var m = editRe.exec(l.details || '');
+                if (!m) return;
+                var oldS = parseInt(m[2], 10), newS = parseInt(m[3], 10);
+                if (oldS === newS) return; // no actual stock change from this edit, so it can't
+                                            // be the explanation for a movement mismatch
+                var name = m[1];
+                if (!editsByName[name]) editsByName[name] = [];
+                editsByName[name].push({ oldStock: oldS, newStock: newS, ts: ts, time: l.time, details: l.details });
+            });
+        } catch(e) { console.warn('Edit log lookup for movement table failed:', e.message); }
+
+        // Aggregate sold / refunded / transfer-out by our own productId+size
+        var sold = {}, refunded = {}, transferOut = {}, transferIn = {}, adjustments = {};
+        function addQty(map, key, qty) { map[key] = (map[key]||0) + qty; }
+
+        var soldOrders = [];
+        var liveSnap = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
+        liveSnap.forEach(function(d){ soldOrders.push(d.data()); });
+        var archSnap = await db.collection('archivedOrders').where('storeId', '==', STATE.storeId).get();
+        archSnap.forEach(function(d){ soldOrders.push(d.data()); });
+        soldOrders.forEach(function(o) {
+            var ts = o.confirmedTimestamp || o.timestamp || 0;
+            if (ts < effectiveFromTs || ts > effectiveToTs) return;
+            if (o.status !== 'confirmed' && o.status !== 'partial_refund' && o.status !== 'refunded') return;
+            (o.cart || []).forEach(function(it){ addQty(sold, it.productId + '|' + (it.size||''), it.quantity); });
+        });
+
+        var refundSnap = await db.collection('stores').doc(STATE.storeId).collection('refunds').get();
+        refundSnap.forEach(function(d) {
+            var r = d.data();
+            var ts = r.refundTimestamp || 0;
+            if (ts < effectiveFromTs || ts > effectiveToTs) return;
+            (r.cart || []).forEach(function(it){ addQty(refunded, it.productId + '|' + (it.size||''), it.quantity); });
+        });
+
+        var xferOutSnap = await db.collection('transfers').where('fromStoreId', '==', STATE.storeId).where('status', '==', 'approved').get();
+        xferOutSnap.forEach(function(d) {
+            var t = d.data();
+            var ts = t.approvedAt || t.requestedAt || 0;
+            if (ts < effectiveFromTs || ts > effectiveToTs) return;
+            addQty(transferOut, t.productId + '|' + (t.size||''), t.qty);
+        });
+
+        var xferInSnap = await db.collection('transfers').where('toStoreId', '==', STATE.storeId).where('status', '==', 'approved').get();
+        var transferInByName = {}; // productName|size -> qty (source productId doesn't match our local ids)
+        xferInSnap.forEach(function(d) {
+            var t = d.data();
+            var ts = t.approvedAt || t.requestedAt || 0;
+            if (ts < effectiveFromTs || ts > effectiveToTs) return;
+            addQty(transferInByName, (t.productName||'') + '|' + (t.size||''), t.qty);
+        });
+
+        var adjSnap = await db.collection('stores').doc(STATE.storeId).collection('stockAdjustments').get();
+        adjSnap.forEach(function(d) {
+            var a = d.data();
+            if (a.timestamp < effectiveFromTs || a.timestamp > effectiveToTs) return;
+            if (a.sizeDeltas && a.sizeDeltas.length) {
+                a.sizeDeltas.forEach(function(sd){ addQty(adjustments, a.productId + '|' + sd.size, sd.delta); });
+            } else {
+                addQty(adjustments, a.productId + '|', a.totalDelta);
+            }
+        });
+
+        // Build the row set: every product+size that appears in the opening snapshot
+        // or the current catalog (covers products added mid-range too)
+        var allKeys = {}; // key -> { productId, name, size }
+        function registerFromMap(map, nameLookup) {
+            Object.keys(map).forEach(function(pid) {
+                var entry = map[pid];
+                var sizes = entry.sizes && Object.keys(entry.sizes).length ? Object.keys(entry.sizes) : [''];
+                sizes.forEach(function(sz) { allKeys[pid + '|' + sz] = { productId: pid, name: entry.name, size: sz }; });
+            });
+        }
+        registerFromMap(opening);
+        var currentMap = {};
+        STATE.products.forEach(function(p) {
+            var sizesMap = {};
+            if (p.sizes && p.sizes.length) p.sizes.forEach(function(s){ sizesMap[s.name] = s.qty||0; });
+            currentMap[p.id] = { name: p.name, sizes: sizesMap };
+        });
+        registerFromMap(currentMap);
+
+        var rows = [];
+        Object.keys(allKeys).forEach(function(key) {
+            var info = allKeys[key];
+            var openQty = (opening[info.productId] && opening[info.productId].sizes && opening[info.productId].sizes[info.size] !== undefined)
+                ? opening[info.productId].sizes[info.size]
+                : (opening[info.productId] && !info.size ? (opening[info.productId].stock||0) : 0);
+            var soldQty = sold[key] || 0;
+            var refQty = refunded[key] || 0;
+            var outQty = transferOut[key] || 0;
+            var adjQty = (adjustments[key] !== undefined ? adjustments[key] : (adjustments[info.productId+'|']||0));
+            var inQty = transferInByName[info.name + '|' + info.size] || 0;
+
+            var actualQty;
+            if (isToday) {
+                var live = currentMap[info.productId];
+                actualQty = live ? (live.sizes[info.size] !== undefined ? live.sizes[info.size] : 0) : 0;
+            } else {
+                actualQty = (closing[info.productId] && closing[info.productId].sizes && closing[info.productId].sizes[info.size] !== undefined) ? closing[info.productId].sizes[info.size] : 0;
+            }
+
+            var expectedQty = openQty - soldQty + refQty + inQty - outQty + adjQty;
+            var diff = actualQty - expectedQty;
+
+            // If this item has a mismatch, surface the nearest matching
+            // product edit in the window as the likely explanation — this is
+            // what lets you tell "someone edited this" apart from "stock is
+            // genuinely wrong" right in the same row, without hunting
+            // through the activity log separately.
+            var editHit = null;
+            if (diff !== 0 && editsByName[info.name] && editsByName[info.name].length) {
+                editHit = editsByName[info.name].slice().sort(function(a,b){ return b.ts - a.ts; })[0];
+            }
+
+            rows.push({
+                productId: info.productId, name: info.name, size: info.size,
+                opening: openQty, sold: soldQty, refunded: refQty, transferIn: inQty, transferOut: outQty, adjustments: adjQty,
+                expected: expectedQty, actual: actualQty, diff: diff, editHit: editHit
+            });
+        });
+
+        rows.sort(function(a,b){ if (a.diff !== 0 && b.diff === 0) return -1; if (a.diff === 0 && b.diff !== 0) return 1; return a.name.localeCompare(b.name); });
+
+        var windowNote = null;
+        if (effectiveFromTs > fromTs || effectiveToTs < toTs) {
+            windowNote = 'Note: the ' + (effectiveFromTs > fromTs ? 'opening' : 'closing') +
+                ' snapshot for this range was taken partway through the day (' +
+                new Date(effectiveFromTs > fromTs ? effectiveFromTs : effectiveToTs).toLocaleString() +
+                '), so movement is measured from that moment, not midnight — otherwise anything before it would be counted twice.';
+        }
+        return { rows: rows, note: windowNote };
+    }
+
+    function renderReconcileMovementTable() {
+        var showAll = document.getElementById('reconcileShowAll').checked;
+        var rows = showAll ? _reconcileMovementRows : _reconcileMovementRows.filter(function(r){ return r.diff !== 0; });
+        var body = document.getElementById('reconcileMovementBody');
+        if (!rows.length) { body.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--gray);padding:1rem">Nothing to show</td></tr>'; return; }
+        body.innerHTML = rows.map(function(r) {
+            var diffColor = r.diff === 0 ? 'var(--success)' : 'var(--danger)';
+            var editCell;
+            if (r.editHit) {
+                editCell = '<span style="color:var(--danger);font-weight:600" title="' + escHtml(r.editHit.details) + '"><i class="fas fa-pen"></i> ' + escHtml(r.editHit.oldStock + ' \u2192 ' + r.editHit.newStock) + '</span>' +
+                    '<div style="font-size:0.72rem;color:var(--gray)">' + escHtml(r.editHit.time || '') + '</div>';
+            } else {
+                editCell = r.diff !== 0 ? '<span style="color:var(--gray)">\u2014</span>' : '';
+            }
+            return '<tr>' +
+                '<td>' + escHtml(r.name) + (r.size ? ' <small style="color:var(--gray)">(' + escHtml(r.size) + ')</small>' : '') + '</td>' +
+                '<td>' + r.opening + '</td><td>-' + r.sold + '</td><td>+' + r.refunded + '</td><td>+' + r.transferIn + '</td><td>-' + r.transferOut + '</td>' +
+                '<td>' + (r.adjustments >= 0 ? '+' : '') + r.adjustments + '</td>' +
+                '<td>' + r.expected + '</td><td>' + r.actual + '</td>' +
+                '<td style="font-weight:700;color:' + diffColor + '">' + (r.diff > 0 ? '+' : '') + r.diff + '</td>' +
+                '<td>' + editCell + '</td>' +
+                '<td><button class="btn btn-outline btn-small" onclick="jumpToInventoryItem(\'' + r.name.replace(/'/g,"\\'") + '\',\'' + (r.size||'').replace(/'/g,"\\'") + '\')" title="View this item"><i class="fas fa-search"></i></button></td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    // Jumps to the Products sub-tab, filtered to a specific item — the "click to
+    // show the incorrect items directly" behavior for reconciliation mismatches
+    function jumpToInventoryItem(name, size) {
+        switchInvTab('products', document.querySelector('.inv-subbtn'));
+        var nameEl = document.getElementById('inventorySearchName');
+        var sizeEl = document.getElementById('inventorySearchSize');
+        if (nameEl) nameEl.value = name || '';
+        if (sizeEl) sizeEl.value = size || '';
+        filterInventory();
+        var body = document.getElementById('inventoryBody');
+        if (body) body.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
     // INVENTORY
     // =============================================
     function quickSizeFilter(size) { document.getElementById('inventorySearchSize').value = size; highlightQuickButton(size); filterInventory(); }
@@ -5653,7 +6714,10 @@ function sendToTelegram(order, callback) {
                 '<td><img src="' + img + '" onclick="openLightbox(\'' + img.replace(/'/g, "\\'") + '\')" style="width:84px;height:84px;object-fit:cover;border-radius:10px;cursor:zoom-in;display:block" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=200\'"></td>' +
                 '<td style="max-width:110px"><strong style="font-size:0.78rem">' + p.name + '</strong></td>' +
                 '<td><span class="product-category ' + getCategoryDisplay(p.category) + '" style="font-size:0.65rem;padding:0.1rem 0.4rem">' + p.category + '</span></td>' +
-                '<td style="font-weight:600;font-size:0.78rem">$' + p.price.toFixed(2) + '</td>' +
+                '<td style="font-weight:600;font-size:0.78rem">$' + p.price.toFixed(2) +
+                (p.costPrice != null ? '<br><span style="font-weight:400;font-size:0.68rem;color:var(--gray)">Cost $' + Number(p.costPrice).toFixed(2) + '</span>' +
+                    '<br><span style="font-weight:600;font-size:0.68rem;color:' + ((p.price - p.costPrice) >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + (p.price > 0 ? (((p.price - p.costPrice) / p.price) * 100).toFixed(0) : '0') + '% margin</span>' : '') +
+                '</td>' +
                 '<td>' + sizeHtml + '</td>' +
                 '<td><strong style="color:' + stockColor + ';font-size:0.78rem">' + totalStock + '</strong></td>' +
                 '<td><div style="display:flex;gap:3px">' +
@@ -5745,6 +6809,7 @@ function sendToTelegram(order, callback) {
     // REPORTS — query Firebase directly
     var _reportData = [];
     var _reportRefunds = [];
+    var _reportProductsByStore = {}; // storeId -> products array, populated in All Branches mode so cost lookups use the right branch's catalog
 
     async function loadReportData() {
         // Show/hide the All Branches toggle — Main Store full admin only
@@ -5753,6 +6818,8 @@ function sendToTelegram(order, callback) {
 
         var allBranchesMode = document.getElementById('reportAllBranchesToggle') && document.getElementById('reportAllBranchesToggle').checked && STATE.storeId === 'GOAT-1979';
         var scopeLabel = document.getElementById('reportScopeLabel');
+        _reportExpenses = {};
+        _reportCustomerTypes = null;
 
         if (!db || !STATE.firebaseOnline) {
             // fallback to local STATE
@@ -5784,6 +6851,7 @@ function sendToTelegram(order, callback) {
 
                 var allOrders = [];
                 var allRefunds = [];
+                _reportProductsByStore = {};
 
                 await Promise.all(stores.map(async function(s) {
                     try {
@@ -5797,6 +6865,13 @@ function sendToTelegram(order, callback) {
                             .where('refundTimestamp', '>=', startTs).where('refundTimestamp', '<=', endTs).get();
                         refSnap.forEach(function(d) { allRefunds.push(Object.assign({}, d.data(), { refundId: d.id, _sourceStoreId: s.id, _sourceStoreName: s.name })); });
                     } catch(re) { console.warn('Refunds fetch failed for ' + s.id + ':', re.message); }
+
+                    try {
+                        var prodSnap = await db.collection('stores').doc(s.id).collection('products').get();
+                        var plist = [];
+                        prodSnap.forEach(function(d) { var dt = d.data(); plist.push(Object.assign({}, dt, { id: d.id })); });
+                        _reportProductsByStore[s.id] = plist;
+                    } catch(pe) { console.warn('Products fetch failed for ' + s.id + ':', pe.message); }
                 }));
 
                 // Archived orders — filter by storeId since this collection is shared across all stores
@@ -5817,6 +6892,7 @@ function sendToTelegram(order, callback) {
                 _reportRefunds = allRefunds;
             } else {
                 if (scopeLabel) scopeLabel.style.display = 'none';
+                _reportProductsByStore = {};
                 var results = [];
                 var refundResults = [];
                 // Query active orders from stores/{storeId}/orders
@@ -5854,6 +6930,8 @@ function sendToTelegram(order, callback) {
             _reportData = STATE.confirmedOrders.slice();
             _reportRefunds = STATE.refundedOrders.slice();
         }
+        await loadExpensesForReportPeriod();
+        await loadCustomerTypesForReport();
         renderReports();
     }
 
@@ -5891,25 +6969,27 @@ function sendToTelegram(order, callback) {
         el.innerHTML = html;
     }
 
-    function renderReports() { updateReportStats(); renderCategoryChart(); renderTopItemsChart(); renderRevenueTrendChart(); renderStockChart(); renderTopItemsList(); renderCustomerBreakdown(); renderStoreBreakdown(); }
+    function renderReports() { updateReportStats(); renderCategoryChart(); renderTopItemsChart(); renderRevenueTrendChart(); renderStockChart(); renderTopItemsList(); renderCustomerBreakdown(); renderStoreBreakdown(); renderFinancialAnalysis(); renderNetProfitTrendChart(); renderExpenseSummary(); renderCustomerTypeBreakdown(); renderFacebookAdsAnalysis(); }
 
     function updateReportStats() {
         var confirmed = getReportConfirmed();
-        var tr = 0; for (var i = 0; i < confirmed.length; i++) { tr += confirmed[i].total || 0; }
-        document.getElementById('reportTotalRevenue').textContent = '$' + tr.toFixed(2);
-        document.getElementById('reportTotalOrders').textContent = confirmed.length;
-        var is = 0; for (var j = 0; j < confirmed.length; j++) { for (var k = 0; k < (confirmed[j].cart||[]).length; k++) is += confirmed[j].cart[k].quantity || 0; }
-        document.getElementById('reportItemsSold').textContent = is;
-        var cs = new Set();
-        for (var l = 0; l < confirmed.length; l++) { if (confirmed[l].customerPhone || confirmed[l].customerName) cs.add(confirmed[l].customerPhone || confirmed[l].customerName); }
-        document.getElementById('reportTotalCustomers').textContent = cs.size;
-        // Refund stats
+        // Refund stats — calculated first so it can be subtracted from revenue below
         var refTotal = 0;
         for (var r = 0; r < _reportRefunds.length; r++) { refTotal += _reportRefunds[r].refundAmount || 0; }
         var refEl = document.getElementById('reportTotalRefunds');
         var refCnt = document.getElementById('reportRefundCount');
         if (refEl) refEl.textContent = '$' + refTotal.toFixed(2);
         if (refCnt) refCnt.textContent = _reportRefunds.length;
+
+        var tr = 0; for (var i = 0; i < confirmed.length; i++) { tr += confirmed[i].total || 0; }
+        var netRevenue = tr - refTotal;
+        document.getElementById('reportTotalRevenue').textContent = '$' + netRevenue.toFixed(2);
+        document.getElementById('reportTotalOrders').textContent = confirmed.length;
+        var is = 0; for (var j = 0; j < confirmed.length; j++) { for (var k = 0; k < (confirmed[j].cart||[]).length; k++) is += confirmed[j].cart[k].quantity || 0; }
+        document.getElementById('reportItemsSold').textContent = is;
+        var cs = new Set();
+        for (var l = 0; l < confirmed.length; l++) { if (confirmed[l].customerPhone || confirmed[l].customerName) cs.add(confirmed[l].customerPhone || confirmed[l].customerName); }
+        document.getElementById('reportTotalCustomers').textContent = cs.size;
         // Payment method breakdown: Cash vs QR Code
         var cashTotal = 0, cashCount = 0, qrTotal = 0, qrCount = 0;
         for (var pm = 0; pm < confirmed.length; pm++) {
@@ -5931,7 +7011,7 @@ function sendToTelegram(order, callback) {
         var ctx = document.getElementById('categoryChart'); if (!ctx) return;
         if (STATE.charts.categoryChart) STATE.charts.categoryChart.destroy();
         var confirmed = getReportConfirmed(); var cs = {};
-        for (var i = 0; i < confirmed.length; i++) { for (var j = 0; j < (confirmed[i].cart||[]).length; j++) { var it = confirmed[i].cart[j], p = findProduct(it.productId), c = p ? p.category : (it.category || 'Unknown'); if (!cs[c]) cs[c] = 0; cs[c] += (it.price * it.quantity); } }
+        for (var i = 0; i < confirmed.length; i++) { for (var j = 0; j < (confirmed[i].cart||[]).length; j++) { var it = confirmed[i].cart[j], p = findReportProduct(confirmed[i], it.productId), c = p ? p.category : (it.category || 'Unknown'); if (!cs[c]) cs[c] = 0; cs[c] += (it.price * it.quantity); } }
         var cats = Object.keys(cs), vals = Object.values(cs);
         var colors = ['#667eea','#48bb78','#ed64a6','#ecc94b','#4299e1','#f56565','#e65100','#9f7aea'];
         STATE.charts.categoryChart = new Chart(ctx, { type: 'doughnut', data: { labels: cats.length ? cats : ['No Data'], datasets: [{ data: cats.length ? vals : [1], backgroundColor: cats.length ? colors.slice(0,cats.length) : ['#e2e8f0'], borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { padding: 15, usePointStyle: true } } } } });
@@ -6005,6 +7085,471 @@ function sendToTelegram(order, callback) {
         el.innerHTML = html;
     }
 
+    // =============================================
+    // FINANCIAL ANALYSIS — costing, profit, live expenses, new/repeat
+    // customers, Facebook ads performance
+    // =============================================
+    var _reportExpenses = {}; // monthKey -> {facility, salaries, facebookAds, other}
+    var _reportCustomerTypes = null; // {newSet, repeatSet} keyed by customer key, computed per report load
+
+    function monthKey(d) { return d.getFullYear() + '-' + ((d.getMonth()+1) < 10 ? '0' : '') + (d.getMonth()+1); }
+
+    function getMonthsInRange(start, end) {
+        var months = [];
+        var cur = new Date(start.getFullYear(), start.getMonth(), 1);
+        var last = new Date(end.getFullYear(), end.getMonth(), 1);
+        var guard = 0;
+        while (cur <= last && guard < 120) { months.push(monthKey(cur)); cur.setMonth(cur.getMonth()+1); guard++; }
+        return months;
+    }
+
+    async function loadExpensesForReportPeriod() {
+        _reportExpenses = {};
+        if (!db || !STATE.firebaseOnline) return;
+        var dr = getDateRange(STATE.dateFilter);
+        var months = getMonthsInRange(dr.start, dr.end);
+        try {
+            await Promise.all(months.map(async function(mk) {
+                var snap = await db.collection('stores').doc(STATE.storeId).collection('expenses').doc(mk).get();
+                if (snap.exists) _reportExpenses[mk] = snap.data();
+            }));
+        } catch(e) { console.warn('Expense load failed:', e.message); }
+    }
+
+    function sumExpensesForPeriod() {
+        var t = { facility: 0, salaries: 0, facebookAds: 0, other: 0 };
+        Object.keys(_reportExpenses).forEach(function(mk) {
+            var e = _reportExpenses[mk] || {};
+            t.facility += Number(e.facility) || 0;
+            t.salaries += Number(e.salaries) || 0;
+            t.facebookAds += Number(e.facebookAds) || 0;
+            t.other += Number(e.other) || 0;
+        });
+        t.total = t.facility + t.salaries + t.facebookAds + t.other;
+        return t;
+    }
+
+    function renderExpenseSummary() {
+        var exp = sumExpensesForPeriod();
+        var confirmed = getReportConfirmed();
+        var revenue = 0; for (var i=0;i<confirmed.length;i++) revenue += confirmed[i].total || 0;
+        var elT = document.getElementById('expTotal'); if (elT) elT.textContent = '$' + exp.total.toFixed(2);
+        var elF = document.getElementById('expFacility'); if (elF) elF.textContent = exp.facility ? '$' + exp.facility.toFixed(2) : '-';
+        var elS = document.getElementById('expSalaries'); if (elS) elS.textContent = exp.salaries ? '$' + exp.salaries.toFixed(2) : '-';
+        var elFb = document.getElementById('expFacebook'); if (elFb) elFb.textContent = exp.facebookAds ? '$' + exp.facebookAds.toFixed(2) : '-';
+        var elO = document.getElementById('expOther'); if (elO) elO.textContent = exp.other ? '$' + exp.other.toFixed(2) : '-';
+        var elP = document.getElementById('expPctSales'); if (elP) elP.textContent = revenue > 0 ? ((exp.total / revenue) * 100).toFixed(1) + '%' : '-';
+        var label = document.getElementById('expensePeriodLabel');
+        if (label) {
+            var months = Object.keys(_reportExpenses);
+            label.textContent = months.length === 1 ? months[0] : (months.length ? (months[0] + ' – ' + months[months.length-1]) : 'this period');
+        }
+    }
+
+    function getProductCost(pid) {
+        var p = findProduct(pid);
+        return (p && p.costPrice != null && p.costPrice !== '') ? Number(p.costPrice) : 0;
+    }
+
+    // Same as getProductCost, but for report rows that may come from a different branch (All Branches
+    // mode). Looks up the item in the catalog of the branch it was actually sold from, instead of
+    // whichever store you're currently logged into.
+    function findReportProduct(order, pid) {
+        var storeId = order && order._sourceStoreId;
+        if (storeId && _reportProductsByStore[storeId]) {
+            var list = _reportProductsByStore[storeId];
+            for (var i = 0; i < list.length; i++) { if (list[i].id === pid) return list[i]; }
+            return null;
+        }
+        return findProduct(pid); // single-store report mode: current store's catalog
+    }
+    function getReportProductCost(order, pid) {
+        var p = findReportProduct(order, pid);
+        return (p && p.costPrice != null && p.costPrice !== '') ? Number(p.costPrice) : 0;
+    }
+
+    function renderFinancialAnalysis() {
+        var confirmed = getReportConfirmed();
+        var revenue = 0, cogs = 0;
+        var byDay = {}; // dateKey -> {revenue, cogs, sortDate}
+        for (var i = 0; i < confirmed.length; i++) {
+            var o = confirmed[i];
+            var orderRevenue = o.total || 0;
+            var orderCost = 0;
+            for (var j = 0; j < (o.cart||[]).length; j++) {
+                var it = o.cart[j];
+                orderCost += getReportProductCost(o, it.productId) * (it.quantity || 0);
+            }
+            revenue += orderRevenue; cogs += orderCost;
+            var od = new Date(o.confirmedTimestamp || o.timestamp || Date.now());
+            var dk = formatDate(od);
+            if (!byDay[dk]) byDay[dk] = { revenue: 0, cogs: 0, walkinRevenue: 0, fbRevenue: 0, sortDate: od };
+            byDay[dk].revenue += orderRevenue;
+            byDay[dk].cogs += orderCost;
+            var sm = o.shippingMethod || 'Pickup';
+            if (sm === 'Pickup') byDay[dk].walkinRevenue += orderRevenue; else byDay[dk].fbRevenue += orderRevenue;
+        }
+        // Subtract refunds on the day the refund happened (not the original sale day),
+        // and reverse the COGS for the refunded items since stock is restored on refund.
+        for (var rf = 0; rf < _reportRefunds.length; rf++) {
+            var ref = _reportRefunds[rf];
+            var refAmt = ref.refundAmount || 0;
+            var refCost = 0;
+            for (var rc = 0; rc < (ref.cart||[]).length; rc++) {
+                var rit = ref.cart[rc];
+                refCost += getReportProductCost(ref.originalOrder || {}, rit.productId) * (rit.quantity || 0);
+            }
+            revenue -= refAmt; cogs -= refCost;
+            var rfd = new Date(ref.refundTimestamp || Date.now());
+            var rdk = formatDate(rfd);
+            if (!byDay[rdk]) byDay[rdk] = { revenue: 0, cogs: 0, walkinRevenue: 0, fbRevenue: 0, sortDate: rfd };
+            byDay[rdk].revenue -= refAmt;
+            byDay[rdk].cogs -= refCost;
+            var rsm = (ref.originalOrder && ref.originalOrder.shippingMethod) || 'Pickup';
+            if (rsm === 'Pickup') byDay[rdk].walkinRevenue -= refAmt; else byDay[rdk].fbRevenue -= refAmt;
+        }
+        var grossProfit = revenue - cogs;
+
+        // Expenses are only entered per-month, so a partial period (e.g. "month to date")
+        // must NOT be charged the whole month's expense against only part of a month's revenue.
+        // Build the day-by-day rows FIRST (prorating each month's expense evenly across its
+        // calendar days), then sum only the days actually in this report period — this keeps
+        // the top summary cards consistent with the daily table/chart below them.
+        var monthlyExpenseTotal = {};
+        var monthlyFbSpend = {};
+        Object.keys(_reportExpenses).forEach(function(mk) {
+            var e = _reportExpenses[mk] || {};
+            monthlyExpenseTotal[mk] = (Number(e.facility)||0) + (Number(e.salaries)||0) + (Number(e.facebookAds)||0) + (Number(e.other)||0);
+            monthlyFbSpend[mk] = Number(e.facebookAds) || 0;
+        });
+        function daysInMonthKey(mk) {
+            var parts = mk.split('-'); var y = +parts[0], m = +parts[1];
+            return new Date(y, m, 0).getDate();
+        }
+        var days = Object.keys(byDay).sort(function(a,b){ return byDay[a].sortDate - byDay[b].sortDate; });
+        var tbody = document.getElementById('dailyProfitList');
+
+        // Build the shared per-day rows (revenue, cogs, gross/net profit, running totals) once,
+        // so the top cards, the daily table, and the Net Profit Trend chart all use identical numbers.
+        var dailyRows = [], runningNetByMonth = {}, runningExpByMonth = {};
+        var periodExpenseTotal = 0, periodNetProfit = 0;
+        for (var k = 0; k < days.length; k++) {
+            var d = byDay[days[k]];
+            var gp = d.revenue - d.cogs;
+            var mk = monthKey(d.sortDate);
+            var monthExp = monthlyExpenseTotal[mk] || 0;
+            var dailyExpShare = monthExp / daysInMonthKey(mk);
+            var fbSpendShare = (monthlyFbSpend[mk] || 0) / daysInMonthKey(mk);
+            var np = gp - dailyExpShare;
+            runningNetByMonth[mk] = (runningNetByMonth[mk] || 0) + np;
+            runningExpByMonth[mk] = (runningExpByMonth[mk] || 0) + dailyExpShare;
+            periodExpenseTotal += dailyExpShare;
+            periodNetProfit += np;
+            dailyRows.push({
+                dateLabel: days[k], sortDate: d.sortDate, mk: mk,
+                revenue: d.revenue, cogs: d.cogs, grossProfit: gp,
+                walkinRevenue: d.walkinRevenue, fbRevenue: d.fbRevenue, fbSpendShare: fbSpendShare,
+                dailyExpShare: dailyExpShare, netProfit: np,
+                runningNet: runningNetByMonth[mk], runningExp: runningExpByMonth[mk]
+            });
+        }
+        STATE._reportDailyRows = dailyRows;
+        var netProfit = periodNetProfit;
+
+        var elC = document.getElementById('reportCOGS'); if (elC) elC.textContent = '$' + cogs.toFixed(2);
+        var elG = document.getElementById('reportGrossProfit'); if (elG) elG.textContent = '$' + grossProfit.toFixed(2);
+        var elGM = document.getElementById('reportGrossMargin'); if (elGM) elGM.textContent = revenue > 0 ? '(' + ((grossProfit/revenue)*100).toFixed(1) + '%)' : '';
+        var npEl = document.getElementById('reportNetProfit');
+        if (npEl) { npEl.textContent = '$' + netProfit.toFixed(2); npEl.style.color = netProfit >= 0 ? '#667eea' : 'var(--danger)'; }
+        var elNM = document.getElementById('reportNetMargin'); if (elNM) elNM.textContent = revenue > 0 ? '(' + ((netProfit/revenue)*100).toFixed(1) + '%)' : '';
+
+        if (!tbody) return;
+        if (!days.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>'; return; }
+        var html = '';
+        for (var r = 0; r < dailyRows.length; r++) {
+            var row = dailyRows[r];
+            html += '<tr><td style="padding:0.5rem 0.8rem;font-weight:600">' + row.dateLabel + '</td>' +
+                '<td style="padding:0.5rem 0.8rem">$' + row.revenue.toFixed(2) + '</td>' +
+                '<td style="padding:0.5rem 0.8rem;color:#ed8936">$' + row.cogs.toFixed(2) + '</td>' +
+                '<td style="padding:0.5rem 0.8rem;color:' + (row.grossProfit >= 0 ? '#38a169' : 'var(--danger)') + '">$' + row.grossProfit.toFixed(2) + '</td>' +
+                '<td style="padding:0.5rem 0.8rem;font-weight:600;color:' + (row.netProfit >= 0 ? '#667eea' : 'var(--danger)') + '">$' + row.netProfit.toFixed(2) + '</td>' +
+                '<td style="padding:0.5rem 0.8rem;color:var(--gray)">$' + row.runningNet.toFixed(2) + '</td></tr>';
+        }
+        tbody.innerHTML = html;
+    }
+
+    function renderNetProfitTrendChart() {
+        var ctx = document.getElementById('netProfitTrendChart'); if (!ctx) return;
+        if (STATE.charts.netProfitTrendChart) STATE.charts.netProfitTrendChart.destroy();
+        var rows = STATE._reportDailyRows || [];
+        var labels = rows.length ? rows.map(function(r){ return r.dateLabel; }) : ['No Data'];
+        var revData = rows.length ? rows.map(function(r){ return r.revenue; }) : [0];
+        var expData = rows.length ? rows.map(function(r){ return r.dailyExpShare; }) : [0];
+        var netData = rows.length ? rows.map(function(r){ return r.netProfit; }) : [0];
+        STATE.charts.netProfitTrendChart = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [
+            { label: 'Revenue ($)', data: revData, borderColor: '#38a169', backgroundColor: 'rgba(56,161,105,0.08)', fill: false, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#38a169' },
+            { label: 'Expenses ($) — monthly total ÷ days in month', data: expData, borderColor: '#ed8936', backgroundColor: 'rgba(237,137,54,0.08)', fill: false, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#ed8936' },
+            { label: 'Net Profit ($)', data: netData, borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.1)', fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#667eea' }
+        ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { padding: 12, usePointStyle: true } } }, scales: { y: { ticks: { callback: function(v){return '$'+v;} } } } } });
+    }
+
+    function openExpenseModal() {
+        var mk = monthKey(new Date());
+        var input = document.getElementById('expenseMonthInput');
+        if (input) { input.value = mk; }
+        loadExpenseModalValues();
+        var modal = document.getElementById('expenseModal'); if (modal) modal.classList.add('active');
+    }
+    function closeExpenseModal() { var modal = document.getElementById('expenseModal'); if (modal) modal.classList.remove('active'); }
+
+    async function loadExpenseModalValues() {
+        var mk = document.getElementById('expenseMonthInput').value;
+        if (!mk || !db) return;
+        try {
+            var snap = await db.collection('stores').doc(STATE.storeId).collection('expenses').doc(mk).get();
+            var d = snap.exists ? snap.data() : {};
+            document.getElementById('expInputFacility').value = d.facility || '';
+            document.getElementById('expInputSalaries').value = d.salaries || '';
+            document.getElementById('expInputFacebook').value = d.facebookAds || '';
+            document.getElementById('expInputOther').value = d.other || '';
+        } catch(e) { console.warn('Load expense values failed:', e.message); }
+    }
+
+    async function saveExpenses() {
+        var mk = document.getElementById('expenseMonthInput').value;
+        if (!mk) { showToast('Pick a month', 'error'); return; }
+        if (!db) { showToast('Offline — cannot save expenses', 'error'); return; }
+        var data = {
+            facility: parseFloat(document.getElementById('expInputFacility').value) || 0,
+            salaries: parseFloat(document.getElementById('expInputSalaries').value) || 0,
+            facebookAds: parseFloat(document.getElementById('expInputFacebook').value) || 0,
+            other: parseFloat(document.getElementById('expInputOther').value) || 0,
+            updatedAt: new Date().toISOString()
+        };
+        try {
+            await db.collection('stores').doc(STATE.storeId).collection('expenses').doc(mk).set(data, { merge: true });
+            showToast('Expenses saved for ' + mk, 'success');
+            closeExpenseModal();
+            loadReportData();
+        } catch(e) { showToast('Failed to save: ' + e.message, 'error'); }
+    }
+
+    // ── Customer index: tracks each customer's first-ever confirmed-order
+    // date, so reports can tell New vs Repeat customers apart without
+    // re-scanning full order history on every report load. ──
+    function customerKeyOf(order) {
+        var k = ((order.customerPhone || order.customerName || '') + '').trim().toLowerCase();
+        return k ? k.replace(/[^a-z0-9]/g, '') : '';
+    }
+
+    function updateCustomerIndexOnConfirm(order) {
+        if (!db) return;
+        var key = customerKeyOf(order);
+        if (!key) return;
+        var ref = db.collection('stores').doc(STATE.storeId).collection('customerIndex').doc(key);
+        ref.get().then(function(snap) {
+            if (!snap.exists) {
+                ref.set({ firstOrderAt: order.timestamp || Date.now(), name: order.customerName || '', phone: order.customerPhone || '' })
+                    .catch(function(e){ console.warn('customerIndex write failed:', e.message); });
+            }
+        }).catch(function(e){ console.warn('customerIndex read failed:', e.message); });
+    }
+
+    async function loadCustomerTypesForReport() {
+        _reportCustomerTypes = null;
+        if (!db || !STATE.firebaseOnline) return;
+        var confirmed = getReportConfirmed();
+        var dr = getDateRange(STATE.dateFilter);
+        var startTs = dr.start.getTime();
+        var keys = {};
+        for (var i = 0; i < confirmed.length; i++) { var k = customerKeyOf(confirmed[i]); if (k) keys[k] = true; }
+        var keyList = Object.keys(keys);
+        if (!keyList.length) { _reportCustomerTypes = { newSet: {}, repeatSet: {} }; return; }
+        var newSet = {}, repeatSet = {};
+        try {
+            await Promise.all(keyList.map(async function(k) {
+                var ref = db.collection('stores').doc(STATE.storeId).collection('customerIndex').doc(k);
+                var snap = await ref.get();
+                if (snap.exists && snap.data().firstOrderAt < startTs) repeatSet[k] = true;
+                else newSet[k] = true; // no index entry yet, or their first-ever order falls inside this period
+            }));
+        } catch(e) { console.warn('Customer type load failed:', e.message); }
+        _reportCustomerTypes = { newSet: newSet, repeatSet: repeatSet };
+    }
+
+    function renderCustomerTypeBreakdown() {
+        var hint = document.getElementById('customerIndexHint');
+        var listEl = document.getElementById('customerTypeList');
+        if (!_reportCustomerTypes) {
+            var elN = document.getElementById('reportNewCustomers'); if (elN) elN.textContent = '—';
+            var elR = document.getElementById('reportRepeatCustomers'); if (elR) elR.textContent = '—';
+            if (listEl) listEl.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--gray);padding:1rem">Connect to the internet to load customer history</td></tr>';
+            if (hint) hint.textContent = '';
+            STATE._reportNewCustomerCount = 0;
+            return;
+        }
+        var confirmed = getReportConfirmed();
+        var stats = { newC: {revenue:0, orders:0, customers: {}}, repeatC: {revenue:0, orders:0, customers: {}} };
+        var byDay = {}; // dateKey -> {newSet:{}, repeatSet:{}, sortDate}
+        for (var i = 0; i < confirmed.length; i++) {
+            var o = confirmed[i], k = customerKeyOf(o);
+            if (!k) continue;
+            var isRepeat = !!_reportCustomerTypes.repeatSet[k];
+            var bucket = isRepeat ? stats.repeatC : stats.newC;
+            bucket.revenue += o.total || 0; bucket.orders++; bucket.customers[k] = true;
+
+            var od = new Date(o.confirmedTimestamp || o.timestamp || Date.now());
+            var dk = formatDate(od);
+            if (!byDay[dk]) byDay[dk] = { newSet: {}, repeatSet: {}, sortDate: od };
+            if (isRepeat) byDay[dk].repeatSet[k] = true; else byDay[dk].newSet[k] = true;
+        }
+        var newCount = Object.keys(stats.newC.customers).length, repeatCount = Object.keys(stats.repeatC.customers).length;
+        var elN2 = document.getElementById('reportNewCustomers'); if (elN2) elN2.textContent = newCount;
+        var elR2 = document.getElementById('reportRepeatCustomers'); if (elR2) elR2.textContent = repeatCount;
+        var html = '';
+        html += '<tr><td style="padding:0.5rem 0.8rem;font-weight:600;color:#4299e1">New</td><td style="padding:0.5rem 0.8rem">' + newCount + '</td><td style="padding:0.5rem 0.8rem">' + stats.newC.orders + '</td><td style="padding:0.5rem 0.8rem">$' + stats.newC.revenue.toFixed(2) + '</td></tr>';
+        html += '<tr><td style="padding:0.5rem 0.8rem;font-weight:600;color:#9f7aea">Repeat</td><td style="padding:0.5rem 0.8rem">' + repeatCount + '</td><td style="padding:0.5rem 0.8rem">' + stats.repeatC.orders + '</td><td style="padding:0.5rem 0.8rem">$' + stats.repeatC.revenue.toFixed(2) + '</td></tr>';
+        if (listEl) listEl.innerHTML = html;
+        if (hint) hint.textContent = 'Based on each customer\'s first-ever order. Tap "Build Customer History" once so older customers classify correctly.';
+        STATE._reportNewCustomerCount = newCount;
+
+        // Daily new-vs-repeat breakdown, oldest first, with running per-month totals —
+        // mirrors the daily profit table so the month can be tracked day by day.
+        var dayTbody = document.getElementById('customerTypeDailyList');
+        var dayKeys = Object.keys(byDay).sort(function(a,b){ return byDay[a].sortDate - byDay[b].sortDate; });
+        var dailyRows = [];
+        if (dayTbody) {
+            if (!dayKeys.length) {
+                dayTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>';
+            } else {
+                var dayHtml = '', runNewByMonth = {}, runRepeatByMonth = {};
+                for (var di = 0; di < dayKeys.length; di++) {
+                    var dEntry = byDay[dayKeys[di]];
+                    var dNew = Object.keys(dEntry.newSet).length, dRepeat = Object.keys(dEntry.repeatSet).length;
+                    var dmk = monthKey(dEntry.sortDate);
+                    runNewByMonth[dmk] = (runNewByMonth[dmk] || 0) + dNew;
+                    runRepeatByMonth[dmk] = (runRepeatByMonth[dmk] || 0) + dRepeat;
+                    dailyRows.push({ date: dayKeys[di], newCount: dNew, repeatCount: dRepeat, runNew: runNewByMonth[dmk], runRepeat: runRepeatByMonth[dmk] });
+                    dayHtml += '<tr><td style="padding:0.5rem 0.8rem;font-weight:600">' + dayKeys[di] + '</td>' +
+                        '<td style="padding:0.5rem 0.8rem;color:#4299e1">' + dNew + '</td>' +
+                        '<td style="padding:0.5rem 0.8rem;color:#9f7aea">' + dRepeat + '</td>' +
+                        '<td style="padding:0.5rem 0.8rem;color:var(--gray)">' + runNewByMonth[dmk] + '</td>' +
+                        '<td style="padding:0.5rem 0.8rem;color:var(--gray)">' + runRepeatByMonth[dmk] + '</td></tr>';
+                }
+                dayTbody.innerHTML = dayHtml;
+            }
+        }
+        STATE._reportCustomerDailyRows = dailyRows;
+    }
+
+    function indexOrderIntoMap(order, map) {
+        if (order.status !== 'confirmed') return;
+        var key = customerKeyOf(order);
+        if (!key) return;
+        var ts = order.timestamp || order.confirmedTimestamp || 0;
+        if (!map[key] || ts < map[key].firstOrderAt) {
+            map[key] = { firstOrderAt: ts, name: order.customerName || '', phone: order.customerPhone || '' };
+        }
+    }
+
+    // One-time (safe to re-run) backfill: scans full order history and
+    // records each customer's true first-ever order date into customerIndex,
+    // so New vs Repeat customer stats are accurate for customers who ordered
+    // before this feature existed.
+    async function backfillCustomerIndex() {
+        if (!db) { showToast('Offline — cannot build customer history', 'error'); return; }
+        if (!confirm('Scan full order history to build customer records? This may take a moment for stores with a lot of history.')) return;
+        showToast('Building customer history…', 'info');
+        try {
+            var firstSeen = {};
+            var activeSnap = await db.collection('stores').doc(STATE.storeId).collection('orders').where('status','==','confirmed').get();
+            activeSnap.forEach(function(d) { indexOrderIntoMap(d.data(), firstSeen); });
+            var archSnap = await db.collection('archivedOrders').get();
+            archSnap.forEach(function(d) {
+                var data = d.data();
+                var ownerId = data.storeId || 'GOAT-1979';
+                if (ownerId === STATE.storeId) indexOrderIntoMap(data, firstSeen);
+            });
+
+            var keys = Object.keys(firstSeen);
+            var CHUNK = 400, commits = [];
+            for (var i = 0; i < keys.length; i += CHUNK) {
+                var batch = db.batch();
+                keys.slice(i, i + CHUNK).forEach(function(k) {
+                    var ref = db.collection('stores').doc(STATE.storeId).collection('customerIndex').doc(k);
+                    batch.set(ref, firstSeen[k], { merge: false });
+                });
+                commits.push(batch.commit());
+            }
+            await Promise.all(commits);
+            showToast('Customer history built for ' + keys.length + ' customer(s).', 'success');
+            loadReportData();
+        } catch(e) {
+            console.error('backfillCustomerIndex failed:', e);
+            showToast('Failed to build customer history: ' + e.message, 'error');
+        }
+    }
+
+    function renderFacebookAdsAnalysis() {
+        var confirmed = getReportConfirmed();
+        var walkinRevenue = 0, fbRevenue = 0;
+        for (var i=0;i<confirmed.length;i++) {
+            var sm = confirmed[i].shippingMethod || 'Pickup';
+            if (sm === 'Pickup') walkinRevenue += confirmed[i].total || 0;
+            else fbRevenue += confirmed[i].total || 0;
+        }
+        var elWalkin = document.getElementById('channelWalkinRevenue'); if (elWalkin) elWalkin.textContent = '$' + walkinRevenue.toFixed(2);
+        var elFbRev = document.getElementById('channelFbRevenue'); if (elFbRev) elFbRev.textContent = '$' + fbRevenue.toFixed(2);
+
+        // Ad Spend is only entered per-month, so — same fix as Net Profit — don't charge the
+        // WHOLE month's spend against a partial period's revenue. Sum only the prorated daily
+        // shares for the days actually covered by this report (from the same rows the daily
+        // table below and the Financial Analysis section use).
+        var rows = STATE._reportDailyRows || [];
+        var periodAdSpend = 0;
+        for (var s = 0; s < rows.length; s++) periodAdSpend += rows[s].fbSpendShare;
+
+        var elSpend = document.getElementById('fbAdSpend'); if (elSpend) elSpend.textContent = '$' + periodAdSpend.toFixed(2);
+        var roas = periodAdSpend > 0 ? (fbRevenue / periodAdSpend) : 0;
+        var elRoas = document.getElementById('fbROAS'); if (elRoas) elRoas.textContent = periodAdSpend > 0 ? roas.toFixed(1) + 'x' : '—';
+        var newCount = STATE._reportNewCustomerCount || 0;
+        var cpnc = (periodAdSpend > 0 && newCount > 0) ? (periodAdSpend / newCount) : null;
+        var elCpnc = document.getElementById('fbCostPerNewCustomer'); if (elCpnc) elCpnc.textContent = cpnc != null ? '$' + cpnc.toFixed(2) : '—';
+
+        // Trend chart: Ad Spend (Day) vs Delivery Revenue (Day), same rows as the table below.
+        var ctx = document.getElementById('fbAdsTrendChart');
+        if (ctx) {
+            if (STATE.charts.fbAdsTrendChart) STATE.charts.fbAdsTrendChart.destroy();
+            var labels = rows.length ? rows.map(function(r){ return r.dateLabel; }) : ['No Data'];
+            var spendData = rows.length ? rows.map(function(r){ return r.fbSpendShare; }) : [0];
+            var fbRevData = rows.length ? rows.map(function(r){ return r.fbRevenue; }) : [0];
+            STATE.charts.fbAdsTrendChart = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [
+                { label: 'Ad Spend (Day) $', data: spendData, borderColor: '#1877f2', backgroundColor: 'rgba(24,119,242,0.08)', fill: false, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#1877f2' },
+                { label: 'Delivery Revenue (Day) $', data: fbRevData, borderColor: '#38a169', backgroundColor: 'rgba(56,161,105,0.1)', fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#38a169' }
+            ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { padding: 12, usePointStyle: true } } }, scales: { y: { ticks: { callback: function(v){return '$'+v;} } } } } });
+        }
+
+        // Day-by-day: each day's share of that month's Ad Spend (prorated, since Ad Spend is
+        // only entered per-month) against that same day's Delivery revenue.
+        var dailyTbody = document.getElementById('fbAdsDailyList');
+        if (dailyTbody) {
+            if (!rows.length) {
+                dailyTbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>';
+            } else {
+                var html = '';
+                for (var r = 0; r < rows.length; r++) {
+                    var row = rows[r];
+                    var dayRoas = row.fbSpendShare > 0 ? (row.fbRevenue / row.fbSpendShare) : null;
+                    html += '<tr><td style="padding:0.5rem 0.8rem;font-weight:600">' + row.dateLabel + '</td>' +
+                        '<td style="padding:0.5rem 0.8rem;color:#1877f2">$' + row.fbSpendShare.toFixed(2) + '</td>' +
+                        '<td style="padding:0.5rem 0.8rem">$' + row.fbRevenue.toFixed(2) + '</td>' +
+                        '<td style="padding:0.5rem 0.8rem;font-weight:600;color:#38a169">' + (dayRoas != null ? dayRoas.toFixed(1) + 'x' : '—') + '</td></tr>';
+                }
+                dailyTbody.innerHTML = html;
+            }
+        }
+    }
+
     function exportReportCSV() {
         var confirmed = getReportConfirmed();
         if (!confirmed.length && !_reportRefunds.length) { showToast('No report data to export', 'warning'); return; }
@@ -6057,6 +7602,117 @@ function sendToTelegram(order, callback) {
             for (var b = 0; b < days.length; b++) {
                 var d = byDay[days[b]];
                 csv += escCSV(days[b]) + ',' + d.orders + ',' + d.customers.size + ',$' + d.revenue.toFixed(2) + '\n';
+            }
+        }
+
+        csv += '\nItems Breakdown\n';
+        csv += 'Product,Size,Qty Sold,Revenue\n';
+        var byItem = {};
+        for (var c = 0; c < confirmed.length; c++) {
+            var cart = confirmed[c].cart || [];
+            for (var d2 = 0; d2 < cart.length; d2++) {
+                var it = cart[d2];
+                var key = it.name + '|' + (it.size || '');
+                if (!byItem[key]) byItem[key] = { name: it.name, size: it.size || '', qty: 0, revenue: 0 };
+                byItem[key].qty += it.quantity || 0;
+                var lineRevenue = (it.subtotal != null ? it.subtotal : (it.price * it.quantity)) - (it.discountAmt || 0);
+                byItem[key].revenue += Math.max(0, lineRevenue);
+            }
+        }
+        var itemKeys = Object.keys(byItem).sort(function(x, y) {
+            return byItem[y].qty - byItem[x].qty;
+        });
+        if (!itemKeys.length) {
+            csv += 'No data for this period\n';
+        } else {
+            for (var e = 0; e < itemKeys.length; e++) {
+                var itm = byItem[itemKeys[e]];
+                csv += escCSV(itm.name) + ',' + escCSV(itm.size) + ',' + itm.qty + ',$' + itm.revenue.toFixed(2) + '\n';
+            }
+        }
+
+        csv += '\nOrder Details (Customer Info)\n';
+        csv += 'Order ID,Date,Customer Name,Phone,Address,City,Payment,Shipping,Item,Size,Qty,Total\n';
+        if (!confirmed.length) {
+            csv += 'No data for this period\n';
+        } else {
+            var sortedOrders = confirmed.slice().sort(function(x, y) {
+                return (y.confirmedTimestamp || y.timestamp || 0) - (x.confirmedTimestamp || x.timestamp || 0);
+            });
+            for (var f = 0; f < sortedOrders.length; f++) {
+                var ord = sortedOrders[f];
+                var oCart = ord.cart || [];
+                var oDate = formatDate(new Date(ord.confirmedTimestamp || ord.timestamp || Date.now()));
+                var payLbl = ord.paymentMethod === 'qr' ? 'QR Code' : 'Cash';
+                if (!oCart.length) {
+                    csv += [
+                        escCSV(ord.orderId), escCSV(oDate), escCSV(ord.customerName||''), escCSV(ord.customerPhone||''),
+                        escCSV(ord.customerAddress||''), escCSV(ord.customerCity||''), escCSV(payLbl), escCSV(ord.shippingMethod||''),
+                        '', '', '', (ord.total||0).toFixed(2)
+                    ].join(',') + '\n';
+                } else {
+                    for (var g = 0; g < oCart.length; g++) {
+                        var oit = oCart[g];
+                        csv += [
+                            escCSV(ord.orderId), escCSV(oDate), escCSV(ord.customerName||''), escCSV(ord.customerPhone||''),
+                            escCSV(ord.customerAddress||''), escCSV(ord.customerCity||''), escCSV(payLbl), escCSV(ord.shippingMethod||''),
+                            escCSV(oit.name), escCSV(oit.size||''), oit.quantity,
+                            (g === 0 ? (ord.total||0).toFixed(2) : '')
+                        ].join(',') + '\n';
+                    }
+                }
+            }
+        }
+
+        if (_reportRefunds.length) {
+            csv += '\nRefunded Orders (Customer Info)\n';
+            csv += 'Refund ID,Order ID,Date,Customer Name,Phone,Refund Amount,Reason\n';
+            for (var h2 = 0; h2 < _reportRefunds.length; h2++) {
+                var rf = _reportRefunds[h2];
+                csv += [
+                    escCSV(rf.refundId||''), escCSV(rf.orderId||''), escCSV(rf.refundDate||''),
+                    escCSV(rf.customerName||''), escCSV(rf.customerPhone||''),
+                    (rf.refundAmount||0).toFixed(2), escCSV(rf.refundReason||'')
+                ].join(',') + '\n';
+            }
+        }
+
+        if (_reportCustomerTypes) {
+            csv += '\nCustomers (New vs Repeat)\n';
+            csv += 'Customer Name,Phone,Type,Orders,Revenue\n';
+            var custRows = {};
+            for (var ci = 0; ci < confirmed.length; ci++) {
+                var co = confirmed[ci], ck = customerKeyOf(co);
+                if (!ck) continue;
+                if (!custRows[ck]) {
+                    custRows[ck] = {
+                        name: co.customerName || '', phone: co.customerPhone || '',
+                        type: _reportCustomerTypes.repeatSet[ck] ? 'Repeat' : 'New',
+                        orders: 0, revenue: 0
+                    };
+                }
+                custRows[ck].orders++; custRows[ck].revenue += co.total || 0;
+            }
+            var custKeys = Object.keys(custRows).sort(function(x,y){ return custRows[y].revenue - custRows[x].revenue; });
+            if (!custKeys.length) {
+                csv += 'No data for this period\n';
+            } else {
+                for (var cj = 0; cj < custKeys.length; cj++) {
+                    var cr = custRows[custKeys[cj]];
+                    csv += escCSV(cr.name) + ',' + escCSV(cr.phone) + ',' + cr.type + ',' + cr.orders + ',$' + cr.revenue.toFixed(2) + '\n';
+                }
+            }
+
+            csv += '\nNew vs Repeat by Day\n';
+            csv += 'Date,New,Repeat,Running Month New,Running Month Repeat\n';
+            var dailyRows = STATE._reportCustomerDailyRows || [];
+            if (!dailyRows.length) {
+                csv += 'No data for this period\n';
+            } else {
+                for (var dj = 0; dj < dailyRows.length; dj++) {
+                    var drow = dailyRows[dj];
+                    csv += escCSV(drow.date) + ',' + drow.newCount + ',' + drow.repeatCount + ',' + drow.runNew + ',' + drow.runRepeat + '\n';
+                }
             }
         }
 
@@ -6753,11 +8409,16 @@ function sendToTelegram(order, callback) {
 
     function exportInventoryCSV() {
         if (!STATE.products.length) { showToast('No products', 'warning'); return; }
-        var csv = 'Product ID,Name,Category,Price,Total Stock,Size,Size Qty,Image\n';
+        var csv = 'Product ID,Name,Category,Price,Cost of Production,Margin %,Total Stock,Stock Value (Cost),Size,Size Qty,Image\n';
         for (var i = 0; i < STATE.products.length; i++) {
             var p = STATE.products[i], img = (p.images && p.images.length > 0) ? p.images[0] : '';
-            if (p.sizes && p.sizes.length > 0) { for (var j = 0; j < p.sizes.length; j++) { csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), getTotalStock(p), escCSV(p.sizes[j].name), p.sizes[j].qty, escCSV(img)].join(',') + '\n'; } }
-            else { csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), getTotalStock(p), 'No sizes', 0, escCSV(img)].join(',') + '\n'; }
+            var ts = getTotalStock(p);
+            var hasCost = p.costPrice != null && p.costPrice !== '';
+            var costStr = hasCost ? Number(p.costPrice).toFixed(2) : '';
+            var marginStr = (hasCost && p.price > 0) ? (((p.price - p.costPrice) / p.price) * 100).toFixed(1) : '';
+            var stockValueStr = hasCost ? (Number(p.costPrice) * ts).toFixed(2) : '';
+            if (p.sizes && p.sizes.length > 0) { for (var j = 0; j < p.sizes.length; j++) { csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), costStr, marginStr, ts, stockValueStr, escCSV(p.sizes[j].name), p.sizes[j].qty, escCSV(img)].join(',') + '\n'; } }
+            else { csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), costStr, marginStr, ts, stockValueStr, 'No sizes', 0, escCSV(img)].join(',') + '\n'; }
         }
         dlCSV(csv, 'GOAT_KIDS_Inventory.csv');
         showToast('Exported!', 'success');
@@ -8011,6 +9672,9 @@ function sendToTelegram(order, callback) {
             // Ensure slug is set on destination product for future transfers
             if (!destData.slug) destData.slug = productSlug;
 
+            // Keep cost of production in sync with the sending store on every transfer
+            if (p.costPrice != null && p.costPrice !== '') destData.costPrice = p.costPrice;
+
             if (destData.sizes && destData.sizes.length > 0 && t.size !== 'One Size') {
                 var found = false;
                 destData.sizes.forEach(function(s){ if (s.name === t.size) { s.qty += t.qty; found = true; } });
@@ -8030,7 +9694,7 @@ function sendToTelegram(order, callback) {
 
             // Keep local STATE in sync if this product is in the local store
             var localP = STATE.products.find(function(x){ return x.id === destProductRef.id; });
-            if (localP) { localP.sizes = destData.sizes; localP.stock = destData.stock; saveProducts(); }
+            if (localP) { localP.sizes = destData.sizes; localP.stock = destData.stock; localP.costPrice = destData.costPrice; saveProducts(); }
 
             logActivity('Transfer Receipt Confirmed', t.productName + ' x' + t.qty + ' from ' + t.fromStoreName);
             _sendTelegramRaw(
@@ -8208,6 +9872,7 @@ function sendToTelegram(order, callback) {
             } else { srcP.stock = (srcP.stock || 0) - t.qty; }
 
             // Add to destination (in memory)
+            if (srcP.costPrice != null && srcP.costPrice !== '') dest.data.costPrice = srcP.costPrice;
             if (dest.data.sizes && dest.data.sizes.length > 0 && t.size !== 'One Size') {
                 var found = false;
                 dest.data.sizes.forEach(function(s){ if (s.name === t.size) { s.qty += t.qty; found = true; } });
