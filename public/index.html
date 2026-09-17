@@ -4293,7 +4293,7 @@ function sendToTelegram(order, callback) {
             '<option value="Cancel">Cancellations</option>' +
             '<option value="Login">Logins</option>' +
             '</select>' +
-            '<select id="logStoreFilter" class="form-control" style="font-size:0.82rem;width:120px" onchange="filterActivityLog()">' +
+            '<select id="logStoreFilter" class="form-control" style="font-size:0.82rem;width:120px" onchange="onLogStoreFilterChange()">' +
             '<option value="">All Stores</option>' +
             '</select>' +
             '</div>' +
@@ -4314,6 +4314,8 @@ function sendToTelegram(order, callback) {
     }
 
     var _allLogs = [];
+    var _allLogsGlobalCache = []; // the original all-stores-combined 500-cap load, so switching back to "All Stores" doesn't need a re-fetch
+    var _logStoreIdMap = {}; // dropdown display value (storeName or storeId) -> real storeId, for the scoped re-query below
 
     async function loadActivityLog() {
         var listEl = document.getElementById('activityLogList');
@@ -4340,14 +4342,53 @@ function sendToTelegram(order, callback) {
         if (!logs.length) logs = STATE.activityLog.slice();
 
         _allLogs = logs;
+        _allLogsGlobalCache = logs.slice();
 
         // Populate store filter
         if (storeFilter) {
             var stores = [...new Set(logs.map(function(l){ return l.storeName||l.storeId||''; }).filter(Boolean))];
+            _logStoreIdMap = {};
+            logs.forEach(function(l) {
+                var disp = l.storeName || l.storeId || '';
+                if (disp && l.storeId) _logStoreIdMap[disp] = l.storeId;
+            });
             storeFilter.innerHTML = '<option value="">All Stores</option>' +
                 stores.map(function(s){ return '<option value="' + s + '">' + s + '</option>'; }).join('');
         }
 
+        filterActivityLog();
+    }
+
+    // Re-queries Firestore scoped to just the selected store, instead of only
+    // filtering client-side on the already-capped 500-across-all-stores list.
+    // Without this, a store's own older entries can be invisible here purely
+    // because OTHER stores' recent activity crowded them out of that shared
+    // cap — even though they're still sitting safely in Firestore.
+    async function onLogStoreFilterChange() {
+        var storeFilter = document.getElementById('logStoreFilter');
+        var storeF = storeFilter ? storeFilter.value : '';
+        if (!storeF) {
+            _allLogs = _allLogsGlobalCache.slice();
+            filterActivityLog();
+            return;
+        }
+        var storeId = _logStoreIdMap[storeF];
+        if (!storeId || !db) { filterActivityLog(); return; } // fall back to filtering whatever's already loaded
+
+        var listEl = document.getElementById('activityLogList');
+        if (listEl) listEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--gray)"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+        try {
+            // No orderBy in the query itself — avoids requiring a Firestore
+            // composite index for (storeId equality + timestamp order). Sort
+            // and cap to the most recent 500 client-side instead.
+            var snap = await db.collection('activityLogs').where('storeId', '==', storeId).get();
+            var storeLogs = [];
+            snap.forEach(function(d){ storeLogs.push(Object.assign({ _id: d.id }, d.data())); });
+            storeLogs.sort(function(a,b){ return (b.timestamp||0) - (a.timestamp||0); });
+            _allLogs = storeLogs.slice(0, 500);
+        } catch(e) {
+            console.warn('Store-scoped log load failed:', e.message);
+        }
         filterActivityLog();
     }
 
@@ -4444,7 +4485,7 @@ function sendToTelegram(order, callback) {
         STATE.activityLog = [];
         localStorage.setItem('goatActivityLog', '[]');
         _allLogs = [];
-        // Also clear from Firebase
+        _allLogsGlobalCache = [];
         if (db) {
             try {
                 var snap = await db.collection('activityLogs').limit(500).get();
@@ -6547,19 +6588,48 @@ function sendToTelegram(order, callback) {
         liveSnap.forEach(function(d){ soldOrders.push(d.data()); });
         var archSnap = await db.collection('archivedOrders').where('storeId', '==', STATE.storeId).get();
         archSnap.forEach(function(d){ soldOrders.push(d.data()); });
+
+        // Refunds, keyed by orderId (not date-filtered here — a sale's TRUE
+        // original quantity doesn't depend on when it was later refunded).
+        // Needed because confirmRefund() destructively removes/reduces items
+        // from order.cart once refunded — reading the order's current cart
+        // alone would make a genuine sale silently vanish from "Sold" the
+        // moment it's refunded, even a same-day refund of a same-day sale.
+        var refundedByOrderAllTime = {}; // orderId -> { 'productId|size': totalRefundedQty }
+        var refundSnap = await db.collection('stores').doc(STATE.storeId).collection('refunds').get();
+        refundSnap.forEach(function(d) {
+            var r = d.data();
+            if (r.orderId) {
+                if (!refundedByOrderAllTime[r.orderId]) refundedByOrderAllTime[r.orderId] = {};
+                (r.cart || []).forEach(function(it) {
+                    var k = it.productId + '|' + (it.size || '');
+                    refundedByOrderAllTime[r.orderId][k] = (refundedByOrderAllTime[r.orderId][k] || 0) + it.quantity;
+                });
+            }
+            // Refund column itself stays window-filtered — a refund's stock
+            // impact genuinely happens whenever it's processed, which can be
+            // a different day than the original sale.
+            var ts = r.refundTimestamp || 0;
+            if (ts < effectiveFromTs || ts > effectiveToTs) return;
+            (r.cart || []).forEach(function(it){ addQty(refunded, it.productId + '|' + (it.size||''), it.quantity); });
+        });
+
         soldOrders.forEach(function(o) {
             var ts = o.confirmedTimestamp || o.timestamp || 0;
             if (ts < effectiveFromTs || ts > effectiveToTs) return;
             if (o.status !== 'confirmed' && o.status !== 'partial_refund' && o.status !== 'refunded') return;
-            (o.cart || []).forEach(function(it){ addQty(sold, it.productId + '|' + (it.size||''), it.quantity); });
-        });
-
-        var refundSnap = await db.collection('stores').doc(STATE.storeId).collection('refunds').get();
-        refundSnap.forEach(function(d) {
-            var r = d.data();
-            var ts = r.refundTimestamp || 0;
-            if (ts < effectiveFromTs || ts > effectiveToTs) return;
-            (r.cart || []).forEach(function(it){ addQty(refunded, it.productId + '|' + (it.size||''), it.quantity); });
+            var thisOrderRefunds = refundedByOrderAllTime[o.orderId] || {};
+            // Union of keys still in the (possibly-trimmed) cart and keys that
+            // were fully refunded out of it entirely.
+            var keys = {};
+            (o.cart || []).forEach(function(it) { keys[it.productId + '|' + (it.size || '')] = true; });
+            Object.keys(thisOrderRefunds).forEach(function(k) { keys[k] = true; });
+            Object.keys(keys).forEach(function(key) {
+                var remainingQty = 0;
+                (o.cart || []).forEach(function(it) { if ((it.productId + '|' + (it.size || '')) === key) remainingQty += it.quantity; });
+                var refundedQty = thisOrderRefunds[key] || 0;
+                addQty(sold, key, remainingQty + refundedQty); // true original sold quantity
+            });
         });
 
         var xferOutSnap = await db.collection('transfers').where('fromStoreId', '==', STATE.storeId).where('status', '==', 'approved').get();
