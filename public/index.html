@@ -9835,6 +9835,11 @@ function sendToTelegram(order, callback) {
     async function approveTransfer(transferId) {
         if (STATE.adminRole !== 'full') { showToast('Full admin required', 'error'); return; }
         if (!confirm('Confirm receipt of this stock?\n\nThis will deduct from ' + 'the sending store and add to your store.')) return;
+        // Only a genuine new-stock arrival should reset the Promotion-flag
+        // clock — a correction or mistaken transfer shouldn't make an old
+        // product look freshly restocked. Ask explicitly, same idea as the
+        // "reason" field on manual stock edits.
+        var isGenuineRestockT = confirm('Is this genuinely new stock arriving?\n\nOK = Yes, new stock (resets the Promotion Due clock for this product)\nCancel = No, this is a correction/mistake transfer (clock stays as-is)');
         if (!db) { showToast('Firebase offline', 'error'); return; }
 
         // ── DOUBLE-TAP PROTECTION ── (mirrors submitTransferRequest's _transferSubmitting lock)
@@ -9951,8 +9956,13 @@ function sendToTelegram(order, callback) {
                     sizes: (p.sizes||[]).map(function(s){ return Object.assign({}, s, {qty: 0}); }),
                     // This product is only now coming into existence at the
                     // destination store — its age should start from here, not
-                    // from whenever Main Store originally registered it.
-                    addedAt: Date.now()
+                    // from whenever Main Store originally registered it. Clear
+                    // any inherited lastRestockDate too — there's no real
+                    // restock history at THIS store yet, so it should fall
+                    // back to addedAt rather than carry over the source
+                    // store's unrelated value.
+                    addedAt: Date.now(),
+                    lastRestockDate: 0
                 });
                 console.log('ℹ️ Creating new product in destination with fresh ID:', destProductRef.id);
             }
@@ -9970,11 +9980,12 @@ function sendToTelegram(order, callback) {
                 destData.stock = destData.sizes.reduce(function(a,s){ return a + (s.qty||0); }, 0);
             } else { destData.stock = (destData.stock || 0) + t.qty; }
 
-            // A transfer receipt IS new stock arriving at the destination
-            // store — reset its Promotion-flag clock the same way a manual
-            // "New stock received" edit does, whether this product already
-            // existed there or is arriving for the first time.
-            destData.lastRestockDate = Date.now();
+            // Only reset the Promotion-flag clock if this was confirmed as a
+            // genuine restock, not a correction/mistake transfer. A brand-new
+            // product at this store still gets its addedAt set above either
+            // way — that's just when it first appeared here, not a claim
+            // about restock intent.
+            if (isGenuineRestockT) destData.lastRestockDate = Date.now();
 
             // Write atomically
             var batch = db.batch();
@@ -9990,7 +10001,7 @@ function sendToTelegram(order, callback) {
             var localP = STATE.products.find(function(x){ return x.id === destProductRef.id; });
             if (localP) { localP.sizes = destData.sizes; localP.stock = destData.stock; localP.costPrice = destData.costPrice; localP.lastRestockDate = destData.lastRestockDate; saveProducts(); }
 
-            logActivity('Transfer Receipt Confirmed', t.productName + ' x' + t.qty + ' from ' + t.fromStoreName);
+            logActivity('Transfer Receipt Confirmed', t.productName + ' x' + t.qty + ' from ' + t.fromStoreName + (isGenuineRestockT ? ' | New stock' : ' | Correction (clock not reset)'));
             _sendTelegramRaw(
                 '✅ <b>TRANSFER CONFIRMED</b>\n\n' +
                 '📦 ' + t.productName + (t.size && t.size !== 'One Size' ? ' (' + t.size + ')' : '') + '\n' +
@@ -10022,6 +10033,8 @@ function sendToTelegram(order, callback) {
         if (!checked.length) { showToast('Select at least one request', 'error'); return; }
         if (STATE.adminRole !== 'full') { showToast('Full admin required', 'error'); return; }
         if (!confirm('Approve ' + checked.length + ' selected transfer(s)? Stock will be deducted from this store and added to the destination store(s).')) return;
+        // Applies to the whole batch — same idea as the single-item prompt.
+        var isGenuineRestockBulk = confirm('Is this genuinely new stock arriving?\n\nOK = Yes, new stock (resets the Promotion Due clock for every item in this batch)\nCancel = No, this is a correction/mistake batch (clocks stay as-is)');
         if (!db) { showToast('Firebase offline', 'error'); return; }
 
         // ── DOUBLE-TAP PROTECTION ── mirrors approveTransfer's lock
@@ -10129,8 +10142,10 @@ function sendToTelegram(order, callback) {
                             sizes: (srcP2.sizes||[]).map(function(s){ return Object.assign({}, s, {qty:0}); }),
                             // Only now coming into existence at this store — age
                             // starts here, not at the source store's original
-                            // registration date.
-                            addedAt: Date.now()
+                            // registration date. Clear inherited lastRestockDate
+                            // too, for the same reason (see single-approve path).
+                            addedAt: Date.now(),
+                            lastRestockDate: 0
                         })
                     };
                     console.log('ℹ️ New product in destination with fresh ID:', newRef2.id);
@@ -10181,10 +10196,9 @@ function sendToTelegram(order, callback) {
                 if (!found) dest.data.sizes.push({ name: t.size, qty: t.qty });
                 dest.data.stock = dest.data.sizes.reduce(function(a,s){ return a+(s.qty||0); }, 0);
             } else { dest.data.stock = (dest.data.stock || 0) + t.qty; }
-            // Every transfer receipt is new stock arriving at the destination
-            // store — reset its Promotion-flag clock, same as the single-item
-            // approve path.
-            dest.data.lastRestockDate = Date.now();
+            // Only reset the Promotion-flag clock if this batch was confirmed
+            // as genuine restock, not a correction/mistake batch.
+            if (isGenuineRestockBulk) dest.data.lastRestockDate = Date.now();
 
             succeeded.push(t);
         });
@@ -10225,7 +10239,7 @@ function sendToTelegram(order, callback) {
                 var caption = '✅ <b>STOCK RECEIPT CONFIRMED</b> (' + succeeded.length + ' item' + (succeeded.length>1?'s':'') + ')\n\n📦 Items:\n' + itemLines.join('\n') + '\n\n✅ Confirmed by ' + (STATE.storeName || STATE.storeId);
                 _sendTelegramRaw(caption, null, 'inventory');
 
-                logActivity('Bulk Transfer Receipt Confirmed', succeeded.length + ' transfers from ' + fromStoreId);
+                logActivity('Bulk Transfer Receipt Confirmed', succeeded.length + ' transfers from ' + fromStoreId + (isGenuineRestockBulk ? ' | New stock' : ' | Correction (clocks not reset)'));
 
                 if (failed.length) {
                     showToast(succeeded.length + ' approved, ' + failed.length + ' failed — see console', 'error');
