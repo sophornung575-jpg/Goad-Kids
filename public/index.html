@@ -9773,7 +9773,8 @@ function sendToTelegram(order, callback) {
         html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;padding-bottom:0.6rem;border-bottom:1px solid var(--gray-light)">' +
             '<label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;cursor:pointer"><input type="checkbox" id="transferSelectAll" onchange="toggleSelectAllTransfers(this)"> Select All (' + pending.length + ')</label>' +
             '<div id="transferBulkActions" style="display:none;gap:6px">' +
-            '<button class="btn btn-success btn-small" onclick="bulkApproveTransfers()"><i class="fas fa-check-double"></i> Confirm Receipt (<span id="transferSelCount">0</span>)</button>' +
+            '<button class="btn btn-success btn-small" onclick="bulkApproveTransfers(true)" title="Genuine new stock — resets the Promotion Due clock for every selected item"><i class="fas fa-box-open"></i> New Stock (<span id="transferSelCount">0</span>)</button>' +
+            '<button class="btn btn-outline btn-small" style="color:#b7791f;border-color:#b7791f" onclick="bulkApproveTransfers(false)" title="Correction / operational transfer — does NOT reset the Promotion Due clock"><i class="fas fa-wrench"></i> Correction (<span id="transferSelCount2">0</span>)</button>' +
             '<button class="btn btn-outline btn-small" style="color:var(--danger)" onclick="bulkRejectTransfers()"><i class="fas fa-times"></i> Reject Selected</button>' +
             '</div></div>';
         pending.forEach(function(t) {
@@ -9790,7 +9791,8 @@ function sendToTelegram(order, callback) {
                 '</div></div>' +
                 '<div style="display:flex;gap:6px">' +
                 '<button class="btn btn-outline btn-small" onclick="diagnoseTransfer(\'' + t.transferId + '\')" title="Diagnose"><i class="fas fa-search"></i></button>' +
-                '<button class="btn btn-success btn-small" onclick="approveTransfer(\'' + t.transferId + '\')"><i class="fas fa-check"></i> Confirm Receipt</button>' +
+                '<button class="btn btn-success btn-small" onclick="approveTransfer(\'' + t.transferId + '\', true, this)" title="Genuine new stock — resets the Promotion Due clock"><i class="fas fa-box-open"></i> New Stock</button>' +
+                '<button class="btn btn-outline btn-small" style="color:#b7791f;border-color:#b7791f" onclick="approveTransfer(\'' + t.transferId + '\', false, this)" title="Correction / operational transfer — does NOT reset the Promotion Due clock"><i class="fas fa-wrench"></i> Correction</button>' +
                 '<button class="btn btn-outline btn-small" style="color:var(--danger)" onclick="rejectTransfer(\'' + t.transferId + '\')"><i class="fas fa-times"></i> Reject</button>' +
                 '</div></div></div>';
         });
@@ -9801,7 +9803,9 @@ function sendToTelegram(order, callback) {
         var checked = document.querySelectorAll('.transfer-select-cb:checked');
         var bulkBar = document.getElementById('transferBulkActions');
         var countEl = document.getElementById('transferSelCount');
+        var countEl2 = document.getElementById('transferSelCount2');
         if (countEl) countEl.textContent = checked.length;
+        if (countEl2) countEl2.textContent = checked.length;
         if (bulkBar) bulkBar.style.display = checked.length > 0 ? 'flex' : 'none';
         var selectAll = document.getElementById('transferSelectAll');
         var all = document.querySelectorAll('.transfer-select-cb');
@@ -9832,14 +9836,12 @@ function sendToTelegram(order, callback) {
         el.innerHTML = html;
     }
 
-    async function approveTransfer(transferId) {
+    async function approveTransfer(transferId, isGenuineRestockT, btnEl) {
         if (STATE.adminRole !== 'full') { showToast('Full admin required', 'error'); return; }
-        if (!confirm('Confirm receipt of this stock?\n\nThis will deduct from ' + 'the sending store and add to your store.')) return;
-        // Only a genuine new-stock arrival should reset the Promotion-flag
-        // clock — a correction or mistaken transfer shouldn't make an old
-        // product look freshly restocked. Ask explicitly, same idea as the
-        // "reason" field on manual stock edits.
-        var isGenuineRestockT = confirm('Is this genuinely new stock arriving?\n\nOK = Yes, new stock (resets the Promotion Due clock for this product)\nCancel = No, this is a correction/mistake transfer (clock stays as-is)');
+        var confirmMsg = isGenuineRestockT
+            ? 'Confirm receipt as NEW STOCK?\n\nThis will deduct from the sending store, add to your store, and reset the Promotion Due clock for this item.'
+            : 'Confirm receipt as a CORRECTION / operational transfer?\n\nThis will deduct from the sending store and add to your store, but will NOT reset the Promotion Due clock.';
+        if (!confirm(confirmMsg)) return;
         if (!db) { showToast('Firebase offline', 'error'); return; }
 
         // ── DOUBLE-TAP PROTECTION ── (mirrors submitTransferRequest's _transferSubmitting lock)
@@ -9848,7 +9850,8 @@ function sendToTelegram(order, callback) {
             return;
         }
         _transferApproving[transferId] = true;
-        var approveBtn = document.querySelector('[onclick="approveTransfer(\'' + transferId + '\')"]');
+        var approveBtn = btnEl || document.querySelector('[data-transfer-approve="' + transferId + '"]');
+        var origBtnHtml = approveBtn ? approveBtn.innerHTML : null;
         if (approveBtn) { approveBtn.disabled = true; approveBtn.textContent = '⏳ Processing...'; }
 
         try {
@@ -10024,23 +10027,25 @@ function sendToTelegram(order, callback) {
         } finally {
             // ── Always unlock, even on error/early-return ──
             delete _transferApproving[transferId];
-            if (approveBtn) { approveBtn.disabled = false; approveBtn.innerHTML = '<i class="fas fa-check"></i> Confirm Receipt'; }
+            if (approveBtn) { approveBtn.disabled = false; approveBtn.innerHTML = origBtnHtml || '<i class="fas fa-check"></i> Confirm'; }
         }
     }
 
-    async function bulkApproveTransfers() {
+    async function bulkApproveTransfers(isGenuineRestockBulk) {
         var checked = Array.from(document.querySelectorAll('.transfer-select-cb:checked')).map(function(c){ return c.value; });
         if (!checked.length) { showToast('Select at least one request', 'error'); return; }
         if (STATE.adminRole !== 'full') { showToast('Full admin required', 'error'); return; }
-        if (!confirm('Approve ' + checked.length + ' selected transfer(s)? Stock will be deducted from this store and added to the destination store(s).')) return;
-        // Applies to the whole batch — same idea as the single-item prompt.
-        var isGenuineRestockBulk = confirm('Is this genuinely new stock arriving?\n\nOK = Yes, new stock (resets the Promotion Due clock for every item in this batch)\nCancel = No, this is a correction/mistake batch (clocks stay as-is)');
+        var confirmMsgBulk = isGenuineRestockBulk
+            ? 'Approve ' + checked.length + ' selected transfer(s) as NEW STOCK?\n\nStock will be deducted from the sending store, added to the destination store(s), and the Promotion Due clock will reset for every item.'
+            : 'Approve ' + checked.length + ' selected transfer(s) as a CORRECTION / operational batch?\n\nStock will be deducted and added as usual, but the Promotion Due clock will NOT reset.';
+        if (!confirm(confirmMsgBulk)) return;
         if (!db) { showToast('Firebase offline', 'error'); return; }
 
         // ── DOUBLE-TAP PROTECTION ── mirrors approveTransfer's lock
         if (_bulkTransferBusy) { showToast('Already processing a batch — please wait...', 'warning'); return; }
         _bulkTransferBusy = true;
-        var bulkApproveBtn = document.querySelector('[onclick="bulkApproveTransfers()"]');
+        var bulkApproveBtn = document.querySelector('[onclick="bulkApproveTransfers(' + isGenuineRestockBulk + ')"]');
+        var origBulkBtnHtml = bulkApproveBtn ? bulkApproveBtn.innerHTML : null;
         if (bulkApproveBtn) { bulkApproveBtn.disabled = true; bulkApproveBtn.textContent = '⏳ Processing...'; }
 
         try {
@@ -10269,7 +10274,7 @@ function sendToTelegram(order, callback) {
         } finally {
             // ── Always unlock, even on error/timeout ──
             _bulkTransferBusy = false;
-            if (bulkApproveBtn) { bulkApproveBtn.disabled = false; bulkApproveBtn.innerHTML = '<i class="fas fa-check-double"></i> Confirm Receipt (<span id="transferSelCount">0</span>)'; }
+            if (bulkApproveBtn) { bulkApproveBtn.disabled = false; bulkApproveBtn.innerHTML = origBulkBtnHtml || '<i class="fas fa-check-double"></i> Confirm'; }
         }
     }
 
