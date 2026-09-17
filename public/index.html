@@ -6860,11 +6860,13 @@ function sendToTelegram(order, callback) {
         if (!db || !STATE.firebaseOnline) return;
         if (!STATE.products.length) return;
         try {
-            // v2: supersedes the earlier flag, which incorrectly used ANY edit
-            // (price changes, count corrections, etc.) as a restock signal.
-            // This re-derives every product's dates from scratch so it also
-            // repairs anything the old logic already wrote wrong.
-            var flagDoc = await db.collection('_admin_').doc('restockBackfillV2_' + STATE.storeId).get();
+            // v3: v2's check ("lastRestockDate !== addedAt means it's fine")
+            // failed on products the original buggy backfill had set BOTH
+            // fields to the same wrong value for — that looks identical to a
+            // legitimate brand-new product (which also gets both fields set
+            // equal, at creation). This version instead verifies each stored
+            // value against real log evidence, not against the other field.
+            var flagDoc = await db.collection('_admin_').doc('restockBackfillV3_' + STATE.storeId).get();
             if (flagDoc.exists) return; // already ran (correctly) for this store
         } catch (e) { return; }
 
@@ -6896,27 +6898,27 @@ function sendToTelegram(order, callback) {
             var batch = db.batch();
             var writes = 0;
             STATE.products.forEach(function(p) {
-                var correctRestock = restocksByName[p.name] || 0;
-                var newAdded = p.addedAt, newRestock = p.lastRestockDate, changed = false;
+                var trueAdded = addsByName[p.name] || 0;
+                var trueRestock = restocksByName[p.name] || 0;
 
-                // lastRestockDate is only ever legitimately set two ways in this
-                // app: equal to addedAt at creation, or via a genuine
-                // "New stock received" edit. If the stored value is neither —
-                // it can only be leftover from the earlier buggy backfill
-                // (which used ANY edit reason) — recompute it. Never touches
-                // a value that's already consistent with either legit source.
-                if (p.lastRestockDate && p.lastRestockDate !== p.addedAt && p.lastRestockDate !== correctRestock) {
-                    newRestock = correctRestock; // real restock date if one exists, else 0 (falls back to addedAt)
-                    changed = true;
-                }
-                // Only fill addedAt when it's genuinely unknown (0) — never
-                // overwrite an existing value, even if the log has since aged
-                // out or been cleared.
-                if (!p.addedAt && addsByName[p.name]) {
-                    newAdded = addsByName[p.name];
-                    changed = true;
-                }
-                if (!changed) return;
+                // addedAt is only ever legitimate if it matches a real
+                // "Add Product" log entry for this exact product, or is
+                // already 0 (genuinely unknown). Anything else — including a
+                // value that happens to equal lastRestockDate — is unverified
+                // and must be treated as leftover from the earlier buggy
+                // backfill, not trusted just because it looks self-consistent.
+                var addedOk = !p.addedAt || (trueAdded && p.addedAt === trueAdded);
+                // lastRestockDate is only legitimate if it matches a genuine
+                // "New stock received" edit, or matches a verified addedAt
+                // (creation-time default), or is already 0.
+                var restockOk = !p.lastRestockDate ||
+                    (trueRestock && p.lastRestockDate === trueRestock) ||
+                    (addedOk && p.lastRestockDate === p.addedAt);
+
+                if (addedOk && restockOk) return; // both verified against real evidence — leave alone
+
+                var newAdded = addedOk ? p.addedAt : trueAdded;       // real creation date if found, else 0 (unknown)
+                var newRestock = restockOk ? p.lastRestockDate : trueRestock; // real restock date if found, else 0 (falls back to addedAt)
                 p.addedAt = newAdded;
                 p.lastRestockDate = newRestock;
                 writes++;
@@ -6925,7 +6927,7 @@ function sendToTelegram(order, callback) {
                 });
             });
             if (writes) { await batch.commit(); saveProducts(); }
-            await db.collection('_admin_').doc('restockBackfillV2_' + STATE.storeId).set({
+            await db.collection('_admin_').doc('restockBackfillV3_' + STATE.storeId).set({
                 done: true, at: Date.now(), corrected: writes, total: STATE.products.length
             });
             renderInventory();
