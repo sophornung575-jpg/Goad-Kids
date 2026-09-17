@@ -36,6 +36,7 @@
   }
   .logo{ display:flex; align-items:center; gap:0.6rem; font-size:1.3rem; font-weight:700; color:var(--primary); }
   .logo .sub{ font-size:0.78rem; font-weight:500; color:var(--gray-dark); }
+  .header-actions{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:flex-end; }
   .back-link{
     display:inline-flex; align-items:center; gap:0.4rem;
     font-size:0.85rem; font-weight:600; color:var(--primary); text-decoration:none;
@@ -98,6 +99,8 @@
   .mark-ordered:hover{ background:var(--success); color:#fff; }
   .mark-received{ background:none; border:1px solid var(--info); color:var(--info); border-radius:5px; padding:3px 8px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
   .mark-received:hover{ background:var(--info); color:#fff; }
+  .undo-status{ background:none; border:1px solid var(--gray); color:var(--gray-dark); border-radius:5px; padding:3px 8px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
+  .undo-status:hover{ background:var(--gray); color:#fff; }
   .send-status{ font-size:0.82rem; margin-top:10px; padding:10px 12px; border-radius:var(--radius); display:none; }
   .send-status.ok{ background:#e6fffa; color:#2c7a7b; display:block; }
   .send-status.err{ background:#fff5f5; color:#c53030; display:block; }
@@ -216,10 +219,20 @@
   .note p:last-child{ margin-bottom:0; }
 
   /* ---------- Mobile (iPhone-width screens) ---------- */
+  @media (max-width: 900px){
+    .header-container{ gap:10px; }
+    .header-actions{ gap:8px; }
+    .logo .sub{ display:none; }
+  }
+
   @media (max-width: 640px){
     .header-container{ padding:0.75rem 1rem; gap:8px; }
     .logo{ font-size:1.05rem; }
     .logo .sub{ display:block; font-size:0.68rem; }
+    .header-actions{ width:100%; justify-content:center; gap:8px; }
+    .lang-select{ padding:0.35rem 0.5rem; font-size:0.75rem; }
+    .mode-pill{ font-size:0.7rem; padding:0.35rem 0.6rem; }
+    #unlock1688Btn{ padding:0.4rem 0.65rem; font-size:0.75rem; }
     .back-link{ padding:0.4rem 0.7rem; font-size:0.78rem; }
     main{ padding:16px 0.85rem 50px; }
 
@@ -253,7 +266,7 @@
 <header>
   <div class="header-container">
     <div class="logo"><i class="fas fa-truck-loading"></i> GOAT KIDS <span class="sub">Restock Search</span></div>
-    <div style="display:flex; align-items:center; gap:12px;">
+    <div class="header-actions">
       <select id="langSelect" class="lang-select">
         <option value="en">English</option>
         <option value="kh">ខ្មែរ</option>
@@ -558,6 +571,7 @@ const TRANSLATIONS = {
     orderOn1688Arrow: 'Order on Link Source ↗', searchOn1688Arrow: 'Search on Link Source ↗',
     unlock1688BtnLabel: 'Unlock Link Source', lock1688BtnLabel: 'Lock Link Source', linkLockedLabel: 'Link locked', enterUnlockPasswordPrompt: 'Enter password to view Link Source links:',
     markOrderedBtn: 'Mark ordered', markReceivedBtn: 'Mark received', qtyShort: 'Qty',
+    undoStatusBtn: 'Undo', undoStatusTitle: 'Revert to the previous status',
     searchLinkLabel: 'Search link', directLinkLabel: 'Direct link', uncategorizedOption: '— Uncategorized —'
   },
   kh: {
@@ -607,6 +621,7 @@ const TRANSLATIONS = {
     orderOn1688Arrow: 'កម្មង់នៅ Link Source ↗', searchOn1688Arrow: 'ស្វែងរកនៅ Link Source ↗',
     unlock1688BtnLabel: 'ដោះសោ Link Source', lock1688BtnLabel: 'ចាក់សោ Link Source', linkLockedLabel: 'តំណភ្ជាប់បានចាក់សោ', enterUnlockPasswordPrompt: 'បញ្ចូលពាក្យសម្ងាត់ដើម្បីមើលតំណភ្ជាប់ Link Source៖',
     markOrderedBtn: 'សម្គាល់ថាបានបញ្ជាទិញ', markReceivedBtn: 'សម្គាល់ថាបានទទួល', qtyShort: 'ចំនួន',
+    undoStatusBtn: 'ត្រឡប់', undoStatusTitle: 'ត្រឡប់ទៅស្ថានភាពមុន',
     searchLinkLabel: 'តំណស្វែងរក', directLinkLabel: 'តំណផ្ទាល់', uncategorizedOption: '— មិនទាន់មានប្រភេទ —'
   },
   zh: {
@@ -656,6 +671,7 @@ const TRANSLATIONS = {
     orderOn1688Arrow: '在Link Source下单 ↗', searchOn1688Arrow: '搜索Link Source ↗',
     unlock1688BtnLabel: '解锁Link Source', lock1688BtnLabel: '锁定Link Source', linkLockedLabel: '链接已锁定', enterUnlockPasswordPrompt: '输入密码以查看Link Source链接:',
     markOrderedBtn: '标记为已订购', markReceivedBtn: '标记为已收货', qtyShort: '数量',
+    undoStatusBtn: '撤销', undoStatusTitle: '恢复到之前的状态',
     searchLinkLabel: '搜索链接', directLinkLabel: '直接链接', uncategorizedOption: '— 未分类 —'
   }
 };
@@ -1749,25 +1765,49 @@ function confirmRemoveFromRestock(docId){
 
 function markAsOrdered(docId){
   if(db && !docId.startsWith('local-')){
+    const item = restockList.find(i => i.docId === docId);
+    const prevStatus = item ? itemStatus(item) : 'pending';
     db.collection('restockTool_items').doc(docId).update({
       status: 'ordered',
+      previousStatus: prevStatus,
       orderedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   } else {
     const item = restockList.find(i => i.docId === docId);
-    if(item){ item.status = 'ordered'; renderRestock(); }
+    if(item){ item.previousStatus = itemStatus(item); item.status = 'ordered'; renderRestock(); }
   }
 }
 
 function markAsReceived(docId){
   if(db && !docId.startsWith('local-')){
+    const item = restockList.find(i => i.docId === docId);
+    const prevStatus = item ? itemStatus(item) : 'ordered';
     db.collection('restockTool_items').doc(docId).update({
       status: 'received',
+      previousStatus: prevStatus,
       receivedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   } else {
     const item = restockList.find(i => i.docId === docId);
-    if(item){ item.status = 'received'; renderRestock(); }
+    if(item){ item.previousStatus = itemStatus(item); item.status = 'received'; renderRestock(); }
+  }
+}
+
+// Reverts a single mis-click back to whatever status it was before that
+// click — one level only, not a full history, matching what was asked for.
+// Clears previousStatus afterward so a second Undo click does nothing
+// rather than bouncing back and forth.
+function undoStatus(docId){
+  if(db && !docId.startsWith('local-')){
+    const item = restockList.find(i => i.docId === docId);
+    const prev = item && item.previousStatus ? item.previousStatus : 'pending';
+    db.collection('restockTool_items').doc(docId).update({
+      status: prev,
+      previousStatus: firebase.firestore.FieldValue.delete()
+    });
+  } else {
+    const item = restockList.find(i => i.docId === docId);
+    if(item){ item.status = item.previousStatus || 'pending'; delete item.previousStatus; renderRestock(); }
   }
 }
 
@@ -1778,6 +1818,9 @@ function markGroupOrdered(docIdsCsv){
 }
 function markGroupReceived(docIdsCsv){
   docIdsCsv.split(',').forEach(id => markAsReceived(id));
+}
+function undoGroupStatus(docIdsCsv){
+  docIdsCsv.split(',').forEach(id => undoStatus(id));
 }
 
 function removeFromRestock(docId){
@@ -1888,6 +1931,13 @@ function groupStatus(group){
   return itemStatus(group.lines[0]);
 }
 
+// Mirrors groupStatus's same "read from the first line" approach — status
+// changes are always applied to every line in the group together, so they
+// stay in sync in practice.
+function groupPreviousStatus(group){
+  return group.lines[0].previousStatus || null;
+}
+
 function getFilteredRestockGroups(){
   const groups = groupRestockByProduct(restockList);
   return restockStatusFilter === 'all'
@@ -1966,6 +2016,7 @@ function renderRestock(){
             ) : ''}
           ${status === 'ordered' ? `<button class="mark-received" onclick="markGroupReceived('${docIdsCsv}')">${t('markReceivedBtn')}</button>` : ''}
           ${(status === 'pending' || status === 'sent') ? `<button class="mark-ordered" onclick="markGroupOrdered('${docIdsCsv}')">${t('markOrderedBtn')}</button>` : ''}
+          ${groupPreviousStatus(group) ? `<button class="undo-status" onclick="undoGroupStatus('${docIdsCsv}')" title="${t('undoStatusTitle')}"><i class="fas fa-undo"></i> ${t('undoStatusBtn')}</button>` : ''}
         </div>
       </div>
     `;
