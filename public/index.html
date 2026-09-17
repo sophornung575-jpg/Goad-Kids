@@ -676,6 +676,15 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                         <option value="out-of-stock" data-translate="outLbl">Out</option>
                                         <option value="low-stock" data-translate="lowStock">Low (≤3)</option>
                                     </select>
+                                    <select id="inventorySearchFlag" class="form-control" style="flex:1;min-width:120px;font-size:0.82rem" onchange="filterInventory()">
+                                        <option value="all">All Flags</option>
+                                        <option value="promo-any">🏷️ Any Promotion</option>
+                                        <option value="promo-lv1">🏷️ Promotion Lv1</option>
+                                        <option value="promo-lv2">🏷️ Promotion Lv2</option>
+                                        <option value="promo-lv3">🏷️ Promotion Lv3</option>
+                                        <option value="restock">🚚 Needs Restock</option>
+                                        <option value="none">No Flag</option>
+                                    </select>
                                     <button class="btn btn-outline btn-small" onclick="clearInventorySearch()" style="white-space:nowrap"><i class="fas fa-times"></i></button>
                                 </div>
                                 <div class="inv-size-btns">
@@ -6700,6 +6709,7 @@ function sendToTelegram(order, callback) {
         document.getElementById('inventorySearchName').value = '';
         document.getElementById('inventorySearchCategory').value = 'all';
         document.getElementById('inventorySearchStock').value = 'all';
+        var flagSel = document.getElementById('inventorySearchFlag'); if (flagSel) flagSel.value = 'all';
         document.getElementById('inventorySearchSize').value = '';
         document.querySelectorAll('.btn-quick-size').forEach(function(btn) { btn.classList.remove('active-size'); });
         showActiveSizeFilter('');
@@ -6717,6 +6727,7 @@ function sendToTelegram(order, callback) {
         var searchName = document.getElementById('inventorySearchName').value.toLowerCase().trim();
         var searchCategory = document.getElementById('inventorySearchCategory').value;
         var searchStock = document.getElementById('inventorySearchStock').value;
+        var searchFlag = document.getElementById('inventorySearchFlag') ? document.getElementById('inventorySearchFlag').value : 'all';
         var searchSize = document.getElementById('inventorySearchSize').value.toUpperCase().trim();
         highlightQuickButton(searchSize); showActiveSizeFilter(searchSize);
         var sizeHeader = document.getElementById('sizeColumnHeader');
@@ -6728,6 +6739,16 @@ function sendToTelegram(order, callback) {
             if (searchStock === 'in-stock' && !hasStock(product)) return false;
             if (searchStock === 'out-of-stock' && hasStock(product)) return false;
             if (searchStock === 'low-stock' && !isLowStock(product)) return false;
+            if (searchFlag !== 'all') {
+                var lvl = getPromotionLevel(product);
+                var restockFlag = isRestockDue(product);
+                if (searchFlag === 'promo-any' && lvl < 1) return false;
+                if (searchFlag === 'promo-lv1' && lvl !== 1) return false;
+                if (searchFlag === 'promo-lv2' && lvl !== 2) return false;
+                if (searchFlag === 'promo-lv3' && lvl !== 3) return false;
+                if (searchFlag === 'restock' && !restockFlag) return false;
+                if (searchFlag === 'none' && (lvl >= 1 || restockFlag)) return false;
+            }
             return true;
         });
         renderFilteredInventory(filteredProducts, searchSize);
