@@ -9948,7 +9948,11 @@ function sendToTelegram(order, callback) {
                 destData = Object.assign({}, p, {
                     slug: productSlug,
                     stock: 0,
-                    sizes: (p.sizes||[]).map(function(s){ return Object.assign({}, s, {qty: 0}); })
+                    sizes: (p.sizes||[]).map(function(s){ return Object.assign({}, s, {qty: 0}); }),
+                    // This product is only now coming into existence at the
+                    // destination store — its age should start from here, not
+                    // from whenever Main Store originally registered it.
+                    addedAt: Date.now()
                 });
                 console.log('ℹ️ Creating new product in destination with fresh ID:', destProductRef.id);
             }
@@ -9966,6 +9970,12 @@ function sendToTelegram(order, callback) {
                 destData.stock = destData.sizes.reduce(function(a,s){ return a + (s.qty||0); }, 0);
             } else { destData.stock = (destData.stock || 0) + t.qty; }
 
+            // A transfer receipt IS new stock arriving at the destination
+            // store — reset its Promotion-flag clock the same way a manual
+            // "New stock received" edit does, whether this product already
+            // existed there or is arriving for the first time.
+            destData.lastRestockDate = Date.now();
+
             // Write atomically
             var batch = db.batch();
             batch.set(sourceRef, Object.assign({}, p), { merge: true });
@@ -9978,7 +9988,7 @@ function sendToTelegram(order, callback) {
 
             // Keep local STATE in sync if this product is in the local store
             var localP = STATE.products.find(function(x){ return x.id === destProductRef.id; });
-            if (localP) { localP.sizes = destData.sizes; localP.stock = destData.stock; localP.costPrice = destData.costPrice; saveProducts(); }
+            if (localP) { localP.sizes = destData.sizes; localP.stock = destData.stock; localP.costPrice = destData.costPrice; localP.lastRestockDate = destData.lastRestockDate; saveProducts(); }
 
             logActivity('Transfer Receipt Confirmed', t.productName + ' x' + t.qty + ' from ' + t.fromStoreName);
             _sendTelegramRaw(
@@ -10113,7 +10123,15 @@ function sendToTelegram(order, callback) {
                     var newRef2 = db.collection('stores').doc(t.toStoreId).collection('products').doc();
                     destProductCache[destKey] = {
                         ref: newRef2,
-                        data: Object.assign({}, srcP2, { slug: productSlug2, stock: 0, sizes: (srcP2.sizes||[]).map(function(s){ return Object.assign({}, s, {qty:0}); }) })
+                        data: Object.assign({}, srcP2, {
+                            slug: productSlug2,
+                            stock: 0,
+                            sizes: (srcP2.sizes||[]).map(function(s){ return Object.assign({}, s, {qty:0}); }),
+                            // Only now coming into existence at this store — age
+                            // starts here, not at the source store's original
+                            // registration date.
+                            addedAt: Date.now()
+                        })
                     };
                     console.log('ℹ️ New product in destination with fresh ID:', newRef2.id);
                 }
@@ -10163,6 +10181,10 @@ function sendToTelegram(order, callback) {
                 if (!found) dest.data.sizes.push({ name: t.size, qty: t.qty });
                 dest.data.stock = dest.data.sizes.reduce(function(a,s){ return a+(s.qty||0); }, 0);
             } else { dest.data.stock = (dest.data.stock || 0) + t.qty; }
+            // Every transfer receipt is new stock arriving at the destination
+            // store — reset its Promotion-flag clock, same as the single-item
+            // approve path.
+            dest.data.lastRestockDate = Date.now();
 
             succeeded.push(t);
         });
