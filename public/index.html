@@ -1474,6 +1474,10 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         <span>Discount applied:</span>
                         <span id="refundDiscountAmt" style="color:var(--success)">-$0.00</span>
                     </div>
+                    <div class="form-group" style="display:flex;align-items:center;gap:6px;margin-bottom:4px" id="refundShippingRow">
+                        <input type="checkbox" id="refundIncludeShipping" onchange="recalcRefundTotal()">
+                        <label for="refundIncludeShipping" style="font-size:0.82rem;margin:0">Also refund delivery fee (<span id="refundShippingFeeAmt">$0.00</span>)</label>
+                    </div>
                     <div style="display:flex;justify-content:space-between;font-size:1rem;font-weight:700;border-top:1px solid var(--gray-light);padding-top:6px;margin-top:4px">
                         <span>Refund Total:</span>
                         <span id="refundTotal" style="color:var(--danger)">$0.00</span>
@@ -8145,6 +8149,13 @@ function sendToTelegram(order, callback) {
         document.getElementById('refundAmountOverride').value = '';
         document.getElementById('refundReason').value = 'Customer return';
         document.getElementById('refundReasonCustom').value = '';
+        var shippingRow = document.getElementById('refundShippingRow');
+        var shippingCb = document.getElementById('refundIncludeShipping');
+        var shippingFee = order.shipping || 0;
+        if (shippingRow) shippingRow.style.display = shippingFee > 0 ? 'flex' : 'none';
+        if (shippingCb) shippingCb.checked = false; // explicit choice each time, never assumed
+        var feeAmtEl = document.getElementById('refundShippingFeeAmt');
+        if (feeAmtEl) feeAmtEl.textContent = '$' + shippingFee.toFixed(2);
         recalcRefundTotal();
 
         // Show modal
@@ -8177,7 +8188,9 @@ function sendToTelegram(order, callback) {
                 if (lineEl2) lineEl2.style.opacity = '0.3';
             }
         });
-        var refundTotal = Math.max(0, subtotal - discountTotal);
+        var shippingFee = order.shipping || 0;
+        var includeShipping = document.getElementById('refundIncludeShipping') && document.getElementById('refundIncludeShipping').checked;
+        var refundTotal = Math.max(0, subtotal - discountTotal + (includeShipping ? shippingFee : 0));
         document.getElementById('refundItemsSubtotal').textContent = '$' + subtotal.toFixed(2);
         document.getElementById('refundDiscountAmt').textContent = '-$' + discountTotal.toFixed(2);
         document.getElementById('refundTotal').textContent = '$' + refundTotal.toFixed(2);
@@ -8231,9 +8244,16 @@ function sendToTelegram(order, callback) {
         var custom = document.getElementById('refundReasonCustom').value.trim();
         if (custom) reason = reason + ' — ' + custom;
 
+        // Delivery fee — only ever reversed if explicitly checked, never assumed
+        var includeShipping = document.getElementById('refundIncludeShipping') && document.getElementById('refundIncludeShipping').checked;
+        var shippingFeeRefunded = includeShipping ? (order.shipping || 0) : 0;
+
         // Confirm
         var itemSummary = refundItems.map(function(it){ return it.quantity + '× ' + it.name + ' (' + it.size + ')'; }).join('\n');
-        if (!confirm('Confirm refund?\n\nItems:\n' + itemSummary + '\n\nRefund: $' + refundAmount.toFixed(2) + '\nReason: ' + reason)) return;
+        var confirmText = 'Confirm refund?\n\nItems:\n' + itemSummary +
+            (shippingFeeRefunded > 0 ? '\n\nDelivery fee also refunded: $' + shippingFeeRefunded.toFixed(2) : '') +
+            '\n\nRefund: $' + refundAmount.toFixed(2) + '\nReason: ' + reason;
+        if (!confirm(confirmText)) return;
 
         // NOTE: Do NOT restore stock in local STATE here.
         // Firebase restore (below) fetches fresh from Firestore and applies exactly +qty once.
@@ -8252,7 +8272,8 @@ function sendToTelegram(order, callback) {
             customerName: order.customerName,
             customerPhone: order.customerPhone,
             cart: refundItems,  // only refunded items
-            isPartial: refundItems.length < order.cart.length
+            isPartial: refundItems.length < order.cart.length,
+            shippingFeeRefunded: shippingFeeRefunded
         };
 
         // Determine if full or partial refund
@@ -8275,6 +8296,10 @@ function sendToTelegram(order, callback) {
         });
         // Remove fully refunded items from order cart
         order.cart = order.cart.filter(function(c){ return c.quantity > 0; });
+        // If the delivery fee was refunded, it's gone from the order going
+        // forward too — otherwise this recalculation would silently add it
+        // straight back onto order.total right after refunding it.
+        if (shippingFeeRefunded > 0) order.shipping = 0;
         // Recalculate order total
         order.subtotal = order.cart.reduce(function(a, c){ return a + (c.price * c.quantity); }, 0);
         order.discount = order.cart.reduce(function(a, c){ return a + (c.discountAmt || 0); }, 0);
@@ -8292,7 +8317,7 @@ function sendToTelegram(order, callback) {
         }
 
         saveProducts(); saveOrders(); saveRefunds();
-        logActivity('Refund', order.orderId + ' — $' + refundAmount.toFixed(2) + ' (' + refundItems.length + ' item(s))');
+        logActivity('Refund', order.orderId + ' — $' + refundAmount.toFixed(2) + ' (' + refundItems.length + ' item(s))' + (shippingFeeRefunded > 0 ? ' + delivery fee $' + shippingFeeRefunded.toFixed(2) : ''));
 
         // Save to Firebase
         if (db) {
@@ -8366,6 +8391,7 @@ function sendToTelegram(order, callback) {
             '🧾 Order: ' + order.orderId + '\n' +
             '👤 ' + (order.customerName||'—') + ' | 📞 ' + (order.customerPhone||'—') + '\n' +
             '💰 Refund: <b>$' + refundAmount.toFixed(2) + '</b>\n' +
+            (shippingFeeRefunded > 0 ? '🚚 Delivery fee also refunded: $' + shippingFeeRefunded.toFixed(2) + '\n' : '') +
             '📦 Refunded items:\n' + itemLines + '\n' +
             '📝 Reason: ' + reason + '\n' +
             '🕐 ' + new Date().toLocaleString();
