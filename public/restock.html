@@ -162,6 +162,7 @@
   .size-qty-item input:focus{ outline:none; border-color:var(--primary); }
   .card .row{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:auto; }
   .card .view{ font-size:0.72rem; color:var(--primary); text-decoration:none; font-weight:600; }
+  .card .view.locked{ color:var(--gray); }
   .card .add{ background:var(--secondary); color:#fff; border:none; border-radius:6px; padding:6px 10px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
   .card .add:hover{ background:var(--secondary-dark); }
   .add-photo{ margin-top:6px; }
@@ -259,6 +260,7 @@
         <option value="zh">中文</option>
       </select>
       <span class="mode-pill" id="modePill" data-t="modePillSample">Sample data</span>
+      <button class="btn btn-outline btn-small" id="unlock1688Btn" onclick="unlock1688Links()"><i class="fas fa-lock" id="unlock1688Icon"></i> <span id="unlock1688Label" data-t="unlock1688BtnLabel">Unlock Link Source</span></button>
       <a class="back-link" href="index.html"><i class="fas fa-arrow-left"></i> <span data-t="backToStore">Back to store</span></a>
     </div>
   </div>
@@ -268,7 +270,7 @@
   <div>
     <div class="page-tabs">
       <button class="page-tab active" id="tabHomeBtn" onclick="switchSection('home')"><i class="fas fa-layer-group"></i> <span data-t="tabHome">Home</span></button>
-      <button class="page-tab" id="tabSearchBtn" onclick="switchSection('search')"><i class="fas fa-search"></i> <span data-t="tabSearch">Search 1688</span></button>
+      <button class="page-tab" id="tabSearchBtn" onclick="switchSection('search')"><i class="fas fa-search"></i> <span data-t="tabSearch">Search Link Source</span></button>
       <button class="page-tab" id="tabRestockBtn" onclick="switchSection('restock')"><i class="fas fa-clipboard-list"></i> <span data-t="tabRestockList">Restock List</span></button>
       <button class="page-tab" id="tabSettingsBtn" onclick="switchSection('settings')"><i class="fas fa-cog"></i> <span data-t="tabSettings">Settings</span></button>
     </div>
@@ -352,7 +354,7 @@
             <summary></summary>
             <p class="hint" data-t="manualAddHint">If a supplier's item isn't showing up in search, paste its 1688 product link here to add it straight to your restock list. It'll also be saved to your Home catalog.</p>
             <div class="add-form">
-              <input type="text" class="form-control" id="itemUrl" data-t-ph="itemUrlPh" placeholder="1688 product link">
+              <input type="text" class="form-control" id="itemUrl" data-t-ph="itemUrlPh" placeholder="Link Source product link">
               <input type="text" class="form-control" id="itemTitle" data-t-ph="itemTitlePh" placeholder="Product name">
               <input type="text" class="form-control" id="itemSize" data-t-ph="itemSizePh" placeholder="Size (optional)">
               <input type="number" class="form-control" id="itemQty" min="1" value="1" data-t-ph="itemQtyPh" placeholder="Qty">
@@ -371,7 +373,6 @@
             <p data-t="restockListDesc">Select the items you're ready to order, then send them to Telegram.</p>
           </div>
           <button class="btn btn-primary" id="sendTelegramBtn" disabled><i class="fab fa-telegram-plane"></i> <span data-t="sendTelegramBtnLabel">Send selected to Telegram</span></button>
-          <button class="btn btn-outline" id="unlock1688Btn" onclick="unlock1688Links()"><i class="fas fa-lock" id="unlock1688Icon"></i> <span id="unlock1688Label" data-t="unlock1688BtnLabel">Unlock 1688 Links</span></button>
         </div>
         <div class="admin-card-body">
           <div class="status-filter" id="statusFilter">
@@ -413,7 +414,7 @@
       <div class="admin-card">
         <div class="admin-card-header">
           <h1><i class="fas fa-server" style="color:var(--primary)"></i> <span data-t="dataSourceTitle">Data source</span></h1>
-          <p data-t="dataSourceDesc">Controls for the Search 1688 tab</p>
+          <p data-t="dataSourceDesc">Controls for the Search Link Source tab</p>
         </div>
         <div class="admin-card-body">
           <label for="apifyToken" class="settings-label" data-t="apifyTokenLabel">Apify API token</label>
@@ -431,7 +432,7 @@
       <div class="admin-card">
         <div class="admin-card-header">
           <h1><i class="fas fa-store" style="color:var(--primary)"></i> <span data-t="trustedShopsTitle">Trusted shops</span></h1>
-          <p data-t="trustedShopsDesc">Shops you can filter searches to on the Search 1688 tab</p>
+          <p data-t="trustedShopsDesc">Shops you can filter searches to on the Search Link Source tab</p>
         </div>
         <div class="admin-card-body">
           <div id="shopList"></div>
@@ -511,8 +512,8 @@ try{
 // ---------- translations ----------
 const TRANSLATIONS = {
   en: {
-    backToStore: 'Back to store', modePillSample: 'Sample data', modePillLive: 'Live 1688 data',
-    tabHome: 'Home', tabSearch: 'Search 1688', tabRestockList: 'Restock List', tabSettings: 'Settings',
+    backToStore: 'Back to store', modePillSample: 'Sample data', modePillLive: 'Live Link Source data',
+    tabHome: 'Home', tabSearch: 'Search Link Source', tabRestockList: 'Restock List', tabSettings: 'Settings',
     homeTitle: 'Product catalog', homeDesc: "Everything found through search or added manually — pick straight from here without searching again.",
     filterPlaceholder: 'Filter your saved products...',
     catAll: 'All', catGirlClothes: 'Girl Clothes', catBoyClothes: 'Boy Clothes', catBabyShirt: 'Baby Shirt', catDresses: 'Dresses', catBabyAccessories: 'Baby Accessories', catBabyShoes: 'Baby Shoes',
@@ -529,7 +530,7 @@ const TRANSLATIONS = {
     liveDataHint: 'Live search covers all of 1688 by keyword — it doesn\'t filter to one trusted shop, and "View all items" still shows sample data since this scraper can\'t browse a whole shop without a keyword.',
     resultsLabelDefault: 'Search a product to see results', noResultsYet: 'No results yet — try a search above.',
     manualAddHint: "If a supplier's item isn't showing up in search, paste its 1688 product link here to add it straight to your restock list. It'll also be saved to your Home catalog.",
-    itemUrlPh: '1688 product link', itemTitlePh: 'Product name', itemSizePh: 'Size (optional)', itemQtyPh: 'Qty', addToListBtn: 'Add to list',
+    itemUrlPh: 'Link Source product link', itemTitlePh: 'Product name', itemSizePh: 'Size (optional)', itemQtyPh: 'Qty', addToListBtn: 'Add to list',
     restockListTitle: 'Restock list', restockListDesc: "Select the items you're ready to order, then send them to Telegram.",
     sendTelegramBtnLabel: 'Send selected to Telegram',
     statusAll: 'All', statusPending: 'Not sent', statusSent: 'Sent', statusOrdered: 'Ordered', statusReceived: 'Received',
@@ -537,12 +538,12 @@ const TRANSLATIONS = {
     noItemsMatchFilter: 'No items match this filter.',
     settingsProtectedTitle: 'Settings Protected', settingsProtectedDesc: 'Enter the settings password to continue',
     enterPasswordPh: 'Enter password', unlockBtn: 'Unlock Settings', incorrectPasswordMsg: 'Incorrect password',
-    dataSourceTitle: 'Data source', dataSourceDesc: 'Controls for the Search 1688 tab',
+    dataSourceTitle: 'Data source', dataSourceDesc: 'Controls for the Search Link Source tab',
     apifyTokenLabel: 'Apify API token', apifyTokenPh: 'Paste your token here', apifyActorLabel: 'Apify actor ID',
     dataSourceNote1: 'No token yet? Search uses sample data so the tool stays fully testable. Add a token and keyword search switches to real 1688 listings automatically.',
     dataSourceNote2: 'This scraper searches all of 1688 by keyword — it can\'t scope to one trusted shop, and "View all items" always stays on sample data since it can\'t browse a whole shop without a keyword.',
     dataSourceNote3: "Your token syncs across every device that opens this tool, the same way the store app's own Telegram settings do. That also means anyone with the page link could see it — worth knowing, since it's a real API credential.",
-    trustedShopsTitle: 'Trusted shops', trustedShopsDesc: 'Shops you can filter searches to on the Search 1688 tab',
+    trustedShopsTitle: 'Trusted shops', trustedShopsDesc: 'Shops you can filter searches to on the Search Link Source tab',
     shopNicknamePh: 'Shop nickname', shopIdPh: '1688 shop ID (from the shop URL)', addShopBtnLabel: 'Add shop',
     telegramTitle: 'Telegram', telegramDesc: 'Where the Restock List sends orders to',
     botTokenLabel: 'Bot token', botTokenPh: 'Paste your bot token here', chatIdLabel: 'Chat ID', chatIdPh: 'Paste your chat ID here',
@@ -553,15 +554,15 @@ const TRANSLATIONS = {
     currentPasswordLabel: 'Current Password', currentPasswordPh: 'Current password',
     newPasswordLabel: 'New Password', newPasswordPh: 'Min 4 characters',
     confirmNewLabel: 'Confirm New', confirmNewPh: 'Repeat new password', changePasswordBtn: 'Change Password',
-    moqLabel: 'MOQ', viewOn1688: 'View on 1688', searchOn1688: 'Search on 1688',
-    orderOn1688Arrow: 'Order on 1688 ↗', searchOn1688Arrow: 'Search on 1688 ↗',
-    unlock1688BtnLabel: 'Unlock 1688 Links', lock1688BtnLabel: 'Lock 1688 Links', linkLockedLabel: 'Link locked', enterUnlockPasswordPrompt: 'Enter password to view 1688 links:',
+    moqLabel: 'MOQ', viewOn1688: 'View on Link Source', searchOn1688: 'Search on Link Source',
+    orderOn1688Arrow: 'Order on Link Source ↗', searchOn1688Arrow: 'Search on Link Source ↗',
+    unlock1688BtnLabel: 'Unlock Link Source', lock1688BtnLabel: 'Lock Link Source', linkLockedLabel: 'Link locked', enterUnlockPasswordPrompt: 'Enter password to view Link Source links:',
     markOrderedBtn: 'Mark ordered', markReceivedBtn: 'Mark received', qtyShort: 'Qty',
     searchLinkLabel: 'Search link', directLinkLabel: 'Direct link', uncategorizedOption: '— Uncategorized —'
   },
   kh: {
-    backToStore: 'ត្រឡប់ទៅហាង', modePillSample: 'ទិន្នន័យគំរូ', modePillLive: 'ទិន្នន័យផ្ទាល់ 1688',
-    tabHome: 'ទំព័រដើម', tabSearch: 'ស្វែងរក 1688', tabRestockList: 'បញ្ជីបញ្ជាទិញ', tabSettings: 'ការកំណត់',
+    backToStore: 'ត្រឡប់ទៅហាង', modePillSample: 'ទិន្នន័យគំរូ', modePillLive: 'ទិន្នន័យផ្ទាល់ Link Source',
+    tabHome: 'ទំព័រដើម', tabSearch: 'ស្វែងរក Link Source', tabRestockList: 'បញ្ជីបញ្ជាទិញ', tabSettings: 'ការកំណត់',
     homeTitle: 'កាតាឡុកផលិតផល', homeDesc: 'អ្វីៗគ្រប់យ៉ាងដែលបានរកឃើញតាមរយៈការស្វែងរក ឬបានបន្ថែមដោយដៃ — ជ្រើសរើសពីទីនេះដោយផ្ទាល់ដោយមិនចាំបាច់ស្វែងរកម្តងទៀត។',
     filterPlaceholder: 'ត្រងផលិតផលដែលបានរក្សាទុករបស់អ្នក...',
     catAll: 'ទាំងអស់', catGirlClothes: 'សម្លៀកបំពាក់ក្មេងស្រី', catBoyClothes: 'សម្លៀកបំពាក់ក្មេងប្រុស', catBabyShirt: 'អាវកូនក្មេង', catDresses: 'រ៉ូប', catBabyAccessories: 'គ្រឿងបន្លាស់កូនក្មេង', catBabyShoes: 'ស្បែកជើងកូនក្មេង',
@@ -578,7 +579,7 @@ const TRANSLATIONS = {
     liveDataHint: 'ការស្វែងរកផ្ទាល់គ្របដណ្តប់ 1688 ទាំងអស់តាមពាក្យគន្លឹះ — វាមិនត្រងចំពោះហាងណាមួយទេ ហើយ "មើលទំនិញទាំងអស់" នៅតែបង្ហាញទិន្នន័យគំរូ ព្រោះកម្មវិធីនេះមិនអាចរុករកហាងទាំងមូលដោយគ្មានពាក្យគន្លឹះបានទេ។',
     resultsLabelDefault: 'ស្វែងរកទំនិញដើម្បីមើលលទ្ធផល', noResultsYet: 'មិនទាន់មានលទ្ធផលនៅឡើយទេ — សាកល្បងស្វែងរកខាងលើ។',
     manualAddHint: 'ប្រសិនបើទំនិញរបស់អ្នកផ្គត់ផ្គង់មិនបង្ហាញនៅក្នុងលទ្ធផលស្វែងរក សូមបិទភ្ជាប់តំណទំនិញ 1688 នៅទីនេះដើម្បីបន្ថែមវាដោយផ្ទាល់ទៅបញ្ជីបញ្ជាទិញរបស់អ្នក។ វានឹងត្រូវបានរក្សាទុកទៅកាតាឡុកទំព័រដើមផងដែរ។',
-    itemUrlPh: 'តំណទំនិញ 1688', itemTitlePh: 'ឈ្មោះទំនិញ', itemSizePh: 'ទំហំ (ស្រេចចិត្ត)', itemQtyPh: 'ចំនួន', addToListBtn: 'បន្ថែមទៅបញ្ជី',
+    itemUrlPh: 'តំណទំនិញ Link Source', itemTitlePh: 'ឈ្មោះទំនិញ', itemSizePh: 'ទំហំ (ស្រេចចិត្ត)', itemQtyPh: 'ចំនួន', addToListBtn: 'បន្ថែមទៅបញ្ជី',
     restockListTitle: 'បញ្ជីបញ្ជាទិញ', restockListDesc: 'ជ្រើសរើសទំនិញដែលអ្នកត្រៀមខ្លួនបញ្ជាទិញ រួចផ្ញើវាទៅ Telegram។',
     sendTelegramBtnLabel: 'ផ្ញើទំនិញដែលបានជ្រើសរើសទៅ Telegram',
     statusAll: 'ទាំងអស់', statusPending: 'មិនទាន់ផ្ញើ', statusSent: 'បានផ្ញើ', statusOrdered: 'បានបញ្ជាទិញ', statusReceived: 'បានទទួល',
@@ -586,12 +587,12 @@ const TRANSLATIONS = {
     noItemsMatchFilter: 'គ្មានទំនិញត្រូវនឹងតម្រងនេះទេ។',
     settingsProtectedTitle: 'ការកំណត់ត្រូវបានការពារ', settingsProtectedDesc: 'បញ្ចូលពាក្យសម្ងាត់ការកំណត់ដើម្បីបន្ត',
     enterPasswordPh: 'បញ្ចូលពាក្យសម្ងាត់', unlockBtn: 'ដោះសោការកំណត់', incorrectPasswordMsg: 'ពាក្យសម្ងាត់មិនត្រឹមត្រូវ',
-    dataSourceTitle: 'ប្រភពទិន្នន័យ', dataSourceDesc: 'ការគ្រប់គ្រងសម្រាប់ផ្ទាំងស្វែងរក 1688',
+    dataSourceTitle: 'ប្រភពទិន្នន័យ', dataSourceDesc: 'ការគ្រប់គ្រងសម្រាប់ផ្ទាំងស្វែងរក Link Source',
     apifyTokenLabel: 'Apify API token', apifyTokenPh: 'បិទភ្ជាប់ token របស់អ្នកនៅទីនេះ', apifyActorLabel: 'Apify actor ID',
     dataSourceNote1: 'មិនទាន់មាន token ទេឬ? ការស្វែងរកប្រើទិន្នន័យគំរូ ដើម្បីឲ្យកម្មវិធីនៅតែសាកល្បងបានពេញលេញ។ បន្ថែម token មួយ ការស្វែងរកតាមពាក្យគន្លឹះនឹងប្តូរទៅជាទិន្នន័យ 1688 ពិតប្រាកដដោយស្វ័យប្រវត្តិ។',
     dataSourceNote2: 'កម្មវិធីនេះស្វែងរកទូទាំង 1688 តាមពាក្យគន្លឹះ — វាមិនអាចកំណត់ចំពោះហាងណាមួយបានទេ ហើយ "មើលទំនិញទាំងអស់" នៅតែប្រើទិន្នន័យគំរូជានិច្ច ព្រោះវាមិនអាចរុករកហាងទាំងមូលដោយគ្មានពាក្យគន្លឹះបានទេ។',
     dataSourceNote3: 'token របស់អ្នកធ្វើសមកាលកម្មនៅគ្រប់ឧបករណ៍ដែលបើកកម្មវិធីនេះ ដូចការកំណត់ Telegram របស់កម្មវិធីហាងដែរ។ នោះមានន័យថាអ្នកណាដែលមានតំណទំព័រក៏អាចមើលឃើញវាដែរ — សំខាន់ដឹងទុក ព្រោះវាជា API credential ពិតប្រាកដ។',
-    trustedShopsTitle: 'ហាងគួរទុកចិត្ត', trustedShopsDesc: 'ហាងដែលអ្នកអាចត្រងការស្វែងរកទៅផ្ទាំងស្វែងរក 1688',
+    trustedShopsTitle: 'ហាងគួរទុកចិត្ត', trustedShopsDesc: 'ហាងដែលអ្នកអាចត្រងការស្វែងរកទៅផ្ទាំងស្វែងរក Link Source',
     shopNicknamePh: 'ឈ្មោះហៅក្រៅហាង', shopIdPh: 'លេខសម្គាល់ហាង 1688 (ពី URL ហាង)', addShopBtnLabel: 'បន្ថែមហាង',
     telegramTitle: 'Telegram', telegramDesc: 'កន្លែងដែលបញ្ជីបញ្ជាទិញផ្ញើការបញ្ជាទិញទៅ',
     botTokenLabel: 'Bot token', botTokenPh: 'បិទភ្ជាប់ bot token របស់អ្នកនៅទីនេះ', chatIdLabel: 'Chat ID', chatIdPh: 'បិទភ្ជាប់ chat ID របស់អ្នកនៅទីនេះ',
@@ -602,15 +603,15 @@ const TRANSLATIONS = {
     currentPasswordLabel: 'ពាក្យសម្ងាត់បច្ចុប្បន្ន', currentPasswordPh: 'ពាក្យសម្ងាត់បច្ចុប្បន្ន',
     newPasswordLabel: 'ពាក្យសម្ងាត់ថ្មី', newPasswordPh: 'អប្បបរមា ៤ តួអក្សរ',
     confirmNewLabel: 'បញ្ជាក់ពាក្យសម្ងាត់ថ្មី', confirmNewPh: 'វាយពាក្យសម្ងាត់ថ្មីម្តងទៀត', changePasswordBtn: 'ប្តូរពាក្យសម្ងាត់',
-    moqLabel: 'ចំនួនបញ្ជាទិញអប្បបរមា', viewOn1688: 'មើលនៅ 1688', searchOn1688: 'ស្វែងរកនៅ 1688',
-    orderOn1688Arrow: 'កម្មង់នៅ 1688 ↗', searchOn1688Arrow: 'ស្វែងរកនៅ 1688 ↗',
-    unlock1688BtnLabel: 'ដោះសោតំណភ្ជាប់ 1688', lock1688BtnLabel: 'ចាក់សោតំណភ្ជាប់ 1688', linkLockedLabel: 'តំណភ្ជាប់បានចាក់សោ', enterUnlockPasswordPrompt: 'បញ្ចូលពាក្យសម្ងាត់ដើម្បីមើលតំណភ្ជាប់ 1688៖',
+    moqLabel: 'ចំនួនបញ្ជាទិញអប្បបរមា', viewOn1688: 'មើលនៅ Link Source', searchOn1688: 'ស្វែងរកនៅ Link Source',
+    orderOn1688Arrow: 'កម្មង់នៅ Link Source ↗', searchOn1688Arrow: 'ស្វែងរកនៅ Link Source ↗',
+    unlock1688BtnLabel: 'ដោះសោ Link Source', lock1688BtnLabel: 'ចាក់សោ Link Source', linkLockedLabel: 'តំណភ្ជាប់បានចាក់សោ', enterUnlockPasswordPrompt: 'បញ្ចូលពាក្យសម្ងាត់ដើម្បីមើលតំណភ្ជាប់ Link Source៖',
     markOrderedBtn: 'សម្គាល់ថាបានបញ្ជាទិញ', markReceivedBtn: 'សម្គាល់ថាបានទទួល', qtyShort: 'ចំនួន',
     searchLinkLabel: 'តំណស្វែងរក', directLinkLabel: 'តំណផ្ទាល់', uncategorizedOption: '— មិនទាន់មានប្រភេទ —'
   },
   zh: {
-    backToStore: '返回商店', modePillSample: '示例数据', modePillLive: '1688实时数据',
-    tabHome: '首页', tabSearch: '搜索1688', tabRestockList: '补货清单', tabSettings: '设置',
+    backToStore: '返回商店', modePillSample: '示例数据', modePillLive: 'Link Source实时数据',
+    tabHome: '首页', tabSearch: '搜索Link Source', tabRestockList: '补货清单', tabSettings: '设置',
     homeTitle: '产品目录', homeDesc: '所有通过搜索找到或手动添加的商品——直接从这里选择，无需重新搜索。',
     filterPlaceholder: '筛选已保存的产品...',
     catAll: '全部', catGirlClothes: '女童服装', catBoyClothes: '男童服装', catBabyShirt: '婴儿上衣', catDresses: '连衣裙', catBabyAccessories: '婴儿配件', catBabyShoes: '婴儿鞋',
@@ -627,7 +628,7 @@ const TRANSLATIONS = {
     liveDataHint: '实时搜索按关键词覆盖整个1688——不会筛选到单一信任店铺，"查看所有商品"仍显示示例数据，因为该抓取工具无法在没有关键词的情况下浏览整个店铺。',
     resultsLabelDefault: '搜索产品以查看结果', noResultsYet: '暂无结果——请尝试上方搜索。',
     manualAddHint: '如果供应商的商品未出现在搜索结果中，请在此粘贴其1688商品链接，直接添加到您的补货清单。它也会保存到您的首页目录中。',
-    itemUrlPh: '1688商品链接', itemTitlePh: '产品名称', itemSizePh: '尺码（可选）', itemQtyPh: '数量', addToListBtn: '添加到清单',
+    itemUrlPh: 'Link Source商品链接', itemTitlePh: '产品名称', itemSizePh: '尺码（可选）', itemQtyPh: '数量', addToListBtn: '添加到清单',
     restockListTitle: '补货清单', restockListDesc: '选择您准备订购的商品，然后发送到Telegram。',
     sendTelegramBtnLabel: '将所选发送到Telegram',
     statusAll: '全部', statusPending: '未发送', statusSent: '已发送', statusOrdered: '已订购', statusReceived: '已收货',
@@ -635,12 +636,12 @@ const TRANSLATIONS = {
     noItemsMatchFilter: '没有符合此筛选条件的商品。',
     settingsProtectedTitle: '设置已受保护', settingsProtectedDesc: '输入设置密码以继续',
     enterPasswordPh: '输入密码', unlockBtn: '解锁设置', incorrectPasswordMsg: '密码错误',
-    dataSourceTitle: '数据来源', dataSourceDesc: '搜索1688标签页的控制项',
+    dataSourceTitle: '数据来源', dataSourceDesc: '搜索Link Source标签页的控制项',
     apifyTokenLabel: 'Apify API 令牌', apifyTokenPh: '在此粘贴您的令牌', apifyActorLabel: 'Apify actor ID',
     dataSourceNote1: '还没有令牌？搜索将使用示例数据，让工具保持完全可测试。添加令牌后，关键词搜索会自动切换到真实的1688列表。',
     dataSourceNote2: '此抓取工具按关键词搜索整个1688——无法限定到单一信任店铺，"查看所有商品"始终显示示例数据，因为它无法在没有关键词的情况下浏览整个店铺。',
     dataSourceNote3: '您的令牌会同步到打开此工具的每台设备，就像商店应用自己的Telegram设置一样。这也意味着任何拥有该页面链接的人都可能看到它——值得注意，因为这是真实的API凭证。',
-    trustedShopsTitle: '信任的店铺', trustedShopsDesc: '您可以在搜索1688标签页筛选到的店铺',
+    trustedShopsTitle: '信任的店铺', trustedShopsDesc: '您可以在搜索Link Source标签页筛选到的店铺',
     shopNicknamePh: '店铺昵称', shopIdPh: '1688店铺ID（来自店铺网址）', addShopBtnLabel: '添加店铺',
     telegramTitle: 'Telegram', telegramDesc: '补货清单发送订单的位置',
     botTokenLabel: '机器人令牌', botTokenPh: '在此粘贴您的机器人令牌', chatIdLabel: '聊天ID', chatIdPh: '在此粘贴您的聊天ID',
@@ -651,9 +652,9 @@ const TRANSLATIONS = {
     currentPasswordLabel: '当前密码', currentPasswordPh: '当前密码',
     newPasswordLabel: '新密码', newPasswordPh: '至少4个字符',
     confirmNewLabel: '确认新密码', confirmNewPh: '再次输入新密码', changePasswordBtn: '修改密码',
-    moqLabel: '起订量', viewOn1688: '查看1688', searchOn1688: '搜索1688',
-    orderOn1688Arrow: '在1688下单 ↗', searchOn1688Arrow: '搜索1688 ↗',
-    unlock1688BtnLabel: '解锁1688链接', lock1688BtnLabel: '锁定1688链接', linkLockedLabel: '链接已锁定', enterUnlockPasswordPrompt: '输入密码以查看1688链接:',
+    moqLabel: '起订量', viewOn1688: '查看Link Source', searchOn1688: '搜索Link Source',
+    orderOn1688Arrow: '在Link Source下单 ↗', searchOn1688Arrow: '搜索Link Source ↗',
+    unlock1688BtnLabel: '解锁Link Source', lock1688BtnLabel: '锁定Link Source', linkLockedLabel: '链接已锁定', enterUnlockPasswordPrompt: '输入密码以查看Link Source链接:',
     markOrderedBtn: '标记为已订购', markReceivedBtn: '标记为已收货', qtyShort: '数量',
     searchLinkLabel: '搜索链接', directLinkLabel: '直接链接', uncategorizedOption: '— 未分类 —'
   }
@@ -696,6 +697,8 @@ document.getElementById('langSelect').addEventListener('change', e => setLanguag
 let shops = [];
 let restockList = [];
 let lastResults = [];
+let lastSearchKeyword = '';
+let lastSearchShopId = '';
 let historyCache = [];
 let historyFilterText = '';
 let historyFilterCategory = '';
@@ -954,7 +957,9 @@ function productCardHtml(p, opts){
           <input type="number" class="qty-select" min="1" value="1" title="Quantity to order">
         </div>`}
         <div class="row">
-          <a class="view" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">${p.isSearchLink ? t('searchOn1688') : t('viewOn1688')}</a>
+          ${links1688Unlocked
+            ? `<a class="view" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">${p.isSearchLink ? t('searchOn1688') : t('viewOn1688')}</a>`
+            : `<span class="view locked" title="Unlock Link Source links to view"><i class="fas fa-lock"></i> ${t('linkLockedLabel')}</span>`}
           <button class="add" onclick="addToRestock('${escapeHtml(p.id)}', this)">${t('addToListBtn')}</button>
         </div>
         ${opts.removable ? `
@@ -1190,6 +1195,8 @@ async function performSearch(keyword){
   }
 
   lastResults = results;
+  lastSearchKeyword = keyword;
+  lastSearchShopId = shopId;
   renderResults(results, keyword, shopId);
 }
 
@@ -1806,6 +1813,8 @@ async function unlock1688Links(){
     links1688Unlocked = false;
     updateUnlock1688ButtonUI();
     renderRestock();
+    renderHistory();
+    if(lastResults.length) renderResults(lastResults, lastSearchKeyword, lastSearchShopId);
     return;
   }
 
@@ -1831,6 +1840,8 @@ async function unlock1688Links(){
     links1688Unlocked = true;
     updateUnlock1688ButtonUI();
     renderRestock();
+    renderHistory();
+    if(lastResults.length) renderResults(lastResults, lastSearchKeyword, lastSearchShopId);
   } else {
     alert(t('incorrectPasswordMsg'));
   }
@@ -1951,7 +1962,7 @@ function renderRestock(){
         <div class="rl-actions">
           ${group.url ? (links1688Unlocked
               ? `<a href="${escapeHtml(group.url)}" target="_blank" rel="noopener">${group.isSearchLink ? t('searchOn1688Arrow') : t('orderOn1688Arrow')}</a>`
-              : `<span class="rl-locked-link" title="Unlock 1688 links to view"><i class="fas fa-lock"></i> ${t('linkLockedLabel')}</span>`
+              : `<span class="rl-locked-link" title="Unlock Link Source links to view"><i class="fas fa-lock"></i> ${t('linkLockedLabel')}</span>`
             ) : ''}
           ${status === 'ordered' ? `<button class="mark-received" onclick="markGroupReceived('${docIdsCsv}')">${t('markReceivedBtn')}</button>` : ''}
           ${(status === 'pending' || status === 'sent') ? `<button class="mark-ordered" onclick="markGroupOrdered('${docIdsCsv}')">${t('markOrderedBtn')}</button>` : ''}
