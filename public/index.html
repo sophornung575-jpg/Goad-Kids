@@ -1002,12 +1002,23 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         <div class="admin-card">
                             <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-sliders-h" style="color:var(--primary)"></i> Inventory Control Rules</div></div>
                             <div class="admin-card-body">
-                                <p style="font-size:0.83rem;color:var(--gray);margin-bottom:1rem">These formulas control the flags shown in Inventory: "Promotion Due" for slow movers and "Needs Restock" for fast movers running low. Edit the numbers to tune them.</p>
+                                <p style="font-size:0.83rem;color:var(--gray);margin-bottom:1rem">These formulas control the flags shown in Inventory: "Promotion Lv1/Lv2/Lv3" for slow movers and "Needs Restock" for fast movers running low. Edit the numbers to tune them.</p>
                                 <div style="background:#fff3cd;border:1px solid #ffe69c;border-radius:8px;padding:0.7rem;margin-bottom:0.75rem">
                                     <div style="font-weight:700;font-size:0.82rem;color:#856404;margin-bottom:6px"><i class="fas fa-tag"></i> Promotion Trigger (Slow Movers)</div>
-                                    <div class="form-group" style="margin-bottom:0">
-                                        <label style="font-size:0.8rem">Flag for promotion after this many days since last restock</label>
-                                        <input type="number" id="rulePromotionThresholdDays" class="form-control" min="1" placeholder="e.g. 14">
+                                    <p style="font-size:0.76rem;color:var(--gray);margin-bottom:6px">Days since last restock before each priority level kicks in.</p>
+                                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem">
+                                        <div class="form-group" style="margin-bottom:0">
+                                            <label style="font-size:0.8rem">Lv1 (days)</label>
+                                            <input type="number" id="rulePromotionLv1Days" class="form-control" min="1" placeholder="e.g. 30">
+                                        </div>
+                                        <div class="form-group" style="margin-bottom:0">
+                                            <label style="font-size:0.8rem">Lv2 (days)</label>
+                                            <input type="number" id="rulePromotionLv2Days" class="form-control" min="1" placeholder="e.g. 45">
+                                        </div>
+                                        <div class="form-group" style="margin-bottom:0">
+                                            <label style="font-size:0.8rem">Lv3 (days)</label>
+                                            <input type="number" id="rulePromotionLv3Days" class="form-control" min="1" placeholder="e.g. 60">
+                                        </div>
                                     </div>
                                 </div>
                                 <div style="background:rgba(72,187,120,0.08);border:1px solid rgba(72,187,120,0.3);border-radius:8px;padding:0.7rem;margin-bottom:0.75rem">
@@ -2078,7 +2089,7 @@ function sendToTelegram(order, callback) {
         selectedProduct: null,
         charts: {},
         dateFilter: 'today',
-        inventoryRules: { promotionThresholdDays: 14, fastSellWindowDays: 7, fastSellMinUnits: 5, lowStockThreshold: 3 },
+        inventoryRules: { promotionLv1Days: 30, promotionLv2Days: 45, promotionLv3Days: 60, fastSellWindowDays: 7, fastSellMinUnits: 5, lowStockThreshold: 3 },
         customStartDate: null,
         customEndDate: null,
         loginAttempts: JSON.parse(localStorage.getItem('goatLoginAttempts') || '{}'),
@@ -6759,7 +6770,7 @@ function sendToTelegram(order, callback) {
             h += '<tr>' +
                 '<td><img src="' + img + '" onclick="openLightbox(\'' + img.replace(/'/g, "\\'") + '\')" style="width:84px;height:84px;object-fit:cover;border-radius:10px;cursor:zoom-in;display:block" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=200\'"></td>' +
                 '<td style="max-width:110px"><strong style="font-size:0.78rem">' + p.name + '</strong>' +
-                (isPromotionDue(p) ? '<br><span style="display:inline-block;margin-top:2px;font-size:0.62rem;font-weight:700;color:#856404;background:#fff3cd;border-radius:4px;padding:1px 5px" title="' + getStockAgeDays(p) + ' days since last restock"><i class="fas fa-tag"></i> Promotion Due</span>' : '') +
+                (getPromotionLevel(p) ? '<br><span style="display:inline-block;margin-top:2px;font-size:0.62rem;font-weight:700;color:#856404;background:#fff3cd;border-radius:4px;padding:1px 5px" title="' + getStockAgeDays(p) + ' days since last restock"><i class="fas fa-tag"></i> Promotion Lv' + getPromotionLevel(p) + '</span>' : '') +
                 (isRestockDue(p) ? '<br><span style="display:inline-block;margin-top:2px;font-size:0.62rem;font-weight:700;color:#fff;background:var(--danger);border-radius:4px;padding:1px 5px"><i class="fas fa-truck-loading"></i> Needs Restock</span>' : '') +
                 '</td>' +
                 '<td><span class="product-category ' + getCategoryDisplay(p.category) + '" style="font-size:0.65rem;padding:0.1rem 0.4rem">' + p.category + '</span></td>' +
@@ -6807,7 +6818,9 @@ function sendToTelegram(order, callback) {
 
     async function saveInventoryRules() {
         var r = {
-            promotionThresholdDays: parseInt(document.getElementById('rulePromotionThresholdDays').value, 10) || STATE.inventoryRules.promotionThresholdDays,
+            promotionLv1Days: parseInt(document.getElementById('rulePromotionLv1Days').value, 10) || STATE.inventoryRules.promotionLv1Days,
+            promotionLv2Days: parseInt(document.getElementById('rulePromotionLv2Days').value, 10) || STATE.inventoryRules.promotionLv2Days,
+            promotionLv3Days: parseInt(document.getElementById('rulePromotionLv3Days').value, 10) || STATE.inventoryRules.promotionLv3Days,
             fastSellWindowDays: parseInt(document.getElementById('ruleFastSellWindowDays').value, 10) || STATE.inventoryRules.fastSellWindowDays,
             fastSellMinUnits: parseInt(document.getElementById('ruleFastSellMinUnits').value, 10) || STATE.inventoryRules.fastSellMinUnits,
             lowStockThreshold: (function(){ var v = parseInt(document.getElementById('ruleLowStockThreshold').value, 10); return isNaN(v) ? STATE.inventoryRules.lowStockThreshold : v; })()
@@ -6818,7 +6831,7 @@ function sendToTelegram(order, callback) {
         try {
             if (db) await db.collection('_admin_').doc('inventoryRules').set(r, { merge: true });
             if (statusEl) statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Rules saved.</span>';
-            logActivity('Inventory Rules Updated', 'Promo: ' + r.promotionThresholdDays + 'd | Fast-sell: ' + r.fastSellMinUnits + ' in ' + r.fastSellWindowDays + 'd | Low stock: ' + r.lowStockThreshold);
+            logActivity('Inventory Rules Updated', 'Promo Lv1/2/3: ' + r.promotionLv1Days + '/' + r.promotionLv2Days + '/' + r.promotionLv3Days + 'd | Fast-sell: ' + r.fastSellMinUnits + ' in ' + r.fastSellWindowDays + 'd | Low stock: ' + r.lowStockThreshold);
         } catch (e) {
             if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger)">Save failed: ' + e.message + '</span>';
         }
@@ -6827,7 +6840,9 @@ function sendToTelegram(order, callback) {
 
     function populateInventoryRulesForm() {
         var r = STATE.inventoryRules;
-        var a = document.getElementById('rulePromotionThresholdDays'); if (a) a.value = r.promotionThresholdDays;
+        var a1 = document.getElementById('rulePromotionLv1Days'); if (a1) a1.value = r.promotionLv1Days;
+        var a2 = document.getElementById('rulePromotionLv2Days'); if (a2) a2.value = r.promotionLv2Days;
+        var a3 = document.getElementById('rulePromotionLv3Days'); if (a3) a3.value = r.promotionLv3Days;
         var b = document.getElementById('ruleFastSellWindowDays'); if (b) b.value = r.fastSellWindowDays;
         var c = document.getElementById('ruleFastSellMinUnits'); if (c) c.value = r.fastSellMinUnits;
         var d = document.getElementById('ruleLowStockThreshold'); if (d) d.value = r.lowStockThreshold;
@@ -6934,8 +6949,13 @@ function sendToTelegram(order, callback) {
         } catch (e) { console.warn('Restock date backfill failed:', e.message); }
     }
 
-    function isPromotionDue(p) {
-        return getStockAgeDays(p) >= (STATE.inventoryRules.promotionThresholdDays || 14);
+    function getPromotionLevel(p) {
+        var age = getStockAgeDays(p);
+        var r = STATE.inventoryRules;
+        if (age >= (r.promotionLv3Days || 60)) return 3;
+        if (age >= (r.promotionLv2Days || 45)) return 2;
+        if (age >= (r.promotionLv1Days || 30)) return 1;
+        return 0;
     }
 
     // Sums confirmed sales of this product within the trailing window (days).
