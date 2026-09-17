@@ -87,6 +87,7 @@
   .rl-size-remove{ background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.75rem; padding:2px; flex-shrink:0; font-family:inherit; }
   .rl-item .rl-actions{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; }
   .rl-item a{ color:var(--primary); text-decoration:none; font-size:0.78rem; font-weight:600; white-space:nowrap; }
+  .rl-locked-link{ color:var(--gray); font-size:0.78rem; font-weight:600; white-space:nowrap; }
   .rl-item.is-received{ opacity:0.65; }
   .status-badge{ display:inline-block; font-size:0.65rem; font-weight:700; padding:2px 8px; border-radius:999px; margin:3px 0; }
   .status-pending{ background:var(--gray-light); color:var(--gray-dark); }
@@ -370,6 +371,7 @@
             <p data-t="restockListDesc">Select the items you're ready to order, then send them to Telegram.</p>
           </div>
           <button class="btn btn-primary" id="sendTelegramBtn" disabled><i class="fab fa-telegram-plane"></i> <span data-t="sendTelegramBtnLabel">Send selected to Telegram</span></button>
+          <button class="btn btn-outline" id="unlock1688Btn" onclick="unlock1688Links()"><i class="fas fa-lock" id="unlock1688Icon"></i> <span id="unlock1688Label" data-t="unlock1688BtnLabel">Unlock 1688 Links</span></button>
         </div>
         <div class="admin-card-body">
           <div class="status-filter" id="statusFilter">
@@ -553,6 +555,7 @@ const TRANSLATIONS = {
     confirmNewLabel: 'Confirm New', confirmNewPh: 'Repeat new password', changePasswordBtn: 'Change Password',
     moqLabel: 'MOQ', viewOn1688: 'View on 1688', searchOn1688: 'Search on 1688',
     orderOn1688Arrow: 'Order on 1688 ↗', searchOn1688Arrow: 'Search on 1688 ↗',
+    unlock1688BtnLabel: 'Unlock 1688 Links', lock1688BtnLabel: 'Lock 1688 Links', linkLockedLabel: 'Link locked', enterUnlockPasswordPrompt: 'Enter password to view 1688 links:',
     markOrderedBtn: 'Mark ordered', markReceivedBtn: 'Mark received', qtyShort: 'Qty',
     searchLinkLabel: 'Search link', directLinkLabel: 'Direct link', uncategorizedOption: '— Uncategorized —'
   },
@@ -601,6 +604,7 @@ const TRANSLATIONS = {
     confirmNewLabel: 'បញ្ជាក់ពាក្យសម្ងាត់ថ្មី', confirmNewPh: 'វាយពាក្យសម្ងាត់ថ្មីម្តងទៀត', changePasswordBtn: 'ប្តូរពាក្យសម្ងាត់',
     moqLabel: 'ចំនួនបញ្ជាទិញអប្បបរមា', viewOn1688: 'មើលនៅ 1688', searchOn1688: 'ស្វែងរកនៅ 1688',
     orderOn1688Arrow: 'កម្មង់នៅ 1688 ↗', searchOn1688Arrow: 'ស្វែងរកនៅ 1688 ↗',
+    unlock1688BtnLabel: 'ដោះសោតំណភ្ជាប់ 1688', lock1688BtnLabel: 'ចាក់សោតំណភ្ជាប់ 1688', linkLockedLabel: 'តំណភ្ជាប់បានចាក់សោ', enterUnlockPasswordPrompt: 'បញ្ចូលពាក្យសម្ងាត់ដើម្បីមើលតំណភ្ជាប់ 1688៖',
     markOrderedBtn: 'សម្គាល់ថាបានបញ្ជាទិញ', markReceivedBtn: 'សម្គាល់ថាបានទទួល', qtyShort: 'ចំនួន',
     searchLinkLabel: 'តំណស្វែងរក', directLinkLabel: 'តំណផ្ទាល់', uncategorizedOption: '— មិនទាន់មានប្រភេទ —'
   },
@@ -649,6 +653,7 @@ const TRANSLATIONS = {
     confirmNewLabel: '确认新密码', confirmNewPh: '再次输入新密码', changePasswordBtn: '修改密码',
     moqLabel: '起订量', viewOn1688: '查看1688', searchOn1688: '搜索1688',
     orderOn1688Arrow: '在1688下单 ↗', searchOn1688Arrow: '搜索1688 ↗',
+    unlock1688BtnLabel: '解锁1688链接', lock1688BtnLabel: '锁定1688链接', linkLockedLabel: '链接已锁定', enterUnlockPasswordPrompt: '输入密码以查看1688链接:',
     markOrderedBtn: '标记为已订购', markReceivedBtn: '标记为已收货', qtyShort: '数量',
     searchLinkLabel: '搜索链接', directLinkLabel: '直接链接', uncategorizedOption: '— 未分类 —'
   }
@@ -1790,6 +1795,55 @@ function updateQty(docId, val){
 
 let selectedRestockIds = new Set();
 let restockStatusFilter = 'all';
+let links1688Unlocked = false; // resets to locked every time the page loads
+
+// Single page-level lock/unlock for every 1688 link in the Restock List —
+// reuses the same shared password as Settings (_admin_/restockConfig) rather
+// than a separate one, so there's only one password to manage for this tool.
+async function unlock1688Links(){
+  if(links1688Unlocked){
+    // Already unlocked — this click re-locks, no password needed to hide again.
+    links1688Unlocked = false;
+    updateUnlock1688ButtonUI();
+    renderRestock();
+    return;
+  }
+
+  const entered = prompt(t('enterUnlockPasswordPrompt'));
+  if(entered === null) return; // cancelled
+
+  let correct = DEFAULT_SETTINGS_PASSWORD;
+  if(db){
+    try{
+      const doc = await db.collection('_admin_').doc('restockConfig').get();
+      if(doc.exists && doc.data().password){
+        correct = doc.data().password;
+        sharedSettingsPassword = correct;
+      }
+    }catch(e){
+      console.warn('Password check failed, falling back to default:', e);
+    }
+  } else if(sharedSettingsPassword){
+    correct = sharedSettingsPassword;
+  }
+
+  if(entered === correct){
+    links1688Unlocked = true;
+    updateUnlock1688ButtonUI();
+    renderRestock();
+  } else {
+    alert(t('incorrectPasswordMsg'));
+  }
+}
+
+function updateUnlock1688ButtonUI(){
+  const icon = document.getElementById('unlock1688Icon');
+  const label = document.getElementById('unlock1688Label');
+  if(!icon || !label) return;
+  icon.className = links1688Unlocked ? 'fas fa-unlock' : 'fas fa-lock';
+  label.dataset.t = links1688Unlocked ? 'lock1688BtnLabel' : 'unlock1688BtnLabel';
+  label.textContent = t(label.dataset.t);
+}
 
 function itemStatus(item){
   if(item.status === 'received') return 'received';
@@ -1895,7 +1949,10 @@ function renderRestock(){
           <div class="rl-size-lines">${sizeLines}</div>
         </div>
         <div class="rl-actions">
-          ${group.url ? `<a href="${escapeHtml(group.url)}" target="_blank" rel="noopener">${group.isSearchLink ? t('searchOn1688Arrow') : t('orderOn1688Arrow')}</a>` : ''}
+          ${group.url ? (links1688Unlocked
+              ? `<a href="${escapeHtml(group.url)}" target="_blank" rel="noopener">${group.isSearchLink ? t('searchOn1688Arrow') : t('orderOn1688Arrow')}</a>`
+              : `<span class="rl-locked-link" title="Unlock 1688 links to view"><i class="fas fa-lock"></i> ${t('linkLockedLabel')}</span>`
+            ) : ''}
           ${status === 'ordered' ? `<button class="mark-received" onclick="markGroupReceived('${docIdsCsv}')">${t('markReceivedBtn')}</button>` : ''}
           ${(status === 'pending' || status === 'sent') ? `<button class="mark-ordered" onclick="markGroupOrdered('${docIdsCsv}')">${t('markOrderedBtn')}</button>` : ''}
         </div>
@@ -1974,7 +2031,7 @@ document.getElementById('sendTelegramBtn').onclick = async () => {
   if(items.length === 0) return;
 
   const lines = items.map((item, i) =>
-    `${i + 1}. ${item.title}${item.size ? ' — ' + item.size : ''} — Qty ${item.qty}\n${item.url}`
+    `${i + 1}. ${item.title}${item.size ? ' — ' + item.size : ''} — Qty ${item.qty}`
   );
   const text = `📦 Goat Kids Restock List (${items.length} item${items.length === 1 ? '' : 's'})\n\n` + lines.join('\n\n');
   const url = `https://api.telegram.org/bot${encodeURIComponent(token)}/sendMessage?chat_id=${encodeURIComponent(chatId)}&text=${encodeURIComponent(text)}`;
