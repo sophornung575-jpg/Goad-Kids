@@ -7188,6 +7188,7 @@ function sendToTelegram(order, callback) {
     // REPORTS — query Firebase directly
     var _reportData = [];
     var _reportRefunds = [];
+    var _reportOrigOrders = {}; // 'storeId|orderId' -> { ts, order } = the order exactly as it was BEFORE its first refund
     var _reportProductsByStore = {}; // storeId -> products array, populated in All Branches mode so cost lookups use the right branch's catalog
 
     async function loadReportData() {
@@ -7205,6 +7206,7 @@ function sendToTelegram(order, callback) {
             _reportData = STATE.confirmedOrders.slice();
             _reportRefunds = STATE.refundedOrders.slice();
             if (scopeLabel) scopeLabel.style.display = 'none';
+            await loadReportOrigOrders();
             renderReports();
             return;
         }
@@ -7309,13 +7311,108 @@ function sendToTelegram(order, callback) {
             _reportData = STATE.confirmedOrders.slice();
             _reportRefunds = STATE.refundedOrders.slice();
         }
+        await loadReportOrigOrders();
         await loadExpensesForReportPeriod();
         await loadCustomerTypesForReport();
         renderReports();
     }
 
+    // Orders that still count as live sales (refunded items already removed from their cart/total).
+    // Used for item / category / customer analytics.
     function getReportConfirmed() {
-        return _reportData.filter(function(o) { return o.status === 'confirmed'; });
+        return _reportData.filter(function(o) { return o.status === 'confirmed' || o.status === 'partial_refund'; });
+    }
+
+    // Every order that was actually SOLD in the period, including ones that were later refunded
+    // (partially or fully). confirmRefund() flips status to 'partial_refund' / 'refunded' and shrinks
+    // order.total, so these must stay in the sales list at their ORIGINAL amount — the refund itself
+    // is then deducted separately, on the day it happened. (Dropping them AND subtracting the refund
+    // deducted it twice.)
+    function getReportSales() {
+        return _reportData.filter(function(o) { return o.status === 'confirmed' || o.status === 'partial_refund' || o.status === 'refunded'; });
+    }
+
+    function reportOrigKey(o) { return (o._sourceStoreId || STATE.storeId) + '|' + o.orderId; }
+    function reportOrigOrder(o) { var e = _reportOrigOrders[reportOrigKey(o)]; return e ? e.order : null; }
+
+    // What the customer originally paid for this order, before any refund shrank order.total.
+    function reportGrossTotal(o) {
+        if (o.status === 'confirmed') return o.total || 0;
+        var snap = reportOrigOrder(o);
+        if (snap && snap.total != null) return Number(snap.total) || 0;
+        return (o.total || 0) + (o.refundAmount || 0); // fallback if the refund record can't be found
+    }
+    // The order's ORIGINAL cart (for cost of goods). Refunded items are removed from order.cart afterwards.
+    function reportGrossCart(o) {
+        if (o.status === 'confirmed') return o.cart || [];
+        var snap = reportOrigOrder(o);
+        return (snap && snap.cart) ? snap.cart : (o.cart || []);
+    }
+
+    function reportMoney(n) { return (n < 0 ? '-' : '') + '$' + Math.abs(n).toFixed(2); }
+
+    // Total Revenue = sales at original amount (on their sale date) - refunds (on their refund date).
+    function getReportRefundTotal() {
+        var t = 0; for (var i = 0; i < _reportRefunds.length; i++) t += _reportRefunds[i].refundAmount || 0; return t;
+    }
+    function getReportNetRevenue() {
+        var sales = getReportSales(), t = 0;
+        for (var i = 0; i < sales.length; i++) t += reportGrossTotal(sales[i]);
+        return t - getReportRefundTotal();
+    }
+
+    // One row per calendar day: sales that day, refunds that day, order + customer counts.
+    function buildReportDailyRows() {
+        var byDay = {};
+        function slot(ts) {
+            var d = new Date(ts), dk = formatDate(d);
+            if (!byDay[dk]) byDay[dk] = { date: dk, sortDate: new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(), sales: 0, refunds: 0, orders: 0, refundCount: 0, customers: new Set() };
+            return byDay[dk];
+        }
+        var sales = getReportSales();
+        for (var i = 0; i < sales.length; i++) {
+            var o = sales[i], sl = slot(o.confirmedTimestamp || o.timestamp || Date.now());
+            sl.sales += reportGrossTotal(o); sl.orders++;
+            if (o.customerPhone || o.customerName) sl.customers.add(o.customerPhone || o.customerName);
+        }
+        for (var r = 0; r < _reportRefunds.length; r++) {
+            var rf = _reportRefunds[r], rs = slot(rf.refundTimestamp || Date.now());
+            rs.refunds += rf.refundAmount || 0; rs.refundCount++;
+        }
+        return Object.keys(byDay).map(function(k) { return byDay[k]; }).sort(function(a, b) { return b.sortDate - a.sortDate; }); // newest first
+    }
+
+    // Loads the "before first refund" snapshot for every refunded / partially-refunded order in the report.
+    // Always pulls ALL refunds of those orders (not just ones inside the date range), because the
+    // earliest one is the only one that still shows the original total.
+    async function loadReportOrigOrders() {
+        _reportOrigOrders = {};
+        function keep(r, sid) {
+            if (!r || !r.orderId || !r.originalOrder) return;
+            var k = sid + '|' + r.orderId, ts = r.refundTimestamp || 0;
+            if (!_reportOrigOrders[k] || ts < _reportOrigOrders[k].ts) _reportOrigOrders[k] = { ts: ts, order: r.originalOrder };
+        }
+        var need = {};
+        for (var i = 0; i < _reportData.length; i++) {
+            var o = _reportData[i];
+            if (o.status !== 'refunded' && o.status !== 'partial_refund') continue;
+            var sid = o._sourceStoreId || STATE.storeId;
+            if (!need[sid]) need[sid] = [];
+            need[sid].push(o.orderId);
+        }
+        if (db && STATE.firebaseOnline) {
+            await Promise.all(Object.keys(need).map(async function(sid) {
+                var ids = need[sid];
+                for (var c = 0; c < ids.length; c += 30) {
+                    try {
+                        var snap = await db.collection('stores').doc(sid).collection('refunds').where('orderId', 'in', ids.slice(c, c + 30)).get();
+                        snap.forEach(function(d) { keep(d.data(), sid); });
+                    } catch (e) { console.warn('Original-order lookup failed for ' + sid + ':', e.message); }
+                }
+            }));
+        }
+        // local records (this store only) as a supplement / offline fallback
+        for (var l = 0; l < STATE.refundedOrders.length; l++) keep(STATE.refundedOrders[l], STATE.storeId);
     }
 
     function renderStoreBreakdown() {
@@ -7327,17 +7424,21 @@ function sendToTelegram(order, callback) {
         if (!allBranchesMode) { card.style.display = 'none'; return; }
         card.style.display = 'block';
 
-        var confirmed = getReportConfirmed();
+        var sales = getReportSales();
         var byStore = {};
-        for (var i = 0; i < confirmed.length; i++) {
-            var o = confirmed[i];
+        function storeSlot(o) {
             var sid = o._sourceStoreId || STATE.storeId;
             var sname = o._sourceStoreName || STATE.storeName || sid;
             if (!byStore[sid]) byStore[sid] = { name: sname, revenue: 0, orders: 0, customers: new Set() };
-            byStore[sid].revenue += o.total || 0;
-            byStore[sid].orders++;
-            if (o.customerPhone || o.customerName) byStore[sid].customers.add(o.customerPhone || o.customerName);
+            return byStore[sid];
         }
+        for (var i = 0; i < sales.length; i++) {
+            var o = sales[i], st = storeSlot(o);
+            st.revenue += reportGrossTotal(o);
+            st.orders++;
+            if (o.customerPhone || o.customerName) st.customers.add(o.customerPhone || o.customerName);
+        }
+        for (var rr = 0; rr < _reportRefunds.length; rr++) storeSlot(_reportRefunds[rr]).revenue -= _reportRefunds[rr].refundAmount || 0;
         var storeIds = Object.keys(byStore).sort(function(a,b){ return byStore[b].revenue - byStore[a].revenue; });
         if (!storeIds.length) { el.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>'; return; }
         var html = '';
@@ -7360,21 +7461,21 @@ function sendToTelegram(order, callback) {
         if (refEl) refEl.textContent = '$' + refTotal.toFixed(2);
         if (refCnt) refCnt.textContent = _reportRefunds.length;
 
-        var tr = 0; for (var i = 0; i < confirmed.length; i++) { tr += confirmed[i].total || 0; }
-        var netRevenue = tr - refTotal;
-        document.getElementById('reportTotalRevenue').textContent = '$' + netRevenue.toFixed(2);
-        document.getElementById('reportTotalOrders').textContent = confirmed.length;
+        var sales = getReportSales();
+        var netRevenue = getReportNetRevenue(); // sales at original amount - refunds (same figure the trend / daily table use)
+        document.getElementById('reportTotalRevenue').textContent = reportMoney(netRevenue);
+        document.getElementById('reportTotalOrders').textContent = sales.length;
         var is = 0; for (var j = 0; j < confirmed.length; j++) { for (var k = 0; k < (confirmed[j].cart||[]).length; k++) is += confirmed[j].cart[k].quantity || 0; }
         document.getElementById('reportItemsSold').textContent = is;
         var cs = new Set();
         for (var l = 0; l < confirmed.length; l++) { if (confirmed[l].customerPhone || confirmed[l].customerName) cs.add(confirmed[l].customerPhone || confirmed[l].customerName); }
         document.getElementById('reportTotalCustomers').textContent = cs.size;
-        // Payment method breakdown: Cash vs QR Code
+        // Payment method breakdown: Cash vs QR Code (what was collected at sale time, i.e. before refunds)
         var cashTotal = 0, cashCount = 0, qrTotal = 0, qrCount = 0;
-        for (var pm = 0; pm < confirmed.length; pm++) {
-            var pmOrder = confirmed[pm];
-            if (pmOrder.paymentMethod === 'qr') { qrTotal += pmOrder.total || 0; qrCount++; }
-            else { cashTotal += pmOrder.total || 0; cashCount++; }
+        for (var pm = 0; pm < sales.length; pm++) {
+            var pmOrder = sales[pm];
+            if (pmOrder.paymentMethod === 'qr') { qrTotal += reportGrossTotal(pmOrder); qrCount++; }
+            else { cashTotal += reportGrossTotal(pmOrder); cashCount++; }
         }
         var cashTotalEl = document.getElementById('reportCashTotal');
         var cashCountEl = document.getElementById('reportCashCount');
@@ -7408,18 +7509,24 @@ function sendToTelegram(order, callback) {
     function renderRevenueTrendChart() {
         var ctx = document.getElementById('revenueTrendChart'); if (!ctx) return;
         if (STATE.charts.revenueTrendChart) STATE.charts.revenueTrendChart.destroy();
-        var confirmed = getReportConfirmed(); var rd = {};
+        var rd = {}, rs = {};
         // Group by day, month, or year depending on filter
         var groupBy = (STATE.dateFilter === 'today') ? 'hour' : (STATE.dateFilter === 'year' || STATE.dateFilter === 'all') ? 'month' : 'day';
-        for (var i = 0; i < confirmed.length; i++) {
-            var o = confirmed[i], od = new Date(o.confirmedTimestamp || o.timestamp || Date.now()), dk;
-            if (groupBy === 'hour') dk = od.getHours() + ':00';
-            else if (groupBy === 'month') dk = (od.getMonth()+1) + '/' + od.getFullYear();
-            else dk = formatDate(od);
-            if (!rd[dk]) rd[dk] = 0; rd[dk] += o.total || 0;
+        function bucket(ts, amount) {
+            var od = new Date(ts), dk, sv;
+            if (groupBy === 'hour') { dk = od.getHours() + ':00'; sv = od.getHours(); }
+            else if (groupBy === 'month') { dk = (od.getMonth()+1) + '/' + od.getFullYear(); sv = od.getFullYear() * 12 + od.getMonth(); }
+            else { dk = formatDate(od); sv = new Date(od.getFullYear(), od.getMonth(), od.getDate()).getTime(); }
+            if (!rd[dk]) { rd[dk] = 0; rs[dk] = sv; }
+            rd[dk] += amount;
         }
-        var dates = Object.keys(rd).sort(function(a,b){ return new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')); });
-        STATE.charts.revenueTrendChart = new Chart(ctx, { type: 'line', data: { labels: dates.length ? dates : ['No Data'], datasets: [{ label: 'Revenue ($)', data: dates.length ? dates.map(function(d){return rd[d];}) : [0], borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.1)', fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#667eea' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: function(v){return '$'+v;} } } } } });
+        // Sales count on the day they happened (at their original amount)...
+        var sales = getReportSales();
+        for (var i = 0; i < sales.length; i++) { var o = sales[i]; bucket(o.confirmedTimestamp || o.timestamp || Date.now(), reportGrossTotal(o)); }
+        // ...and refunds are deducted on the day the refund happened, exactly like Total Revenue.
+        for (var r = 0; r < _reportRefunds.length; r++) { var rf = _reportRefunds[r]; bucket(rf.refundTimestamp || Date.now(), -(rf.refundAmount || 0)); }
+        var dates = Object.keys(rd).sort(function(a,b){ return rs[a] - rs[b]; });
+        STATE.charts.revenueTrendChart = new Chart(ctx, { type: 'line', data: { labels: dates.length ? dates : ['No Data'], datasets: [{ label: 'Net Revenue after refunds ($)', data: dates.length ? dates.map(function(d){return rd[d];}) : [0], borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.1)', fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#667eea' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: function(v){return '$'+v;} } } } } });
     }
 
     function renderStockChart() {
@@ -7443,23 +7550,15 @@ function sendToTelegram(order, callback) {
 
     function renderCustomerBreakdown() {
         var el = document.getElementById('customerBreakdownList'); if (!el) return;
-        var confirmed = getReportConfirmed();
-        // Group customers by day
-        var byDay = {};
-        for (var i = 0; i < confirmed.length; i++) {
-            var o = confirmed[i];
-            var dk = formatDate(new Date(o.confirmedTimestamp || o.timestamp || Date.now()));
-            if (!byDay[dk]) byDay[dk] = { revenue: 0, orders: 0, customers: new Set() };
-            byDay[dk].revenue += o.total || 0;
-            byDay[dk].orders++;
-            if (o.customerPhone || o.customerName) byDay[dk].customers.add(o.customerPhone || o.customerName);
-        }
-        var days = Object.keys(byDay).sort(function(a,b){ return new Date(b.split('/').reverse().join('-')) - new Date(a.split('/').reverse().join('-')); });
-        if (!days.length) { el.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>'; return; }
+        var rows = buildReportDailyRows();
+        if (!rows.length) { el.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>'; return; }
         var html = '';
-        for (var j = 0; j < days.length; j++) {
-            var d = byDay[days[j]];
-            html += '<tr><td style="font-weight:600">'+days[j]+'</td><td>'+d.orders+'</td><td>'+d.customers.size+'</td><td>$'+d.revenue.toFixed(2)+'</td></tr>';
+        for (var j = 0; j < rows.length; j++) {
+            var d = rows[j];
+            var refNote = d.refunds > 0
+                ? '<div style="font-size:0.72rem;font-weight:400;color:var(--danger)">↩ -$' + d.refunds.toFixed(2) + ' refund' + (d.refundCount > 1 ? 's' : '') + ' deducted</div>'
+                : '';
+            html += '<tr><td style="font-weight:600">'+d.date+'</td><td>'+d.orders+'</td><td>'+d.customers.size+'</td><td>' + reportMoney(d.sales - d.refunds) + refNote + '</td></tr>';
         }
         el.innerHTML = html;
     }
@@ -7510,8 +7609,7 @@ function sendToTelegram(order, callback) {
 
     function renderExpenseSummary() {
         var exp = sumExpensesForPeriod();
-        var confirmed = getReportConfirmed();
-        var revenue = 0; for (var i=0;i<confirmed.length;i++) revenue += confirmed[i].total || 0;
+        var revenue = getReportNetRevenue();
         var elT = document.getElementById('expTotal'); if (elT) elT.textContent = '$' + exp.total.toFixed(2);
         var elF = document.getElementById('expFacility'); if (elF) elF.textContent = exp.facility ? '$' + exp.facility.toFixed(2) : '-';
         var elS = document.getElementById('expSalaries'); if (elS) elS.textContent = exp.salaries ? '$' + exp.salaries.toFixed(2) : '-';
@@ -7548,15 +7646,16 @@ function sendToTelegram(order, callback) {
     }
 
     function renderFinancialAnalysis() {
-        var confirmed = getReportConfirmed();
+        var confirmed = getReportSales(); // includes later-refunded orders at their ORIGINAL amount; refunds are deducted below
         var revenue = 0, cogs = 0;
         var byDay = {}; // dateKey -> {revenue, cogs, sortDate}
         for (var i = 0; i < confirmed.length; i++) {
             var o = confirmed[i];
-            var orderRevenue = o.total || 0;
+            var orderRevenue = reportGrossTotal(o);
             var orderCost = 0;
-            for (var j = 0; j < (o.cart||[]).length; j++) {
-                var it = o.cart[j];
+            var grossCart = reportGrossCart(o);
+            for (var j = 0; j < grossCart.length; j++) {
+                var it = grossCart[j];
                 orderCost += getReportProductCost(o, it.productId) * (it.quantity || 0);
             }
             revenue += orderRevenue; cogs += orderCost;
@@ -7870,12 +7969,17 @@ function sendToTelegram(order, callback) {
     }
 
     function renderFacebookAdsAnalysis() {
-        var confirmed = getReportConfirmed();
+        var sales = getReportSales();
         var walkinRevenue = 0, fbRevenue = 0;
-        for (var i=0;i<confirmed.length;i++) {
-            var sm = confirmed[i].shippingMethod || 'Pickup';
-            if (sm === 'Pickup') walkinRevenue += confirmed[i].total || 0;
-            else fbRevenue += confirmed[i].total || 0;
+        for (var i=0;i<sales.length;i++) {
+            var sm = sales[i].shippingMethod || 'Pickup';
+            if (sm === 'Pickup') walkinRevenue += reportGrossTotal(sales[i]);
+            else fbRevenue += reportGrossTotal(sales[i]);
+        }
+        for (var rq=0;rq<_reportRefunds.length;rq++) { // refunds come off the channel the original order came from
+            var rsm = (_reportRefunds[rq].originalOrder && _reportRefunds[rq].originalOrder.shippingMethod) || 'Pickup';
+            if (rsm === 'Pickup') walkinRevenue -= _reportRefunds[rq].refundAmount || 0;
+            else fbRevenue -= _reportRefunds[rq].refundAmount || 0;
         }
         var elWalkin = document.getElementById('channelWalkinRevenue'); if (elWalkin) elWalkin.textContent = '$' + walkinRevenue.toFixed(2);
         var elFbRev = document.getElementById('channelFbRevenue'); if (elFbRev) elFbRev.textContent = '$' + fbRevenue.toFixed(2);
@@ -7931,21 +8035,22 @@ function sendToTelegram(order, callback) {
 
     function exportReportCSV() {
         var confirmed = getReportConfirmed();
-        if (!confirmed.length && !_reportRefunds.length) { showToast('No report data to export', 'warning'); return; }
+        var salesAll = getReportSales();
+        if (!salesAll.length && !_reportRefunds.length) { showToast('No report data to export', 'warning'); return; }
 
         var periodEl = document.getElementById('reportDateRange');
         var period = periodEl ? periodEl.textContent : '';
 
-        var tr = 0; for (var i = 0; i < confirmed.length; i++) tr += confirmed[i].total || 0;
+        var tr = getReportNetRevenue();
         var is = 0; for (var j = 0; j < confirmed.length; j++) { for (var k = 0; k < (confirmed[j].cart||[]).length; k++) is += confirmed[j].cart[k].quantity || 0; }
         var cs = new Set();
         for (var l = 0; l < confirmed.length; l++) { if (confirmed[l].customerPhone || confirmed[l].customerName) cs.add(confirmed[l].customerPhone || confirmed[l].customerName); }
         var refTotal = 0; for (var r = 0; r < _reportRefunds.length; r++) refTotal += _reportRefunds[r].refundAmount || 0;
         var cashTotal = 0, cashCount = 0, qrTotal = 0, qrCount = 0;
-        for (var pm = 0; pm < confirmed.length; pm++) {
-            var pmOrder = confirmed[pm];
-            if (pmOrder.paymentMethod === 'qr') { qrTotal += pmOrder.total || 0; qrCount++; }
-            else { cashTotal += pmOrder.total || 0; cashCount++; }
+        for (var pm = 0; pm < salesAll.length; pm++) {
+            var pmOrder = salesAll[pm];
+            if (pmOrder.paymentMethod === 'qr') { qrTotal += reportGrossTotal(pmOrder); qrCount++; }
+            else { cashTotal += reportGrossTotal(pmOrder); cashCount++; }
         }
 
         var csv = 'GOAT KIDS Sales Report\n';
@@ -7955,8 +8060,8 @@ function sendToTelegram(order, callback) {
 
         csv += 'Summary\n';
         csv += 'Metric,Value\n';
-        csv += 'Total Revenue,$' + tr.toFixed(2) + '\n';
-        csv += 'Total Orders,' + confirmed.length + '\n';
+        csv += 'Total Revenue,' + reportMoney(tr) + '\n';
+        csv += 'Total Orders,' + salesAll.length + '\n';
         csv += 'Items Sold,' + is + '\n';
         csv += 'Customers,' + cs.size + '\n';
         csv += 'Refunds,$' + refTotal.toFixed(2) + ' (' + _reportRefunds.length + ')\n';
@@ -7964,26 +8069,16 @@ function sendToTelegram(order, callback) {
         csv += 'QR Code,$' + qrTotal.toFixed(2) + ' (' + qrCount + ')\n\n';
 
         csv += 'Orders by Day\n';
-        csv += 'Date,Orders,Customers,Revenue\n';
-        var byDay = {};
-        for (var a = 0; a < confirmed.length; a++) {
-            var o = confirmed[a];
-            var dk = formatDate(new Date(o.confirmedTimestamp || o.timestamp || Date.now()));
-            if (!byDay[dk]) byDay[dk] = { revenue: 0, orders: 0, customers: new Set() };
-            byDay[dk].revenue += o.total || 0;
-            byDay[dk].orders++;
-            if (o.customerPhone || o.customerName) byDay[dk].customers.add(o.customerPhone || o.customerName);
-        }
-        var days = Object.keys(byDay).sort(function(x,y){ return new Date(y.split('/').reverse().join('-')) - new Date(x.split('/').reverse().join('-')); });
-        if (!days.length) {
+        csv += 'Date,Orders,Customers,Revenue,Refunds Deducted\n';
+        var dayRows = buildReportDailyRows();
+        if (!dayRows.length) {
             csv += 'No data for this period\n';
         } else {
-            for (var b = 0; b < days.length; b++) {
-                var d = byDay[days[b]];
-                csv += escCSV(days[b]) + ',' + d.orders + ',' + d.customers.size + ',$' + d.revenue.toFixed(2) + '\n';
+            for (var b = 0; b < dayRows.length; b++) {
+                var dr = dayRows[b];
+                csv += escCSV(dr.date) + ',' + dr.orders + ',' + dr.customers.size + ',' + reportMoney(dr.sales - dr.refunds) + ',$' + dr.refunds.toFixed(2) + '\n';
             }
         }
-
         csv += '\nItems Breakdown\n';
         csv += 'Product,Size,Qty Sold,Revenue\n';
         var byItem = {};
