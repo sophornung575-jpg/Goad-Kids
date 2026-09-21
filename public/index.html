@@ -199,6 +199,13 @@
         .date-filter-container{display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1.5rem;padding:1rem;background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow)}
         .date-filter-btn{padding:0.5rem 1rem;border:2px solid var(--gray-light);background:#fff;border-radius:var(--radius);cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--gray-dark);transition:all 0.2s;white-space:nowrap}
         .date-filter-btn:hover{border-color:var(--primary);color:var(--primary)}.date-filter-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+        .report-subtabs{display:flex;gap:0.25rem;margin:0 0 1.25rem 0;border-bottom:2px solid var(--gray-light);overflow-x:auto}
+        .report-subtab{padding:0.65rem 1.2rem;border:none;background:none;cursor:pointer;font-size:0.92rem;font-weight:600;color:var(--gray-dark);border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap}
+        .report-subtab:hover{color:var(--primary)}.report-subtab.active{color:var(--primary);border-bottom-color:var(--primary)}
+        .cash-form{display:flex;flex-wrap:wrap;gap:0.5rem;align-items:flex-end}
+        .cash-form label{display:block;font-size:0.72rem;font-weight:600;color:var(--gray-dark);margin-bottom:2px}
+        .cash-form .form-control{padding:0.45rem 0.6rem;font-size:0.88rem;width:auto}
+        .cash-chip{display:inline-block;padding:0.2rem 0.6rem;border-radius:999px;background:var(--gray-light);font-size:0.75rem;color:var(--gray-dark)}
         .date-filter-separator{color:var(--gray);font-size:0.85rem;padding:0 0.25rem}.custom-date-input{padding:0.5rem 1rem;border:2px solid var(--gray-light);border-radius:var(--radius);font-size:0.85rem;cursor:pointer}.custom-date-input:focus{outline:none;border-color:var(--primary)}
         .report-date-range{font-size:0.9rem;color:var(--gray);margin-left:auto;font-weight:500}
         .top-items-list{list-style:none}.top-items-list li{display:flex;justify-content:space-between;align-items:center;padding:0.75rem;border-bottom:1px solid var(--gray-light)}.top-items-list li:last-child{border-bottom:none}
@@ -1232,6 +1239,11 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         </span>
                     </div>
                     <div id="reportScopeLabel" style="display:none;font-size:0.8rem;color:var(--gray);margin:-0.75rem 0 1rem 0.25rem"></div>
+                    <div class="report-subtabs">
+                        <button class="report-subtab active" data-subtab="financial" onclick="switchReportSubTab('financial')"><i class="fas fa-coins"></i> Financial Analysis</button>
+                        <button class="report-subtab" data-subtab="cash" onclick="switchReportSubTab('cash')"><i class="fas fa-money-bill-transfer"></i> Cash In &amp; Out</button>
+                    </div>
+                    <div id="reportPaneFinancial">
                     <div class="reports-grid">
                         <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-dollar-sign"></i></div><div class="stat-info"><h3 id="reportTotalRevenue">$0.00</h3><p data-translate="totalRevenue">Total Revenue</p></div></div>
                         <div class="stat-card orders-stat"><div class="stat-icon"><i class="fas fa-shopping-bag"></i></div><div class="stat-info"><h3 id="reportTotalOrders">0</h3><p data-translate="totalOrders">Total Orders</p></div></div>
@@ -1398,6 +1410,68 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         </div>
                         <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-circle-info"></i> Ad Spend is only entered per-month, so each month's total is divided evenly across its calendar days to compare against that day's Delivery Revenue.</p>
                     </div>
+                    </div><!-- end reportPaneFinancial -->
+
+                    <!-- CASH IN & OUT -->
+                    <div id="reportPaneCash" style="display:none">
+                        <div id="cashScopeNote" style="display:none;font-size:0.8rem;color:var(--gray-dark);background:#fffaf0;border:1px solid #fbd38d;border-radius:var(--radius);padding:0.5rem 0.75rem;margin-bottom:1rem"></div>
+                        <div class="reports-grid" style="margin-bottom:1rem">
+                            <div class="stat-card" style="border-left:4px solid #48bb78"><div class="stat-icon" style="background:rgba(72,187,120,0.1)"><i class="fas fa-arrow-down" style="color:#48bb78"></i></div><div class="stat-info"><h3 id="cashInTotal" style="color:#48bb78">$0.00</h3><p>Cash In <span id="cashInSub" style="font-weight:400;font-size:0.7rem"></span></p></div></div>
+                            <div class="stat-card" style="border-left:4px solid #f56565"><div class="stat-icon" style="background:rgba(245,101,101,0.1)"><i class="fas fa-arrow-up" style="color:#f56565"></i></div><div class="stat-info"><h3 id="cashOutTotal" style="color:#f56565">$0.00</h3><p>Cash Out <span id="cashOutSub" style="font-weight:400;font-size:0.7rem"></span></p></div></div>
+                            <div class="stat-card" style="border-left:4px solid #667eea"><div class="stat-icon" style="background:rgba(102,126,234,0.1)"><i class="fas fa-scale-balanced" style="color:#667eea"></i></div><div class="stat-info"><h3 id="cashNetTotal" style="color:#667eea">$0.00</h3><p>Net Cash Flow</p></div></div>
+                            <div class="stat-card" style="border-left:4px solid #4299e1"><div class="stat-icon" style="background:rgba(66,153,225,0.1)"><i class="fas fa-building-columns" style="color:#4299e1"></i></div><div class="stat-info"><h3 id="cashBankBalance" style="color:#4299e1">-</h3><p>Est. Bank Balance <span id="cashBankSub" style="font-weight:400;font-size:0.7rem"></span></p></div></div>
+                        </div>
+
+                        <div class="chart-card">
+                            <h3><i class="fas fa-money-bill-transfer" style="color:#48bb78"></i> Cash Book</h3>
+
+                            <div class="cash-form">
+                                <div><label>Type</label><select id="cashEntryType" class="form-control" onchange="cashFormTypeChanged()"><option value="out">Cash Out</option><option value="in">Cash In</option></select></div>
+                                <div><label>Date</label><input type="date" id="cashEntryDate" class="form-control"></div>
+                                <div><label>Category</label><select id="cashEntryCat" class="form-control"></select></div>
+                                <div><label>Amount ($)</label><input type="number" id="cashEntryAmount" class="form-control" min="0" step="0.01" placeholder="0.00" style="width:110px" onkeydown="if(event.key==='Enter')addCashEntry()"></div>
+                                <div style="flex:1;min-width:140px"><label>Note (optional)</label><input type="text" id="cashEntryNote" class="form-control" style="width:100%" placeholder="e.g. Supplier invoice #12" onkeydown="if(event.key==='Enter')addCashEntry()"></div>
+                                <div><button class="btn btn-primary btn-small" onclick="addCashEntry()"><i class="fas fa-plus"></i> Add</button></div>
+                            </div>
+                            <div id="cashOutChips" style="display:flex;flex-wrap:wrap;gap:0.4rem;margin:0.9rem 0 0.25rem"></div>
+
+                            <div style="overflow-x:auto;margin-top:0.75rem">
+                                <table style="width:100%;border-collapse:collapse;font-size:0.88rem">
+                                    <thead><tr style="background:var(--gray-light);text-align:left">
+                                        <th style="padding:0.6rem 0.8rem">Date</th>
+                                        <th style="padding:0.6rem 0.8rem">Sales In</th>
+                                        <th style="padding:0.6rem 0.8rem">Other In</th>
+                                        <th style="padding:0.6rem 0.8rem">Refunds Out</th>
+                                        <th style="padding:0.6rem 0.8rem">Paid Out</th>
+                                        <th style="padding:0.6rem 0.8rem">Net</th>
+                                        <th style="padding:0.6rem 0.8rem">Running</th>
+                                    </tr></thead>
+                                    <tbody id="cashDailyList"><tr><td colspan="7" style="text-align:center;color:var(--gray);padding:1rem">No data</td></tr></tbody>
+                                </table>
+                            </div>
+
+                            <details style="margin-top:0.75rem">
+                                <summary style="cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--gray-dark)">Manual entries (<span id="cashEntryCount">0</span>)</summary>
+                                <div style="overflow-x:auto;margin-top:0.5rem">
+                                    <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+                                        <tbody id="cashEntryList"></tbody>
+                                    </table>
+                                </div>
+                            </details>
+
+                            <div style="border-top:1px solid var(--gray-light);margin-top:1rem;padding-top:1rem">
+                                <div style="font-size:0.85rem;font-weight:700;color:var(--dark);margin-bottom:0.5rem"><i class="fas fa-building-columns" style="color:#4299e1"></i> Actual bank balance check</div>
+                                <div class="cash-form">
+                                    <div><label>Balance as of (end of day)</label><input type="date" id="cashCpDate" class="form-control"></div>
+                                    <div><label>Actual balance ($)</label><input type="number" id="cashCpAmount" class="form-control" step="0.01" placeholder="0.00" style="width:130px" onkeydown="if(event.key==='Enter')saveCashCheckpoint()"></div>
+                                    <div><button class="btn btn-outline btn-small" onclick="saveCashCheckpoint()"><i class="fas fa-check"></i> Save balance</button></div>
+                                </div>
+                                <div id="cashCpMsg" style="font-size:0.82rem;margin-top:0.6rem;min-height:1.2em"></div>
+                            </div>
+
+                            <p style="font-size:0.72rem;color:var(--gray);margin-top:0.75rem"><i class="fas fa-circle-info"></i> Cash In counts sales (Cash + QR) at their original amount on the sale day. Refunds count as Cash Out on the day they are paid back. Unlike the expense figures in Financial Analysis (a monthly total spread over the days), entries here are dated when the money really moved. Enter your real bank balance from time to time: the app compares it with what it expected and shows the difference, which reveals unrecorded payments.</p>
+                        </div>
+                    </div><!-- end reportPaneCash -->
                     </div><!-- end reportContent -->
                 </div><!-- end adminReportsTab -->
             </div>
@@ -7208,6 +7282,7 @@ function sendToTelegram(order, callback) {
             if (scopeLabel) scopeLabel.style.display = 'none';
             await loadReportOrigOrders();
             renderReports();
+            loadCashData();
             return;
         }
         var dr = getDateRange(STATE.dateFilter);
@@ -7315,6 +7390,7 @@ function sendToTelegram(order, callback) {
         await loadExpensesForReportPeriod();
         await loadCustomerTypesForReport();
         renderReports();
+        loadCashData();
     }
 
     // Orders that still count as live sales (refunded items already removed from their cart/total).
@@ -7449,7 +7525,7 @@ function sendToTelegram(order, callback) {
         el.innerHTML = html;
     }
 
-    function renderReports() { updateReportStats(); renderCategoryChart(); renderTopItemsChart(); renderRevenueTrendChart(); renderStockChart(); renderTopItemsList(); renderCustomerBreakdown(); renderStoreBreakdown(); renderFinancialAnalysis(); renderNetProfitTrendChart(); renderExpenseSummary(); renderCustomerTypeBreakdown(); renderFacebookAdsAnalysis(); }
+    function renderReports() { updateReportStats(); renderCategoryChart(); renderTopItemsChart(); renderRevenueTrendChart(); renderStockChart(); renderTopItemsList(); renderCustomerBreakdown(); renderStoreBreakdown(); renderFinancialAnalysis(); renderNetProfitTrendChart(); renderExpenseSummary(); renderCustomerTypeBreakdown(); renderFacebookAdsAnalysis(); renderCashTab(); }
 
     function updateReportStats() {
         var confirmed = getReportConfirmed();
@@ -7470,20 +7546,26 @@ function sendToTelegram(order, callback) {
         var cs = new Set();
         for (var l = 0; l < confirmed.length; l++) { if (confirmed[l].customerPhone || confirmed[l].customerName) cs.add(confirmed[l].customerPhone || confirmed[l].customerName); }
         document.getElementById('reportTotalCustomers').textContent = cs.size;
-        // Payment method breakdown: Cash vs QR Code (what was collected at sale time, i.e. before refunds)
+        // Payment method breakdown: Cash vs QR Code. Sales count at their original amount, and each refund
+        // comes off the SAME method the original order was paid with, so Cash + QR = Total Revenue.
         var cashTotal = 0, cashCount = 0, qrTotal = 0, qrCount = 0;
         for (var pm = 0; pm < sales.length; pm++) {
             var pmOrder = sales[pm];
             if (pmOrder.paymentMethod === 'qr') { qrTotal += reportGrossTotal(pmOrder); qrCount++; }
             else { cashTotal += reportGrossTotal(pmOrder); cashCount++; }
         }
+        for (var pr = 0; pr < _reportRefunds.length; pr++) {
+            var prRef = _reportRefunds[pr], prAmt = Number(prRef.refundAmount) || 0;
+            if (prRef.originalOrder && prRef.originalOrder.paymentMethod === 'qr') qrTotal -= prAmt;
+            else cashTotal -= prAmt;
+        }
         var cashTotalEl = document.getElementById('reportCashTotal');
         var cashCountEl = document.getElementById('reportCashCount');
         var qrTotalEl = document.getElementById('reportQrTotal');
         var qrCountEl = document.getElementById('reportQrCount');
-        if (cashTotalEl) cashTotalEl.textContent = '$' + cashTotal.toFixed(2);
+        if (cashTotalEl) cashTotalEl.textContent = reportMoney(cashTotal);
         if (cashCountEl) cashCountEl.textContent = cashCount;
-        if (qrTotalEl) qrTotalEl.textContent = '$' + qrTotal.toFixed(2);
+        if (qrTotalEl) qrTotalEl.textContent = reportMoney(qrTotal);
         if (qrCountEl) qrCountEl.textContent = qrCount;
     }
 
@@ -7810,6 +7892,259 @@ function sendToTelegram(order, callback) {
             closeExpenseModal();
             loadReportData();
         } catch(e) { showToast('Failed to save: ' + e.message, 'error'); }
+    }
+
+    // =============================================
+    // CASH IN & CASH OUT — where the real money moved (separate from the expense proration in Financial Analysis)
+    //   Cash In  = sales at their ORIGINAL amount on the sale day (same rule as Total Revenue) + manual "in" entries
+    //   Cash Out = refunds on the day they were paid back + manual "out" entries (stock, rent, salaries, ads ...)
+    // Manual entries: stores/{storeId}/cashLedger   Actual bank balances: stores/{storeId}/cashCheckpoints (doc id = date)
+    var CASH_OUT_CATS = [['stock','Stock Payment (Supplier)'],['rent','Rent / Facility'],['salary','Salaries'],['ads','Facebook Ads'],['shipping','Shipping / Delivery'],['equipment','Equipment / Renovation'],['withdrawal','Owner Withdrawal'],['other','Other']];
+    var CASH_IN_CATS  = [['deposit','Owner Deposit / Capital'],['other','Other Income']];
+    var _cashLedger = [];        // manual entries inside the selected report period
+    var _cashCheckpoint = null;  // latest actual bank balance { date, balance }
+    var _cashSince = null;       // net cash movement since that checkpoint's day
+    var _cashLoadToken = 0;
+
+    function cashDateStr(d) { var m = d.getMonth() + 1, dd = d.getDate(); return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd; }
+    function cashDisplayDate(s) { var p = String(s).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : s; }
+    function cashCatLabel(dir, key) {
+        var list = dir === 'in' ? CASH_IN_CATS : CASH_OUT_CATS;
+        for (var i = 0; i < list.length; i++) { if (list[i][0] === key) return list[i][1]; }
+        return key || 'Other';
+    }
+    // The ledger belongs to ONE store, so only that store's sales/refunds count (All Branches mode loads every branch).
+    function cashScoped(list) { return list.filter(function(x) { return !x._sourceStoreId || x._sourceStoreId === STATE.storeId; }); }
+
+    function switchReportSubTab(name) {
+        var fin = document.getElementById('reportPaneFinancial'), cash = document.getElementById('reportPaneCash');
+        if (!fin || !cash) return;
+        fin.style.display = name === 'cash' ? 'none' : 'block';
+        cash.style.display = name === 'cash' ? 'block' : 'none';
+        document.querySelectorAll('.report-subtab').forEach(function(b) { b.classList.toggle('active', b.getAttribute('data-subtab') === name); });
+        if (name === 'cash') renderCashTab();
+        else { try { Object.keys(STATE.charts).forEach(function(k) { var c = STATE.charts[k]; if (c && c.resize) c.resize(); }); } catch(e) {} }
+    }
+
+    function cashFormTypeChanged() {
+        var typeEl = document.getElementById('cashEntryType'), catEl = document.getElementById('cashEntryCat');
+        if (!typeEl || !catEl) return;
+        var list = typeEl.value === 'in' ? CASH_IN_CATS : CASH_OUT_CATS;
+        catEl.innerHTML = list.map(function(c) { return '<option value="' + c[0] + '">' + c[1] + '</option>'; }).join('');
+    }
+
+    // One row per calendar day (oldest first): what came in and what went out, plus a running total for the period.
+    function cashBuildRows() {
+        var byDay = {};
+        function slot(k) { if (!byDay[k]) byDay[k] = { key: k, salesIn: 0, otherIn: 0, refundsOut: 0, paidOut: 0 }; return byDay[k]; }
+        var sales = cashScoped(getReportSales());
+        for (var i = 0; i < sales.length; i++) {
+            var o = sales[i];
+            slot(cashDateStr(new Date(o.confirmedTimestamp || o.timestamp || Date.now()))).salesIn += reportGrossTotal(o);
+        }
+        var refs = cashScoped(_reportRefunds);
+        for (var r = 0; r < refs.length; r++) {
+            slot(cashDateStr(new Date(refs[r].refundTimestamp || Date.now()))).refundsOut += Number(refs[r].refundAmount) || 0;
+        }
+        for (var l = 0; l < _cashLedger.length; l++) {
+            var e = _cashLedger[l], amt = Number(e.amount) || 0;
+            if (e.direction === 'in') slot(e.date).otherIn += amt; else slot(e.date).paidOut += amt;
+        }
+        var rows = Object.keys(byDay).sort().map(function(k) { return byDay[k]; });
+        var run = 0;
+        rows.forEach(function(row) {
+            row.cashIn = row.salesIn + row.otherIn;
+            row.cashOut = row.refundsOut + row.paidOut;
+            row.net = row.cashIn - row.cashOut;
+            run += row.net; row.running = run;
+        });
+        return rows;
+    }
+
+    async function loadCashData() {
+        var token = ++_cashLoadToken;
+        if (!db || !STATE.firebaseOnline) { _cashLedger = []; _cashCheckpoint = null; _cashSince = null; renderCashTab(); return; }
+        var base = db.collection('stores').doc(STATE.storeId);
+        var dr = getDateRange(STATE.dateFilter);
+        var ledger = [], cp = null, since = null;
+        try {
+            var snap = await base.collection('cashLedger').where('date', '>=', cashDateStr(dr.start)).where('date', '<=', cashDateStr(dr.end)).get();
+            snap.forEach(function(d) { ledger.push(Object.assign({}, d.data(), { id: d.id })); });
+            var cpSnap = await base.collection('cashCheckpoints').orderBy('date', 'desc').limit(1).get();
+            if (!cpSnap.empty) { cp = cpSnap.docs[0].data(); since = await cashFlowBetween(cp.date, null); }
+        } catch(e) { console.warn('Cash data load failed:', e.message); }
+        if (token !== _cashLoadToken) return; // a newer load started; drop this one
+        _cashLedger = ledger; _cashCheckpoint = cp; _cashSince = since;
+        renderCashTab();
+    }
+
+    // Net cash movement for THIS store on the days after `afterStr` (exclusive) up to `uptoStr` (inclusive; null = now).
+    // Orders created in the window already have their refunds netted into order.total, so only refunds of orders
+    // created BEFORE the window are subtracted separately (otherwise they would be deducted twice).
+    async function cashFlowBetween(afterStr, uptoStr) {
+        var base = db.collection('stores').doc(STATE.storeId);
+        var a = afterStr.split('-');
+        var startTs = new Date(+a[0], +a[1] - 1, +a[2] + 1, 0, 0, 0, 0).getTime();
+        var endTs = Date.now();
+        if (uptoStr) { var u = uptoStr.split('-'); endTs = new Date(+u[0], +u[1] - 1, +u[2], 23, 59, 59, 999).getTime(); }
+        var out = { salesIn: 0, refundsOut: 0, manualIn: 0, manualOut: 0, net: 0 };
+        if (endTs < startTs) return out;
+        var seen = {};
+        function takeOrder(id, o) {
+            if (o.status !== 'confirmed' && o.status !== 'partial_refund' && o.status !== 'refunded') return;
+            seen[id] = true; out.salesIn += Number(o.total) || 0;
+        }
+        var oSnap = await base.collection('orders').where('timestamp', '>=', startTs).where('timestamp', '<=', endTs).get();
+        oSnap.forEach(function(d) { takeOrder(d.id, d.data()); });
+        try {
+            var arSnap = await db.collection('archivedOrders').where('timestamp', '>=', startTs).where('timestamp', '<=', endTs).get();
+            arSnap.forEach(function(d) { var x = d.data(); if ((x.storeId || 'GOAT-1979') === STATE.storeId) takeOrder(d.id, x); });
+        } catch(e) { console.warn('Archived orders fetch failed:', e.message); }
+        var rSnap = await base.collection('refunds').where('refundTimestamp', '>=', startTs).where('refundTimestamp', '<=', endTs).get();
+        rSnap.forEach(function(d) { var r = d.data(); if (!seen[r.orderId]) out.refundsOut += Number(r.refundAmount) || 0; });
+        var q = base.collection('cashLedger').where('date', '>', afterStr);
+        if (uptoStr) q = q.where('date', '<=', uptoStr);
+        var lSnap = await q.get();
+        lSnap.forEach(function(d) { var e = d.data(), amt = Number(e.amount) || 0; if (e.direction === 'in') out.manualIn += amt; else out.manualOut += amt; });
+        out.net = out.salesIn + out.manualIn - out.refundsOut - out.manualOut;
+        return out;
+    }
+
+    async function addCashEntry() {
+        var dir = document.getElementById('cashEntryType').value;
+        var dateStr = document.getElementById('cashEntryDate').value;
+        var cat = document.getElementById('cashEntryCat').value;
+        var amount = parseFloat(document.getElementById('cashEntryAmount').value);
+        var note = (document.getElementById('cashEntryNote').value || '').trim();
+        if (!dateStr) { showToast('Pick a date', 'error'); return; }
+        if (!(amount > 0)) { showToast('Enter an amount greater than 0', 'error'); return; }
+        if (!db || !STATE.firebaseOnline) { showToast('Offline — cannot save entry', 'error'); return; }
+        try {
+            await db.collection('stores').doc(STATE.storeId).collection('cashLedger').add({ date: dateStr, direction: dir, category: cat, amount: amount, note: note, createdAt: Date.now() });
+            document.getElementById('cashEntryAmount').value = ''; document.getElementById('cashEntryNote').value = '';
+            showToast((dir === 'in' ? 'Cash in' : 'Cash out') + ' saved for ' + cashDisplayDate(dateStr), 'success');
+            loadCashData();
+        } catch(e) { showToast('Failed to save: ' + e.message, 'error'); }
+    }
+
+    async function deleteCashEntry(id) {
+        if (!id || !db) return;
+        if (!confirm('Delete this cash entry?')) return;
+        try {
+            await db.collection('stores').doc(STATE.storeId).collection('cashLedger').doc(id).delete();
+            showToast('Entry deleted', 'success');
+            loadCashData();
+        } catch(e) { showToast('Failed to delete: ' + e.message, 'error'); }
+    }
+
+    // Saves the REAL bank balance at the end of a day and compares it with what the app expected
+    // (previous checkpoint + everything logged since). The difference points at money that moved without being logged.
+    async function saveCashCheckpoint() {
+        var dateStr = document.getElementById('cashCpDate').value;
+        var raw = document.getElementById('cashCpAmount').value;
+        var msg = document.getElementById('cashCpMsg');
+        if (!dateStr) { showToast('Pick a date', 'error'); return; }
+        if (raw === '' || isNaN(parseFloat(raw))) { showToast('Enter the actual bank balance', 'error'); return; }
+        if (dateStr > cashDateStr(new Date())) { showToast('Date cannot be in the future', 'error'); return; }
+        if (!db || !STATE.firebaseOnline) { showToast('Offline — cannot save balance', 'error'); return; }
+        var balance = parseFloat(raw);
+        var base = db.collection('stores').doc(STATE.storeId);
+        try {
+            var expected = null, diff = null, prevDate = null;
+            var prevSnap = await base.collection('cashCheckpoints').where('date', '<', dateStr).orderBy('date', 'desc').limit(1).get();
+            if (!prevSnap.empty) {
+                var prev = prevSnap.docs[0].data();
+                var flow = await cashFlowBetween(prev.date, dateStr);
+                expected = (Number(prev.balance) || 0) + flow.net; diff = balance - expected; prevDate = prev.date;
+            }
+            await base.collection('cashCheckpoints').doc(dateStr).set({ date: dateStr, balance: balance, expected: expected, difference: diff, previousDate: prevDate, createdAt: Date.now() });
+            document.getElementById('cashCpAmount').value = '';
+            if (msg) {
+                if (diff === null) msg.innerHTML = '<span style="color:var(--gray-dark)">First balance saved. From now on the app estimates your bank balance from this point.</span>';
+                else if (Math.abs(diff) < 0.5) msg.innerHTML = '<span style="color:#38a169"><i class="fas fa-circle-check"></i> Matches. Expected ' + reportMoney(expected) + ' (since ' + cashDisplayDate(prevDate) + ').</span>';
+                else if (diff < 0) msg.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-triangle-exclamation"></i> Actual is ' + reportMoney(-diff) + ' LOWER than the expected ' + reportMoney(expected) + '. Some money went out that has not been logged yet, so check for missing Cash Out entries.</span>';
+                else msg.innerHTML = '<span style="color:#dd6b20"><i class="fas fa-triangle-exclamation"></i> Actual is ' + reportMoney(diff) + ' HIGHER than the expected ' + reportMoney(expected) + '. Some money came in that is not logged (e.g. a deposit), or an entry was recorded twice.</span>';
+            }
+            showToast('Bank balance saved', 'success');
+            loadCashData();
+        } catch(e) { showToast('Failed to save: ' + e.message, 'error'); }
+    }
+
+    function renderCashTab() {
+        if (!document.getElementById('cashInTotal')) return;
+        function setText(id, t) { var el = document.getElementById(id); if (el) el.textContent = t; }
+        var typeEl = document.getElementById('cashEntryType'), catEl = document.getElementById('cashEntryCat');
+        if (catEl && !catEl.options.length) cashFormTypeChanged();
+        var today = cashDateStr(new Date());
+        var d1 = document.getElementById('cashEntryDate'); if (d1 && !d1.value) d1.value = today;
+        var d2 = document.getElementById('cashCpDate'); if (d2 && !d2.value) d2.value = today;
+
+        var allBr = document.getElementById('reportAllBranchesToggle');
+        var note = document.getElementById('cashScopeNote');
+        if (note) {
+            if (allBr && allBr.checked) { note.style.display = 'block'; note.innerHTML = '<i class="fas fa-info-circle"></i> The cash book belongs to one store, so this tab shows only <b>' + escHtml(STATE.storeId) + '</b> even while All Branches Combined is ticked.'; }
+            else note.style.display = 'none';
+        }
+
+        var rows = cashBuildRows();
+        var t = { salesIn: 0, otherIn: 0, refundsOut: 0, paidOut: 0 };
+        rows.forEach(function(r) { t.salesIn += r.salesIn; t.otherIn += r.otherIn; t.refundsOut += r.refundsOut; t.paidOut += r.paidOut; });
+        var cashIn = t.salesIn + t.otherIn, cashOut = t.refundsOut + t.paidOut;
+        setText('cashInTotal', reportMoney(cashIn));
+        setText('cashInSub', '(sales ' + reportMoney(t.salesIn) + (t.otherIn ? ' + other ' + reportMoney(t.otherIn) : '') + ')');
+        setText('cashOutTotal', reportMoney(cashOut));
+        setText('cashOutSub', '(paid ' + reportMoney(t.paidOut) + (t.refundsOut ? ' + refunds ' + reportMoney(t.refundsOut) : '') + ')');
+        setText('cashNetTotal', reportMoney(cashIn - cashOut));
+
+        if (_cashCheckpoint) {
+            var since = _cashSince ? _cashSince.net : 0;
+            setText('cashBankBalance', reportMoney((Number(_cashCheckpoint.balance) || 0) + since));
+            setText('cashBankSub', '(actual ' + reportMoney(Number(_cashCheckpoint.balance) || 0) + ' on ' + cashDisplayDate(_cashCheckpoint.date) + (since ? ', ' + (since >= 0 ? '+' : '') + reportMoney(since) + ' since' : '') + ')');
+        } else {
+            setText('cashBankBalance', '-');
+            setText('cashBankSub', '(enter your actual balance below)');
+        }
+
+        var chips = document.getElementById('cashOutChips');
+        if (chips) {
+            var byCat = {};
+            _cashLedger.forEach(function(e) { if (e.direction !== 'in') { var lb = cashCatLabel('out', e.category); byCat[lb] = (byCat[lb] || 0) + (Number(e.amount) || 0); } });
+            if (t.refundsOut) byCat['Refunds'] = (byCat['Refunds'] || 0) + t.refundsOut;
+            var keys = Object.keys(byCat).sort(function(a, b) { return byCat[b] - byCat[a]; });
+            chips.innerHTML = keys.length ? '<span style="font-size:0.75rem;color:var(--gray);align-self:center">Cash out by category:</span>' + keys.map(function(k) { return '<span class="cash-chip">' + escHtml(k) + ' ' + reportMoney(byCat[k]) + '</span>'; }).join('') : '';
+        }
+
+        var tb = document.getElementById('cashDailyList');
+        if (tb) {
+            if (!rows.length) tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--gray);padding:1rem">No data</td></tr>';
+            else tb.innerHTML = rows.slice().reverse().map(function(r) {
+                var pos = 'color:#38a169', neg = 'color:var(--danger)';
+                return '<tr style="border-bottom:1px solid var(--gray-light)">' +
+                    '<td style="padding:0.5rem 0.8rem">' + cashDisplayDate(r.key) + '</td>' +
+                    '<td style="padding:0.5rem 0.8rem">' + (r.salesIn ? reportMoney(r.salesIn) : '-') + '</td>' +
+                    '<td style="padding:0.5rem 0.8rem">' + (r.otherIn ? reportMoney(r.otherIn) : '-') + '</td>' +
+                    '<td style="padding:0.5rem 0.8rem;' + (r.refundsOut ? neg : '') + '">' + (r.refundsOut ? '-' + reportMoney(r.refundsOut) : '-') + '</td>' +
+                    '<td style="padding:0.5rem 0.8rem;' + (r.paidOut ? neg : '') + '">' + (r.paidOut ? '-' + reportMoney(r.paidOut) : '-') + '</td>' +
+                    '<td style="padding:0.5rem 0.8rem;font-weight:600;' + (r.net >= 0 ? pos : neg) + '">' + reportMoney(r.net) + '</td>' +
+                    '<td style="padding:0.5rem 0.8rem;color:var(--gray-dark)">' + reportMoney(r.running) + '</td></tr>';
+            }).join('');
+        }
+
+        var list = document.getElementById('cashEntryList');
+        setText('cashEntryCount', _cashLedger.length);
+        if (list) {
+            var sorted = _cashLedger.slice().sort(function(a, b) { return (b.date + '|' + (b.createdAt || 0)) < (a.date + '|' + (a.createdAt || 0)) ? -1 : 1; });
+            list.innerHTML = sorted.length ? sorted.map(function(e) {
+                var isIn = e.direction === 'in';
+                return '<tr style="border-bottom:1px solid var(--gray-light)">' +
+                    '<td style="padding:0.4rem 0.6rem;white-space:nowrap">' + cashDisplayDate(e.date) + '</td>' +
+                    '<td style="padding:0.4rem 0.6rem"><span class="cash-chip" style="background:' + (isIn ? 'rgba(72,187,120,0.15)' : 'rgba(245,101,101,0.15)') + '">' + (isIn ? 'In' : 'Out') + '</span></td>' +
+                    '<td style="padding:0.4rem 0.6rem">' + escHtml(cashCatLabel(e.direction, e.category)) + '</td>' +
+                    '<td style="padding:0.4rem 0.6rem;color:var(--gray-dark)">' + escHtml(e.note || '') + '</td>' +
+                    '<td style="padding:0.4rem 0.6rem;text-align:right;font-weight:600;color:' + (isIn ? '#38a169' : 'var(--danger)') + '">' + (isIn ? '' : '-') + reportMoney(Number(e.amount) || 0) + '</td>' +
+                    '<td style="padding:0.4rem 0.6rem;text-align:right"><button class="btn btn-outline btn-small" style="padding:0.15rem 0.45rem;font-size:0.7rem" onclick="deleteCashEntry(\'' + e.id + '\')"><i class="fas fa-trash"></i></button></td></tr>';
+            }).join('') : '<tr><td style="padding:0.75rem;text-align:center;color:var(--gray)">No manual entries in this period</td></tr>';
+        }
     }
 
     // ── Customer index: tracks each customer's first-ever confirmed-order
