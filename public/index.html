@@ -8065,7 +8065,7 @@ function sendToTelegram(order, callback) {
                 var combinedCpSnap = await combinedCpBase().orderBy('date', 'desc').limit(1).get();
                 if (!combinedCpSnap.empty) {
                     var combinedCp = combinedCpSnap.docs[0].data();
-                    var allFlow = await cashFlowBetweenAll(combinedCp.date, null);
+                    var allFlow = await cashFlowBetweenAll(combinedCp.date, null, combinedCp.createdAt);
                     cp = { date: combinedCp.date, balance: combinedCp.balance };
                     since = allFlow;
                 } else {
@@ -8081,7 +8081,7 @@ function sendToTelegram(order, callback) {
                     await Promise.all(perStoreCp.map(async function(r) {
                         if (!r.checkpoint) { missing.push(r.storeName); return; }
                         anyCp = true;
-                        var flow = await cashFlowBetween(r.checkpoint.date, null, r.storeId);
+                        var flow = await cashFlowBetween(r.checkpoint.date, null, r.storeId, r.checkpoint.createdAt);
                         totalBal += (Number(r.checkpoint.balance) || 0) + flow.net;
                     }));
                     cp = anyCp ? { combined: true, balance: totalBal, missing: missing } : null;
@@ -8091,7 +8091,7 @@ function sendToTelegram(order, callback) {
                 var snap = await base.collection('cashLedger').where('date', '>=', cashDateStr(dr.start)).where('date', '<=', cashDateStr(dr.end)).get();
                 snap.forEach(function(d) { ledger.push(Object.assign({}, d.data(), { id: d.id })); });
                 var cpSnap = await base.collection('cashCheckpoints').orderBy('date', 'desc').limit(1).get();
-                if (!cpSnap.empty) { cp = cpSnap.docs[0].data(); since = await cashFlowBetween(cp.date, null, sid); }
+                if (!cpSnap.empty) { cp = cpSnap.docs[0].data(); since = await cashFlowBetween(cp.date, null, sid, cp.createdAt); }
             }
         } catch(e) { console.warn('Cash data load failed:', e.message); }
         if (token !== _cashLoadToken || sid !== cashActiveStoreId()) return; // a newer load, or the store changed mid-flight; drop this one
@@ -8112,11 +8112,24 @@ function sendToTelegram(order, callback) {
     // range-filter one field per query, so this runs two queries and merges by id: orders confirmed in the
     // window (confirmedTimestamp) plus, for old orders saved before that field existed, a fallback on
     // `timestamp` for any order that has no confirmedTimestamp at all.
-    async function cashFlowBetween(afterStr, uptoStr, sidOverride) {
+    //
+    // `afterTs`: the exact millisecond a checkpoint was saved (its `createdAt`), when known. A checkpoint
+    // date is only a calendar day, but the balance you typed in is true as of the SECOND you saved it — so
+    // anything confirmed later that same day still needs to count. Passing afterTs makes the cutoff that
+    // precise instant instead of midnight-to-midnight; afterStr/day-boundary math is only the fallback for
+    // older checkpoints saved before this field existed.
+    async function cashFlowBetween(afterStr, uptoStr, sidOverride, afterTs) {
         var sid = sidOverride || cashActiveStoreId();
         var base = db.collection('stores').doc(sid);
-        var a = afterStr.split('-');
-        var startTs = new Date(+a[0], +a[1] - 1, +a[2] + 1, 0, 0, 0, 0).getTime();
+        // Only trust the precise save-instant when the checkpoint was saved ON the day it's dated for — a
+        // live "here's my balance right now" entry. A checkpoint BACKDATED to an earlier date (e.g. dated
+        // the 21st but actually saved on the 23rd, correcting an old figure) must use full-day boundaries
+        // instead, or real activity between the 21st and the 23rd would be wrongly treated as "already in
+        // the balance" and dropped.
+        var precise = !!(afterTs && cashDateStr(new Date(afterTs)) === afterStr);
+        var startTs;
+        if (precise) { startTs = afterTs + 1; }
+        else { var a = afterStr.split('-'); startTs = new Date(+a[0], +a[1] - 1, +a[2] + 1, 0, 0, 0, 0).getTime(); }
         var endTs = Date.now();
         if (uptoStr) { var u = uptoStr.split('-'); endTs = new Date(+u[0], +u[1] - 1, +u[2], 23, 59, 59, 999).getTime(); }
         var out = { salesIn: 0, refundsOut: 0, manualIn: 0, manualOut: 0, net: 0 };
@@ -8138,10 +8151,17 @@ function sendToTelegram(order, callback) {
         } catch(e) { console.warn('Archived orders fetch failed:', e.message); }
         var rSnap = await base.collection('refunds').where('refundTimestamp', '>=', startTs).where('refundTimestamp', '<=', endTs).get();
         rSnap.forEach(function(d) { var r = d.data(); if (!seen[r.orderId]) out.refundsOut += Number(r.refundAmount) || 0; });
-        var q = base.collection('cashLedger').where('date', '>', afterStr);
+        // Ledger entries only carry a date string, so a Firestore range filter can't share the precise-ms cutoff
+        // with the date-based query above — fetch by date (broad enough to include the checkpoint's own day
+        // when using the precise cutoff) and, in that case, refine client-side by the entry's own createdAt.
+        var q = base.collection('cashLedger').where('date', precise ? '>=' : '>', afterStr);
         if (uptoStr) q = q.where('date', '<=', uptoStr);
         var lSnap = await q.get();
-        lSnap.forEach(function(d) { var e = d.data(), amt = Number(e.amount) || 0; if (e.direction === 'in') out.manualIn += amt; else out.manualOut += amt; });
+        lSnap.forEach(function(d) {
+            var e = d.data();
+            if (precise && (e.createdAt || 0) <= afterTs) return; // entry existed at or before the checkpoint moment — already reflected in the typed balance
+            var amt = Number(e.amount) || 0; if (e.direction === 'in') out.manualIn += amt; else out.manualOut += amt;
+        });
         out.net = out.salesIn + out.manualIn - out.refundsOut - out.manualOut;
         return out;
     }
@@ -8182,9 +8202,9 @@ function sendToTelegram(order, callback) {
 
     // Net cash movement across EVERY store combined, for the days after afterStr (exclusive) up to uptoStr
     // (inclusive; null = now). Sums cashFlowBetween for each known store.
-    async function cashFlowBetweenAll(afterStr, uptoStr) {
+    async function cashFlowBetweenAll(afterStr, uptoStr, afterTs) {
         var stores = await cashLoadStoreList();
-        var parts = await Promise.all(stores.map(function(s) { return cashFlowBetween(afterStr, uptoStr, s.id); }));
+        var parts = await Promise.all(stores.map(function(s) { return cashFlowBetween(afterStr, uptoStr, s.id, afterTs); }));
         var out = { salesIn: 0, refundsOut: 0, manualIn: 0, manualOut: 0, net: 0 };
         parts.forEach(function(p) { out.salesIn += p.salesIn; out.refundsOut += p.refundsOut; out.manualIn += p.manualIn; out.manualOut += p.manualOut; out.net += p.net; });
         return out;
@@ -8206,7 +8226,7 @@ function sendToTelegram(order, callback) {
             var prevSnap = await base.where('date', '<', dateStr).orderBy('date', 'desc').limit(1).get();
             if (!prevSnap.empty) {
                 var prev = prevSnap.docs[0].data();
-                var flow = isAll ? await cashFlowBetweenAll(prev.date, dateStr) : await cashFlowBetween(prev.date, dateStr, cashActiveStoreId());
+                var flow = isAll ? await cashFlowBetweenAll(prev.date, dateStr, prev.createdAt) : await cashFlowBetween(prev.date, dateStr, cashActiveStoreId(), prev.createdAt);
                 expected = (Number(prev.balance) || 0) + flow.net; diff = balance - expected; prevDate = prev.date;
             }
             await base.doc(dateStr).set({ date: dateStr, balance: balance, expected: expected, difference: diff, previousDate: prevDate, createdAt: Date.now() });
