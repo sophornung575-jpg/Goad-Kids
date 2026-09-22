@@ -7408,37 +7408,42 @@ function sendToTelegram(order, callback) {
     // order.total, so these must stay in the sales list at their ORIGINAL amount — the refund itself
     // is then deducted separately, on the day it happened. (Dropping them AND subtracting the refund
     // deducted it twice.)
-    function getReportSales() {
-        return _reportData.filter(function(o) { return o.status === 'confirmed' || o.status === 'partial_refund' || o.status === 'refunded'; });
+    // data/refunds/origMap default to the Financial tab's own globals, but every one of these can
+    // also be called with an explicit dataset (the Cash tab does this for its own store scope, so it
+    // stays correct even when the Financial tab's own "All Branches Combined" checkbox is off).
+    function getReportSales(data) {
+        data = data || _reportData;
+        return data.filter(function(o) { return o.status === 'confirmed' || o.status === 'partial_refund' || o.status === 'refunded'; });
     }
 
     function reportOrigKey(o) { return (o._sourceStoreId || STATE.storeId) + '|' + o.orderId; }
-    function reportOrigOrder(o) { var e = _reportOrigOrders[reportOrigKey(o)]; return e ? e.order : null; }
+    function reportOrigOrder(o, origMap) { origMap = origMap || _reportOrigOrders; var e = origMap[reportOrigKey(o)]; return e ? e.order : null; }
 
     // What the customer originally paid for this order, before any refund shrank order.total.
-    function reportGrossTotal(o) {
+    function reportGrossTotal(o, origMap) {
         if (o.status === 'confirmed') return o.total || 0;
-        var snap = reportOrigOrder(o);
+        var snap = reportOrigOrder(o, origMap);
         if (snap && snap.total != null) return Number(snap.total) || 0;
         return (o.total || 0) + (o.refundAmount || 0); // fallback if the refund record can't be found
     }
     // The order's ORIGINAL cart (for cost of goods). Refunded items are removed from order.cart afterwards.
-    function reportGrossCart(o) {
+    function reportGrossCart(o, origMap) {
         if (o.status === 'confirmed') return o.cart || [];
-        var snap = reportOrigOrder(o);
+        var snap = reportOrigOrder(o, origMap);
         return (snap && snap.cart) ? snap.cart : (o.cart || []);
     }
 
     function reportMoney(n) { return (n < 0 ? '-' : '') + '$' + Math.abs(n).toFixed(2); }
 
     // Total Revenue = sales at original amount (on their sale date) - refunds (on their refund date).
-    function getReportRefundTotal() {
-        var t = 0; for (var i = 0; i < _reportRefunds.length; i++) t += _reportRefunds[i].refundAmount || 0; return t;
+    function getReportRefundTotal(refunds) {
+        refunds = refunds || _reportRefunds;
+        var t = 0; for (var i = 0; i < refunds.length; i++) t += refunds[i].refundAmount || 0; return t;
     }
-    function getReportNetRevenue() {
-        var sales = getReportSales(), t = 0;
-        for (var i = 0; i < sales.length; i++) t += reportGrossTotal(sales[i]);
-        return t - getReportRefundTotal();
+    function getReportNetRevenue(data, refunds, origMap) {
+        var sales = getReportSales(data), t = 0;
+        for (var i = 0; i < sales.length; i++) t += reportGrossTotal(sales[i], origMap);
+        return t - getReportRefundTotal(refunds);
     }
 
     // One row per calendar day: sales that day, refunds that day, order + customer counts.
@@ -7465,16 +7470,22 @@ function sendToTelegram(order, callback) {
     // Loads the "before first refund" snapshot for every refunded / partially-refunded order in the report.
     // Always pulls ALL refunds of those orders (not just ones inside the date range), because the
     // earliest one is the only one that still shows the original total.
-    async function loadReportOrigOrders() {
-        _reportOrigOrders = {};
+    // With no args: rebuilds the Financial tab's own global map (unchanged behavior).
+    // With (data, target): scans `data` instead and fills `target` instead, leaving the Financial
+    // tab's global map untouched — used by the Cash tab for its own store scope.
+    async function loadReportOrigOrders(data, target) {
+        var isDefault = !target;
+        data = data || _reportData;
+        target = target || {};
+        if (isDefault) _reportOrigOrders = target;
         function keep(r, sid) {
             if (!r || !r.orderId || !r.originalOrder) return;
             var k = sid + '|' + r.orderId, ts = r.refundTimestamp || 0;
-            if (!_reportOrigOrders[k] || ts < _reportOrigOrders[k].ts) _reportOrigOrders[k] = { ts: ts, order: r.originalOrder };
+            if (!target[k] || ts < target[k].ts) target[k] = { ts: ts, order: r.originalOrder };
         }
         var need = {};
-        for (var i = 0; i < _reportData.length; i++) {
-            var o = _reportData[i];
+        for (var i = 0; i < data.length; i++) {
+            var o = data[i];
             if (o.status !== 'refunded' && o.status !== 'partial_refund') continue;
             var sid = o._sourceStoreId || STATE.storeId;
             if (!need[sid]) need[sid] = [];
@@ -7493,6 +7504,7 @@ function sendToTelegram(order, callback) {
         }
         // local records (this store only) as a supplement / offline fallback
         for (var l = 0; l < STATE.refundedOrders.length; l++) keep(STATE.refundedOrders[l], STATE.storeId);
+        return target;
     }
 
     function renderStoreBreakdown() {
@@ -7924,7 +7936,18 @@ function sendToTelegram(order, callback) {
     var _cashStoreList = null;         // [{id,name}], cached after first load
     function cashActiveStoreId() { return _cashSelectedStoreId || STATE.storeId; }
     function cashCanPickStore() { return STATE.storeId === 'GOAT-1979' && STATE.adminRole === 'full'; }
-    function cashScoped(list) { var sid = cashActiveStoreId(); return list.filter(function(x) { return !x._sourceStoreId || x._sourceStoreId === sid; }); }
+    // The Cash tab fetches its own data directly (own orders/refunds/ledger query per store), instead of
+    // reusing the Financial tab's dataset — that keeps it correct whether or not the Financial tab's own
+    // "All Branches Combined" checkbox is on, and lets it offer an independent "All Branches Combined" choice.
+    var _cashData = [];          // sales orders in scope, tagged with _sourceStoreId
+    var _cashRefundsForScope = []; // refunds in scope, tagged with _sourceStoreId
+    var _cashOrigOrders = {};    // this scope's own "before first refund" snapshot map (see loadReportOrigOrders)
+    var _cashSelectedStoreId = null;   // null until the picker (or the default) sets it; 'ALL' = every store
+    var _cashStoreList = null;         // [{id,name}], cached after first load
+
+    function cashActiveStoreId() { return _cashSelectedStoreId || STATE.storeId; }
+    function cashCanPickStore() { return STATE.storeId === 'GOAT-1979' && STATE.adminRole === 'full'; }
+    function cashIsAllMode() { return cashActiveStoreId() === 'ALL'; }
 
     async function cashLoadStoreList() {
         if (_cashStoreList) return _cashStoreList;
@@ -7963,14 +7986,13 @@ function sendToTelegram(order, callback) {
     function cashBuildRows() {
         var byDay = {};
         function slot(k) { if (!byDay[k]) byDay[k] = { key: k, salesIn: 0, otherIn: 0, refundsOut: 0, paidOut: 0 }; return byDay[k]; }
-        var sales = cashScoped(getReportSales());
+        var sales = getReportSales(_cashData);
         for (var i = 0; i < sales.length; i++) {
             var o = sales[i];
-            slot(cashDateStr(new Date(o.confirmedTimestamp || o.timestamp || Date.now()))).salesIn += reportGrossTotal(o);
+            slot(cashDateStr(new Date(o.confirmedTimestamp || o.timestamp || Date.now()))).salesIn += reportGrossTotal(o, _cashOrigOrders);
         }
-        var refs = cashScoped(_reportRefunds);
-        for (var r = 0; r < refs.length; r++) {
-            slot(cashDateStr(new Date(refs[r].refundTimestamp || Date.now()))).refundsOut += Number(refs[r].refundAmount) || 0;
+        for (var r = 0; r < _cashRefundsForScope.length; r++) {
+            slot(cashDateStr(new Date(_cashRefundsForScope[r].refundTimestamp || Date.now()))).refundsOut += Number(_cashRefundsForScope[r].refundAmount) || 0;
         }
         for (var l = 0; l < _cashLedger.length; l++) {
             var e = _cashLedger[l], amt = Number(e.amount) || 0;
@@ -7987,31 +8009,91 @@ function sendToTelegram(order, callback) {
         return rows;
     }
 
+    // Fetches one store's own sales + refunds for the report period, tagged with _sourceStoreId.
+    async function cashFetchOneStore(sid, startTs, endTs) {
+        var sales = [], refunds = [];
+        try {
+            var oSnap = await db.collection('stores').doc(sid).collection('orders').where('timestamp', '>=', startTs).where('timestamp', '<=', endTs).get();
+            oSnap.forEach(function(d) { sales.push(Object.assign({}, d.data(), { orderId: d.id, _sourceStoreId: sid })); });
+        } catch(e) { console.warn('Cash orders fetch failed for ' + sid + ':', e.message); }
+        try {
+            var rSnap = await db.collection('stores').doc(sid).collection('refunds').where('refundTimestamp', '>=', startTs).where('refundTimestamp', '<=', endTs).get();
+            rSnap.forEach(function(d) { refunds.push(Object.assign({}, d.data(), { refundId: d.id, _sourceStoreId: sid })); });
+        } catch(e) { console.warn('Cash refunds fetch failed for ' + sid + ':', e.message); }
+        return { sales: sales, refunds: refunds };
+    }
+
+    // sid === 'ALL' fetches and merges every store; otherwise just that one store.
+    async function cashFetchScope(sid, startTs, endTs) {
+        if (sid !== 'ALL') return await cashFetchOneStore(sid, startTs, endTs);
+        var stores = await cashLoadStoreList();
+        var results = await Promise.all(stores.map(function(s) { return cashFetchOneStore(s.id, startTs, endTs); }));
+        var sales = [], refunds = [];
+        results.forEach(function(r) { sales = sales.concat(r.sales); refunds = refunds.concat(r.refunds); });
+        return { sales: sales, refunds: refunds };
+    }
+
     async function loadCashData() {
         var token = ++_cashLoadToken;
         if (cashCanPickStore()) { await cashLoadStoreList(); if (!_cashSelectedStoreId) _cashSelectedStoreId = STATE.storeId; }
         else { _cashSelectedStoreId = STATE.storeId; }
-        if (!db || !STATE.firebaseOnline) { _cashLedger = []; _cashCheckpoint = null; _cashSince = null; renderCashTab(); return; }
         var sid = cashActiveStoreId();
-        var base = db.collection('stores').doc(sid);
+        if (!db || !STATE.firebaseOnline) { _cashData = []; _cashRefundsForScope = []; _cashOrigOrders = {}; _cashLedger = []; _cashCheckpoint = null; _cashSince = null; renderCashTab(); return; }
         var dr = getDateRange(STATE.dateFilter);
-        var ledger = [], cp = null, since = null;
+        var startTs = dr.start.getTime(), endTs = dr.end.getTime();
+        var data = [], refunds = [], origMap = {}, ledger = [], cp = null, since = null;
         try {
-            var snap = await base.collection('cashLedger').where('date', '>=', cashDateStr(dr.start)).where('date', '<=', cashDateStr(dr.end)).get();
-            snap.forEach(function(d) { ledger.push(Object.assign({}, d.data(), { id: d.id })); });
-            var cpSnap = await base.collection('cashCheckpoints').orderBy('date', 'desc').limit(1).get();
-            if (!cpSnap.empty) { cp = cpSnap.docs[0].data(); since = await cashFlowBetween(cp.date, null); }
+            var scope = await cashFetchScope(sid, startTs, endTs);
+            data = scope.sales; refunds = scope.refunds;
+            await loadReportOrigOrders(data, origMap); // fills origMap without touching the Financial tab's own map
+
+            if (sid === 'ALL') {
+                var stores = await cashLoadStoreList();
+                var perStore = await Promise.all(stores.map(async function(s) {
+                    var l = [];
+                    try {
+                        var snap = await db.collection('stores').doc(s.id).collection('cashLedger').where('date', '>=', cashDateStr(dr.start)).where('date', '<=', cashDateStr(dr.end)).get();
+                        snap.forEach(function(d) { l.push(Object.assign({}, d.data(), { id: d.id, _storeId: s.id, _storeName: s.name })); });
+                    } catch(e) { console.warn('Ledger fetch failed for ' + s.id + ':', e.message); }
+                    var checkpoint = null;
+                    try {
+                        var cpSnap = await db.collection('stores').doc(s.id).collection('cashCheckpoints').orderBy('date', 'desc').limit(1).get();
+                        if (!cpSnap.empty) checkpoint = cpSnap.docs[0].data();
+                    } catch(e) { console.warn('Checkpoint fetch failed for ' + s.id + ':', e.message); }
+                    return { ledger: l, checkpoint: checkpoint, storeId: s.id, storeName: s.name };
+                }));
+                perStore.forEach(function(r) { ledger = ledger.concat(r.ledger); });
+                // Combined balance = sum of each store's OWN latest balance + its own net flow since that day.
+                // A store with no balance saved yet is left out of the sum and listed under "missing" instead.
+                var missing = [], anyCp = false, totalBal = 0;
+                await Promise.all(perStore.map(async function(r) {
+                    if (!r.checkpoint) { missing.push(r.storeName); return; }
+                    anyCp = true;
+                    var flow = await cashFlowBetween(r.checkpoint.date, null, r.storeId);
+                    totalBal += (Number(r.checkpoint.balance) || 0) + flow.net;
+                }));
+                cp = anyCp ? { combined: true, balance: totalBal, missing: missing } : null;
+            } else {
+                var base = db.collection('stores').doc(sid);
+                var snap = await base.collection('cashLedger').where('date', '>=', cashDateStr(dr.start)).where('date', '<=', cashDateStr(dr.end)).get();
+                snap.forEach(function(d) { ledger.push(Object.assign({}, d.data(), { id: d.id })); });
+                var cpSnap = await base.collection('cashCheckpoints').orderBy('date', 'desc').limit(1).get();
+                if (!cpSnap.empty) { cp = cpSnap.docs[0].data(); since = await cashFlowBetween(cp.date, null, sid); }
+            }
         } catch(e) { console.warn('Cash data load failed:', e.message); }
         if (token !== _cashLoadToken || sid !== cashActiveStoreId()) return; // a newer load, or the store changed mid-flight; drop this one
+        _cashData = data; _cashRefundsForScope = refunds; _cashOrigOrders = origMap;
         _cashLedger = ledger; _cashCheckpoint = cp; _cashSince = since;
         renderCashTab();
     }
 
-    // Net cash movement for THIS store on the days after `afterStr` (exclusive) up to `uptoStr` (inclusive; null = now).
-    // Orders created in the window already have their refunds netted into order.total, so only refunds of orders
-    // created BEFORE the window are subtracted separately (otherwise they would be deducted twice).
-    async function cashFlowBetween(afterStr, uptoStr) {
-        var sid = cashActiveStoreId();
+    // Net cash movement for ONE store (sidOverride, or the active store if omitted) on the days after
+    // `afterStr` (exclusive) up to `uptoStr` (inclusive; null = now). Orders created in the window already
+    // have their refunds netted into order.total, so only refunds of orders created BEFORE the window are
+    // subtracted separately (otherwise they would be deducted twice). Never call this with sid 'ALL' —
+    // pass an explicit real store id (the ALL-mode balance sums per-store calls instead).
+    async function cashFlowBetween(afterStr, uptoStr, sidOverride) {
+        var sid = sidOverride || cashActiveStoreId();
         var base = db.collection('stores').doc(sid);
         var a = afterStr.split('-');
         var startTs = new Date(+a[0], +a[1] - 1, +a[2] + 1, 0, 0, 0, 0).getTime();
@@ -8041,6 +8123,7 @@ function sendToTelegram(order, callback) {
     }
 
     async function addCashEntry() {
+        if (cashIsAllMode()) { showToast('Pick a single store first — a cash entry has to belong to one store', 'error'); return; }
         var dir = document.getElementById('cashEntryType').value;
         var dateStr = document.getElementById('cashEntryDate').value;
         var cat = document.getElementById('cashEntryCat').value;
@@ -8057,11 +8140,11 @@ function sendToTelegram(order, callback) {
         } catch(e) { showToast('Failed to save: ' + e.message, 'error'); }
     }
 
-    async function deleteCashEntry(id) {
+    async function deleteCashEntry(id, storeId) {
         if (!id || !db) return;
         if (!confirm('Delete this cash entry?')) return;
         try {
-            await db.collection('stores').doc(cashActiveStoreId()).collection('cashLedger').doc(id).delete();
+            await db.collection('stores').doc(storeId || cashActiveStoreId()).collection('cashLedger').doc(id).delete();
             showToast('Entry deleted', 'success');
             loadCashData();
         } catch(e) { showToast('Failed to delete: ' + e.message, 'error'); }
@@ -8070,6 +8153,7 @@ function sendToTelegram(order, callback) {
     // Saves the REAL bank balance at the end of a day and compares it with what the app expected
     // (previous checkpoint + everything logged since). The difference points at money that moved without being logged.
     async function saveCashCheckpoint() {
+        if (cashIsAllMode()) { showToast('Pick a single store first — a bank balance belongs to one store', 'error'); return; }
         var dateStr = document.getElementById('cashCpDate').value;
         var raw = document.getElementById('cashCpAmount').value;
         var msg = document.getElementById('cashCpMsg');
@@ -8078,13 +8162,14 @@ function sendToTelegram(order, callback) {
         if (dateStr > cashDateStr(new Date())) { showToast('Date cannot be in the future', 'error'); return; }
         if (!db || !STATE.firebaseOnline) { showToast('Offline — cannot save balance', 'error'); return; }
         var balance = parseFloat(raw);
-        var base = db.collection('stores').doc(cashActiveStoreId());
+        var sid = cashActiveStoreId();
+        var base = db.collection('stores').doc(sid);
         try {
             var expected = null, diff = null, prevDate = null;
             var prevSnap = await base.collection('cashCheckpoints').where('date', '<', dateStr).orderBy('date', 'desc').limit(1).get();
             if (!prevSnap.empty) {
                 var prev = prevSnap.docs[0].data();
-                var flow = await cashFlowBetween(prev.date, dateStr);
+                var flow = await cashFlowBetween(prev.date, dateStr, sid);
                 expected = (Number(prev.balance) || 0) + flow.net; diff = balance - expected; prevDate = prev.date;
             }
             await base.collection('cashCheckpoints').doc(dateStr).set({ date: dateStr, balance: balance, expected: expected, difference: diff, previousDate: prevDate, createdAt: Date.now() });
@@ -8113,13 +8198,19 @@ function sendToTelegram(order, callback) {
         if (row) {
             if (cashCanPickStore() && _cashStoreList) {
                 row.style.display = 'flex';
-                if (sel && sel.options.length !== _cashStoreList.length) {
-                    sel.innerHTML = _cashStoreList.map(function(s) { return '<option value="' + s.id + '">' + escHtml(s.name) + '</option>'; }).join('');
+                var wantOptions = 1 + _cashStoreList.length; // "All Branches Combined" + each store
+                if (sel && sel.options.length !== wantOptions) {
+                    sel.innerHTML = '<option value="ALL">All Branches Combined</option>' + _cashStoreList.map(function(s) { return '<option value="' + s.id + '">' + escHtml(s.name) + '</option>'; }).join('');
                 }
                 if (sel) sel.value = cashActiveStoreId();
-                if (noteEl) noteEl.textContent = 'The cash book belongs to one store at a time — pick which one to view.';
+                if (noteEl) noteEl.textContent = cashIsAllMode() ? 'Adding entries and saving a bank balance need a single store — pick one for that.' : 'The cash book belongs to one store at a time — pick which one to view.';
             } else { row.style.display = 'none'; }
         }
+
+        var addBtn = document.querySelector('.cash-form button[onclick="addCashEntry()"]');
+        if (addBtn) addBtn.disabled = cashIsAllMode();
+        var cpBtn = document.querySelector('.cash-form button[onclick="saveCashCheckpoint()"]');
+        if (cpBtn) cpBtn.disabled = cashIsAllMode();
 
         var rows = cashBuildRows();
         var t = { salesIn: 0, otherIn: 0, refundsOut: 0, paidOut: 0 };
@@ -8131,13 +8222,19 @@ function sendToTelegram(order, callback) {
         setText('cashOutSub', '(paid ' + reportMoney(t.paidOut) + (t.refundsOut ? ' + refunds ' + reportMoney(t.refundsOut) : '') + ')');
         setText('cashNetTotal', reportMoney(cashIn - cashOut));
 
-        if (_cashCheckpoint) {
+        if (_cashCheckpoint && _cashCheckpoint.combined) {
+            setText('cashBankBalance', reportMoney(_cashCheckpoint.balance));
+            var sub = '(combined from every store with a saved balance';
+            if (_cashCheckpoint.missing.length) sub += '; no balance saved yet for ' + _cashCheckpoint.missing.join(', ');
+            sub += ')';
+            setText('cashBankSub', sub);
+        } else if (_cashCheckpoint) {
             var since = _cashSince ? _cashSince.net : 0;
             setText('cashBankBalance', reportMoney((Number(_cashCheckpoint.balance) || 0) + since));
             setText('cashBankSub', '(actual ' + reportMoney(Number(_cashCheckpoint.balance) || 0) + ' on ' + cashDisplayDate(_cashCheckpoint.date) + (since ? ', ' + (since >= 0 ? '+' : '') + reportMoney(since) + ' since' : '') + ')');
         } else {
             setText('cashBankBalance', '-');
-            setText('cashBankSub', '(enter your actual balance below)');
+            setText('cashBankSub', cashIsAllMode() ? '(no store has a saved balance yet)' : '(enter your actual balance below)');
         }
 
         var chips = document.getElementById('cashOutChips');
@@ -8171,13 +8268,14 @@ function sendToTelegram(order, callback) {
             var sorted = _cashLedger.slice().sort(function(a, b) { return (b.date + '|' + (b.createdAt || 0)) < (a.date + '|' + (a.createdAt || 0)) ? -1 : 1; });
             list.innerHTML = sorted.length ? sorted.map(function(e) {
                 var isIn = e.direction === 'in';
+                var storeTag = e._storeName ? '<b>[' + escHtml(e._storeName) + ']</b> ' : '';
                 return '<tr style="border-bottom:1px solid var(--gray-light)">' +
                     '<td style="padding:0.4rem 0.6rem;white-space:nowrap">' + cashDisplayDate(e.date) + '</td>' +
                     '<td style="padding:0.4rem 0.6rem"><span class="cash-chip" style="background:' + (isIn ? 'rgba(72,187,120,0.15)' : 'rgba(245,101,101,0.15)') + '">' + (isIn ? 'In' : 'Out') + '</span></td>' +
                     '<td style="padding:0.4rem 0.6rem">' + escHtml(cashCatLabel(e.direction, e.category)) + '</td>' +
-                    '<td style="padding:0.4rem 0.6rem;color:var(--gray-dark)">' + escHtml(e.note || '') + '</td>' +
+                    '<td style="padding:0.4rem 0.6rem;color:var(--gray-dark)">' + storeTag + escHtml(e.note || '') + '</td>' +
                     '<td style="padding:0.4rem 0.6rem;text-align:right;font-weight:600;color:' + (isIn ? '#38a169' : 'var(--danger)') + '">' + (isIn ? '' : '-') + reportMoney(Number(e.amount) || 0) + '</td>' +
-                    '<td style="padding:0.4rem 0.6rem;text-align:right"><button class="btn btn-outline btn-small" style="padding:0.15rem 0.45rem;font-size:0.7rem" onclick="deleteCashEntry(\'' + e.id + '\')"><i class="fas fa-trash"></i></button></td></tr>';
+                    '<td style="padding:0.4rem 0.6rem;text-align:right"><button class="btn btn-outline btn-small" style="padding:0.15rem 0.45rem;font-size:0.7rem" onclick="deleteCashEntry(\'' + e.id + '\',\'' + (e._storeId || '') + '\')"><i class="fas fa-trash"></i></button></td></tr>';
             }).join('') : '<tr><td style="padding:0.75rem;text-align:center;color:var(--gray)">No manual entries in this period</td></tr>';
         }
     }
