@@ -1414,7 +1414,11 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
 
                     <!-- CASH IN & OUT -->
                     <div id="reportPaneCash" style="display:none">
-                        <div id="cashScopeNote" style="display:none;font-size:0.8rem;color:var(--gray-dark);background:#fffaf0;border:1px solid #fbd38d;border-radius:var(--radius);padding:0.5rem 0.75rem;margin-bottom:1rem"></div>
+                        <div id="cashStoreRow" style="display:none;align-items:center;gap:0.6rem;margin-bottom:1rem">
+                            <label style="font-size:0.8rem;font-weight:600;color:var(--gray-dark)"><i class="fas fa-store-alt"></i> Store</label>
+                            <select id="cashStoreSelect" class="form-control" style="width:auto;padding:0.4rem 0.6rem" onchange="cashStoreChanged()"></select>
+                            <span id="cashStoreNote" style="font-size:0.78rem;color:var(--gray)"></span>
+                        </div>
                         <div class="reports-grid" style="margin-bottom:1rem">
                             <div class="stat-card" style="border-left:4px solid #48bb78"><div class="stat-icon" style="background:rgba(72,187,120,0.1)"><i class="fas fa-arrow-down" style="color:#48bb78"></i></div><div class="stat-info"><h3 id="cashInTotal" style="color:#48bb78">$0.00</h3><p>Cash In <span id="cashInSub" style="font-weight:400;font-size:0.7rem"></span></p></div></div>
                             <div class="stat-card" style="border-left:4px solid #f56565"><div class="stat-icon" style="background:rgba(245,101,101,0.1)"><i class="fas fa-arrow-up" style="color:#f56565"></i></div><div class="stat-info"><h3 id="cashOutTotal" style="color:#f56565">$0.00</h3><p>Cash Out <span id="cashOutSub" style="font-weight:400;font-size:0.7rem"></span></p></div></div>
@@ -7914,7 +7918,29 @@ function sendToTelegram(order, callback) {
         return key || 'Other';
     }
     // The ledger belongs to ONE store, so only that store's sales/refunds count (All Branches mode loads every branch).
-    function cashScoped(list) { return list.filter(function(x) { return !x._sourceStoreId || x._sourceStoreId === STATE.storeId; }); }
+    // The cash book always belongs to ONE real store. When the logged-in device is Main Store with full
+    // admin, a picker lets you choose which store's book to view; every other device just sees its own store.
+    var _cashSelectedStoreId = null;   // null until the picker (or the default) sets it
+    var _cashStoreList = null;         // [{id,name}], cached after first load
+    function cashActiveStoreId() { return _cashSelectedStoreId || STATE.storeId; }
+    function cashCanPickStore() { return STATE.storeId === 'GOAT-1979' && STATE.adminRole === 'full'; }
+    function cashScoped(list) { var sid = cashActiveStoreId(); return list.filter(function(x) { return !x._sourceStoreId || x._sourceStoreId === sid; }); }
+
+    async function cashLoadStoreList() {
+        if (_cashStoreList) return _cashStoreList;
+        var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
+        try { var bSnap = await db.collection('_admin_').doc('branches').get(); if (bSnap.exists) { (bSnap.data().list || []).forEach(function(b) { stores.push({ id: b.id, name: b.name }); }); } }
+        catch(e) { console.warn('Branch list fetch failed:', e.message); }
+        _cashStoreList = stores;
+        return stores;
+    }
+
+    function cashStoreChanged() {
+        var sel = document.getElementById('cashStoreSelect');
+        if (!sel) return;
+        _cashSelectedStoreId = sel.value;
+        loadCashData();
+    }
 
     function switchReportSubTab(name) {
         var fin = document.getElementById('reportPaneFinancial'), cash = document.getElementById('reportPaneCash');
@@ -7963,8 +7989,11 @@ function sendToTelegram(order, callback) {
 
     async function loadCashData() {
         var token = ++_cashLoadToken;
+        if (cashCanPickStore()) { await cashLoadStoreList(); if (!_cashSelectedStoreId) _cashSelectedStoreId = STATE.storeId; }
+        else { _cashSelectedStoreId = STATE.storeId; }
         if (!db || !STATE.firebaseOnline) { _cashLedger = []; _cashCheckpoint = null; _cashSince = null; renderCashTab(); return; }
-        var base = db.collection('stores').doc(STATE.storeId);
+        var sid = cashActiveStoreId();
+        var base = db.collection('stores').doc(sid);
         var dr = getDateRange(STATE.dateFilter);
         var ledger = [], cp = null, since = null;
         try {
@@ -7973,7 +8002,7 @@ function sendToTelegram(order, callback) {
             var cpSnap = await base.collection('cashCheckpoints').orderBy('date', 'desc').limit(1).get();
             if (!cpSnap.empty) { cp = cpSnap.docs[0].data(); since = await cashFlowBetween(cp.date, null); }
         } catch(e) { console.warn('Cash data load failed:', e.message); }
-        if (token !== _cashLoadToken) return; // a newer load started; drop this one
+        if (token !== _cashLoadToken || sid !== cashActiveStoreId()) return; // a newer load, or the store changed mid-flight; drop this one
         _cashLedger = ledger; _cashCheckpoint = cp; _cashSince = since;
         renderCashTab();
     }
@@ -7982,7 +8011,8 @@ function sendToTelegram(order, callback) {
     // Orders created in the window already have their refunds netted into order.total, so only refunds of orders
     // created BEFORE the window are subtracted separately (otherwise they would be deducted twice).
     async function cashFlowBetween(afterStr, uptoStr) {
-        var base = db.collection('stores').doc(STATE.storeId);
+        var sid = cashActiveStoreId();
+        var base = db.collection('stores').doc(sid);
         var a = afterStr.split('-');
         var startTs = new Date(+a[0], +a[1] - 1, +a[2] + 1, 0, 0, 0, 0).getTime();
         var endTs = Date.now();
@@ -7998,7 +8028,7 @@ function sendToTelegram(order, callback) {
         oSnap.forEach(function(d) { takeOrder(d.id, d.data()); });
         try {
             var arSnap = await db.collection('archivedOrders').where('timestamp', '>=', startTs).where('timestamp', '<=', endTs).get();
-            arSnap.forEach(function(d) { var x = d.data(); if ((x.storeId || 'GOAT-1979') === STATE.storeId) takeOrder(d.id, x); });
+            arSnap.forEach(function(d) { var x = d.data(); if ((x.storeId || 'GOAT-1979') === sid) takeOrder(d.id, x); });
         } catch(e) { console.warn('Archived orders fetch failed:', e.message); }
         var rSnap = await base.collection('refunds').where('refundTimestamp', '>=', startTs).where('refundTimestamp', '<=', endTs).get();
         rSnap.forEach(function(d) { var r = d.data(); if (!seen[r.orderId]) out.refundsOut += Number(r.refundAmount) || 0; });
@@ -8020,7 +8050,7 @@ function sendToTelegram(order, callback) {
         if (!(amount > 0)) { showToast('Enter an amount greater than 0', 'error'); return; }
         if (!db || !STATE.firebaseOnline) { showToast('Offline — cannot save entry', 'error'); return; }
         try {
-            await db.collection('stores').doc(STATE.storeId).collection('cashLedger').add({ date: dateStr, direction: dir, category: cat, amount: amount, note: note, createdAt: Date.now() });
+            await db.collection('stores').doc(cashActiveStoreId()).collection('cashLedger').add({ date: dateStr, direction: dir, category: cat, amount: amount, note: note, createdAt: Date.now() });
             document.getElementById('cashEntryAmount').value = ''; document.getElementById('cashEntryNote').value = '';
             showToast((dir === 'in' ? 'Cash in' : 'Cash out') + ' saved for ' + cashDisplayDate(dateStr), 'success');
             loadCashData();
@@ -8031,7 +8061,7 @@ function sendToTelegram(order, callback) {
         if (!id || !db) return;
         if (!confirm('Delete this cash entry?')) return;
         try {
-            await db.collection('stores').doc(STATE.storeId).collection('cashLedger').doc(id).delete();
+            await db.collection('stores').doc(cashActiveStoreId()).collection('cashLedger').doc(id).delete();
             showToast('Entry deleted', 'success');
             loadCashData();
         } catch(e) { showToast('Failed to delete: ' + e.message, 'error'); }
@@ -8048,7 +8078,7 @@ function sendToTelegram(order, callback) {
         if (dateStr > cashDateStr(new Date())) { showToast('Date cannot be in the future', 'error'); return; }
         if (!db || !STATE.firebaseOnline) { showToast('Offline — cannot save balance', 'error'); return; }
         var balance = parseFloat(raw);
-        var base = db.collection('stores').doc(STATE.storeId);
+        var base = db.collection('stores').doc(cashActiveStoreId());
         try {
             var expected = null, diff = null, prevDate = null;
             var prevSnap = await base.collection('cashCheckpoints').where('date', '<', dateStr).orderBy('date', 'desc').limit(1).get();
@@ -8079,11 +8109,16 @@ function sendToTelegram(order, callback) {
         var d1 = document.getElementById('cashEntryDate'); if (d1 && !d1.value) d1.value = today;
         var d2 = document.getElementById('cashCpDate'); if (d2 && !d2.value) d2.value = today;
 
-        var allBr = document.getElementById('reportAllBranchesToggle');
-        var note = document.getElementById('cashScopeNote');
-        if (note) {
-            if (allBr && allBr.checked) { note.style.display = 'block'; note.innerHTML = '<i class="fas fa-info-circle"></i> The cash book belongs to one store, so this tab shows only <b>' + escHtml(STATE.storeId) + '</b> even while All Branches Combined is ticked.'; }
-            else note.style.display = 'none';
+        var row = document.getElementById('cashStoreRow'), sel = document.getElementById('cashStoreSelect'), noteEl = document.getElementById('cashStoreNote');
+        if (row) {
+            if (cashCanPickStore() && _cashStoreList) {
+                row.style.display = 'flex';
+                if (sel && sel.options.length !== _cashStoreList.length) {
+                    sel.innerHTML = _cashStoreList.map(function(s) { return '<option value="' + s.id + '">' + escHtml(s.name) + '</option>'; }).join('');
+                }
+                if (sel) sel.value = cashActiveStoreId();
+                if (noteEl) noteEl.textContent = 'The cash book belongs to one store at a time — pick which one to view.';
+            } else { row.style.display = 'none'; }
         }
 
         var rows = cashBuildRows();
