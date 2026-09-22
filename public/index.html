@@ -8055,24 +8055,37 @@ function sendToTelegram(order, callback) {
                         var snap = await db.collection('stores').doc(s.id).collection('cashLedger').where('date', '>=', cashDateStr(dr.start)).where('date', '<=', cashDateStr(dr.end)).get();
                         snap.forEach(function(d) { l.push(Object.assign({}, d.data(), { id: d.id, _storeId: s.id, _storeName: s.name })); });
                     } catch(e) { console.warn('Ledger fetch failed for ' + s.id + ':', e.message); }
-                    var checkpoint = null;
-                    try {
-                        var cpSnap = await db.collection('stores').doc(s.id).collection('cashCheckpoints').orderBy('date', 'desc').limit(1).get();
-                        if (!cpSnap.empty) checkpoint = cpSnap.docs[0].data();
-                    } catch(e) { console.warn('Checkpoint fetch failed for ' + s.id + ':', e.message); }
-                    return { ledger: l, checkpoint: checkpoint, storeId: s.id, storeName: s.name };
+                    return { ledger: l, storeId: s.id, storeName: s.name };
                 }));
                 perStore.forEach(function(r) { ledger = ledger.concat(r.ledger); });
-                // Combined balance = sum of each store's OWN latest balance + its own net flow since that day.
-                // A store with no balance saved yet is left out of the sum and listed under "missing" instead.
-                var missing = [], anyCp = false, totalBal = 0;
-                await Promise.all(perStore.map(async function(r) {
-                    if (!r.checkpoint) { missing.push(r.storeName); return; }
-                    anyCp = true;
-                    var flow = await cashFlowBetween(r.checkpoint.date, null, r.storeId);
-                    totalBal += (Number(r.checkpoint.balance) || 0) + flow.net;
-                }));
-                cp = anyCp ? { combined: true, balance: totalBal, missing: missing } : null;
+                // Combined balance now comes from ONE real checkpoint (the owner's true total, saved while in
+                // Combined view) plus every store's activity added together since that single date. If no
+                // combined checkpoint exists yet, fall back to summing each store's own separate checkpoint
+                // (old behaviour) so nothing breaks for anyone who only ever saved per-store balances.
+                var combinedCpSnap = await combinedCpBase().orderBy('date', 'desc').limit(1).get();
+                if (!combinedCpSnap.empty) {
+                    var combinedCp = combinedCpSnap.docs[0].data();
+                    var allFlow = await cashFlowBetweenAll(combinedCp.date, null);
+                    cp = { date: combinedCp.date, balance: combinedCp.balance };
+                    since = allFlow;
+                } else {
+                    var perStoreCp = await Promise.all(stores.map(async function(s) {
+                        var checkpoint = null;
+                        try {
+                            var cpSnap = await db.collection('stores').doc(s.id).collection('cashCheckpoints').orderBy('date', 'desc').limit(1).get();
+                            if (!cpSnap.empty) checkpoint = cpSnap.docs[0].data();
+                        } catch(e) { console.warn('Checkpoint fetch failed for ' + s.id + ':', e.message); }
+                        return { checkpoint: checkpoint, storeId: s.id, storeName: s.name };
+                    }));
+                    var missing = [], anyCp = false, totalBal = 0;
+                    await Promise.all(perStoreCp.map(async function(r) {
+                        if (!r.checkpoint) { missing.push(r.storeName); return; }
+                        anyCp = true;
+                        var flow = await cashFlowBetween(r.checkpoint.date, null, r.storeId);
+                        totalBal += (Number(r.checkpoint.balance) || 0) + flow.net;
+                    }));
+                    cp = anyCp ? { combined: true, balance: totalBal, missing: missing } : null;
+                }
             } else {
                 var base = db.collection('stores').doc(sid);
                 var snap = await base.collection('cashLedger').where('date', '>=', cashDateStr(dr.start)).where('date', '<=', cashDateStr(dr.end)).get();
@@ -8152,8 +8165,21 @@ function sendToTelegram(order, callback) {
 
     // Saves the REAL bank balance at the end of a day and compares it with what the app expected
     // (previous checkpoint + everything logged since). The difference points at money that moved without being logged.
+    // Combined-view checkpoints live in one shared place (not under any single store), since they represent
+    // the owner's one real total bank balance across every branch at once: stores/_combinedCash_/checkpoints
+    function combinedCpBase() { return db.collection('stores').doc('_combinedCash_').collection('checkpoints'); }
+
+    // Net cash movement across EVERY store combined, for the days after afterStr (exclusive) up to uptoStr
+    // (inclusive; null = now). Sums cashFlowBetween for each known store.
+    async function cashFlowBetweenAll(afterStr, uptoStr) {
+        var stores = await cashLoadStoreList();
+        var parts = await Promise.all(stores.map(function(s) { return cashFlowBetween(afterStr, uptoStr, s.id); }));
+        var out = { salesIn: 0, refundsOut: 0, manualIn: 0, manualOut: 0, net: 0 };
+        parts.forEach(function(p) { out.salesIn += p.salesIn; out.refundsOut += p.refundsOut; out.manualIn += p.manualIn; out.manualOut += p.manualOut; out.net += p.net; });
+        return out;
+    }
+
     async function saveCashCheckpoint() {
-        if (cashIsAllMode()) { showToast('Pick a single store first — a bank balance belongs to one store', 'error'); return; }
         var dateStr = document.getElementById('cashCpDate').value;
         var raw = document.getElementById('cashCpAmount').value;
         var msg = document.getElementById('cashCpMsg');
@@ -8162,20 +8188,21 @@ function sendToTelegram(order, callback) {
         if (dateStr > cashDateStr(new Date())) { showToast('Date cannot be in the future', 'error'); return; }
         if (!db || !STATE.firebaseOnline) { showToast('Offline — cannot save balance', 'error'); return; }
         var balance = parseFloat(raw);
-        var sid = cashActiveStoreId();
-        var base = db.collection('stores').doc(sid);
+        var isAll = cashIsAllMode();
+        var base = isAll ? combinedCpBase() : db.collection('stores').doc(cashActiveStoreId()).collection('cashCheckpoints');
         try {
             var expected = null, diff = null, prevDate = null;
-            var prevSnap = await base.collection('cashCheckpoints').where('date', '<', dateStr).orderBy('date', 'desc').limit(1).get();
+            var prevSnap = await base.where('date', '<', dateStr).orderBy('date', 'desc').limit(1).get();
             if (!prevSnap.empty) {
                 var prev = prevSnap.docs[0].data();
-                var flow = await cashFlowBetween(prev.date, dateStr, sid);
+                var flow = isAll ? await cashFlowBetweenAll(prev.date, dateStr) : await cashFlowBetween(prev.date, dateStr, cashActiveStoreId());
                 expected = (Number(prev.balance) || 0) + flow.net; diff = balance - expected; prevDate = prev.date;
             }
-            await base.collection('cashCheckpoints').doc(dateStr).set({ date: dateStr, balance: balance, expected: expected, difference: diff, previousDate: prevDate, createdAt: Date.now() });
+            await base.doc(dateStr).set({ date: dateStr, balance: balance, expected: expected, difference: diff, previousDate: prevDate, createdAt: Date.now() });
             document.getElementById('cashCpAmount').value = '';
             if (msg) {
-                if (diff === null) msg.innerHTML = '<span style="color:var(--gray-dark)">First balance saved. From now on the app estimates your bank balance from this point.</span>';
+                var scopeNote = isAll ? ' This is your combined total across every branch.' : '';
+                if (diff === null) msg.innerHTML = '<span style="color:var(--gray-dark)">First balance saved.' + scopeNote + ' From now on the app estimates your bank balance from this point.</span>';
                 else if (Math.abs(diff) < 0.5) msg.innerHTML = '<span style="color:#38a169"><i class="fas fa-circle-check"></i> Matches. Expected ' + reportMoney(expected) + ' (since ' + cashDisplayDate(prevDate) + ').</span>';
                 else if (diff < 0) msg.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-triangle-exclamation"></i> Actual is ' + reportMoney(-diff) + ' LOWER than the expected ' + reportMoney(expected) + '. Some money went out that has not been logged yet, so check for missing Cash Out entries.</span>';
                 else msg.innerHTML = '<span style="color:#dd6b20"><i class="fas fa-triangle-exclamation"></i> Actual is ' + reportMoney(diff) + ' HIGHER than the expected ' + reportMoney(expected) + '. Some money came in that is not logged (e.g. a deposit), or an entry was recorded twice.</span>';
@@ -8203,14 +8230,14 @@ function sendToTelegram(order, callback) {
                     sel.innerHTML = '<option value="ALL">All Branches Combined</option>' + _cashStoreList.map(function(s) { return '<option value="' + s.id + '">' + escHtml(s.name) + '</option>'; }).join('');
                 }
                 if (sel) sel.value = cashActiveStoreId();
-                if (noteEl) noteEl.textContent = cashIsAllMode() ? 'Adding entries and saving a bank balance need a single store — pick one for that.' : 'The cash book belongs to one store at a time — pick which one to view.';
+                if (noteEl) noteEl.textContent = cashIsAllMode() ? 'You are viewing every branch combined. A cash entry still belongs to one store, so pick one for that — but the bank balance below can be your one combined total.' : 'The cash book belongs to one store at a time — pick which one to view.';
             } else { row.style.display = 'none'; }
         }
 
         var addBtn = document.querySelector('.cash-form button[onclick="addCashEntry()"]');
         if (addBtn) addBtn.disabled = cashIsAllMode();
         var cpBtn = document.querySelector('.cash-form button[onclick="saveCashCheckpoint()"]');
-        if (cpBtn) cpBtn.disabled = cashIsAllMode();
+        if (cpBtn) cpBtn.disabled = false;
 
         var rows = cashBuildRows();
         var t = { salesIn: 0, otherIn: 0, refundsOut: 0, paidOut: 0 };
@@ -8223,10 +8250,11 @@ function sendToTelegram(order, callback) {
         setText('cashNetTotal', reportMoney(cashIn - cashOut));
 
         if (_cashCheckpoint && _cashCheckpoint.combined) {
+            // Old fallback path: no single combined checkpoint exists yet, so this is a sum of separate per-store balances (frozen, does not grow).
             setText('cashBankBalance', reportMoney(_cashCheckpoint.balance));
             var sub = '(combined from every store with a saved balance';
             if (_cashCheckpoint.missing.length) sub += '; no balance saved yet for ' + _cashCheckpoint.missing.join(', ');
-            sub += ')';
+            sub += ' — save one combined balance below to make this grow automatically)';
             setText('cashBankSub', sub);
         } else if (_cashCheckpoint) {
             var since = _cashSince ? _cashSince.net : 0;
