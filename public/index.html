@@ -8105,6 +8105,13 @@ function sendToTelegram(order, callback) {
     // have their refunds netted into order.total, so only refunds of orders created BEFORE the window are
     // subtracted separately (otherwise they would be deducted twice). Never call this with sid 'ALL' —
     // pass an explicit real store id (the ALL-mode balance sums per-store calls instead).
+    //
+    // Cash only actually lands in the bank when an order is CONFIRMED (paid), not when it was first created —
+    // an order can sit as pending for days before being confirmed. So this must bucket by confirmedTimestamp
+    // (the same field cashBuildRows/Total Revenue use), not the raw creation `timestamp`. Firestore can only
+    // range-filter one field per query, so this runs two queries and merges by id: orders confirmed in the
+    // window (confirmedTimestamp) plus, for old orders saved before that field existed, a fallback on
+    // `timestamp` for any order that has no confirmedTimestamp at all.
     async function cashFlowBetween(afterStr, uptoStr, sidOverride) {
         var sid = sidOverride || cashActiveStoreId();
         var base = db.collection('stores').doc(sid);
@@ -8119,11 +8126,15 @@ function sendToTelegram(order, callback) {
             if (o.status !== 'confirmed' && o.status !== 'partial_refund' && o.status !== 'refunded') return;
             seen[id] = true; out.salesIn += Number(o.total) || 0;
         }
-        var oSnap = await base.collection('orders').where('timestamp', '>=', startTs).where('timestamp', '<=', endTs).get();
+        var oSnap = await base.collection('orders').where('confirmedTimestamp', '>=', startTs).where('confirmedTimestamp', '<=', endTs).get();
         oSnap.forEach(function(d) { takeOrder(d.id, d.data()); });
+        var oSnap2 = await base.collection('orders').where('timestamp', '>=', startTs).where('timestamp', '<=', endTs).get();
+        oSnap2.forEach(function(d) { if (!seen[d.id]) { var o = d.data(); if (!o.confirmedTimestamp) takeOrder(d.id, o); } });
         try {
-            var arSnap = await db.collection('archivedOrders').where('timestamp', '>=', startTs).where('timestamp', '<=', endTs).get();
+            var arSnap = await db.collection('archivedOrders').where('confirmedTimestamp', '>=', startTs).where('confirmedTimestamp', '<=', endTs).get();
             arSnap.forEach(function(d) { var x = d.data(); if ((x.storeId || 'GOAT-1979') === sid) takeOrder(d.id, x); });
+            var arSnap2 = await db.collection('archivedOrders').where('timestamp', '>=', startTs).where('timestamp', '<=', endTs).get();
+            arSnap2.forEach(function(d) { var x = d.data(); if ((x.storeId || 'GOAT-1979') === sid && !seen[d.id] && !x.confirmedTimestamp) takeOrder(d.id, x); });
         } catch(e) { console.warn('Archived orders fetch failed:', e.message); }
         var rSnap = await base.collection('refunds').where('refundTimestamp', '>=', startTs).where('refundTimestamp', '<=', endTs).get();
         rSnap.forEach(function(d) { var r = d.data(); if (!seen[r.orderId]) out.refundsOut += Number(r.refundAmount) || 0; });
