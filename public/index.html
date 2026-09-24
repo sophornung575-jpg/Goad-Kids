@@ -664,6 +664,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                     <button class="btn btn-outline btn-small" onclick="exportInventoryCSV()"><i class="fas fa-download"></i></button>
                                 </div>
                             </div>
+                            <div id="invStockValueSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.5rem;padding:0.75rem 1rem;border-bottom:1px solid var(--gray-light)"></div>
                             <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--gray-light);background:var(--light)">
                                 <div class="inv-filter-row">
                                     <div style="position:relative;flex:1;min-width:130px"><i class="fas fa-search" style="position:absolute;left:0.6rem;top:50%;transform:translateY(-50%);color:var(--gray);font-size:0.8rem"></i><input type="text" id="inventorySearchName" class="form-control" data-translate="nameCol" placeholder="Name..." oninput="filterInventory()" style="padding-left:2rem;font-size:0.82rem"></div>
@@ -6922,6 +6923,7 @@ function sendToTelegram(order, callback) {
         var tb = document.getElementById('inventoryBody');
         if (!tb) return;
         document.getElementById('productCount').textContent = filteredProducts.length;
+        renderInvStockValueSummary();
         if (!filteredProducts.length) { tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--gray)"><i class="fas fa-search" style="font-size:1.5rem;display:block;margin-bottom:0.4rem"></i>No products found</td></tr>'; return; }
         var h = '';
         for (var i = 0; i < filteredProducts.length; i++) {
@@ -6961,6 +6963,26 @@ function sendToTelegram(order, callback) {
                 '</tr>';
         }
         tb.innerHTML = h;
+    }
+
+    // Overall stock value for the Products tab: always ALL products (ignores search filters),
+    // qty = total of every size (same number as the Stock column), cost = qty x Cost of Production, price = qty x selling price.
+    function renderInvStockValueSummary() {
+        var el = document.getElementById('invStockValueSummary'); if (!el) return;
+        var qty = 0, cost = 0, value = 0, noCost = 0;
+        for (var i = 0; i < STATE.products.length; i++) {
+            var p = STATE.products[i], q = getTotalStock(p);
+            var hasCost = p.costPrice != null && p.costPrice !== '';
+            qty += q; cost += q * (hasCost ? (Number(p.costPrice) || 0) : 0); value += q * (Number(p.price) || 0);
+            if (q > 0 && !hasCost) noCost++;
+        }
+        var money = function(n){ return '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+        var box = function(label, val, color){ return '<div style="background:var(--light);border-radius:8px;padding:0.5rem 0.7rem;border-left:4px solid ' + color + '"><div style="font-size:0.68rem;color:var(--gray-dark);text-transform:uppercase;letter-spacing:0.4px">' + label + '</div><div style="font-size:1.05rem;font-weight:700;color:var(--dark)">' + val + '</div></div>'; };
+        el.innerHTML = box('Total Stock (pcs)', qty.toLocaleString('en-US'), 'var(--primary)') +
+            box('Total Cost of Stock', money(cost), 'var(--warning)') +
+            box('Total Price of Stock', money(value), 'var(--success)') +
+            box('Potential Profit', money(value - cost), (value - cost) >= 0 ? 'var(--success)' : 'var(--danger)') +
+            (noCost ? '<div style="grid-column:1/-1;font-size:0.72rem;color:var(--danger)"><i class="fas fa-triangle-exclamation"></i> ' + noCost + ' in-stock product(s) have no Cost of Production — counted as $0 cost.</div>' : '');
     }
 
     function renderInventory() {
