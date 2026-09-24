@@ -7216,15 +7216,29 @@ function sendToTelegram(order, callback) {
         try {
             var existingSnap = await db.collection('restockTool_items').where('autoFlagged', '==', true).get();
             var alreadyFlagged = {};
+            // Old-style alerts (written before size-split alerts existed) have no alertBatchId
+            // and only one size-less line. If still Pending/Sent, they get replaced below with
+            // a size-split alert. Ordered ones are left alone — the order is already placed.
+            var oldStyleRefs = {};
             existingSnap.forEach(function(d) {
                 var it = d.data();
                 if (it.status === 'received') return; // safe to flag again once it's been restocked
-                if (it.sourceProductId && it.sourceStoreId) alreadyFlagged[it.sourceStoreId + '|' + it.sourceProductId] = true;
+                if (!it.sourceProductId || !it.sourceStoreId) return;
+                var k = it.sourceStoreId + '|' + it.sourceProductId;
+                var st = it.status || 'pending';
+                if (!it.alertBatchId && it.sourceStoreId === STATE.storeId && (st === 'pending' || st === 'sent')) {
+                    (oldStyleRefs[k] = oldStyleRefs[k] || []).push(d.ref);
+                    return;
+                }
+                alreadyFlagged[k] = true;
             });
             for (var i = 0; i < STATE.products.length; i++) {
                 var p = STATE.products[i];
                 var flagKey = STATE.storeId + '|' + p.id;
-                if (!p.active || alreadyFlagged[flagKey] || !isRestockDue(p)) continue;
+                if (alreadyFlagged[flagKey]) continue;
+                // Old alert but product no longer qualifies: keep the old alert as it is.
+                if (oldStyleRefs[flagKey] && (!p.active || !isRestockDue(p))) continue;
+                if (!p.active || !isRestockDue(p)) continue;
                 // One restock line per size that customers bought in the trigger window,
                 // qty = how many of that size sold (so the reorder replaces what sold).
                 // All lines of one alert share alertBatchId so restock.html groups them as one item.
@@ -7249,6 +7263,8 @@ function sendToTelegram(order, callback) {
                 };
                 var lines = soldSizes.length ? soldSizes : [{ size: null, qty: STATE.inventoryRules.fastSellMinUnits || 5 }];
                 var wb = db.batch();
+                // Remove the old size-less alert in the same batch, so it's swapped atomically.
+                (oldStyleRefs[flagKey] || []).forEach(function(ref) { wb.delete(ref); });
                 lines.forEach(function(ln) {
                     wb.set(db.collection('restockTool_items').doc(), Object.assign({}, base, {
                         size: ln.size,
