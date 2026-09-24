@@ -7169,6 +7169,35 @@ function sendToTelegram(order, callback) {
         return total;
     }
 
+    // Same window as getUnitsSoldInWindow, but split by the size customers actually bought:
+    // returns [{ size, qty }] sorted by most sold first.
+    function getSizesSoldInWindow(productId, windowDays) {
+        var cutoff = Date.now() - windowDays * 86400000;
+        var bySize = {}, order = [];
+        var orders = STATE.confirmedOrders || [];
+        for (var i = 0; i < orders.length; i++) {
+            var o = orders[i];
+            var ts = o.confirmedTimestamp || o.timestamp || 0;
+            if (ts < cutoff) continue;
+            for (var j = 0; j < (o.cart || []).length; j++) {
+                var c = o.cart[j];
+                if (c.productId !== productId) continue;
+                var sz = c.size || 'One Size';
+                if (!(sz in bySize)) { bySize[sz] = 0; order.push(sz); }
+                bySize[sz] += c.quantity || 0;
+            }
+        }
+        return order.map(function(sz) { return { size: sz, qty: bySize[sz] }; })
+            .filter(function(x) { return x.qty > 0; })
+            .sort(function(a, b) { return b.qty - a.qty; });
+    }
+
+    function getSizeStockLeft(p, sizeName) {
+        if (!p.sizes || !p.sizes.length) return getTotalStock(p);
+        for (var i = 0; i < p.sizes.length; i++) { if (p.sizes[i].name === sizeName) return p.sizes[i].qty || 0; }
+        return 0;
+    }
+
     function isRestockDue(p) {
         var rules = STATE.inventoryRules;
         var sold = getUnitsSoldInWindow(p.id, rules.fastSellWindowDays || 7);
@@ -7196,20 +7225,40 @@ function sendToTelegram(order, callback) {
                 var p = STATE.products[i];
                 var flagKey = STATE.storeId + '|' + p.id;
                 if (!p.active || alreadyFlagged[flagKey] || !isRestockDue(p)) continue;
-                await db.collection('restockTool_items').add({
+                // One restock line per size that customers bought in the trigger window,
+                // qty = how many of that size sold (so the reorder replaces what sold).
+                // All lines of one alert share alertBatchId so restock.html groups them as one item.
+                var windowDays = STATE.inventoryRules.fastSellWindowDays || 7;
+                var soldSizes = getSizesSoldInWindow(p.id, windowDays);
+                var totalSold = soldSizes.reduce(function(t, x) { return t + x.qty; }, 0);
+                var batchId = STATE.storeId + '_' + p.id + '_' + Date.now();
+                var base = {
                     title: p.name,
                     image: (p.images && p.images[0]) || '',
                     images: p.images || [],
-                    size: null,
-                    qty: STATE.inventoryRules.fastSellMinUnits || 5,
                     supplier: 'Auto-flagged — fast seller, low stock',
                     sourceProductId: p.id,
                     sourceStoreId: STATE.storeId,
                     sourceStoreName: STATE.storeName || STATE.storeId,
                     sourceApp: 'goat-kids-store',
                     autoFlagged: true,
-                    addedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    alertBatchId: batchId,
+                    alertWindowDays: windowDays,
+                    alertTotalSold: totalSold,
+                    alertStockLeft: getTotalStock(p)
+                };
+                var lines = soldSizes.length ? soldSizes : [{ size: null, qty: STATE.inventoryRules.fastSellMinUnits || 5 }];
+                var wb = db.batch();
+                lines.forEach(function(ln) {
+                    wb.set(db.collection('restockTool_items').doc(), Object.assign({}, base, {
+                        size: ln.size,
+                        qty: ln.qty,
+                        soldQty: ln.size != null ? ln.qty : null,
+                        stockLeft: ln.size != null ? getSizeStockLeft(p, ln.size) : getTotalStock(p),
+                        addedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }));
                 });
+                await wb.commit(); // all sizes land together, so the list never shows a half-built alert
                 alreadyFlagged[flagKey] = true;
             }
         } catch (e) { console.warn('Auto restock push failed:', e.message); }
