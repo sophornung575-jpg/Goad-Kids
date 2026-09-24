@@ -101,6 +101,11 @@
   .status-pending{ background:var(--gray-light); color:var(--gray-dark); }
   .status-sent{ background:#e6fffa; color:#2c7a7b; }
   .status-ordered{ background:#f0fff4; color:#276749; }
+  .status-alert{ background:#fff5f5; color:#c53030; border:1px solid #feb2b2; }
+  .rl-item.is-alert{ border-left:4px solid var(--danger); }
+  .rl-size-stats{ font-size:0.68rem; color:var(--gray-dark); white-space:nowrap; }
+  .rl-size-stats .low{ color:var(--danger); font-weight:700; }
+  .tab-alert-count{ display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; margin-left:4px; border-radius:999px; background:var(--danger); color:#fff; font-size:0.65rem; font-weight:700; }
   .status-received{ background:#ebf4ff; color:#2c5282; }
   .mark-ordered{ background:none; border:1px solid var(--success); color:var(--success); border-radius:5px; padding:3px 8px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
   .mark-ordered:hover{ background:var(--success); color:#fff; }
@@ -291,7 +296,7 @@
     <div class="page-tabs">
       <button class="page-tab active" id="tabHomeBtn" onclick="switchSection('home')"><i class="fas fa-layer-group"></i> <span data-t="tabHome">Home</span></button>
       <button class="page-tab" id="tabSearchBtn" onclick="switchSection('search')"><i class="fas fa-search"></i> <span data-t="tabSearch">Search Link Source</span></button>
-      <button class="page-tab" id="tabRestockBtn" onclick="switchSection('restock')"><i class="fas fa-clipboard-list"></i> <span data-t="tabRestockList">Restock List</span></button>
+      <button class="page-tab" id="tabRestockBtn" onclick="switchSection('restock')"><i class="fas fa-clipboard-list"></i> <span data-t="tabRestockList">Restock List</span><span class="tab-alert-count" id="restockAlertCount" style="display:none"></span></button>
       <button class="page-tab" id="tabSettingsBtn" onclick="switchSection('settings')"><i class="fas fa-cog"></i> <span data-t="tabSettings">Settings</span></button>
     </div>
 
@@ -577,7 +582,7 @@ const TRANSLATIONS = {
     moqLabel: 'MOQ', viewOn1688: 'View on Link Source', searchOn1688: 'Search on Link Source',
     orderOn1688Arrow: 'Order on Link Source ↗', searchOn1688Arrow: 'Search on Link Source ↗',
     unlock1688BtnLabel: 'Unlock Link Source', lock1688BtnLabel: 'Lock Link Source', linkLockedLabel: 'Link locked', enterUnlockPasswordPrompt: 'Enter password to view Link Source links:',
-    markOrderedBtn: 'Mark ordered', markReceivedBtn: 'Mark received', qtyShort: 'Qty',
+    markOrderedBtn: 'Mark ordered', markReceivedBtn: 'Mark received', qtyShort: 'Qty', alertBadge: 'Low-stock alert', alertMeta: 'Sold {sold} in {days} days · {left} left in store', soldShort: 'sold', leftShort: 'left', alertTabTitle: 'Low-stock alerts waiting to be ordered',
     undoStatusBtn: 'Undo', undoStatusTitle: 'Revert to the previous status',
     searchLinkLabel: 'Search link', directLinkLabel: 'Direct link', uncategorizedOption: '— Uncategorized —'
   },
@@ -627,7 +632,7 @@ const TRANSLATIONS = {
     moqLabel: 'ចំនួនបញ្ជាទិញអប្បបរមា', viewOn1688: 'មើលនៅ Link Source', searchOn1688: 'ស្វែងរកនៅ Link Source',
     orderOn1688Arrow: 'កម្មង់នៅ Link Source ↗', searchOn1688Arrow: 'ស្វែងរកនៅ Link Source ↗',
     unlock1688BtnLabel: 'ដោះសោ Link Source', lock1688BtnLabel: 'ចាក់សោ Link Source', linkLockedLabel: 'តំណភ្ជាប់បានចាក់សោ', enterUnlockPasswordPrompt: 'បញ្ចូលពាក្យសម្ងាត់ដើម្បីមើលតំណភ្ជាប់ Link Source៖',
-    markOrderedBtn: 'សម្គាល់ថាបានបញ្ជាទិញ', markReceivedBtn: 'សម្គាល់ថាបានទទួល', qtyShort: 'ចំនួន',
+    markOrderedBtn: 'សម្គាល់ថាបានបញ្ជាទិញ', markReceivedBtn: 'សម្គាល់ថាបានទទួល', qtyShort: 'ចំនួន', alertBadge: 'ជូនដំណឹងស្តុកទាប', alertMeta: 'លក់បាន {sold} ក្នុង {days} ថ្ងៃ · នៅសល់ {left} ក្នុងហាង', soldShort: 'លក់', leftShort: 'សល់', alertTabTitle: 'ការជូនដំណឹងស្តុកទាបដែលរង់ចាំបញ្ជាទិញ',
     undoStatusBtn: 'ត្រឡប់', undoStatusTitle: 'ត្រឡប់ទៅស្ថានភាពមុន',
     searchLinkLabel: 'តំណស្វែងរក', directLinkLabel: 'តំណផ្ទាល់', uncategorizedOption: '— មិនទាន់មានប្រភេទ —'
   },
@@ -677,7 +682,7 @@ const TRANSLATIONS = {
     moqLabel: '起订量', viewOn1688: '查看Link Source', searchOn1688: '搜索Link Source',
     orderOn1688Arrow: '在Link Source下单 ↗', searchOn1688Arrow: '搜索Link Source ↗',
     unlock1688BtnLabel: '解锁Link Source', lock1688BtnLabel: '锁定Link Source', linkLockedLabel: '链接已锁定', enterUnlockPasswordPrompt: '输入密码以查看Link Source链接:',
-    markOrderedBtn: '标记为已订购', markReceivedBtn: '标记为已收货', qtyShort: '数量',
+    markOrderedBtn: '标记为已订购', markReceivedBtn: '标记为已收货', qtyShort: '数量', alertBadge: '低库存提醒', alertMeta: '{days}天内售出 {sold} 件 · 店内剩余 {left} 件', soldShort: '已售', leftShort: '剩余', alertTabTitle: '等待订购的低库存提醒',
     undoStatusBtn: '撤销', undoStatusTitle: '恢复到之前的状态',
     searchLinkLabel: '搜索链接', directLinkLabel: '直接链接', uncategorizedOption: '— 未分类 —'
   }
@@ -1921,9 +1926,11 @@ function groupRestockByProduct(list){
   const groups = [];
   const byKey = {};
   list.forEach(item => {
-    const key = item.url || (item.sourceStoreName ? item.title + '__' + item.sourceStoreName : item.title);
+    const key = item.alertBatchId ? 'alert__' + item.alertBatchId
+      : (item.url || (item.sourceStoreName ? item.title + '__' + item.sourceStoreName : item.title));
     if(!byKey[key]){
-      byKey[key] = { key, title: item.title, url: item.url, isSearchLink: item.isSearchLink, sourceStoreName: item.sourceStoreName, lines: [] };
+      byKey[key] = { key, title: item.title, url: item.url, isSearchLink: item.isSearchLink, sourceStoreName: item.sourceStoreName,
+        isAlert: !!item.autoFlagged, alertWindowDays: item.alertWindowDays, alertTotalSold: item.alertTotalSold, alertStockLeft: item.alertStockLeft, lines: [] };
       groups.push(byKey[key]);
     }
     byKey[key].lines.push(item);
@@ -1945,11 +1952,21 @@ function groupPreviousStatus(group){
   return group.lines[0].previousStatus || null;
 }
 
+// An auto-flagged (low-stock) group stays an active alert until it is marked Ordered.
+function isActiveAlert(group){
+  const st = groupStatus(group);
+  return group.isAlert && (st === 'pending' || st === 'sent');
+}
+
 function getFilteredRestockGroups(){
   const groups = groupRestockByProduct(restockList);
-  return restockStatusFilter === 'all'
+  const list = restockStatusFilter === 'all'
     ? groups
     : groups.filter(g => groupStatus(g) === restockStatusFilter);
+  // Active alerts always float to the top so they can't get buried
+  return list.map((g, i) => ({ g, i }))
+    .sort((a, b) => (isActiveAlert(b.g) - isActiveAlert(a.g)) || (a.i - b.i))
+    .map(x => x.g);
 }
 
 function setRestockFilter(status){
@@ -1974,6 +1991,14 @@ function renderRestock(){
   document.querySelectorAll('.status-filter-btn').forEach(btn => {
     btn.textContent = `${btn.dataset.label} (${counts[btn.dataset.status]})`;
   });
+
+  const alertCount = allGroups.filter(isActiveAlert).length;
+  const alertEl = document.getElementById('restockAlertCount');
+  if(alertEl){
+    alertEl.style.display = alertCount ? 'inline-flex' : 'none';
+    alertEl.textContent = alertCount;
+    alertEl.title = t('alertTabTitle');
+  }
 
   const filtered = getFilteredRestockGroups();
 
@@ -2000,20 +2025,23 @@ function renderRestock(){
     const statusLabel = status === 'received' ? t('statusReceived') : (status === 'ordered' ? t('statusOrdered') : (status === 'sent' ? t('statusSent') : t('statusPending')));
     const sizeLines = group.lines.map(item => `
       <div class="rl-size-line">
-        <span class="rl-size-label">${item.size ? escapeHtml(item.size) : t('qtyShort')}</span>
+        <span class="rl-size-label">${item.size ? escapeHtml(item.size) : t('qtyShort')}${(item.soldQty != null || item.stockLeft != null) ? `<br><span class="rl-size-stats">${item.soldQty != null ? escapeHtml(String(item.soldQty)) + ' ' + t('soldShort') : ''}${item.soldQty != null && item.stockLeft != null ? ' · ' : ''}${item.stockLeft != null ? `<span class="${item.stockLeft <= 1 ? 'low' : ''}">${escapeHtml(String(item.stockLeft))} ${t('leftShort')}</span>` : ''}</span>` : ''}</span>
         <input class="qty" type="number" min="1" value="${item.qty}" onchange="updateQty('${escapeHtml(item.docId)}', this.value)">
         <button class="rl-size-remove" onclick="confirmRemoveFromRestock('${escapeHtml(item.docId)}')" title="Remove this size"><i class="fas fa-times"></i></button>
       </div>
     `).join('');
     return `
-      <div class="rl-item${status === 'received' ? ' is-received' : ''}">
+      <div class="rl-item${status === 'received' ? ' is-received' : ''}${isActiveAlert(group) ? ' is-alert' : ''}">
         <input type="checkbox" ${groupChecked ? 'checked' : ''} onchange="toggleRestockGroupSelect('${docIdsCsv}', this.checked)">
         <div class="rl-thumb">${thumb}</div>
         <div class="rl-info">
           <div class="rl-title">${escapeHtml(group.title)}</div>
           <span class="status-badge status-${status}">${statusLabel}</span>
+          ${isActiveAlert(group) ? `<span class="status-badge status-alert"><i class="fas fa-triangle-exclamation"></i> ${t('alertBadge')}</span>` : ''}
           ${group.sourceStoreName ? `<span class="status-badge" style="background:#e0e7ff;color:#3730a3"><i class="fas fa-store"></i> ${escapeHtml(group.sourceStoreName)}</span>` : ''}
-          <div class="rl-meta">${group.isSearchLink ? t('searchLinkLabel') : t('directLinkLabel')}</div>
+          ${group.isAlert && group.alertTotalSold != null
+            ? `<div class="rl-meta" style="color:var(--danger)">${t('alertMeta').replace('{sold}', escapeHtml(String(group.alertTotalSold))).replace('{days}', escapeHtml(String(group.alertWindowDays || 7))).replace('{left}', escapeHtml(String(group.alertStockLeft != null ? group.alertStockLeft : '?')))}</div>`
+            : `<div class="rl-meta">${group.isSearchLink ? t('searchLinkLabel') : t('directLinkLabel')}</div>`}
           <div class="rl-size-lines">${sizeLines}</div>
         </div>
         <div class="rl-actions">
