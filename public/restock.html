@@ -941,6 +941,11 @@ function initFirestoreListeners(){
 function getImages(p){
   const arr = Array.isArray(p.images) ? p.images.slice() : [];
   if(p.image && !arr.includes(p.image)) arr.push(p.image);
+  // No supplier photo yet? Borrow the linked store product's photos.
+  if(!arr.length && p.linkedProductId && typeof storeProducts !== 'undefined'){
+    const sp = storeProducts.find(x => x.id === p.linkedProductId);
+    if(sp && sp.images && sp.images.length) return sp.images.slice();
+  }
   return arr;
 }
 
@@ -1108,10 +1113,12 @@ function loadStoreProducts(){
   db.collection('stores').doc(LINK_STORE_ID).collection('products').get().then(snap => {
     storeProducts = snap.docs.map(d => {
       const x = d.data() || {};
-      return { id: d.id, name: ((x.name || '') + '').trim(), barcode: ((x.barcode || '') + '').trim(), active: x.active !== false };
+      const imgs = (Array.isArray(x.images) ? x.images : []).filter(u => typeof u === 'string' && u);
+      if(typeof x.image === 'string' && x.image && !imgs.includes(x.image)) imgs.push(x.image);
+      return { id: d.id, name: ((x.name || '') + '').trim(), barcode: ((x.barcode || '') + '').trim(), active: x.active !== false, images: imgs };
     }).filter(p => p.name).sort((a, b) => a.name.localeCompare(b.name));
     storeProductsState = 'ready';
-    if(openLinkEditorId) renderHistory();
+    renderHistory(); // linked items without their own photo pick up the store photo
   }).catch(err => {
     console.warn('Store products load failed:', err);
     storeProductsState = 'failed';
