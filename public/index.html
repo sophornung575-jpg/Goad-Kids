@@ -1258,7 +1258,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         <div class="chart-card"><h3><i class="fas fa-chart-bar" style="color:var(--success)"></i> <span data-translate="topSelling">Top Selling Items</span></h3><div class="chart-container"><canvas id="topItemsChart"></canvas></div></div>
                     </div>
                     <div class="chart-card" style="margin-bottom:1.5rem"><h3><i class="fas fa-chart-line" style="color:var(--info)"></i> <span data-translate="revenueTrend">Revenue Trend</span></h3><div class="chart-container"><canvas id="revenueTrendChart"></canvas></div></div>
-                    <div class="chart-card" style="margin-bottom:1.5rem"><h3><i class="fas fa-warehouse" style="color:var(--warning)"></i> <span data-translate="stockOverview">Stock Overview by Category</span></h3><div class="chart-container"><canvas id="stockChart"></canvas></div></div>
+                    <div class="chart-card" style="margin-bottom:1.5rem"><h3><i class="fas fa-warehouse" style="color:var(--warning)"></i> <span data-translate="stockOverview">Stock Overview by Category</span></h3><div id="stockValueSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.6rem;margin-bottom:1rem"></div><div class="chart-container"><canvas id="stockChart"></canvas></div><div id="stockValueTable" style="overflow-x:auto;margin-top:1rem"></div></div>
                     <div class="chart-card"><h3><i class="fas fa-trophy" style="color:var(--warning)"></i> <span data-translate="bestSelling">Best Selling Products</span></h3><ul class="top-items-list" id="topItemsList"><li style="text-align:center;color:var(--gray);padding:2rem">No sales data yet</li></ul></div>
                     <div class="chart-card" style="margin-top:1.5rem">
                         <h3><i class="fas fa-calendar-day" style="color:var(--info)"></i> Orders by Day</h3>
@@ -7630,10 +7630,54 @@ function sendToTelegram(order, callback) {
     function renderStockChart() {
         var ctx = document.getElementById('stockChart'); if (!ctx) return;
         if (STATE.charts.stockChart) STATE.charts.stockChart.destroy();
-        var sc = {}; for (var i = 0; i < STATE.products.length; i++) { var p = STATE.products[i]; if (!sc[p.category]) sc[p.category] = 0; sc[p.category] += getTotalStock(p); }
-        var cats = Object.keys(sc), vals = Object.values(sc);
-        STATE.charts.stockChart = new Chart(ctx, { type: 'bar', data: { labels: cats.length ? cats : ['No Data'], datasets: [{ label: 'In Stock', data: cats.length ? vals : [0], backgroundColor: ['rgba(72,187,120,0.7)','rgba(66,153,225,0.7)','rgba(237,100,166,0.7)','rgba(236,201,75,0.7)','rgba(245,101,101,0.7)','rgba(128,90,213,0.7)'], borderColor: '#fff', borderWidth: 2, borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 5 } } } } });
+        // Per-category: units in stock, total cost (qty x Cost of Production), total retail value (qty x selling price)
+        var sc = {}, tot = { qty: 0, cost: 0, value: 0, noCost: 0 };
+        for (var i = 0; i < STATE.products.length; i++) {
+            var p = STATE.products[i], cat = p.category || 'Other', q = getTotalStock(p);
+            var unitCost = (p.costPrice != null && p.costPrice !== '') ? Number(p.costPrice) || 0 : 0;
+            var unitPrice = Number(p.price) || 0;
+            if (!sc[cat]) sc[cat] = { qty: 0, cost: 0, value: 0, noCost: 0 };
+            sc[cat].qty += q; sc[cat].cost += q * unitCost; sc[cat].value += q * unitPrice;
+            tot.qty += q; tot.cost += q * unitCost; tot.value += q * unitPrice;
+            if (q > 0 && (p.costPrice == null || p.costPrice === '')) { sc[cat].noCost++; tot.noCost++; }
+        }
+        var cats = Object.keys(sc), vals = cats.map(function(c){ return sc[c].qty; });
+        var money = function(n){ return '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+
+        // Summary boxes
+        var sumEl = document.getElementById('stockValueSummary');
+        if (sumEl) {
+            var profit = tot.value - tot.cost;
+            var box = function(label, val, color){ return '<div style="background:var(--light);border-radius:10px;padding:0.7rem 0.8rem;border-left:4px solid ' + color + '"><div style="font-size:0.72rem;color:var(--gray-dark);text-transform:uppercase;letter-spacing:0.4px">' + label + '</div><div style="font-size:1.15rem;font-weight:700;color:var(--dark)">' + val + '</div></div>'; };
+            sumEl.innerHTML = box('Units in Stock', tot.qty.toLocaleString('en-US'), 'var(--primary)') +
+                box('Total Cost of Stock', money(tot.cost), 'var(--warning)') +
+                box('Total Price of Stock', money(tot.value), 'var(--success)') +
+                box('Potential Gross Profit', money(profit), profit >= 0 ? 'var(--success)' : 'var(--danger)') +
+                (tot.noCost ? '<div style="grid-column:1/-1;font-size:0.75rem;color:var(--danger)"><i class="fas fa-triangle-exclamation"></i> ' + tot.noCost + ' in-stock product(s) have no Cost of Production set — their cost is counted as $0.</div>' : '');
+        }
+
+        // Per-category table
+        var tblEl = document.getElementById('stockValueTable');
+        if (tblEl) {
+            if (!cats.length) { tblEl.innerHTML = ''; }
+            else {
+                var rows = cats.slice().sort(function(a,b){ return sc[b].value - sc[a].value; }).map(function(c){
+                    var r = sc[c];
+                    return '<tr><td>' + escapeStockCat(c) + (r.noCost ? ' <span title="Products missing cost" style="color:var(--danger);font-size:0.7rem">(' + r.noCost + ' no cost)</span>' : '') + '</td>' +
+                        '<td style="text-align:right">' + r.qty.toLocaleString('en-US') + '</td>' +
+                        '<td style="text-align:right">' + money(r.cost) + '</td>' +
+                        '<td style="text-align:right">' + money(r.value) + '</td>' +
+                        '<td style="text-align:right;color:' + ((r.value - r.cost) >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + money(r.value - r.cost) + '</td></tr>';
+                }).join('');
+                tblEl.innerHTML = '<table class="inventory-table"><thead><tr><th>Category</th><th style="text-align:right">Units</th><th style="text-align:right">Total Cost</th><th style="text-align:right">Total Price</th><th style="text-align:right">Potential Profit</th></tr></thead><tbody>' + rows +
+                    '<tr style="font-weight:700;background:var(--light)"><td>TOTAL</td><td style="text-align:right">' + tot.qty.toLocaleString('en-US') + '</td><td style="text-align:right">' + money(tot.cost) + '</td><td style="text-align:right">' + money(tot.value) + '</td><td style="text-align:right">' + money(tot.value - tot.cost) + '</td></tr></tbody></table>';
+            }
+        }
+
+        STATE.charts.stockChart = new Chart(ctx, { type: 'bar', data: { labels: cats.length ? cats : ['No Data'], datasets: [{ label: 'In Stock', data: cats.length ? vals : [0], backgroundColor: ['rgba(72,187,120,0.7)','rgba(66,153,225,0.7)','rgba(237,100,166,0.7)','rgba(236,201,75,0.7)','rgba(245,101,101,0.7)','rgba(128,90,213,0.7)'], borderColor: '#fff', borderWidth: 2, borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { afterLabel: function(item){ var r = sc[item.label]; return r ? ['Cost: ' + money(r.cost), 'Price: ' + money(r.value)] : ''; } } } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 5 } } } } });
     }
+
+    function escapeStockCat(t) { return String(t).replace(/[&<>"']/g, function(ch){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]; }); }
 
     function renderTopItemsList() {
         var list = document.getElementById('topItemsList'); if (!list) return;
