@@ -102,6 +102,21 @@
   .status-sent{ background:#e6fffa; color:#2c7a7b; }
   .status-ordered{ background:#f0fff4; color:#276749; }
   .status-alert{ background:#fff5f5; color:#c53030; border:1px solid #feb2b2; }
+  .store-link{ margin-top:8px; font-size:0.78rem; }
+  .store-link-btn{ width:100%; border:1px dashed #a0aec0; background:#f7fafc; color:#4a5568; border-radius:8px; padding:6px 8px; font-size:0.78rem; cursor:pointer; font-weight:600; }
+  .store-link-btn:hover{ border-color:#3182ce; color:#2b6cb0; }
+  .store-link-set{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; background:#f0fff4; border:1px solid #9ae6b4; color:#22543d; border-radius:8px; padding:5px 8px; }
+  .store-link-set b{ word-break:break-word; }
+  .store-link-change{ margin-left:auto; border:none; background:none; color:#2b6cb0; font-size:0.75rem; font-weight:600; cursor:pointer; padding:0; }
+  .store-link-editor{ margin-top:6px; display:flex; flex-direction:column; gap:6px; background:#f7fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px; }
+  .store-link-editor input, .store-link-editor select{ width:100%; font-size:0.8rem; padding:6px; border:1px solid #cbd5e0; border-radius:6px; background:#fff; }
+  .store-link-actions{ display:flex; gap:6px; flex-wrap:wrap; }
+  .store-link-actions button{ flex:1; font-size:0.78rem; padding:6px; border-radius:6px; cursor:pointer; font-weight:600; border:1px solid #cbd5e0; background:#fff; }
+  .store-link-actions .save{ background:#3182ce; border-color:#3182ce; color:#fff; }
+  .store-link-actions .unlink{ color:#c53030; border-color:#feb2b2; }
+  .store-link-hint{ color:#718096; font-size:0.72rem; }
+  .rl-linked{ font-size:0.75rem; color:#22543d; margin-top:3px; }
+  .rl-unlinked{ font-size:0.75rem; color:#975a16; margin-top:3px; }
   .rl-item.is-alert{ border-left:4px solid var(--danger); }
   .rl-size-stats{ font-size:0.68rem; color:var(--gray-dark); white-space:nowrap; }
   .rl-size-stats .low{ color:var(--danger); font-weight:700; }
@@ -516,6 +531,8 @@
 // only ever touches its own three collections below (restockTool_shops,
 // restockTool_items, restockTool_history) — it never reads or writes
 // stores/orders/products/transfers/refunds or anything else the store app uses.
+// One exception, read-only: it reads the store's product list (names only)
+// so Home items can be linked to a store product. It never writes there.
 const firebaseConfig = {
   apiKey: "AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU",
   authDomain: "goat-kids-store.firebaseapp.com",
@@ -582,7 +599,7 @@ const TRANSLATIONS = {
     moqLabel: 'MOQ', viewOn1688: 'View on Link Source', searchOn1688: 'Search on Link Source',
     orderOn1688Arrow: 'Order on Link Source ↗', searchOn1688Arrow: 'Search on Link Source ↗',
     unlock1688BtnLabel: 'Unlock Link Source', lock1688BtnLabel: 'Lock Link Source', linkLockedLabel: 'Link locked', enterUnlockPasswordPrompt: 'Enter password to view Link Source links:',
-    markOrderedBtn: 'Mark ordered', markReceivedBtn: 'Mark received', qtyShort: 'Qty', alertBadge: 'Low-stock alert', alertMeta: 'Sold {sold} in {days} days · {left} left in store', soldShort: 'sold', leftShort: 'left', alertTabTitle: 'Low-stock alerts waiting to be ordered',
+    markOrderedBtn: 'Mark ordered', markReceivedBtn: 'Mark received', qtyShort: 'Qty', alertBadge: 'Low-stock alert', alertMeta: 'Sold {sold} in {days} days · {left} left in store', soldShort: 'sold', leftShort: 'left', alertTabTitle: 'Low-stock alerts waiting to be ordered', linkToStoreBtn: 'Link to store product', linkedToLabel: 'Store product:', changeLinkBtn: 'Change', filterStoreProducts: 'Type to filter your products...', chooseStoreProduct: '— Choose a store product —', saveLinkBtn: 'Save', cancelBtn: 'Cancel', unlinkBtn: 'Unlink', storeProductsLoading: 'Loading store products...', storeProductsFailed: 'Could not load store products.', suggestedMatch: 'Suggested by supplier code', linkedSupplierLabel: 'Supplier:', notLinkedYet: 'No supplier linked yet — link it from the Home tab',
     undoStatusBtn: 'Undo', undoStatusTitle: 'Revert to the previous status',
     searchLinkLabel: 'Search link', directLinkLabel: 'Direct link', uncategorizedOption: '— Uncategorized —'
   },
@@ -632,7 +649,7 @@ const TRANSLATIONS = {
     moqLabel: 'ចំនួនបញ្ជាទិញអប្បបរមា', viewOn1688: 'មើលនៅ Link Source', searchOn1688: 'ស្វែងរកនៅ Link Source',
     orderOn1688Arrow: 'កម្មង់នៅ Link Source ↗', searchOn1688Arrow: 'ស្វែងរកនៅ Link Source ↗',
     unlock1688BtnLabel: 'ដោះសោ Link Source', lock1688BtnLabel: 'ចាក់សោ Link Source', linkLockedLabel: 'តំណភ្ជាប់បានចាក់សោ', enterUnlockPasswordPrompt: 'បញ្ចូលពាក្យសម្ងាត់ដើម្បីមើលតំណភ្ជាប់ Link Source៖',
-    markOrderedBtn: 'សម្គាល់ថាបានបញ្ជាទិញ', markReceivedBtn: 'សម្គាល់ថាបានទទួល', qtyShort: 'ចំនួន', alertBadge: 'ជូនដំណឹងស្តុកទាប', alertMeta: 'លក់បាន {sold} ក្នុង {days} ថ្ងៃ · នៅសល់ {left} ក្នុងហាង', soldShort: 'លក់', leftShort: 'សល់', alertTabTitle: 'ការជូនដំណឹងស្តុកទាបដែលរង់ចាំបញ្ជាទិញ',
+    markOrderedBtn: 'សម្គាល់ថាបានបញ្ជាទិញ', markReceivedBtn: 'សម្គាល់ថាបានទទួល', qtyShort: 'ចំនួន', alertBadge: 'ជូនដំណឹងស្តុកទាប', alertMeta: 'លក់បាន {sold} ក្នុង {days} ថ្ងៃ · នៅសល់ {left} ក្នុងហាង', soldShort: 'លក់', leftShort: 'សល់', alertTabTitle: 'ការជូនដំណឹងស្តុកទាបដែលរង់ចាំបញ្ជាទិញ', linkToStoreBtn: 'ភ្ជាប់ទៅទំនិញក្នុងហាង', linkedToLabel: 'ទំនិញក្នុងហាង:', changeLinkBtn: 'ប្តូរ', filterStoreProducts: 'វាយដើម្បីស្វែងរកទំនិញ...', chooseStoreProduct: '— ជ្រើសរើសទំនិញក្នុងហាង —', saveLinkBtn: 'រក្សាទុក', cancelBtn: 'បោះបង់', unlinkBtn: 'ផ្តាច់', storeProductsLoading: 'កំពុងផ្ទុកទំនិញក្នុងហាង...', storeProductsFailed: 'មិនអាចផ្ទុកទំនិញក្នុងហាងបានទេ។', suggestedMatch: 'ណែនាំតាមលេខកូដអ្នកផ្គត់ផ្គង់', linkedSupplierLabel: 'អ្នកផ្គត់ផ្គង់:', notLinkedYet: 'មិនទាន់ភ្ជាប់អ្នកផ្គត់ផ្គង់ — ភ្ជាប់វានៅផ្ទាំង Home',
     undoStatusBtn: 'ត្រឡប់', undoStatusTitle: 'ត្រឡប់ទៅស្ថានភាពមុន',
     searchLinkLabel: 'តំណស្វែងរក', directLinkLabel: 'តំណផ្ទាល់', uncategorizedOption: '— មិនទាន់មានប្រភេទ —'
   },
@@ -682,7 +699,7 @@ const TRANSLATIONS = {
     moqLabel: '起订量', viewOn1688: '查看Link Source', searchOn1688: '搜索Link Source',
     orderOn1688Arrow: '在Link Source下单 ↗', searchOn1688Arrow: '搜索Link Source ↗',
     unlock1688BtnLabel: '解锁Link Source', lock1688BtnLabel: '锁定Link Source', linkLockedLabel: '链接已锁定', enterUnlockPasswordPrompt: '输入密码以查看Link Source链接:',
-    markOrderedBtn: '标记为已订购', markReceivedBtn: '标记为已收货', qtyShort: '数量', alertBadge: '低库存提醒', alertMeta: '{days}天内售出 {sold} 件 · 店内剩余 {left} 件', soldShort: '已售', leftShort: '剩余', alertTabTitle: '等待订购的低库存提醒',
+    markOrderedBtn: '标记为已订购', markReceivedBtn: '标记为已收货', qtyShort: '数量', alertBadge: '低库存提醒', alertMeta: '{days}天内售出 {sold} 件 · 店内剩余 {left} 件', soldShort: '已售', leftShort: '剩余', alertTabTitle: '等待订购的低库存提醒', linkToStoreBtn: '关联店内商品', linkedToLabel: '店内商品：', changeLinkBtn: '更改', filterStoreProducts: '输入以筛选商品...', chooseStoreProduct: '— 选择店内商品 —', saveLinkBtn: '保存', cancelBtn: '取消', unlinkBtn: '取消关联', storeProductsLoading: '正在加载店内商品...', storeProductsFailed: '无法加载店内商品。', suggestedMatch: '根据货号推荐', linkedSupplierLabel: '供应商：', notLinkedYet: '尚未关联供应商——请在首页关联',
     undoStatusBtn: '撤销', undoStatusTitle: '恢复到之前的状态',
     searchLinkLabel: '搜索链接', directLinkLabel: '直接链接', uncategorizedOption: '— 未分类 —'
   }
@@ -909,10 +926,13 @@ function initFirestoreListeners(){
   db.collection('restockTool_history').orderBy('savedAt', 'desc').onSnapshot(snap => {
     historyCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderHistory();
+    renderRestock(); // supplier links on alerts come from Home items
   }, err => {
     console.error('History listener failed, falling back to local-only:', err);
     renderHistory();
   });
+
+  loadStoreProducts();
 }
 
 // ---------- shared product card ----------
@@ -966,6 +986,7 @@ function productCardHtml(p, opts){
         ${p.category ? `<span class="category-badge">${escapeHtml(categoryLabel(p.category))}</span>` : ''}
         <div class="price">${escapeHtml(String(p.price))}</div>
         <div class="meta">${t('moqLabel')} ${escapeHtml(String(p.moq))} · ${escapeHtml(p.supplier)}</div>
+        ${opts.removable ? storeLinkHtml(p) : ''}
         ${opts.removable ? `
         <div class="category-picker hidden" id="categoryPicker-${escapeHtml(p.id)}">
           <select onchange="setProductCategory('${escapeHtml(p.id)}', this.value)">
@@ -1071,13 +1092,158 @@ function savePhotoLink(id){
 }
 
 // ---------- Home catalog ----------
+// ---------- linking Home items to store products ----------
+// Supplier names (e.g. 艾莎长袖公主裙...) never match the store's own
+// product names, so each Home item is linked by hand ONCE: pick the store
+// product from a dropdown, save, and it stays linked. Low-stock alerts
+// from the store then pick up that item's 1688 link automatically.
+const LINK_STORE_ID = localStorage.getItem('goatStoreId') || 'GOAT-1979';
+let storeProducts = [];
+let storeProductsState = 'idle'; // idle | loading | ready | failed
+let openLinkEditorId = null;
+
+function loadStoreProducts(){
+  if(!db) return;
+  storeProductsState = 'loading';
+  db.collection('stores').doc(LINK_STORE_ID).collection('products').get().then(snap => {
+    storeProducts = snap.docs.map(d => {
+      const x = d.data() || {};
+      return { id: d.id, name: ((x.name || '') + '').trim(), barcode: ((x.barcode || '') + '').trim(), active: x.active !== false };
+    }).filter(p => p.name).sort((a, b) => a.name.localeCompare(b.name));
+    storeProductsState = 'ready';
+    if(openLinkEditorId) renderHistory();
+  }).catch(err => {
+    console.warn('Store products load failed:', err);
+    storeProductsState = 'failed';
+    if(openLinkEditorId) renderHistory();
+  });
+}
+
+function normLinkName(s){
+  return (s || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Finds the Home item linked to the store product a restock line came from.
+// Matches the exact product first; falls back to the same product name so
+// alerts from other branches (different product IDs, same name) still link.
+function findLinkedSupplier(item){
+  if(!item || item.url || !historyCache.length) return null;
+  let hit = null;
+  if(item.sourceProductId){
+    hit = historyCache.find(h => h.linkedProductId === item.sourceProductId &&
+      (!h.linkedStoreId || !item.sourceStoreId || h.linkedStoreId === item.sourceStoreId));
+  }
+  if(!hit){
+    const n = normLinkName(item.title);
+    if(n) hit = historyCache.find(h => h.linkedProductName && normLinkName(h.linkedProductName) === n);
+  }
+  return hit || null;
+}
+
+// A store product whose barcode (or name) contains the supplier's style code, e.g. BX1761.
+function suggestStoreProduct(p){
+  const code = normLinkName(p.styleCode);
+  if(!code || code.length < 3) return null;
+  return storeProducts.find(sp => normLinkName(sp.barcode) === code) ||
+         storeProducts.find(sp => normLinkName(sp.name).includes(code)) || null;
+}
+
+function storeProductOptionsHtml(selectedId, filterText){
+  const f = normLinkName(filterText);
+  const list = storeProducts.filter(sp => !f || normLinkName(sp.name).includes(f) || normLinkName(sp.barcode).includes(f) || sp.id === selectedId);
+  return `<option value="">${escapeHtml(t('chooseStoreProduct'))}</option>` +
+    list.map(sp => `<option value="${escapeHtml(sp.id)}"${sp.id === selectedId ? ' selected' : ''}>${escapeHtml(sp.name)}${sp.active ? '' : ' (inactive)'}</option>`).join('');
+}
+
+function storeLinkHtml(p){
+  const id = escapeHtml(p.id);
+  const editing = openLinkEditorId === p.id;
+  let editor = '';
+  if(editing){
+    if(storeProductsState === 'ready'){
+      const suggested = !p.linkedProductId ? suggestStoreProduct(p) : null;
+      const selectedId = p.linkedProductId || (suggested && suggested.id) || '';
+      editor = `
+        <div class="store-link-editor" onclick="event.stopPropagation()">
+          <input type="text" placeholder="${escapeHtml(t('filterStoreProducts'))}" oninput="filterStoreLinkOptions('${id}', this.value)">
+          <select id="storeLinkSelect-${id}">${storeProductOptionsHtml(selectedId, '')}</select>
+          ${suggested ? `<span class="store-link-hint"><i class="fas fa-wand-magic-sparkles"></i> ${escapeHtml(t('suggestedMatch'))}</span>` : ''}
+          <div class="store-link-actions">
+            <button class="save" onclick="saveStoreLink('${id}')">${escapeHtml(t('saveLinkBtn'))}</button>
+            <button onclick="closeStoreLink()">${escapeHtml(t('cancelBtn'))}</button>
+            ${p.linkedProductId ? `<button class="unlink" onclick="unlinkStoreProduct('${id}')">${escapeHtml(t('unlinkBtn'))}</button>` : ''}
+          </div>
+        </div>`;
+    } else {
+      editor = `<div class="store-link-editor"><span class="store-link-hint">${escapeHtml(storeProductsState === 'failed' ? t('storeProductsFailed') : t('storeProductsLoading'))}</span></div>`;
+    }
+  }
+  const head = p.linkedProductName
+    ? `<div class="store-link-set"><i class="fas fa-link"></i> ${escapeHtml(t('linkedToLabel'))} <b>${escapeHtml(p.linkedProductName)}</b>${editing ? '' : `<button class="store-link-change" onclick="event.stopPropagation();openStoreLink('${id}')">${escapeHtml(t('changeLinkBtn'))}</button>`}</div>`
+    : (editing ? '' : `<button class="store-link-btn" onclick="event.stopPropagation();openStoreLink('${id}')"><i class="fas fa-link"></i> ${escapeHtml(t('linkToStoreBtn'))}</button>`);
+  return `<div class="store-link">${head}${editor}</div>`;
+}
+
+function openStoreLink(histId){
+  openLinkEditorId = histId;
+  if(storeProductsState === 'idle' || storeProductsState === 'failed') loadStoreProducts();
+  renderHistory();
+}
+
+function closeStoreLink(){
+  openLinkEditorId = null;
+  renderHistory();
+}
+
+function filterStoreLinkOptions(histId, text){
+  const sel = document.getElementById('storeLinkSelect-' + histId);
+  if(!sel) return;
+  const current = sel.value;
+  sel.innerHTML = storeProductOptionsHtml(current, text);
+  // With a filter, jump to the first match so Save picks what's visible.
+  if(!current && text && sel.options.length > 1) sel.selectedIndex = 1;
+}
+
+function saveStoreLink(histId){
+  const sel = document.getElementById('storeLinkSelect-' + histId);
+  const pid = sel ? sel.value : '';
+  if(!pid){ alert(t('chooseStoreProduct')); return; }
+  const sp = storeProducts.find(x => x.id === pid);
+  if(!sp) return;
+  const data = { linkedProductId: sp.id, linkedProductName: sp.name, linkedStoreId: LINK_STORE_ID };
+  openLinkEditorId = null;
+  if(db){
+    db.collection('restockTool_history').doc(histId).set({ ...data, linkedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
+      .catch(err => alert('Could not save the link: ' + err.message));
+  } else {
+    const h = historyCache.find(x => x.id === histId);
+    if(h) Object.assign(h, data);
+    renderHistory();
+    renderRestock();
+  }
+}
+
+function unlinkStoreProduct(histId){
+  openLinkEditorId = null;
+  if(db){
+    const del = firebase.firestore.FieldValue.delete();
+    db.collection('restockTool_history').doc(histId).update({ linkedProductId: del, linkedProductName: del, linkedStoreId: del, linkedAt: del })
+      .catch(err => alert('Could not remove the link: ' + err.message));
+  } else {
+    const h = historyCache.find(x => x.id === histId);
+    if(h){ delete h.linkedProductId; delete h.linkedProductName; delete h.linkedStoreId; }
+    renderHistory();
+    renderRestock();
+  }
+}
+
 function renderHistory(){
   indexProducts(historyCache);
   const grid = document.getElementById('historyGrid');
   const empty = document.getElementById('historyEmpty');
   let filtered = historyCache;
   if(historyFilterCategory) filtered = filtered.filter(p => p.category === historyFilterCategory);
-  if(historyFilterText) filtered = filtered.filter(p => (p.title || '').toLowerCase().includes(historyFilterText));
+  if(historyFilterText) filtered = filtered.filter(p => (p.title || '').toLowerCase().includes(historyFilterText) || (p.linkedProductName || '').toLowerCase().includes(historyFilterText) || (p.styleCode || '').toLowerCase().includes(historyFilterText));
 
   if(filtered.length === 0){
     grid.innerHTML = '';
@@ -1540,7 +1706,7 @@ document.getElementById('bulkImportBtn').onclick = () => {
 let csvRows = [];
 let csvOrderEntries = null; // set when a recognized order-export format is detected
 
-const ORDER_EXPORT_HEADERS = { title: '货品标题', price: '单价(元)', supplier: '卖家公司名', offerId: 'Offer ID' };
+const ORDER_EXPORT_HEADERS = { title: '货品标题', price: '单价(元)', supplier: '卖家公司名', offerId: 'Offer ID', styleCode: '货号' };
 
 function looksLikeHeaderRow(row){
   return row.every(cell => (cell || '').toString().length < 30) &&
@@ -1599,6 +1765,7 @@ function detectOrderExport(){
         price: idx.price > -1 && row[idx.price] !== undefined && row[idx.price] !== '' ? ('¥' + row[idx.price]) : '—',
         supplier: idx.supplier > -1 && row[idx.supplier] ? ((row[idx.supplier] || '') + '').trim() : '—',
         url: 'https://detail.1688.com/offer/' + offerId + '.html',
+        styleCode: idx.styleCode > -1 ? ((row[idx.styleCode] || '') + '').trim() : '',
         sizesSet: new Set()
       };
     }
@@ -1608,7 +1775,7 @@ function detectOrderExport(){
 
   const entries = Object.values(grouped).map(e => ({
     offerId: e.offerId, title: e.title, price: e.price, supplier: e.supplier, url: e.url,
-    sizes: Array.from(e.sizesSet)
+    styleCode: e.styleCode || '', sizes: Array.from(e.sizesSet)
   }));
   return entries.length ? entries : null;
 }
@@ -1721,6 +1888,7 @@ document.getElementById('csvImportBtn').onclick = async () => {
         title: e.title, price: e.price, moq: '—', supplier: e.supplier,
         image: '', url: e.url, sizes: e.sizes || [], isSearchLink: false
       };
+      if(e.styleCode) data.styleCode = e.styleCode;
       if(db){
         return db.collection('restockTool_history').doc(id).set({
           ...data, savedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1931,6 +2099,12 @@ function groupRestockByProduct(list){
     if(!byKey[key]){
       byKey[key] = { key, title: item.title, url: item.url, isSearchLink: item.isSearchLink, sourceStoreName: item.sourceStoreName,
         isAlert: !!item.autoFlagged, alertWindowDays: item.alertWindowDays, alertTotalSold: item.alertTotalSold, alertStockLeft: item.alertStockLeft, lines: [] };
+      const linked = findLinkedSupplier(item);
+      if(linked){
+        byKey[key].url = linked.url;
+        byKey[key].isSearchLink = !!linked.isSearchLink;
+        byKey[key].linkedSupplier = linked;
+      }
       groups.push(byKey[key]);
     }
     byKey[key].lines.push(item);
@@ -2042,6 +2216,9 @@ function renderRestock(){
           ${group.isAlert && group.alertTotalSold != null
             ? `<div class="rl-meta" style="color:var(--danger)">${t('alertMeta').replace('{sold}', escapeHtml(String(group.alertTotalSold))).replace('{days}', escapeHtml(String(group.alertWindowDays || 7))).replace('{left}', escapeHtml(String(group.alertStockLeft != null ? group.alertStockLeft : '?')))}</div>`
             : `<div class="rl-meta">${group.isSearchLink ? t('searchLinkLabel') : t('directLinkLabel')}</div>`}
+          ${group.linkedSupplier
+            ? `<div class="rl-linked"><i class="fas fa-link"></i> ${t('linkedSupplierLabel')} ${escapeHtml(group.linkedSupplier.supplier && group.linkedSupplier.supplier !== '—' ? group.linkedSupplier.supplier : group.linkedSupplier.title)}${group.linkedSupplier.styleCode ? ' · ' + escapeHtml(group.linkedSupplier.styleCode) : ''}${group.linkedSupplier.price && group.linkedSupplier.price !== '—' ? ' · ' + escapeHtml(String(group.linkedSupplier.price)) : ''}</div>`
+            : (group.isAlert && !group.url ? `<div class="rl-unlinked"><i class="fas fa-unlink"></i> ${t('notLinkedYet')}</div>` : '')}
           <div class="rl-size-lines">${sizeLines}</div>
         </div>
         <div class="rl-actions">
