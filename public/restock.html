@@ -2086,8 +2086,10 @@ async function storeBuildPlan(entries, prefixRaw){
   await pricingRefresh();  // always use the latest rule from the store app
   const snap = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').get();
   const existing = [];
-  snap.forEach(d => existing.push({ id: d.id, name: ((d.data().name || '') + '').trim() }));
-  const existingIds = new Set(existing.map(p => p.id));
+  snap.forEach(d => existing.push({ id: d.id, name: ((d.data().name || '') + '').trim(), active: d.data().active !== false }));
+  // A product deleted in the store app can leave an empty record behind
+  // (active:false) — treat it as gone so the item is created again.
+  const existingIds = new Set(existing.filter(p => p.active).map(p => p.id));
   const existingNames = new Set(existing.map(p => p.name.toLowerCase()));
 
   // Highest number already used with this prefix (deleted-but-kept items count
@@ -2300,7 +2302,7 @@ document.getElementById('csvImportBtn').onclick = async () => {
 async function incomingQueue(entries, orderKey){
   const snap = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').get();
   const live = {};
-  snap.forEach(d => { live[d.id] = d.data() || {}; });
+  snap.forEach(d => { const x = d.data() || {}; if(x.active !== false) live[d.id] = x; });
   const batchId = 'r' + Date.now();
   const key = orderKey || batchId;
   const wb = db.batch();
@@ -2311,8 +2313,10 @@ async function incomingQueue(entries, orderKey){
     const hd = hist.exists ? (hist.data() || {}) : {};
     const pid = hd.storeProductId;
     if(!pid || !live[pid]) continue;
-    const pending = Object.values(hd.incoming || {});
-    if(pending.some(x => x.orderKey === key) || (hd.receivedKeys || []).includes(key)){ already++; continue; }
+    const pending = Object.entries(hd.incoming || {});
+    if((hd.receivedKeys || []).includes(key) || pending.some(([, x]) => x && x.orderKey === key && x.productId === pid)){ already++; continue; }
+    // Same order queued earlier for a product that has since been deleted — drop it.
+    pending.forEach(([bid, x]) => { if(x && x.orderKey === key) wb.update(db.collection('restockTool_history').doc(e.offerId), { ['incoming.' + bid]: firebase.firestore.FieldValue.delete() }); });
     const sizes = Object.keys(e.qtyBySize).filter(n => n).map(n => ({ name: n, qty: e.qtyBySize[n] }));
     const noSize = e.qtyBySize[''] || 0;
     wb.set(db.collection('restockTool_history').doc(e.offerId), { incoming: { [batchId]: {
@@ -2372,8 +2376,8 @@ async function incomingReceive(batchId, btn){
     const docs = await Promise.all(g.items.map(x => ref.doc(x.productId).get()));
     const missing = [], zero = [], work = [];
     g.items.forEach((x, i) => {
-      if(!docs[i].exists){ missing.push(x.productName); return; }
-      const p = docs[i].data() || {};
+      const p = docs[i].exists ? (docs[i].data() || {}) : null;
+      if(!p || p.active === false){ missing.push(x.productName); return; }
       if(!(Number(p.price) > 0)) zero.push(p.name || x.productName);
       work.push({ x, p });
     });
