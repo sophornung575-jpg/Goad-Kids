@@ -1105,11 +1105,11 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         <div class="admin-card" id="pricingRuleCard" style="display:none">
                             <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-tags" style="color:var(--primary)"></i> Store Pricing Rule</div></div>
                             <div class="admin-card-body">
-                                <p style="font-size:0.8rem;color:var(--gray);margin-bottom:0.75rem">Cost and sell price for items created by the 1688 import in the Restock tool.</p>
+                                <p style="font-size:0.8rem;color:var(--gray);margin-bottom:0.75rem">Cost and sell price for items created by the 1688 import in the Restock tool. Cost = the 1688 price converted to dollars. The extra cost and markup only go into the sell price.</p>
                                 <div class="form-group"><label>Exchange rate (¥ per $1)</label><input type="number" step="0.01" min="0" id="prRate" class="form-control pr-input" placeholder="e.g. 7.1"></div>
-                                <div class="form-group"><label>Extra cost % (shipping, customs...)</label><input type="number" step="0.1" min="0" id="prExtraPct" class="form-control pr-input" placeholder="e.g. 15"></div>
-                                <div class="form-group"><label>Extra cost per item ($)</label><input type="number" step="0.01" min="0" id="prExtraFlat" class="form-control pr-input" placeholder="e.g. 0.50"></div>
-                                <div class="form-group"><label>Sell price = cost ×</label><input type="number" step="0.01" min="0" id="prMarkup" class="form-control pr-input" placeholder="e.g. 2.5"></div>
+                                <div class="form-group"><label>Extra cost % for sell price (shipping, customs...)</label><input type="number" step="0.1" min="0" id="prExtraPct" class="form-control pr-input" placeholder="e.g. 15"></div>
+                                <div class="form-group"><label>Extra cost per item for sell price ($)</label><input type="number" step="0.01" min="0" id="prExtraFlat" class="form-control pr-input" placeholder="e.g. 0.50"></div>
+                                <div class="form-group"><label>Sell price = (cost + extras) ×</label><input type="number" step="0.01" min="0" id="prMarkup" class="form-control pr-input" placeholder="e.g. 2.5"></div>
                                 <div class="form-group"><label>Round sell price up to</label>
                                     <select id="prRound" class="form-control pr-input">
                                         <option value="0">No rounding</option>
@@ -1120,9 +1120,9 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                 </div>
                                 <div id="prExample" style="font-size:0.85rem;font-weight:600;margin-bottom:0.75rem;color:var(--gray-dark)"></div>
                                 <button class="btn btn-primary w-full" onclick="pricingRuleSave()"><i class="fas fa-save"></i> Save Rule</button>
-                                <button class="btn btn-secondary w-full" style="margin-top:0.5rem" onclick="pricingRuleApply()"><i class="fas fa-magic"></i> Apply to imported items still at $0</button>
+                                <button class="btn btn-secondary w-full" style="margin-top:0.5rem" onclick="pricingRuleApply()"><i class="fas fa-magic"></i> Apply to imported items</button>
                                 <div id="prStatus" style="margin-top:0.75rem;font-size:0.85rem"></div>
-                                <div style="font-size:0.75rem;color:var(--gray);margin-top:0.5rem">Leave the exchange rate empty to turn the rule off. The rule only prices new imports and imported items still at $0 — it never changes a price you've set.</div>
+                                <div style="font-size:0.75rem;color:var(--gray);margin-top:0.5rem">Leave the exchange rate empty to turn the rule off. Apply prices imported items still at $0, and corrects the cost on imported items that are already priced — a sell price you've set is never changed.</div>
                             </div>
                         </div>
                         <!-- Security -->
@@ -5894,7 +5894,8 @@ function sendToTelegram(order, callback) {
     // =============================================
     // STORE PRICING RULE (Main Store) — used by the Restock tool's 1688 import.
     // Saved in restockTool_config/settings.pricing so the Restock tool reads it.
-    // cost = yuan / rate × (1 + extra%) + extra per item; sell = cost × markup, rounded UP
+    // cost = yuan / rate (plain converted supplier price)
+    // sell = (cost × (1 + extra%) + extra per item) × markup, rounded UP
     // =============================================
     function pricingRuleGet() {
         var num = function(id) { var el = document.getElementById(id); var v = parseFloat(el ? el.value : ''); return isFinite(v) ? v : 0; };
@@ -5911,15 +5912,17 @@ function sendToTelegram(order, callback) {
     function pricingRuleCalc(yuan, p) {
         p = p || pricingRuleGet();
         if (!(p.rate > 0) || !(yuan > 0)) return null;
-        var cost = Math.round((yuan / p.rate * (1 + (p.extraPct || 0) / 100) + (p.extraFlat || 0)) * 100) / 100;
-        var sell = cost * (p.markup > 0 ? p.markup : 1);
+        var base = yuan / p.rate;
+        var cost = Math.round(base * 100) / 100;
+        var landed = base * (1 + (p.extraPct || 0) / 100) + (p.extraFlat || 0);
+        var sell = landed * (p.markup > 0 ? p.markup : 1);
         if (p.round > 0) sell = Math.ceil(sell / p.round - 1e-9) * p.round;
-        return { cost: cost, price: Math.round(sell * 100) / 100 };
+        return { cost: cost, landed: Math.round(landed * 100) / 100, price: Math.round(sell * 100) / 100 };
     }
     function pricingRuleExample() {
         var el = document.getElementById('prExample'); if (!el) return;
         var r = pricingRuleCalc(50);
-        el.textContent = r ? ('Example: ¥50 → cost $' + r.cost.toFixed(2) + ' → sell $' + r.price.toFixed(2)) : 'Rule is off (no exchange rate set).';
+        el.textContent = r ? ('Example: ¥50 → cost $' + r.cost.toFixed(2) + ' → with extras $' + r.landed.toFixed(2) + ' → sell $' + r.price.toFixed(2)) : 'Rule is off (no exchange rate set).';
     }
     document.addEventListener('input', function(e) { if (e.target && e.target.classList && e.target.classList.contains('pr-input')) pricingRuleExample(); });
     document.addEventListener('change', function(e) { if (e.target && e.target.classList && e.target.classList.contains('pr-input')) pricingRuleExample(); });
@@ -5962,29 +5965,40 @@ function sendToTelegram(order, callback) {
             results[1].forEach(function(d) {
                 var h = d.data() || {};
                 var sp = h.storeProductId && live[h.storeProductId];
-                if (!sp || (Number(sp.price) || 0) > 0) return;   // only imported items still at $0
+                if (!sp) return;
                 var r = pricingRuleCalc(pricingYuan(h.price), p);
-                if (r) todo.push({ id: h.storeProductId, name: sp.name || h.storeProductName || h.storeProductId, yuan: h.price, r: r });
+                if (!r) return;
+                var name = sp.name || h.storeProductName || h.storeProductId;
+                if ((Number(sp.price) || 0) > 0) {
+                    // Already priced: fix the cost only, keep the sell price.
+                    var oldCost = (sp.costPrice != null && sp.costPrice !== '') ? Number(sp.costPrice) : null;
+                    if (oldCost === null || Math.abs(oldCost - r.cost) > 0.005) todo.push({ id: h.storeProductId, name: name, yuan: h.price, r: r, costOnly: true, oldCost: oldCost });
+                } else {
+                    todo.push({ id: h.storeProductId, name: name, yuan: h.price, r: r });
+                }
             });
-            if (!todo.length) { st.innerHTML = '<span style="color:var(--gray)">No imported items at $0 with a 1688 price.</span>'; return; }
-            var lines = todo.slice(0, 10).map(function(x) { return x.name + ': ' + x.yuan + ' → cost $' + x.r.cost.toFixed(2) + ', sell $' + x.r.price.toFixed(2); });
-            if (!confirm('Set prices on ' + todo.length + ' item' + (todo.length === 1 ? '' : 's') + '?\n\n' + lines.join('\n') + (todo.length > 10 ? '\n...' : ''))) {
+            if (!todo.length) { st.innerHTML = '<span style="color:var(--gray)">Nothing to change — imported items are priced and their cost is correct.</span>'; return; }
+            var priceTodo = todo.filter(function(x) { return !x.costOnly; }), costTodo = todo.filter(function(x) { return x.costOnly; });
+            var msg = '';
+            if (priceTodo.length) msg += 'Set price on ' + priceTodo.length + ' item' + (priceTodo.length === 1 ? '' : 's') + ' at $0:\n' + priceTodo.slice(0, 8).map(function(x) { return x.name + ': ' + x.yuan + ' → cost $' + x.r.cost.toFixed(2) + ', sell $' + x.r.price.toFixed(2); }).join('\n') + (priceTodo.length > 8 ? '\n...' : '') + '\n\n';
+            if (costTodo.length) msg += 'Correct the cost on ' + costTodo.length + ' priced item' + (costTodo.length === 1 ? '' : 's') + ' (sell price kept):\n' + costTodo.slice(0, 8).map(function(x) { return x.name + ': cost ' + (x.oldCost === null ? 'none' : '$' + x.oldCost.toFixed(2)) + ' → $' + x.r.cost.toFixed(2); }).join('\n') + (costTodo.length > 8 ? '\n...' : '') + '\n\n';
+            if (!confirm(msg + 'Go ahead?')) {
                 st.innerHTML = '<span style="color:var(--gray)">Cancelled — nothing changed.</span>'; return;
             }
             var now = new Date().toISOString();
             for (var i = 0; i < todo.length; i += 400) {
                 var batch = db.batch();
-                todo.slice(i, i + 400).forEach(function(x) { batch.update(storeRef.doc(x.id), { price: x.r.price, costPrice: x.r.cost, updatedAt: now }); });
+                todo.slice(i, i + 400).forEach(function(x) { batch.update(storeRef.doc(x.id), x.costOnly ? { costPrice: x.r.cost, updatedAt: now } : { price: x.r.price, costPrice: x.r.cost, updatedAt: now }); });
                 await batch.commit();
             }
             // Keep this device's copy in step so the Sync button can't write $0 back
             todo.forEach(function(x) {
                 var prod = STATE.products.find(function(q) { return q.id === x.id; });
-                if (prod) { prod.price = x.r.price; prod.costPrice = x.r.cost; }
+                if (prod) { if (!x.costOnly) prod.price = x.r.price; prod.costPrice = x.r.cost; }
             });
             saveProducts(); renderProducts(); renderInventory();
-            st.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Prices set on ' + todo.length + ' item' + (todo.length === 1 ? '' : 's') + '.</span>';
-            logActivity('Pricing Rule Applied', todo.length + ' imported items priced');
+            st.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Done — ' + priceTodo.length + ' priced, ' + costTodo.length + ' cost corrected.</span>';
+            logActivity('Pricing Rule Applied', priceTodo.length + ' imported items priced, ' + costTodo.length + ' costs corrected');
         } catch (e) {
             st.innerHTML = '<span style="color:var(--danger)">Failed: ' + e.message + '</span>';
         }
