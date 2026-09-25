@@ -357,6 +357,30 @@
                 <label class="hint" for="csvColumnSelect" data-t="whichColumnLabel">Which column has the item name?</label>
                 <select class="form-control" id="csvColumnSelect"></select>
                 <p class="hint" id="csvPreviewText"></p>
+                <!-- Optional: also create matching items in the Goat Kids store app.
+                     Purely additive — only ever creates brand-new products in Main
+                     Store; never edits or deletes anything that already exists, and
+                     never touches branch stock or store-to-store transfers. -->
+                <div id="storePushBox" class="hidden" style="margin-top:12px;padding:10px;border:1px dashed var(--gray-light);border-radius:8px">
+                  <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;font-weight:600;cursor:pointer">
+                    <input type="checkbox" id="storePushToggle"> Also create these items in the Goat Kids store app
+                  </label>
+                  <div id="storePushFields" class="hidden" style="margin-top:10px">
+                    <label class="hint" for="storePushCategory">Category for every item in this file</label>
+                    <select class="form-control" id="storePushCategory" style="max-width:260px">
+                      <option value="Dresses">Dresses</option>
+                      <option value="Girl Clothes">Girl Clothes</option>
+                      <option value="Boy Clothes">Boy Clothes</option>
+                      <option value="Baby Shirt">Baby Shirt</option>
+                      <option value="Baby Shoes">Baby Shoes</option>
+                      <option value="Baby Accessories">Baby Accessories</option>
+                    </select>
+                    <label class="hint" for="storePushPrefix" style="margin-top:8px;display:block">Name prefix — each item becomes "prefix + next number"</label>
+                    <input class="form-control" id="storePushPrefix" style="max-width:260px" placeholder="e.g. cutie dress">
+                    <p class="hint" id="storePushPreview" style="margin-top:8px"></p>
+                    <button class="btn btn-outline btn-small" id="storePushPreviewBtn" style="margin-top:6px" type="button">Check next numbers</button>
+                  </div>
+                </div>
                 <button class="btn btn-primary btn-small" id="csvImportBtn" data-t="importItemsBtn">Import these items</button>
               </div>
             </div>
@@ -1825,6 +1849,7 @@ function handleParsedRows(){
   }
 
   csvOrderEntries = detectOrderExport();
+  storePushReset(!!csvOrderEntries); // store-app option only makes sense for 1688 order exports
   if(csvOrderEntries){
     document.getElementById('csvColumnSelect').style.display = 'none';
     document.querySelector('label[for="csvColumnSelect"]').style.display = 'none';
@@ -1881,7 +1906,154 @@ function updateCsvPreview(){
     : 'No values found in that column.';
 }
 
+// ---------- Also create items in the Goat Kids store app ----------
+// Strictly ADDITIVE: this only ever creates brand-new product documents in
+// Main Store (GOAT-1979). It never edits, overwrites or deletes an existing
+// product, never touches branch stores, and never touches transfers.
+// The 1688 link stays on the restock side only — the store product gets just
+// its own name (prefix + next number), category and sizes. The restock
+// catalog entry remembers which store product it created (storeProductId),
+// so importing the same file twice won't create duplicates.
+const STORE_MAIN_ID = 'GOAT-1979';
+const STORE_PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400';
+
+function storePushReset(show){
+  document.getElementById('storePushBox').classList.toggle('hidden', !show);
+  document.getElementById('storePushToggle').checked = false;
+  document.getElementById('storePushFields').classList.add('hidden');
+  document.getElementById('storePushPreview').textContent = '';
+}
+
+document.getElementById('storePushToggle').addEventListener('change', (e) => {
+  document.getElementById('storePushFields').classList.toggle('hidden', !e.target.checked);
+});
+
+function storeEscapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// "颜色: 粉色 适合身高: 120cm" -> "120cm". Colour is dropped; the supplier's
+// own size text is kept as-is so it can be corrected later in the app.
+function storeSizesFromVariants(variants){
+  const seen = new Set();
+  const out = [];
+  (variants || []).forEach(v => {
+    const m = v.match(/适合身高[:：]\s*([^\s,;，；]+)/) || v.match(/尺码[:：]\s*([^\s,;，；]+)/);
+    const size = (m ? m[1] : v).trim();
+    if(size && !seen.has(size)){ seen.add(size); out.push(size); }
+  });
+  out.sort((a, b) => ((parseFloat(a) || 0) - (parseFloat(b) || 0)) || a.localeCompare(b));
+  return out.map(name => ({ name, qty: 0 }));
+}
+
+// Reads Main Store's products and works out exactly what would be created.
+// Used by both the "Check next numbers" preview and the real import, so what
+// you see in the preview is what gets written.
+async function storeBuildPlan(entries, prefixRaw){
+  const prefix = prefixRaw.trim();
+  const snap = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').get();
+  const existing = [];
+  snap.forEach(d => existing.push({ id: d.id, name: ((d.data().name || '') + '').trim() }));
+  const existingIds = new Set(existing.map(p => p.id));
+  const existingNames = new Set(existing.map(p => p.name.toLowerCase()));
+
+  // Highest number already used with this prefix (deleted-but-kept items count
+  // too, so a number is never reused). Copies the existing spelling/spacing.
+  const re = new RegExp('^(' + storeEscapeRegExp(prefix) + ')(\\s*)(\\d+)$', 'i');
+  let max = 0, lastName = '', namePrefix = prefix, sep = ' ';
+  existing.forEach(p => {
+    const m = p.name.match(re);
+    if(m && parseInt(m[3], 10) >= max){
+      max = parseInt(m[3], 10); lastName = p.name; namePrefix = m[1]; sep = m[2];
+    }
+  });
+
+  // Skip products this catalog already created in the store earlier.
+  const plan = [];
+  const skipped = [];
+  let next = max + 1;
+  for(const e of entries){
+    const hist = await db.collection('restockTool_history').doc(e.offerId).get();
+    const linkedId = hist.exists ? hist.data().storeProductId : null;
+    if(linkedId && existingIds.has(linkedId)){
+      skipped.push(hist.data().storeProductName || e.title);
+      continue;
+    }
+    let name = namePrefix + sep + next;
+    while(existingNames.has(name.toLowerCase())){ next++; name = namePrefix + sep + next; }
+    existingNames.add(name.toLowerCase());
+    plan.push({ entry: e, name, sizes: storeSizesFromVariants(e.sizes) });
+    next++;
+  }
+  return { plan, skipped, lastName };
+}
+
+function storePlanSummary(result, category){
+  const { plan, skipped, lastName } = result;
+  let txt = '';
+  if(plan.length){
+    txt += `Will create ${plan.length} new item${plan.length === 1 ? '' : 's'} in "${category}": ` +
+           (plan.length === 1 ? plan[0].name : `${plan[0].name} → ${plan[plan.length - 1].name}`) + '. ';
+  } else {
+    txt += 'Nothing new to create. ';
+  }
+  txt += lastName
+    ? `Last existing item: ${lastName}.`
+    : 'No existing item uses this prefix, so numbering starts at 1 — check the spelling.';
+  if(skipped.length) txt += ` Skipping ${skipped.length} already in the app (${skipped.slice(0, 3).join(', ')}${skipped.length > 3 ? ', ...' : ''}).`;
+  return txt;
+}
+
+document.getElementById('storePushPreviewBtn').onclick = async () => {
+  const out = document.getElementById('storePushPreview');
+  const prefix = document.getElementById('storePushPrefix').value;
+  if(!prefix.trim()){ out.textContent = 'Type a name prefix first.'; return; }
+  if(!db){ out.textContent = 'Not connected to the database — cannot check.'; return; }
+  if(!csvOrderEntries){ return; }
+  out.textContent = 'Checking...';
+  try{
+    const result = await storeBuildPlan(csvOrderEntries, prefix);
+    out.textContent = storePlanSummary(result, document.getElementById('storePushCategory').value);
+  }catch(err){
+    out.textContent = 'Could not read the store products: ' + err.message;
+  }
+};
+
+// Writes all new store products in ONE batch: either every item is created
+// or none are. Each product is tagged with importBatch so a whole import can
+// be found (and removed) later if something looks wrong.
+async function storePushEntries(entries, prefix, category){
+  const result = await storeBuildPlan(entries, prefix);
+  if(!result.plan.length) return { created: 0, skipped: result.skipped.length, cancelled: false };
+  if(!confirm(storePlanSummary(result, category) + '\n\nCreate these in the Goat Kids store app (Main Store)?')){
+    return { created: 0, skipped: result.skipped.length, cancelled: true };
+  }
+  const now = Date.now();
+  const importBatch = 'restock-' + now;
+  const batch = db.batch();
+  result.plan.forEach((item, i) => {
+    const id = 'p' + (now + i);
+    batch.set(db.collection('stores').doc(STORE_MAIN_ID).collection('products').doc(id), {
+      name: item.name,
+      slug: item.name.trim().toLowerCase().replace(/\s+/g, '_'),
+      price: 0, costPrice: null, stock: 0,
+      category, images: [STORE_PLACEHOLDER_IMG], sizes: item.sizes,
+      active: true, addedAt: now, lastRestockDate: now,
+      updatedAt: new Date().toISOString(), importBatch
+    });
+    // The link lives on the restock side only.
+    batch.set(db.collection('restockTool_history').doc(item.entry.offerId),
+      { storeProductId: id, storeProductName: item.name }, { merge: true });
+  });
+  await batch.commit();
+  return { created: result.plan.length, skipped: result.skipped.length, cancelled: false,
+           first: result.plan[0].name, last: result.plan[result.plan.length - 1].name };
+}
+
 document.getElementById('csvImportBtn').onclick = async () => {
+  const storePush = !!csvOrderEntries && document.getElementById('storePushToggle').checked;
+  const storePrefix = document.getElementById('storePushPrefix').value;
+  const storeCategory = document.getElementById('storePushCategory').value;
+  if(storePush && !storePrefix.trim()){ alert('Type a name prefix for the store items first (e.g. cutie dress).'); return; }
+  if(storePush && !db){ alert('Not connected to the database, so items cannot be created in the store app.'); return; }
   let importCount = 0;
   let failCount = 0;
   const resultEl = document.getElementById('bulkImportResult');
@@ -1912,6 +2084,17 @@ document.getElementById('csvImportBtn').onclick = async () => {
     resultEl.textContent = failCount === 0
       ? `Added ${importCount} product${importCount === 1 ? '' : 's'} from your order history to your catalog.`
       : `Saved ${importCount} product${importCount === 1 ? '' : 's'}, but ${failCount} failed to save — likely a permissions issue. Check your Firestore rules are published, then try again.`;
+    if(storePush && failCount === 0){
+      try{
+        const r = await storePushEntries(csvOrderEntries, storePrefix, storeCategory);
+        if(r.cancelled) resultEl.textContent += ' Store app: cancelled, nothing created.';
+        else if(r.created) resultEl.textContent += ` Store app: created ${r.created} item${r.created === 1 ? '' : 's'} (${r.first}${r.created > 1 ? ' → ' + r.last : ''}) with price $0 and stock 0 — set prices in the app.` + (r.skipped ? ` ${r.skipped} already existed, skipped.` : '');
+        else resultEl.textContent += ` Store app: nothing new to create${r.skipped ? ' (' + r.skipped + ' already exist)' : ''}.`;
+      }catch(err){
+        console.warn('Store push failed:', err);
+        resultEl.textContent += ' Store app: FAILED, nothing was created (' + err.message + ').';
+      }
+    }
   } else {
     const colIndex = parseInt(document.getElementById('csvColumnSelect').value);
     const names = [...new Set(csvNamesForColumn(colIndex))];
@@ -1941,6 +2124,7 @@ document.getElementById('csvImportBtn').onclick = async () => {
   document.getElementById('csvFile').value = '';
   csvRows = [];
   csvOrderEntries = null;
+  storePushReset(false);
   resultEl.style.display = 'block';
 };
 
