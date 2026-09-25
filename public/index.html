@@ -413,11 +413,11 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                     <input type="password" id="setupOrdersPass" class="form-control" placeholder="Unlocks orders only">
                 </div>
                 <div class="form-group">
-                    <label style="font-size:0.82rem">Inventory / Settings Password <span style="color:#a0aec0;font-weight:400">(default: inventory123)</span></label>
-                    <input type="password" id="setupInventoryPass" class="form-control" placeholder="Unlocks inventory + Settings page">
+                    <label style="font-size:0.82rem">Inventory Password <span style="color:#a0aec0;font-weight:400">(default: inventory123)</span></label>
+                    <input type="password" id="setupInventoryPass" class="form-control" placeholder="Unlocks inventory">
                 </div>
                 <div style="font-size:0.75rem;color:#718096;margin-top:0.25rem">
-                    💡 Settings page unlocks with <b>Admin</b> or <b>Inventory/Settings</b> password
+                    💡 Settings page unlocks with the <b>Admin</b> password, or the <b>Inventory</b> password until you set a separate Settings password (Settings → Change Password)
                 </div>
             </div>
             <button class="btn btn-primary w-full" style="margin-top:0.5rem" onclick="completeSetup()">
@@ -925,7 +925,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                             <div style="background:#fff;border-radius:16px;padding:2rem;max-width:320px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
                                 <div style="font-size:2.5rem;margin-bottom:0.5rem"></div>
                                 <h3 style="margin-bottom:0.25rem;color:var(--gray-dark)">Settings Protected</h3>
-                                <p style="font-size:0.85rem;color:var(--gray);margin-bottom:1.5rem">Enter your admin password to access settings</p>
+                                <p style="font-size:0.85rem;color:var(--gray);margin-bottom:1.5rem">Enter the Settings password (or Full Admin password) to access settings</p>
                                 <div style="position:relative;margin-bottom:1rem">
                                     <input type="password" id="settingsLockInput" class="form-control" placeholder="Enter password" style="padding-right:2.5rem;text-align:center;letter-spacing:2px" onkeydown="if(event.key==='Enter')unlockSettings()">
                                     <button onclick="toggleSettingsLockVisibility()" style="position:absolute;right:0.75rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray)" id="settingsLockEye"><i class="fas fa-eye"></i></button>
@@ -1101,6 +1101,30 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                 <div id="telegramConfigStatus" style="margin-top:0.75rem;font-size:0.85rem"></div>
                             </div>
                         </div>
+                        <!-- Store pricing rule (Main Store only) -->
+                        <div class="admin-card" id="pricingRuleCard" style="display:none">
+                            <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-tags" style="color:var(--primary)"></i> Store Pricing Rule</div></div>
+                            <div class="admin-card-body">
+                                <p style="font-size:0.8rem;color:var(--gray);margin-bottom:0.75rem">Cost and sell price for items created by the 1688 import in the Restock tool.</p>
+                                <div class="form-group"><label>Exchange rate (¥ per $1)</label><input type="number" step="0.01" min="0" id="prRate" class="form-control pr-input" placeholder="e.g. 7.1"></div>
+                                <div class="form-group"><label>Extra cost % (shipping, customs...)</label><input type="number" step="0.1" min="0" id="prExtraPct" class="form-control pr-input" placeholder="e.g. 15"></div>
+                                <div class="form-group"><label>Extra cost per item ($)</label><input type="number" step="0.01" min="0" id="prExtraFlat" class="form-control pr-input" placeholder="e.g. 0.50"></div>
+                                <div class="form-group"><label>Sell price = cost ×</label><input type="number" step="0.01" min="0" id="prMarkup" class="form-control pr-input" placeholder="e.g. 2.5"></div>
+                                <div class="form-group"><label>Round sell price up to</label>
+                                    <select id="prRound" class="form-control pr-input">
+                                        <option value="0">No rounding</option>
+                                        <option value="0.25">$0.25</option>
+                                        <option value="0.5">$0.50</option>
+                                        <option value="1" selected>$1</option>
+                                    </select>
+                                </div>
+                                <div id="prExample" style="font-size:0.85rem;font-weight:600;margin-bottom:0.75rem;color:var(--gray-dark)"></div>
+                                <button class="btn btn-primary w-full" onclick="pricingRuleSave()"><i class="fas fa-save"></i> Save Rule</button>
+                                <button class="btn btn-secondary w-full" style="margin-top:0.5rem" onclick="pricingRuleApply()"><i class="fas fa-magic"></i> Apply to imported items still at $0</button>
+                                <div id="prStatus" style="margin-top:0.75rem;font-size:0.85rem"></div>
+                                <div style="font-size:0.75rem;color:var(--gray);margin-top:0.5rem">Leave the exchange rate empty to turn the rule off. The rule only prices new imports and imported items still at $0 — it never changes a price you've set.</div>
+                            </div>
+                        </div>
                         <!-- Security -->
                         <div class="admin-card">
                             <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-shield-alt" style="color:var(--danger)"></i> Change Password</div></div>
@@ -1110,7 +1134,8 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                     <select id="changePwRole" class="form-control">
                                         <option value="full">Full Admin (unlocks everything + Settings)</option>
                                         <option value="orders">Orders password (orders only)</option>
-                                        <option value="inventory">Inventory / Settings password</option>
+                                        <option value="inventory">Inventory password</option>
+                                        <option value="settings">Settings page password</option>
                                         <option value="productedit">Product Edit/Delete password</option>
                                         <option value="restock">Restock Settings password</option>
                                     </select>
@@ -3366,6 +3391,23 @@ function sendToTelegram(order, callback) {
         localStorage.setItem('goatPasswords', JSON.stringify(defaults));
         return defaults;
     }
+    // Merge Firestore's password doc into the local cache without dropping
+    // keys it doesn't carry (e.g. productEditPass / settingsPass).
+    function cachePasswordsFrom(d, fallback) {
+        var merged = Object.assign({}, fallback || {});
+        ['fullPass', 'ordersPass', 'inventoryPass', 'productEditPass', 'settingsPass'].forEach(function(k) {
+            if (d && d[k]) merged[k] = d[k];
+        });
+        localStorage.setItem('goatPasswords', JSON.stringify(merged));
+    }
+    // Settings unlocks with Full Admin, or the Settings password once one is
+    // set. Until then the Inventory password still opens it (old behaviour).
+    function settingsPasswordOk(pw, d) {
+        if (!pw || !d) return false;
+        if (d.fullPass && pw === d.fullPass) return true;
+        if (d.settingsPass) return pw === d.settingsPass;
+        return !!d.inventoryPass && pw === d.inventoryPass;
+    }
     function savePasswords(obj) {
         localStorage.setItem('goatPasswords', JSON.stringify(obj));
         // Save to Firebase per store so each store has independent passwords.
@@ -3377,6 +3419,8 @@ function sendToTelegram(order, callback) {
                 fullPass: obj.fullPass,
                 ordersPass: obj.ordersPass,
                 inventoryPass: obj.inventoryPass,
+                ...(obj.productEditPass ? { productEditPass: obj.productEditPass } : {}),
+                ...(obj.settingsPass ? { settingsPass: obj.settingsPass } : {}),
                 updatedAt: new Date().toISOString()
             }, { merge: true }).then(function(){ return true; }).catch(function(e){
                 console.warn('Password sync failed:', e);
@@ -3457,8 +3501,12 @@ function sendToTelegram(order, callback) {
         }
 
         var passwords = getStoredPasswords();
-        var key = role === 'full' ? 'fullPass' : role === 'orders' ? 'ordersPass' : role === 'productedit' ? 'productEditPass' : 'inventoryPass';
-        var currentCorrect = passwords[key] || (role === 'productedit' ? (passwords.fullPass || 'admin123') : null);
+        var key = role === 'full' ? 'fullPass' : role === 'orders' ? 'ordersPass' : role === 'productedit' ? 'productEditPass' : role === 'settings' ? 'settingsPass' : 'inventoryPass';
+        var currentCorrect = passwords[key] || (role === 'productedit' ? (passwords.fullPass || 'admin123') : role === 'settings' ? passwords.inventoryPass : null);
+        // First time setting a Settings password: the Full Admin password is accepted as "current" too
+        if (role === 'settings' && !passwords.settingsPass && cur === passwords.fullPass) currentCorrect = cur;
+        if (role === 'settings' && np === passwords.inventoryPass) { statusEl.innerHTML = '<span style="color:var(--danger)">Settings password must be different from the Inventory password.</span>'; return; }
+        if (role === 'inventory' && passwords.settingsPass && np === passwords.settingsPass) { statusEl.innerHTML = '<span style="color:var(--danger)">Inventory password must be different from the Settings password.</span>'; return; }
         if (currentCorrect !== cur) { statusEl.innerHTML = '<span style="color:var(--danger)">Current password is incorrect.</span>'; return; }
         passwords[key] = np;
 
@@ -3512,11 +3560,7 @@ function sendToTelegram(order, callback) {
             if (data) {
                 firestoreReached = true; // Firestore answered — treat it as the source of truth
                 // Self-heal local cache so offline logins later use the current password
-                localStorage.setItem('goatPasswords', JSON.stringify({
-                    fullPass: data.fullPass || passwords.fullPass,
-                    ordersPass: data.ordersPass || passwords.ordersPass,
-                    inventoryPass: data.inventoryPass || passwords.inventoryPass
-                }));
+                cachePasswordsFrom(data, passwords);
                 passwords = getStoredPasswords();
                 if (role === 'full' && pw === data.fullPass) { valid = true; name = 'Full Admin'; }
                 else if (role === 'orders' && pw === data.ordersPass) { valid = true; name = 'Order Manager'; }
@@ -3850,11 +3894,7 @@ function sendToTelegram(order, callback) {
                 if (!credDoc.exists) credDoc = await db.collection('_admin_').doc('credentials').get();
                 if (credDoc.exists) {
                     var creds = credDoc.data();
-                    localStorage.setItem('goatPasswords', JSON.stringify({
-                        fullPass: creds.fullPass || 'admin123',
-                        ordersPass: creds.ordersPass || 'orders123',
-                        inventoryPass: creds.inventoryPass || 'inventory123'
-                    }));
+                    cachePasswordsFrom(creds, Object.assign({ fullPass: 'admin123', ordersPass: 'orders123', inventoryPass: 'inventory123' }, getStoredPasswords()));
                 }
             } catch(e) { console.warn('Password load failed:', e); }
 
@@ -5851,6 +5891,105 @@ function sendToTelegram(order, callback) {
         }
     }
 
+    // =============================================
+    // STORE PRICING RULE (Main Store) — used by the Restock tool's 1688 import.
+    // Saved in restockTool_config/settings.pricing so the Restock tool reads it.
+    // cost = yuan / rate × (1 + extra%) + extra per item; sell = cost × markup, rounded UP
+    // =============================================
+    function pricingRuleGet() {
+        var num = function(id) { var el = document.getElementById(id); var v = parseFloat(el ? el.value : ''); return isFinite(v) ? v : 0; };
+        return { rate: num('prRate'), extraPct: num('prExtraPct'), extraFlat: num('prExtraFlat'), markup: num('prMarkup'), round: num('prRound') };
+    }
+    function pricingRuleFill(p) {
+        p = p || {};
+        var set = function(id, v) { var el = document.getElementById(id); if (el) el.value = v ? v : ''; };
+        set('prRate', p.rate); set('prExtraPct', p.extraPct); set('prExtraFlat', p.extraFlat); set('prMarkup', p.markup);
+        var r = document.getElementById('prRound'); if (r) r.value = String(p.round != null ? p.round : 1);
+        pricingRuleExample();
+    }
+    function pricingYuan(v) { var n = parseFloat(String(v == null ? '' : v).replace(/[^\d.]/g, '')); return isFinite(n) ? n : 0; }
+    function pricingRuleCalc(yuan, p) {
+        p = p || pricingRuleGet();
+        if (!(p.rate > 0) || !(yuan > 0)) return null;
+        var cost = Math.round((yuan / p.rate * (1 + (p.extraPct || 0) / 100) + (p.extraFlat || 0)) * 100) / 100;
+        var sell = cost * (p.markup > 0 ? p.markup : 1);
+        if (p.round > 0) sell = Math.ceil(sell / p.round - 1e-9) * p.round;
+        return { cost: cost, price: Math.round(sell * 100) / 100 };
+    }
+    function pricingRuleExample() {
+        var el = document.getElementById('prExample'); if (!el) return;
+        var r = pricingRuleCalc(50);
+        el.textContent = r ? ('Example: ¥50 → cost $' + r.cost.toFixed(2) + ' → sell $' + r.price.toFixed(2)) : 'Rule is off (no exchange rate set).';
+    }
+    document.addEventListener('input', function(e) { if (e.target && e.target.classList && e.target.classList.contains('pr-input')) pricingRuleExample(); });
+    document.addEventListener('change', function(e) { if (e.target && e.target.classList && e.target.classList.contains('pr-input')) pricingRuleExample(); });
+
+    async function pricingRuleLoad() {
+        var st = document.getElementById('prStatus'); if (st) st.innerHTML = '';
+        if (!db) { pricingRuleFill(null); return; }
+        try {
+            var doc = await db.collection('restockTool_config').doc('settings').get();
+            pricingRuleFill(doc.exists ? doc.data().pricing : null);
+        } catch (e) {
+            if (st) st.innerHTML = '<span style="color:var(--danger)">Could not load rule: ' + e.message + '</span>';
+        }
+    }
+    async function pricingRuleSave() {
+        var st = document.getElementById('prStatus');
+        if (!db || !STATE.firebaseOnline) { st.innerHTML = '<span style="color:var(--danger)">Offline — rule not saved.</span>'; return; }
+        var p = pricingRuleGet();
+        try {
+            await db.collection('restockTool_config').doc('settings').set({ pricing: p, pricingUpdatedAt: Date.now() }, { merge: true });
+            st.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Rule saved. New imports will use it.</span>';
+            logActivity('Pricing Rule Saved', p.rate > 0 ? ('rate ' + p.rate + ', +' + p.extraPct + '%, +$' + p.extraFlat + ', ×' + p.markup + ', round $' + p.round) : 'rule off');
+        } catch (e) {
+            st.innerHTML = '<span style="color:var(--danger)">Save failed: ' + e.message + '</span>';
+        }
+    }
+    async function pricingRuleApply() {
+        var st = document.getElementById('prStatus');
+        if (STATE.storeId !== 'GOAT-1979') return;
+        if (!db || !STATE.firebaseOnline) { st.innerHTML = '<span style="color:var(--danger)">Offline — nothing changed.</span>'; return; }
+        var p = pricingRuleGet();
+        if (!pricingRuleCalc(1, p)) { st.innerHTML = '<span style="color:var(--danger)">Set the exchange rate first.</span>'; return; }
+        st.innerHTML = '<span style="color:var(--gray)"><i class="fas fa-spinner fa-spin"></i> Checking...</span>';
+        try {
+            var storeRef = db.collection('stores').doc(STATE.storeId).collection('products');
+            var results = await Promise.all([storeRef.get(), db.collection('restockTool_history').get()]);
+            var live = {};
+            results[0].forEach(function(d) { live[d.id] = d.data() || {}; });
+            var todo = [];
+            results[1].forEach(function(d) {
+                var h = d.data() || {};
+                var sp = h.storeProductId && live[h.storeProductId];
+                if (!sp || (Number(sp.price) || 0) > 0) return;   // only imported items still at $0
+                var r = pricingRuleCalc(pricingYuan(h.price), p);
+                if (r) todo.push({ id: h.storeProductId, name: sp.name || h.storeProductName || h.storeProductId, yuan: h.price, r: r });
+            });
+            if (!todo.length) { st.innerHTML = '<span style="color:var(--gray)">No imported items at $0 with a 1688 price.</span>'; return; }
+            var lines = todo.slice(0, 10).map(function(x) { return x.name + ': ' + x.yuan + ' → cost $' + x.r.cost.toFixed(2) + ', sell $' + x.r.price.toFixed(2); });
+            if (!confirm('Set prices on ' + todo.length + ' item' + (todo.length === 1 ? '' : 's') + '?\n\n' + lines.join('\n') + (todo.length > 10 ? '\n...' : ''))) {
+                st.innerHTML = '<span style="color:var(--gray)">Cancelled — nothing changed.</span>'; return;
+            }
+            var now = new Date().toISOString();
+            for (var i = 0; i < todo.length; i += 400) {
+                var batch = db.batch();
+                todo.slice(i, i + 400).forEach(function(x) { batch.update(storeRef.doc(x.id), { price: x.r.price, costPrice: x.r.cost, updatedAt: now }); });
+                await batch.commit();
+            }
+            // Keep this device's copy in step so the Sync button can't write $0 back
+            todo.forEach(function(x) {
+                var prod = STATE.products.find(function(q) { return q.id === x.id; });
+                if (prod) { prod.price = x.r.price; prod.costPrice = x.r.cost; }
+            });
+            saveProducts(); renderProducts(); renderInventory();
+            st.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Prices set on ' + todo.length + ' item' + (todo.length === 1 ? '' : 's') + '.</span>';
+            logActivity('Pricing Rule Applied', todo.length + ' imported items priced');
+        } catch (e) {
+            st.innerHTML = '<span style="color:var(--danger)">Failed: ' + e.message + '</span>';
+        }
+    }
+
     function lockSettings() {
         var lock = document.getElementById('settingsLock');
         var content = document.getElementById('settingsContent');
@@ -5879,11 +6018,7 @@ function sendToTelegram(order, callback) {
                 if (doc.exists) {
                     firestoreReached = true;
                     var d = doc.data();
-                    localStorage.setItem('goatPasswords', JSON.stringify({
-                        fullPass: d.fullPass || passwords.fullPass,
-                        ordersPass: d.ordersPass || passwords.ordersPass,
-                        inventoryPass: d.inventoryPass || passwords.inventoryPass
-                    }));
+                    cachePasswordsFrom(d, passwords);
                     passwords = getStoredPasswords();
                     if (pw === d.fullPass || pw === d.ordersPass) valid = true;
                 }
@@ -5951,19 +6086,15 @@ function sendToTelegram(order, callback) {
                     firestoreReached = true;
                     var d = doc.data();
                     // Self-heal local cache to match Firestore's current values
-                    localStorage.setItem('goatPasswords', JSON.stringify({
-                        fullPass: d.fullPass || passwords.fullPass,
-                        ordersPass: d.ordersPass || passwords.ordersPass,
-                        inventoryPass: d.inventoryPass || passwords.inventoryPass
-                    }));
+                    cachePasswordsFrom(d, passwords);
                     passwords = getStoredPasswords();
-                    if (pw === d.fullPass || pw === d.inventoryPass) valid = true;
+                    if (settingsPasswordOk(pw, d)) valid = true;
                 }
             } catch(e) { console.warn('Firebase password check failed:', e); }
         }
         // Only fall back to the local cache when Firestore couldn't be reached (offline).
         if (!valid && !firestoreReached) {
-            valid = (pw === passwords.fullPass || pw === passwords.inventoryPass);
+            valid = settingsPasswordOk(pw, passwords);
         }
 
         if (valid) {
@@ -5974,6 +6105,9 @@ function sendToTelegram(order, callback) {
             if (STATE.storeId === 'GOAT-1979') loadBranchListAdmin();
             else { var bc = document.getElementById('manageBranchesCard'); if (bc) bc.style.display = 'none'; }
             populateInventoryRulesForm();
+            var prCard = document.getElementById('pricingRuleCard');
+            if (prCard) prCard.style.display = (STATE.storeId === 'GOAT-1979') ? '' : 'none';
+            if (STATE.storeId === 'GOAT-1979') pricingRuleLoad();
             // Populate Telegram settings
             var savedToken = localStorage.getItem('goatTgToken') || '';
             var savedChat = localStorage.getItem('goatTgChatId') || '';
