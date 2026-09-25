@@ -434,6 +434,15 @@
     </div>
 
     <div id="restockSection" class="hidden">
+      <div class="admin-card hidden" id="incomingCard" style="margin-bottom:16px">
+        <div class="admin-card-header">
+          <div>
+            <h1><i class="fas fa-truck" style="color:var(--primary)"></i> Waiting to receive</h1>
+            <p>Ordered on 1688, not in the store yet. When the goods arrive, press Receive stock to add the ordered sizes to the store app.</p>
+          </div>
+        </div>
+        <div class="admin-card-body"><div id="incomingWrap"></div></div>
+      </div>
       <div class="admin-card">
         <div class="admin-card-header restock-header">
           <div>
@@ -1818,8 +1827,9 @@ document.getElementById('bulkImportBtn').onclick = () => {
 // a preview before importing so nothing goes in silently wrong.
 let csvRows = [];
 let csvOrderEntries = null; // set when a recognized order-export format is detected
+let csvOrderKey = '';        // identifies the 1688 order(s) in the file
 
-const ORDER_EXPORT_HEADERS = { title: '货品标题', price: '单价(元)', supplier: '卖家公司名', offerId: 'Offer ID', styleCode: '货号' };
+const ORDER_EXPORT_HEADERS = { title: '货品标题', price: '单价(元)', supplier: '卖家公司名', offerId: 'Offer ID', styleCode: '货号', qty: '数量', orderNo: '订单编号' };
 
 function looksLikeHeaderRow(row){
   return row.every(cell => (cell || '').toString().length < 30) &&
@@ -1860,6 +1870,7 @@ function detectOrderExport(){
   }
   if(idx.title === -1 || idx.offerId === -1) return null;
 
+  const orderNos = new Set();
   // Each row is one size/colour variant of an order — group by Offer ID so
   // the many rows for one product collapse into one entry, with every
   // distinct variant text (e.g. "颜色: 杏色 适合身高: 110码/4Y") collected
@@ -1879,17 +1890,28 @@ function detectOrderExport(){
         supplier: idx.supplier > -1 && row[idx.supplier] ? ((row[idx.supplier] || '') + '').trim() : '—',
         url: 'https://detail.1688.com/offer/' + offerId + '.html',
         styleCode: idx.styleCode > -1 ? ((row[idx.styleCode] || '') + '').trim() : '',
-        sizesSet: new Set()
+        sizesSet: new Set(), qtyBySize: {}, qtyTotal: 0
       };
     }
     const variant = rawTitle.slice(grouped[offerId].title.length).trim().replace(/^[\s,;、]+/, '');
     if(variant) grouped[offerId].sizesSet.add(variant);
+    // Ordered quantity (数量) per size — colours of the same size add up.
+    const q = idx.qty > -1 ? Math.round(parseFloat(row[idx.qty]) || 0) : 0;
+    if(q > 0){
+      const sz = sizeNameFromVariant(variant);
+      grouped[offerId].qtyBySize[sz] = (grouped[offerId].qtyBySize[sz] || 0) + q;
+      grouped[offerId].qtyTotal += q;
+    }
+    if(idx.orderNo > -1){ const on = ((row[idx.orderNo] || '') + '').trim(); if(on) orderNos.add(on); }
   }
 
   const entries = Object.values(grouped).map(e => ({
     offerId: e.offerId, title: e.title, price: e.price, supplier: e.supplier, url: e.url,
-    styleCode: e.styleCode || '', sizes: Array.from(e.sizesSet)
+    styleCode: e.styleCode || '', sizes: Array.from(e.sizesSet),
+    qtyBySize: e.qtyBySize, qtyTotal: e.qtyTotal
   }));
+  // One key per 1688 order file, so the same order can't be received twice.
+  csvOrderKey = orderNos.size ? 'o' + hashId(Array.from(orderNos).sort().join(',')) : '';
   return entries.length ? entries : null;
 }
 
@@ -1999,8 +2021,8 @@ function updateCsvPreview(){
 // ---------- store pricing rule ----------
 // The rule is set in the store app (Settings → Store Pricing Rule) and saved
 // in restockTool_config/settings.pricing. This tool only reads it.
-// cost ($) = yuan / rate × (1 + extra%) + extra per item
-// sell ($) = cost × markup, rounded UP to the chosen step
+// cost ($) = yuan / rate  (the plain converted supplier price)
+// sell ($) = (cost × (1 + extra%) + extra per item) × markup, rounded UP
 function pricingGet(){
   try{ return JSON.parse(localStorage.getItem('restockTool_pricing') || 'null') || {}; }catch(e){ return {}; }
 }
@@ -2018,8 +2040,9 @@ function yuanFrom(v){ const n = parseFloat(((v || '') + '').replace(/[^\d.]/g, '
 function pricingCalc(yuan, p){
   p = p || pricingGet();
   if(!(p.rate > 0) || !(yuan > 0)) return null;
-  const cost = Math.round((yuan / p.rate * (1 + (p.extraPct || 0) / 100) + (p.extraFlat || 0)) * 100) / 100;
-  let sell = cost * (p.markup > 0 ? p.markup : 1);
+  const base = yuan / p.rate;
+  const cost = Math.round(base * 100) / 100;
+  let sell = (base * (1 + (p.extraPct || 0) / 100) + (p.extraFlat || 0)) * (p.markup > 0 ? p.markup : 1);
   sell = p.round > 0 ? Math.ceil(sell / p.round - 1e-9) * p.round : sell;
   return { cost, price: Math.round(sell * 100) / 100 };
 }
@@ -2039,12 +2062,16 @@ function storeEscapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
 
 // "颜色: 粉色 适合身高: 120cm" -> "120cm". Colour is dropped; the supplier's
 // own size text is kept as-is so it can be corrected later in the app.
+function sizeNameFromVariant(v){
+  v = (v || '') + '';
+  const m = v.match(/适合身高[:：]\s*([^\s,;，；]+)/) || v.match(/尺码[:：]\s*([^\s,;，；]+)/);
+  return (m ? m[1] : v).trim();
+}
 function storeSizesFromVariants(variants){
   const seen = new Set();
   const out = [];
   (variants || []).forEach(v => {
-    const m = v.match(/适合身高[:：]\s*([^\s,;，；]+)/) || v.match(/尺码[:：]\s*([^\s,;，；]+)/);
-    const size = (m ? m[1] : v).trim();
+    const size = sizeNameFromVariant(v);
     if(size && !seen.has(size)){ seen.add(size); out.push(size); }
   });
   out.sort((a, b) => ((parseFloat(a) || 0) - (parseFloat(b) || 0)) || a.localeCompare(b));
@@ -2220,6 +2247,16 @@ document.getElementById('csvImportBtn').onclick = async () => {
         resultEl.textContent += ' Store app: FAILED, nothing was created (' + err.message + ').';
       }
     }
+    if(db && failCount === 0){
+      try{
+        const q = await incomingQueue(csvOrderEntries, csvOrderKey);
+        if(q.queued) resultEl.textContent += ` ${q.pieces} piece${q.pieces === 1 ? '' : 's'} (${q.queued} item${q.queued === 1 ? '' : 's'}) waiting to receive — press "Receive stock" on the Restock list when the goods arrive.`;
+        if(q.already) resultEl.textContent += ` ${q.already} item${q.already === 1 ? ' was' : 's were'} already queued or received from this order.`;
+      }catch(err){
+        console.warn('Queue incoming failed:', err);
+        resultEl.textContent += ' Could not save the ordered quantities (' + err.message + ').';
+      }
+    }
   } else {
     const colIndex = parseInt(document.getElementById('csvColumnSelect').value);
     const names = [...new Set(csvNamesForColumn(colIndex))];
@@ -2249,9 +2286,147 @@ document.getElementById('csvImportBtn').onclick = async () => {
   document.getElementById('csvFile').value = '';
   csvRows = [];
   csvOrderEntries = null;
+  csvOrderKey = '';
   storePushReset(false);
   resultEl.style.display = 'block';
 };
+
+// ---------- Incoming stock (ordered on 1688, not arrived yet) ----------
+// The import remembers the ordered quantity per size on each catalog entry
+// (restockTool_history/{offerId}.incoming.{batchId}). Nothing touches the
+// store's stock until "Receive stock" is pressed on the Restock list.
+// Only items that are store products created by the import get queued, so
+// the size names always match.
+async function incomingQueue(entries, orderKey){
+  const snap = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').get();
+  const live = {};
+  snap.forEach(d => { live[d.id] = d.data() || {}; });
+  const batchId = 'r' + Date.now();
+  const key = orderKey || batchId;
+  const wb = db.batch();
+  let queued = 0, pieces = 0, already = 0;
+  for(const e of entries){
+    if(!(e.qtyTotal > 0)) continue;
+    const hist = await db.collection('restockTool_history').doc(e.offerId).get();
+    const hd = hist.exists ? (hist.data() || {}) : {};
+    const pid = hd.storeProductId;
+    if(!pid || !live[pid]) continue;
+    const pending = Object.values(hd.incoming || {});
+    if(pending.some(x => x.orderKey === key) || (hd.receivedKeys || []).includes(key)){ already++; continue; }
+    const sizes = Object.keys(e.qtyBySize).filter(n => n).map(n => ({ name: n, qty: e.qtyBySize[n] }));
+    const noSize = e.qtyBySize[''] || 0;
+    wb.set(db.collection('restockTool_history').doc(e.offerId), { incoming: { [batchId]: {
+      orderKey: key, productId: pid, productName: live[pid].name || hd.storeProductName || '',
+      sizes, noSize, total: e.qtyTotal, createdAt: Date.now()
+    } } }, { merge: true });
+    queued++; pieces += e.qtyTotal;
+  }
+  if(queued) await wb.commit();
+  return { queued, pieces, already };
+}
+
+function incomingGroups(){
+  const groups = {};
+  historyCache.forEach(h => {
+    Object.entries(h.incoming || {}).forEach(([bid, x]) => {
+      if(!x || !x.productId) return;
+      (groups[bid] = groups[bid] || { batchId: bid, createdAt: x.createdAt || 0, items: [] })
+        .items.push({ histId: h.id, ...x });
+    });
+  });
+  return Object.values(groups).sort((a, b) => a.createdAt - b.createdAt);
+}
+
+function renderIncoming(){
+  const card = document.getElementById('incomingCard');
+  const wrap = document.getElementById('incomingWrap');
+  if(!card || !wrap) return;
+  const groups = db ? incomingGroups() : [];
+  card.classList.toggle('hidden', !groups.length);
+  wrap.innerHTML = groups.map(g => {
+    const pieces = g.items.reduce((a, x) => a + (x.total || 0), 0);
+    const names = g.items.map(x => x.productName).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const lines = g.items.slice().sort((a, b) => (a.productName || '').localeCompare(b.productName || '', undefined, { numeric: true }))
+      .map(x => `<div class="rl-meta">${escapeHtml(x.productName || '')} — ${escapeHtml((x.sizes || []).map(s => s.name + ' ×' + s.qty).join(', ') || (x.total + ' pcs'))} <b>(${x.total})</b></div>`).join('');
+    return `<div style="border:1px solid var(--gray-light);border-radius:var(--radius);padding:12px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div><b>Ordered ${escapeHtml(new Date(g.createdAt).toLocaleDateString())}</b> · ${g.items.length} item${g.items.length === 1 ? '' : 's'} · ${pieces} pieces
+          <div class="rl-meta">${escapeHtml(names.length > 1 ? names[0] + ' → ' + names[names.length - 1] : names[0] || '')}</div></div>
+        <button class="btn btn-primary btn-small" onclick="incomingReceive('${g.batchId}', this)"><i class="fas fa-box-open"></i> Receive stock</button>
+      </div>
+      <details style="margin-top:8px"><summary style="cursor:pointer;font-size:0.8rem;color:var(--gray-dark)">Show sizes</summary>${lines}</details>
+    </div>`;
+  }).join('');
+}
+
+// Adds the ordered quantities to each store product's sizes in ONE batch,
+// logs a stock adjustment ("New stock received") for the store's
+// reconciliation, and marks the order as received so it can't be doubled.
+async function incomingReceive(batchId, btn){
+  if(!db){ alert('Not connected to the database.'); return; }
+  const g = incomingGroups().find(x => x.batchId === batchId);
+  if(!g) return;
+  if(btn) btn.disabled = true;
+  try{
+    const ref = db.collection('stores').doc(STORE_MAIN_ID).collection('products');
+    const docs = await Promise.all(g.items.map(x => ref.doc(x.productId).get()));
+    const missing = [], zero = [], work = [];
+    g.items.forEach((x, i) => {
+      if(!docs[i].exists){ missing.push(x.productName); return; }
+      const p = docs[i].data() || {};
+      if(!(Number(p.price) > 0)) zero.push(p.name || x.productName);
+      work.push({ x, p });
+    });
+    const pieces = work.reduce((a, w) => a + (w.x.total || 0), 0);
+    let msg = `Receive ${pieces} pieces into ${work.length} item${work.length === 1 ? '' : 's'} in Main Store?`;
+    if(zero.length) msg += `\n\n⚠ ${zero.length} still priced at $0 — they will show as in stock at $0 until you price them (store app → Settings → Store Pricing Rule → Apply):\n` + zero.slice(0, 8).join(', ') + (zero.length > 8 ? ', ...' : '');
+    if(missing.length) msg += `\n\n${missing.length} were deleted from the store and will be skipped: ` + missing.slice(0, 5).join(', ');
+    if(!confirm(msg)){ if(btn) btn.disabled = false; return; }
+
+    const now = Date.now(), iso = new Date().toISOString(), del = firebase.firestore.FieldValue.delete();
+    const writes = [];
+    work.forEach(({ x, p }) => {
+      const oldSizes = Array.isArray(p.sizes) ? p.sizes.map(s => ({ ...s })) : [];
+      const sizes = oldSizes.map(s => ({ ...s }));
+      const deltas = [];
+      (x.sizes || []).forEach(inc => {
+        let s = sizes.find(o => ((o.name || '') + '').trim().toLowerCase() === inc.name.trim().toLowerCase());
+        if(!s){ s = { name: inc.name, qty: 0 }; sizes.push(s); }
+        const before = Number(s.qty) || 0;
+        s.qty = before + inc.qty;
+        deltas.push({ size: s.name, oldQty: before, newQty: s.qty, delta: inc.qty });
+      });
+      const oldStock = Number(p.stock) || 0;
+      const stock = sizes.length ? sizes.reduce((a, s) => a + (Number(s.qty) || 0), 0) + (x.noSize || 0) : oldStock + (x.total || 0);
+      writes.push(b => b.update(ref.doc(x.productId), { sizes, stock, lastRestockDate: now, updatedAt: iso }));
+      writes.push(b => b.set(db.collection('stores').doc(STORE_MAIN_ID).collection('stockAdjustments').doc(), {
+        productId: x.productId, productName: p.name || x.productName, oldStock, newStock: stock,
+        totalDelta: stock - oldStock, sizeDeltas: deltas, reason: 'New stock received',
+        timestamp: now, timeStr: new Date(now).toLocaleString(), user: 'restock-tool'
+      }));
+    });
+    g.items.forEach(x => writes.push(b => b.update(db.collection('restockTool_history').doc(x.histId), {
+      ['incoming.' + batchId]: del,
+      receivedKeys: firebase.firestore.FieldValue.arrayUnion(x.orderKey)
+    })));
+    for(let i = 0; i < writes.length; i += 450){
+      const b = db.batch();
+      writes.slice(i, i + 450).forEach(w => w(b));
+      await b.commit();
+    }
+    db.collection('activityLogs').add({
+      action: 'Stock Received (1688 order)', details: `${pieces} pcs into ${work.length} items: ` + work.map(w => w.p.name).slice(0, 20).join(', '),
+      time: new Date(now).toLocaleString(), timestamp: now, user: 'restock-tool', storeId: STORE_MAIN_ID, storeName: STORE_MAIN_ID
+    }).catch(() => {});
+    alert(`Received ${pieces} pieces into ${work.length} item${work.length === 1 ? '' : 's'}.` +
+          (zero.length ? `\n\n${zero.length} still at $0 — price them in the store app.` : '') +
+          '\n\nIf the store app is open on another device, refresh it before selling or syncing.');
+  }catch(err){
+    console.warn('Receive failed:', err);
+    alert('Receive failed, nothing was changed: ' + err.message);
+    if(btn) btn.disabled = false;
+  }
+}
 
 function confirmRemoveFromRestock(docId){
   if(confirm('Remove this item from the restock list? This can\'t be undone.')){
@@ -2468,6 +2643,7 @@ function setRestockFilter(status){
 }
 
 function renderRestock(){
+  renderIncoming();
   const wrap = document.getElementById('restockListWrap');
   const empty = document.getElementById('restockListEmpty');
   const sendBtn = document.getElementById('sendTelegramBtn');
