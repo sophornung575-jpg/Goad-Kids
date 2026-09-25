@@ -915,6 +915,7 @@ function loadSharedConfig(){
     if(cfg.apifyActor){ document.getElementById('apifyActor').value = cfg.apifyActor; localStorage.setItem('restockTool_apifyActor', cfg.apifyActor); }
     if(cfg.tgToken){ document.getElementById('tgToken').value = cfg.tgToken; localStorage.setItem('restockTool_tgToken', cfg.tgToken); }
     if(cfg.tgChatId){ document.getElementById('tgChatId').value = cfg.tgChatId; localStorage.setItem('restockTool_tgChatId', cfg.tgChatId); }
+    if(cfg.pricing){ localStorage.setItem('restockTool_pricing', JSON.stringify(cfg.pricing)); }
   }).catch(err => console.warn('Shared settings load failed:', err));
 
   // The settings password lives separately, in _admin_/restockConfig, so the
@@ -1995,6 +1996,34 @@ function updateCsvPreview(){
 // its own name (prefix + next number), category and sizes. The restock
 // catalog entry remembers which store product it created (storeProductId),
 // so importing the same file twice won't create duplicates.
+// ---------- store pricing rule ----------
+// The rule is set in the store app (Settings → Store Pricing Rule) and saved
+// in restockTool_config/settings.pricing. This tool only reads it.
+// cost ($) = yuan / rate × (1 + extra%) + extra per item
+// sell ($) = cost × markup, rounded UP to the chosen step
+function pricingGet(){
+  try{ return JSON.parse(localStorage.getItem('restockTool_pricing') || 'null') || {}; }catch(e){ return {}; }
+}
+async function pricingRefresh(){
+  if(!db) return;
+  try{
+    const doc = await db.collection('restockTool_config').doc('settings').get();
+    const p = doc.exists ? doc.data().pricing : null;
+    if(p) localStorage.setItem('restockTool_pricing', JSON.stringify(p));
+    else localStorage.removeItem('restockTool_pricing');
+  }catch(e){ console.warn('Pricing rule load failed:', e); }
+}
+function yuanFrom(v){ const n = parseFloat(((v || '') + '').replace(/[^\d.]/g, '')); return isFinite(n) ? n : 0; }
+// Returns null when the rule is off or the item has no price.
+function pricingCalc(yuan, p){
+  p = p || pricingGet();
+  if(!(p.rate > 0) || !(yuan > 0)) return null;
+  const cost = Math.round((yuan / p.rate * (1 + (p.extraPct || 0) / 100) + (p.extraFlat || 0)) * 100) / 100;
+  let sell = cost * (p.markup > 0 ? p.markup : 1);
+  sell = p.round > 0 ? Math.ceil(sell / p.round - 1e-9) * p.round : sell;
+  return { cost, price: Math.round(sell * 100) / 100 };
+}
+
 function storePushReset(show){
   document.getElementById('storePushBox').classList.toggle('hidden', !show);
   document.getElementById('storePushToggle').checked = false;
@@ -2027,6 +2056,7 @@ function storeSizesFromVariants(variants){
 // you see in the preview is what gets written.
 async function storeBuildPlan(entries, prefixRaw){
   const prefix = prefixRaw.trim();
+  await pricingRefresh();  // always use the latest rule from the store app
   const snap = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').get();
   const existing = [];
   snap.forEach(d => existing.push({ id: d.id, name: ((d.data().name || '') + '').trim() }));
@@ -2065,7 +2095,8 @@ async function storeBuildPlan(entries, prefixRaw){
     let name = namePrefix + sep + next;
     while(existingNames.has(name.toLowerCase())){ next++; name = namePrefix + sep + next; }
     existingNames.add(name.toLowerCase());
-    plan.push({ entry: e, name, sizes: storeSizesFromVariants(e.sizes), images: catalogImgs });
+    plan.push({ entry: e, name, sizes: storeSizesFromVariants(e.sizes), images: catalogImgs,
+                pricing: pricingCalc(yuanFrom(e.price)) });
     next++;
   }
   return { plan, skipped, lastName };
@@ -2079,6 +2110,12 @@ function storePlanSummary(result, category){
            (plan.length === 1 ? plan[0].name : `${plan[0].name} → ${plan[plan.length - 1].name}`) + '. ';
   } else {
     txt += 'Nothing new to create. ';
+  }
+  if(plan.length){
+    const priced = plan.filter(p => p.pricing);
+    txt += priced.length
+      ? `Prices from your rule: ${priced.slice(0, 3).map(p => p.name + ' $' + p.pricing.price.toFixed(2)).join(', ')}${priced.length > 3 ? ', ...' : ''}. `
+      : 'No pricing rule set in the store app — items start at $0. ';
   }
   txt += lastName
     ? `Last existing item: ${lastName}.`
@@ -2119,7 +2156,8 @@ async function storePushEntries(entries, prefix, category){
     batch.set(db.collection('stores').doc(STORE_MAIN_ID).collection('products').doc(id), {
       name: item.name,
       slug: item.name.trim().toLowerCase().replace(/\s+/g, '_'),
-      price: 0, costPrice: null, stock: 0,
+      price: item.pricing ? item.pricing.price : 0,
+      costPrice: item.pricing ? item.pricing.cost : null, stock: 0,
       category, images: item.images.length ? item.images : [STORE_PLACEHOLDER_IMG], sizes: item.sizes,
       active: true, addedAt: now, lastRestockDate: now,
       updatedAt: new Date().toISOString(), importBatch
@@ -2175,7 +2213,7 @@ document.getElementById('csvImportBtn').onclick = async () => {
       try{
         const r = await storePushEntries(csvOrderEntries, storePrefix, storeCategory);
         if(r.cancelled) resultEl.textContent += ' Store app: cancelled, nothing created.';
-        else if(r.created) resultEl.textContent += ` Store app: created ${r.created} item${r.created === 1 ? '' : 's'} (${r.first}${r.created > 1 ? ' → ' + r.last : ''}) with price $0 and stock 0 — set prices in the app.` + (r.skipped ? ` ${r.skipped} already existed, skipped.` : '');
+        else if(r.created) resultEl.textContent += ` Store app: created ${r.created} item${r.created === 1 ? '' : 's'} (${r.first}${r.created > 1 ? ' → ' + r.last : ''}) with stock 0.` + (r.skipped ? ` ${r.skipped} already existed, skipped.` : '');
         else resultEl.textContent += ` Store app: nothing new to create${r.skipped ? ' (' + r.skipped + ' already exist)' : ''}.`;
       }catch(err){
         console.warn('Store push failed:', err);
