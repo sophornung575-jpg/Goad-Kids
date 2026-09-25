@@ -1234,9 +1234,13 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         <span class="report-date-range" id="reportDateRange">Today</span>
                         <span id="reportAllBranchesWrap" style="display:none;align-items:center;gap:6px;margin-left:auto">
                             <span class="date-filter-separator">|</span>
-                            <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;font-weight:600;color:var(--primary);cursor:pointer">
-                                <input type="checkbox" id="reportAllBranchesToggle" onchange="loadReportData()"> <i class="fas fa-store-alt"></i> All Branches Combined
+                            <label for="reportStoreSelect" style="display:flex;align-items:center;gap:6px;font-size:0.85rem;font-weight:600;color:var(--primary)">
+                                <i class="fas fa-store-alt"></i> Store:
                             </label>
+                            <select id="reportStoreSelect" onchange="loadReportData()" style="padding:0.35rem 0.6rem;border:2px solid var(--primary);border-radius:8px;font-size:0.85rem;font-weight:600;color:var(--dark);background:#fff;cursor:pointer;max-width:220px">
+                                <option value="GOAT-1979">Main Store</option>
+                                <option value="ALL">All Branches Combined</option>
+                            </select>
                         </span>
                     </div>
                     <div id="reportScopeLabel" style="display:none;font-size:0.8rem;color:var(--gray);margin:-0.75rem 0 1rem 0.25rem"></div>
@@ -7357,12 +7361,42 @@ function sendToTelegram(order, callback) {
     var _reportProductsByStore = {}; // storeId -> products array, populated in All Branches mode so cost lookups use the right branch's catalog
     var _reportStoreNames = {}; // storeId -> store name, for every store in All Branches mode (used by Stock Overview)
 
-    async function loadReportData() {
-        // Show/hide the All Branches toggle — Main Store full admin only
-        var toggleWrap = document.getElementById('reportAllBranchesWrap');
-        if (toggleWrap) toggleWrap.style.display = (STATE.storeId === 'GOAT-1979' && STATE.adminRole === 'full') ? 'flex' : 'none';
+    // Store picker on the Reports page (Main Store full admin only):
+    //   'GOAT-1979' = Main Store only, 'ALL' = every store combined, any other id = that one branch only.
+    function reportCanPickStore() { return STATE.storeId === 'GOAT-1979' && STATE.adminRole === 'full'; }
+    function reportSelectedStore() {
+        var sel = document.getElementById('reportStoreSelect');
+        if (!sel || !reportCanPickStore()) return STATE.storeId;
+        return sel.value || STATE.storeId;
+    }
+    function reportIsAllMode() { return reportSelectedStore() === 'ALL'; }
+    // The ONE store whose expenses / customer history belong to the report (All mode keeps the logged-in store, as before).
+    function reportScopeStoreId() { var s = reportSelectedStore(); return s === 'ALL' ? STATE.storeId : s; }
 
-        var allBranchesMode = document.getElementById('reportAllBranchesToggle') && document.getElementById('reportAllBranchesToggle').checked && STATE.storeId === 'GOAT-1979';
+    async function reportFillStoreSelect() {
+        var sel = document.getElementById('reportStoreSelect');
+        if (!sel || !reportCanPickStore() || !db || !STATE.firebaseOnline) return;
+        var stores = await cashLoadStoreList(); // same cached Main Store + branches list the Cash tab uses
+        if (sel.options.length === stores.length + 1) return; // already filled
+        var cur = sel.value;
+        var html = '<option value="GOAT-1979">🏬 Main Store</option><option value="ALL">📊 All Branches Combined</option>';
+        var branches = stores.filter(function(s){ return s.id !== 'GOAT-1979'; });
+        if (branches.length) html += '<optgroup label="Branches">' + branches.map(function(s){ return '<option value="' + escHtml(s.id) + '">' + escHtml(s.name) + '</option>'; }).join('') + '</optgroup>';
+        sel.innerHTML = html;
+        sel.value = cur;
+        if (sel.value !== cur) sel.value = 'GOAT-1979';
+    }
+
+    async function loadReportData() {
+        // Show/hide the store picker — Main Store full admin only
+        var toggleWrap = document.getElementById('reportAllBranchesWrap');
+        if (toggleWrap) toggleWrap.style.display = reportCanPickStore() ? 'flex' : 'none';
+        try { await reportFillStoreSelect(); } catch(fe) { console.warn('Report store list failed:', fe.message); }
+
+        var selectedStore = reportSelectedStore();
+        // Anything other than "the store you're logged into" goes through the multi-store loader, which tags every
+        // row with its source store so costs are looked up in the right branch's catalog.
+        var allBranchesMode = selectedStore !== STATE.storeId;
         var scopeLabel = document.getElementById('reportScopeLabel');
         _reportExpenses = {};
         _reportCustomerTypes = null;
@@ -7391,12 +7425,21 @@ function sendToTelegram(order, callback) {
 
         try {
             if (allBranchesMode) {
-                // Build full store list: Main Store + every branch
+                // Build store list: Main Store + every branch (All), or just the one branch picked
                 var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
                 var bSnap = await db.collection('_admin_').doc('branches').get();
                 if (bSnap.exists) { (bSnap.data().list || []).forEach(function(b) { stores.push({ id: b.id, name: b.name }); }); }
+                if (selectedStore !== 'ALL') {
+                    stores = stores.filter(function(s){ return s.id === selectedStore; });
+                    if (!stores.length) stores = [{ id: selectedStore, name: selectedStore }];
+                }
 
-                if (scopeLabel) { scopeLabel.style.display = 'block'; scopeLabel.innerHTML = '<i class="fas fa-info-circle"></i> Showing combined data from ' + stores.length + ' store(s): ' + stores.map(function(s){return escHtml(s.name);}).join(', '); }
+                if (scopeLabel) {
+                    scopeLabel.style.display = 'block';
+                    scopeLabel.innerHTML = selectedStore === 'ALL'
+                        ? '<i class="fas fa-info-circle"></i> Showing combined data from ' + stores.length + ' store(s): ' + stores.map(function(s){return escHtml(s.name);}).join(', ')
+                        : '<i class="fas fa-info-circle"></i> Showing data for <b>' + escHtml(stores[0].name) + '</b> only';
+                }
 
                 var allOrders = [];
                 var allRefunds = [];
@@ -7603,8 +7646,7 @@ function sendToTelegram(order, callback) {
         var el = document.getElementById('storeBreakdownList');
         if (!card || !el) return;
 
-        var allBranchesMode = document.getElementById('reportAllBranchesToggle') && document.getElementById('reportAllBranchesToggle').checked && STATE.storeId === 'GOAT-1979';
-        if (!allBranchesMode) { card.style.display = 'none'; return; }
+        if (!reportIsAllMode()) { card.style.display = 'none'; return; }
         card.style.display = 'block';
 
         var sales = getReportSales();
@@ -7761,7 +7803,7 @@ function sendToTelegram(order, callback) {
                 box('Potential Gross Profit', money(profit), profit >= 0 ? 'var(--success)' : 'var(--danger)') +
                 (tot.noCost ? '<div style="grid-column:1/-1;font-size:0.75rem;color:var(--danger)"><i class="fas fa-triangle-exclamation"></i> ' + tot.noCost + ' in-stock product(s) have no Cost of Production set — their cost is counted as $0.</div>' : '') +
                 (failedStores.length ? '<div style="grid-column:1/-1;font-size:0.75rem;color:var(--danger)"><i class="fas fa-triangle-exclamation"></i> Could not load stock for: ' + failedStores.map(escapeStockCat).join(', ') + ' — not included in these totals.</div>' : '');
-            sumEl.insertAdjacentHTML('afterbegin', '<div style="grid-column:1/-1;font-size:0.78rem;color:var(--gray-dark)"><i class="fas fa-store-alt"></i> ' + (multiStore ? 'All Branches Combined (' + sources.length + ' store' + (sources.length === 1 ? '' : 's') + ')' : 'This store only') + ' — current stock</div>');
+            sumEl.insertAdjacentHTML('afterbegin', '<div style="grid-column:1/-1;font-size:0.78rem;color:var(--gray-dark)"><i class="fas fa-store-alt"></i> ' + (multiStore ? (reportIsAllMode() ? 'All Branches Combined (' + sources.length + ' store' + (sources.length === 1 ? '' : 's') + ')' : escapeStockCat((sources[0] && sources[0].name) || 'Selected store') + ' only') : 'This store only') + ' — current stock</div>');
         }
 
         // Per-category table
@@ -7779,7 +7821,7 @@ function sendToTelegram(order, callback) {
                 }).join('');
                 tblEl.innerHTML = '<table class="inventory-table"><thead><tr><th>Category</th><th style="text-align:right">Units</th><th style="text-align:right">Total Cost</th><th style="text-align:right">Total Price</th><th style="text-align:right">Potential Profit</th></tr></thead><tbody>' + rows +
                     '<tr style="font-weight:700;background:var(--light)"><td>TOTAL</td><td style="text-align:right">' + tot.qty.toLocaleString('en-US') + '</td><td style="text-align:right">' + money(tot.cost) + '</td><td style="text-align:right">' + money(tot.value) + '</td><td style="text-align:right">' + money(tot.value - tot.cost) + '</td></tr></tbody></table>';
-                if (multiStore && byStore.length) {
+                if (multiStore && reportIsAllMode() && byStore.length) {
                     var srows = byStore.map(function(r){
                         return '<tr><td>' + escapeStockCat(r.name) + (r.noCost ? ' <span style="color:var(--danger);font-size:0.7rem">(' + r.noCost + ' no cost)</span>' : '') + '</td>' +
                             '<td style="text-align:right">' + r.qty.toLocaleString('en-US') + '</td>' +
@@ -7850,7 +7892,7 @@ function sendToTelegram(order, callback) {
         var months = getMonthsInRange(dr.start, dr.end);
         try {
             await Promise.all(months.map(async function(mk) {
-                var snap = await db.collection('stores').doc(STATE.storeId).collection('expenses').doc(mk).get();
+                var snap = await db.collection('stores').doc(reportScopeStoreId()).collection('expenses').doc(mk).get();
                 if (snap.exists) _reportExpenses[mk] = snap.data();
             }));
         } catch(e) { console.warn('Expense load failed:', e.message); }
@@ -8537,7 +8579,7 @@ function sendToTelegram(order, callback) {
         var newSet = {}, repeatSet = {};
         try {
             await Promise.all(keyList.map(async function(k) {
-                var ref = db.collection('stores').doc(STATE.storeId).collection('customerIndex').doc(k);
+                var ref = db.collection('stores').doc(reportScopeStoreId()).collection('customerIndex').doc(k);
                 var snap = await ref.get();
                 if (snap.exists && snap.data().firstOrderAt < startTs) repeatSet[k] = true;
                 else newSet[k] = true; // no index entry yet, or their first-ever order falls inside this period
