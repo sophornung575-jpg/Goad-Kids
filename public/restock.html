@@ -323,6 +323,10 @@
         </div>
         <div class="admin-card-body">
           <input type="text" class="form-control" id="historyFilter" data-t-ph="filterPlaceholder" placeholder="Filter your saved products...">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">
+            <button class="btn btn-outline btn-small" id="storePhotoSyncBtn" type="button"><i class="fas fa-images"></i> Sync photos to app</button>
+            <span id="storePhotoSyncStatus" style="font-size:13px;color:var(--gray)"></span>
+          </div>
           <div class="category-filter" id="categoryFilter">
             <button class="category-filter-btn active" data-cat="" onclick="setHistoryCategoryFilter('')" data-t="catAll">All</button>
             <button class="category-filter-btn" data-cat="Girl Clothes" onclick="setHistoryCategoryFilter('Girl Clothes')" data-t="catGirlClothes">Girl Clothes</button>
@@ -960,6 +964,9 @@ function initFirestoreListeners(){
 }
 
 // ---------- shared product card ----------
+const STORE_MAIN_ID = 'GOAT-1979';
+const STORE_PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400';
+
 // Merges the legacy single-image field with the newer images array, so
 // older catalog entries never lose their photo when a second one is added.
 function getImages(p){
@@ -968,7 +975,8 @@ function getImages(p){
   // No supplier photo yet? Borrow the linked store product's photos.
   if(!arr.length && p.linkedProductId && typeof storeProducts !== 'undefined'){
     const sp = storeProducts.find(x => x.id === p.linkedProductId);
-    if(sp && sp.images && sp.images.length) return sp.images.slice();
+    const real = sp ? sp.images.filter(u => u !== STORE_PLACEHOLDER_IMG) : [];
+    if(real.length) return real;
   }
   return arr;
 }
@@ -1099,14 +1107,87 @@ function toggleAddPhoto(id){
   if(form) form.classList.toggle('hidden');
 }
 
+// ---------- photo sync to the Goat Kids store app ----------
+// Only items this page CREATED in the store (storeProductId, set by the
+// order-export import) are synced. Items linked by hand to an older store
+// product are never touched, so existing live photos stay safe.
+// The store item's photos are replaced by the catalog's photo list.
+function restockOwnImages(p){
+  const arr = (Array.isArray(p.images) ? p.images : []).filter(u => typeof u === 'string' && u);
+  if(typeof p.image === 'string' && p.image && !arr.includes(p.image)) arr.push(p.image);
+  return arr;
+}
+
+function setPhotoSyncStatus(msg){
+  const el = document.getElementById('storePhotoSyncStatus');
+  if(el) el.textContent = msg;
+}
+
+function storeSyncOnePhoto(item, imgs){
+  if(!db || !item || !item.storeProductId || !imgs.length) return;
+  const name = item.storeProductName || 'store item';
+  // update() (not set) so a product deleted from the app is never re-created.
+  db.collection('stores').doc(STORE_MAIN_ID).collection('products').doc(item.storeProductId)
+    .update({ images: imgs, updatedAt: new Date().toISOString() })
+    .then(() => setPhotoSyncStatus('Photo synced to ' + name + '.'))
+    .catch(err => setPhotoSyncStatus('Photo NOT synced to ' + name + ' (' + err.message + ') — press "Sync photos to app" to retry.'));
+}
+
+document.getElementById('storePhotoSyncBtn').onclick = async () => {
+  if(!db){ alert('Not connected to the database.'); return; }
+  const btn = document.getElementById('storePhotoSyncBtn');
+  btn.disabled = true;
+  setPhotoSyncStatus('Checking...');
+  try{
+    const snap = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').get();
+    const store = new Map();
+    snap.forEach(d => store.set(d.id, d.data() || {}));
+    const todo = [];
+    historyCache.forEach(h => {
+      if(!h.storeProductId || !store.has(h.storeProductId)) return;
+      const imgs = restockOwnImages(h);
+      if(!imgs.length) return;
+      const cur = Array.isArray(store.get(h.storeProductId).images) ? store.get(h.storeProductId).images : [];
+      if(JSON.stringify(cur) !== JSON.stringify(imgs)) todo.push({ h, imgs });
+    });
+    if(!todo.length){ setPhotoSyncStatus('All photos are already up to date in the app.'); return; }
+    const names = todo.map(x => x.h.storeProductName || x.h.storeProductId);
+    if(!confirm(`Update photos on ${todo.length} store item${todo.length === 1 ? '' : 's'}?\n\n${names.slice(0, 10).join(', ')}${names.length > 10 ? ', ...' : ''}`)){
+      setPhotoSyncStatus('Cancelled.');
+      return;
+    }
+    for(let i = 0; i < todo.length; i += 400){
+      const batch = db.batch();
+      todo.slice(i, i + 400).forEach(({ h, imgs }) => {
+        batch.update(db.collection('stores').doc(STORE_MAIN_ID).collection('products').doc(h.storeProductId),
+          { images: imgs, updatedAt: new Date().toISOString() });
+      });
+      await batch.commit();
+    }
+    setPhotoSyncStatus(`Synced photos to ${todo.length} store item${todo.length === 1 ? '' : 's'}.`);
+  }catch(err){
+    setPhotoSyncStatus('Photo sync failed, nothing changed: ' + err.message);
+  }finally{
+    btn.disabled = false;
+  }
+};
+
 function savePhotoLink(id){
   const input = document.getElementById('addPhotoInput-' + id);
   const url = input.value.trim();
   if(!url) return;
   if(db){
+    const item = historyCache.find(p => p.id === id);
     db.collection('restockTool_history').doc(id).set({
       images: firebase.firestore.FieldValue.arrayUnion(url)
-    }, { merge: true });
+    }, { merge: true }).then(() => {
+      // Auto-send to the store app if this catalog item created a store product.
+      if(item && item.storeProductId){
+        const imgs = restockOwnImages(item);
+        if(!imgs.includes(url)) imgs.push(url);
+        storeSyncOnePhoto(item, imgs);
+      }
+    });
   } else {
     const item = historyCache.find(p => p.id === id);
     if(item){
@@ -1914,9 +1995,6 @@ function updateCsvPreview(){
 // its own name (prefix + next number), category and sizes. The restock
 // catalog entry remembers which store product it created (storeProductId),
 // so importing the same file twice won't create duplicates.
-const STORE_MAIN_ID = 'GOAT-1979';
-const STORE_PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400';
-
 function storePushReset(show){
   document.getElementById('storePushBox').classList.toggle('hidden', !show);
   document.getElementById('storePushToggle').checked = false;
@@ -1972,15 +2050,22 @@ async function storeBuildPlan(entries, prefixRaw){
   let next = max + 1;
   for(const e of entries){
     const hist = await db.collection('restockTool_history').doc(e.offerId).get();
-    const linkedId = hist.exists ? hist.data().storeProductId : null;
-    if(linkedId && existingIds.has(linkedId)){
-      skipped.push(hist.data().storeProductName || e.title);
+    const hd = hist.exists ? (hist.data() || {}) : {};
+    // Already in the app: created by an earlier import, or linked by hand to
+    // an existing store product (a re-order of something you already sell).
+    if(hd.storeProductId && existingIds.has(hd.storeProductId)){
+      skipped.push(hd.storeProductName || e.title);
       continue;
     }
+    if(hd.linkedProductId && (hd.linkedStoreId || STORE_MAIN_ID) === STORE_MAIN_ID && existingIds.has(hd.linkedProductId)){
+      skipped.push(hd.linkedProductName || e.title);
+      continue;
+    }
+    const catalogImgs = restockOwnImages(hd);
     let name = namePrefix + sep + next;
     while(existingNames.has(name.toLowerCase())){ next++; name = namePrefix + sep + next; }
     existingNames.add(name.toLowerCase());
-    plan.push({ entry: e, name, sizes: storeSizesFromVariants(e.sizes) });
+    plan.push({ entry: e, name, sizes: storeSizesFromVariants(e.sizes), images: catalogImgs });
     next++;
   }
   return { plan, skipped, lastName };
@@ -2035,13 +2120,15 @@ async function storePushEntries(entries, prefix, category){
       name: item.name,
       slug: item.name.trim().toLowerCase().replace(/\s+/g, '_'),
       price: 0, costPrice: null, stock: 0,
-      category, images: [STORE_PLACEHOLDER_IMG], sizes: item.sizes,
+      category, images: item.images.length ? item.images : [STORE_PLACEHOLDER_IMG], sizes: item.sizes,
       active: true, addedAt: now, lastRestockDate: now,
       updatedAt: new Date().toISOString(), importBatch
     });
     // The link lives on the restock side only.
     batch.set(db.collection('restockTool_history').doc(item.entry.offerId),
-      { storeProductId: id, storeProductName: item.name }, { merge: true });
+      { storeProductId: id, storeProductName: item.name,
+        linkedProductId: id, linkedProductName: item.name, linkedStoreId: STORE_MAIN_ID,
+        linkedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
   });
   await batch.commit();
   return { created: result.plan.length, skipped: result.skipped.length, cancelled: false,
