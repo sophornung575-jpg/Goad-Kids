@@ -229,6 +229,7 @@
   .add-photo{ margin-top:6px; }
   .add-photo-toggle{ background:none; border:none; color:var(--primary); font-size:0.7rem; font-weight:600; cursor:pointer; padding:2px 0; font-family:inherit; }
   .add-photo-toggle:hover{ text-decoration:underline; }
+  .add-photo-toggle.del{ color:var(--danger); margin-left:10px; }
   .add-photo-form{ display:flex; gap:6px; margin-top:6px; }
   .add-photo-form.hidden{ display:none; }
   .add-photo-input{ flex:1; min-width:0; padding:5px 7px; border:2px solid var(--gray-light); border-radius:5px; font-size:0.72rem; font-family:inherit; }
@@ -1107,6 +1108,7 @@ function productCardHtml(p, opts){
         ${opts.removable ? `
         <div class="add-photo">
           <button class="add-photo-toggle" onclick="toggleAddPhoto('${escapeHtml(p.id)}')">${images.length ? '+ Add another photo' : '+ Add photo link'}</button>
+          ${restockOwnImages(p).length ? `<button class="add-photo-toggle del" onclick="deleteShownPhoto('${escapeHtml(p.id)}')" title="Delete the photo showing now"><i class="fas fa-trash-alt"></i> Delete this photo</button>` : ''}
           <div class="add-photo-form hidden" id="addPhotoForm-${escapeHtml(p.id)}">
             <input type="text" class="add-photo-input" id="addPhotoInput-${escapeHtml(p.id)}" placeholder="Paste image link">
             <button class="add-photo-save" onclick="savePhotoLink('${escapeHtml(p.id)}')">Save</button>
@@ -1255,6 +1257,42 @@ function savePhotoLink(id){
   input.value = '';
   const form = document.getElementById('addPhotoForm-' + id);
   if(form) form.classList.add('hidden');
+}
+
+// Deletes the photo currently showing on a Home card, and takes the same
+// photo off its store item. If that leaves the store item with no photo it
+// gets the placeholder, same as a new import.
+async function deleteShownPhoto(id){
+  const item = historyCache.find(p => p.id === id);
+  if(!item) return;
+  const own = restockOwnImages(item);
+  const shown = getImages(item);
+  const url = shown[Math.min(photoIndex[id] || 0, shown.length - 1)];
+  if(!url || !own.includes(url)){ alert('This photo comes from the store app, not this card — change it in the store app.'); return; }
+  const storeName = item.storeProductId ? (item.storeProductName || 'the store item') : '';
+  if(!confirm('Delete this photo from the card?' + (storeName ? `\n\nIt is also removed from ${storeName} in the store app.` : '') +
+              (own.length === 1 ? '\n\nThis is the only photo — paste a new link afterwards.' : ''))) return;
+  const left = own.filter(u => u !== url);
+  photoIndex[id] = 0;
+  if(!db){ item.images = left; if(item.image === url) item.image = ''; renderHistory(); return; }
+  try{
+    const upd = { images: left };
+    if(item.image === url) upd.image = '';
+    await db.collection('restockTool_history').doc(id).update(upd);
+    if(item.storeProductId){
+      const ref = db.collection('stores').doc(STORE_MAIN_ID).collection('products').doc(item.storeProductId);
+      const doc = await ref.get();
+      if(doc.exists && (doc.data() || {}).active !== false){
+        const cur = Array.isArray(doc.data().images) ? doc.data().images : [];
+        let next = cur.filter(u => u !== url);
+        if(!next.length) next = left.length ? left : [STORE_PLACEHOLDER_IMG];
+        await ref.update({ images: next, updatedAt: new Date().toISOString() });
+        setPhotoSyncStatus('Photo removed from ' + (item.storeProductName || 'store item') + '.');
+      }
+    }
+  }catch(err){
+    alert('Could not delete the photo: ' + err.message);
+  }
 }
 
 // ---------- Home catalog ----------
