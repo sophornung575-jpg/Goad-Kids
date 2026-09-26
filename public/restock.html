@@ -96,6 +96,7 @@
   .rcv-item summary{ display:flex; align-items:center; gap:10px; cursor:pointer; list-style:none; }
   .rcv-thumb{ width:44px; height:44px; flex-shrink:0; border-radius:6px; overflow:hidden; background:var(--light); }
   .rcv-thumb img{ width:100%; height:100%; object-fit:cover; }
+  .rcv-colour{ font-size:0.7rem; font-weight:600; color:var(--gray-dark); background:var(--light); padding:1px 7px; border-radius:999px; margin-left:4px; }
   .rcv-name{ font-size:0.85rem; font-weight:600; }
   .rcv-pill{ font-size:0.68rem; font-weight:700; padding:3px 9px; border-radius:999px; background:var(--light); color:var(--gray-dark); white-space:nowrap; }
   .rcv-pill.part{ background:#fefcbf; color:#975a16; }
@@ -1920,16 +1921,20 @@ function detectOrderExport(){
   // the many rows for one product collapse into one entry, with every
   // distinct variant text (e.g. "颜色: 杏色 适合身高: 110码/4Y") collected
   // into that product's sizes list rather than thrown away.
+  // Each colour of an offer is its own store item (the store app keeps one
+  // product per colour), so rows are grouped by Offer ID + colour.
   const grouped = {};
   for(let i = 1; i < csvRows.length; i++){
     const row = csvRows[i];
     const offerId = ((row[idx.offerId] || '') + '').trim();
     const rawTitle = ((row[idx.title] || '') + '').trim();
     if(!offerId || !rawTitle) continue;
+    const colour = colourFromVariant(rawTitle.slice(stripVariantSuffix(rawTitle).length));
+    const gk = offerId + '\u0001' + colour;
 
-    if(!grouped[offerId]){
-      grouped[offerId] = {
-        offerId,
+    if(!grouped[gk]){
+      grouped[gk] = {
+        offerId, colour,
         title: stripVariantSuffix(rawTitle),
         price: idx.price > -1 && row[idx.price] !== undefined && row[idx.price] !== '' ? ('¥' + row[idx.price]) : '—',
         supplier: idx.supplier > -1 && row[idx.supplier] ? ((row[idx.supplier] || '') + '').trim() : '—',
@@ -1938,23 +1943,24 @@ function detectOrderExport(){
         sizesSet: new Set(), qtyBySize: {}, qtyTotal: 0
       };
     }
-    const variant = rawTitle.slice(grouped[offerId].title.length).trim().replace(/^[\s,;、]+/, '');
-    if(variant) grouped[offerId].sizesSet.add(variant);
-    // Ordered quantity (数量) per size — colours of the same size add up.
+    const variant = rawTitle.slice(grouped[gk].title.length).trim().replace(/^[\s,;、]+/, '');
+    if(variant) grouped[gk].sizesSet.add(variant);
+    // Ordered quantity (数量) per size for this colour.
     const q = idx.qty > -1 ? Math.round(parseFloat(row[idx.qty]) || 0) : 0;
     if(q > 0){
       const sz = sizeNameFromVariant(variant);
-      grouped[offerId].qtyBySize[sz] = (grouped[offerId].qtyBySize[sz] || 0) + q;
-      grouped[offerId].qtyTotal += q;
+      grouped[gk].qtyBySize[sz] = (grouped[gk].qtyBySize[sz] || 0) + q;
+      grouped[gk].qtyTotal += q;
     }
     if(idx.orderNo > -1){ const on = ((row[idx.orderNo] || '') + '').trim(); if(on) orderNos.add(on); }
   }
 
   const entries = Object.values(grouped).map(e => ({
-    offerId: e.offerId, title: e.title, price: e.price, supplier: e.supplier, url: e.url,
+    offerId: e.offerId, colour: e.colour, title: e.title, price: e.price, supplier: e.supplier, url: e.url,
     styleCode: e.styleCode || '', sizes: Array.from(e.sizesSet),
     qtyBySize: e.qtyBySize, qtyTotal: e.qtyTotal
   }));
+  orderAssignKeys(entries);
   // One key per 1688 order file, so the same order can't be received twice.
   csvOrderKey = orderNos.size ? 'o' + hashId(Array.from(orderNos).sort().join(',')) : '';
   return entries.length ? entries : null;
@@ -2002,9 +2008,9 @@ function handleParsedRows(){
   if(csvOrderEntries){
     document.getElementById('csvColumnSelect').style.display = 'none';
     document.querySelector('label[for="csvColumnSelect"]').style.display = 'none';
-    const preview = csvOrderEntries.slice(0, 5).map(e => e.title).join(', ');
+    const preview = csvOrderEntries.slice(0, 5).map(e => e.title.slice(0, 14) + (e.colour ? ' · ' + e.colour : '')).join(', ');
     document.getElementById('csvPreviewText').textContent =
-      `Detected a 1688 order export — found ${csvOrderEntries.length} distinct product${csvOrderEntries.length === 1 ? '' : 's'} across your orders (e.g. ${preview}${csvOrderEntries.length > 5 ? ', ...' : ''}). These will get exact product links, price paid, supplier, and the sizes/colours you ordered.`;
+      `Detected a 1688 order export — found ${csvOrderEntries.length} item${csvOrderEntries.length === 1 ? '' : 's'} (each colour counts as its own item) across your orders (e.g. ${preview}${csvOrderEntries.length > 5 ? ', ...' : ''}). These will get exact product links, price paid, supplier, and the sizes/colours you ordered.`;
   } else {
     document.getElementById('csvColumnSelect').style.display = '';
     document.querySelector('label[for="csvColumnSelect"]').style.display = '';
@@ -2107,6 +2113,35 @@ function storeEscapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
 
 // "颜色: 粉色 适合身高: 120cm" -> "120cm". Colour is dropped; the supplier's
 // own size text is kept as-is so it can be corrected later in the app.
+function colourFromVariant(v){
+  const m = ((v || '') + '').match(/颜色(?:分类)?[:：]\s*([^\s,;，；]+)/);
+  return m ? m[1].trim() : '';
+}
+// Which Home card (restockTool_history doc) each colour belongs to.
+// The plain Offer ID card is kept by one colour — the one it already
+// remembers, or, for a card from before colours were split, the first colour
+// in the file. Every other colour gets its own card: offerId_<hash of colour>.
+function orderAssignKeys(entries){
+  const baseTaken = {};
+  entries.forEach(e => {
+    if(!e.colour){ e.key = e.offerId; return; }
+    const base = historyCache.find(h => h.id === e.offerId);
+    if(base && base.colour === e.colour){ e.key = e.offerId; baseTaken[e.offerId] = true; }
+  });
+  entries.forEach(e => {
+    if(e.key) return;
+    const base = historyCache.find(h => h.id === e.offerId);
+    if(!baseTaken[e.offerId] && (!base || !base.colour)){ e.key = e.offerId; baseTaken[e.offerId] = true; }
+    else e.key = e.offerId + '_' + hashId(e.colour);
+  });
+}
+function orderBaseImages(e){
+  const own = historyCache.find(h => h.id === e.key);
+  if(own && restockOwnImages(own).length) return restockOwnImages(own);
+  const base = historyCache.find(h => h.id === e.offerId);
+  return base ? restockOwnImages(base) : [];
+}
+
 function sizeNameFromVariant(v){
   v = (v || '') + '';
   const m = v.match(/适合身高[:：]\s*([^\s,;，；]+)/) || v.match(/尺码[:：]\s*([^\s,;，；]+)/);
@@ -2153,7 +2188,7 @@ async function storeBuildPlan(entries, prefixRaw){
   const skipped = [];
   let next = max + 1;
   for(const e of entries){
-    const hist = await db.collection('restockTool_history').doc(e.offerId).get();
+    const hist = await db.collection('restockTool_history').doc(e.key).get();
     const hd = hist.exists ? (hist.data() || {}) : {};
     // Already in the app: created by an earlier import, or linked by hand to
     // an existing store product (a re-order of something you already sell).
@@ -2165,7 +2200,8 @@ async function storeBuildPlan(entries, prefixRaw){
       skipped.push(hd.linkedProductName || e.title);
       continue;
     }
-    const catalogImgs = restockOwnImages(hd);
+    // Photos from this colour's Home card, else from the offer's main card.
+    const catalogImgs = restockOwnImages(hd).length ? restockOwnImages(hd) : orderBaseImages(e);
     let name = namePrefix + sep + next;
     while(existingNames.has(name.toLowerCase())){ next++; name = namePrefix + sep + next; }
     existingNames.add(name.toLowerCase());
@@ -2237,7 +2273,7 @@ async function storePushEntries(entries, prefix, category){
       updatedAt: new Date().toISOString(), importBatch
     });
     // The link lives on the restock side only.
-    batch.set(db.collection('restockTool_history').doc(item.entry.offerId),
+    batch.set(db.collection('restockTool_history').doc(item.entry.key),
       { storeProductId: id, storeProductName: item.name,
         linkedProductId: id, linkedProductName: item.name, linkedStoreId: STORE_MAIN_ID,
         linkedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
@@ -2261,12 +2297,15 @@ document.getElementById('csvImportBtn').onclick = async () => {
 
   if(csvOrderEntries){
     const writes = csvOrderEntries.map(e => {
-      const id = e.offerId;
+      const id = e.key || e.offerId;
       const data = {
-        title: e.title, price: e.price, moq: '—', supplier: e.supplier,
-        image: '', url: e.url, sizes: e.sizes || [], isSearchLink: false
+        title: e.colour ? e.title + ' · ' + e.colour : e.title, price: e.price, moq: '—', supplier: e.supplier,
+        image: '', url: e.url, sizes: e.sizes || [], isSearchLink: false, offerId: e.offerId
       };
+      if(e.colour) data.colour = e.colour;
       if(e.styleCode) data.styleCode = e.styleCode;
+      // A new colour card starts with the offer's photos so it isn't blank.
+      if(!historyCache.some(h => h.id === id)){ const imgs = orderBaseImages(e); if(imgs.length) data.images = imgs; }
       if(db){
         return db.collection('restockTool_history').doc(id).set({
           ...data, savedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -2354,18 +2393,23 @@ async function incomingQueue(entries, orderKey){
   let queued = 0, pieces = 0, already = 0;
   for(const e of entries){
     if(!(e.qtyTotal > 0)) continue;
-    const hist = await db.collection('restockTool_history').doc(e.offerId).get();
+    const hid = e.key || e.offerId;
+    const hist = await db.collection('restockTool_history').doc(hid).get();
     const hd = hist.exists ? (hist.data() || {}) : {};
     const pid = hd.storeProductId;
     if(!pid || !live[pid]) continue;
     const pending = Object.entries(hd.incoming || {});
-    if((hd.receivedKeys || []).includes(key) || pending.some(([, x]) => x && x.orderKey === key && x.productId === pid)){ already++; continue; }
-    // Same order queued earlier for a product that has since been deleted — drop it.
-    pending.forEach(([bid, x]) => { if(x && x.orderKey === key) wb.update(db.collection('restockTool_history').doc(e.offerId), { ['incoming.' + bid]: firebase.firestore.FieldValue.delete() }); });
+    // Same order already waiting for this product: keep it — unless nothing has
+    // been counted yet and the quantity changed (e.g. colours now split).
+    const touched = x => Array.isArray(x.lines) && x.lines.some(l => l.got || l.rej || l.miss);
+    if((hd.receivedKeys || []).includes(key) ||
+       pending.some(([, x]) => x && x.orderKey === key && x.productId === pid && (touched(x) || Number(x.total) === e.qtyTotal))){ already++; continue; }
+    // Otherwise drop any older copy of this order (deleted product / old split).
+    pending.forEach(([bid, x]) => { if(x && x.orderKey === key) wb.update(db.collection('restockTool_history').doc(hid), { ['incoming.' + bid]: firebase.firestore.FieldValue.delete() }); });
     const sizes = Object.keys(e.qtyBySize).filter(n => n).map(n => ({ name: n, qty: e.qtyBySize[n] }));
     const noSize = e.qtyBySize[''] || 0;
-    wb.set(db.collection('restockTool_history').doc(e.offerId), { incoming: { [batchId]: {
-      orderKey: key, productId: pid, productName: live[pid].name || hd.storeProductName || '',
+    wb.set(db.collection('restockTool_history').doc(hid), { incoming: { [batchId]: {
+      orderKey: key, productId: pid, productName: live[pid].name || hd.storeProductName || '', colour: e.colour || '',
       sizes, noSize, total: e.qtyTotal, createdAt: Date.now()
     } } }, { merge: true });
     queued++; pieces += e.qtyTotal;
@@ -2441,7 +2485,7 @@ function rcvItemHtml(bid, x){
     <summary>
       <div class="rcv-thumb">${img ? `<img src="${escapeHtml(img)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>
       <div style="flex:1;min-width:0">
-        <div class="rcv-name">${escapeHtml(x.productName || '')}</div>
+        <div class="rcv-name">${escapeHtml(x.productName || '')}${x.colour ? ` <span class="rcv-colour">${escapeHtml(x.colour)}</span>` : ''}</div>
         <div class="rcv-stats">${lines.length} size${lines.length === 1 ? '' : 's'} · ${rcvSum(lines, 'qty')} ordered${done ? ' · ' + rcvStats(lines) : ''}</div>
       </div>
       <span class="rcv-pill ${done ? 'part' : ''}">${done ? 'Partly done' : 'Waiting'} · ${left}</span>
@@ -2603,7 +2647,7 @@ async function rcvApply(bid, hids, mode, btn){
           ['incoming.' + bid]: FV.delete(),
           receivedKeys: FV.arrayUnion(x.orderKey || bid),
           receiveLog: FV.arrayUnion({
-            batchId: bid, orderKey: x.orderKey || bid, productId: x.productId, productName: (prod && prod.name) || x.productName || '',
+            batchId: bid, orderKey: x.orderKey || bid, productId: x.productId, productName: (prod && prod.name) || x.productName || '', colour: x.colour || '',
             orderedAt: x.createdAt || 0, closedAt: now, lines: newLines, notes,
             cost: prod && Number(prod.cost) > 0 ? Number(prod.cost) : 0
           })
@@ -2655,7 +2699,7 @@ function renderReceived(){
     const rows = g.items.map(r => {
       const ls = r.lines || [];
       const bad = ls.filter(l => l.rej || l.miss).map(l => `${escapeHtml(l.name || '(no size)')}${l.rej ? ` <span class="bad">✖${l.rej}</span>` : ''}${l.miss ? ` <span class="miss">?${l.miss}</span>` : ''}`).join(', ');
-      return `<div class="rcv-log-row"><b>${escapeHtml(r.productName || '')}</b> — <span class="ok">${rcvSum(ls, 'got')}</span>/${rcvSum(ls, 'qty')} received${bad ? ' · ' + bad : ''}
+      return `<div class="rcv-log-row"><b>${escapeHtml(r.productName || '')}</b>${r.colour ? ` <span class="rcv-colour">${escapeHtml(r.colour)}</span>` : ''} — <span class="ok">${rcvSum(ls, 'got')}</span>/${rcvSum(ls, 'qty')} received${bad ? ' · ' + bad : ''}
         ${(r.notes || []).map(n => `<div class="rcv-prev-note">📝 ${escapeHtml(n)}</div>`).join('')}</div>`;
     }).join('');
     const hasProblem = rcvSum(all, 'rej') + rcvSum(all, 'miss') > 0;
