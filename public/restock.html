@@ -81,6 +81,9 @@
   .category-filter-btn.active{ background:var(--primary); border-color:var(--primary); color:#fff; }
   .select-all-row{ display:flex; align-items:center; gap:10px; padding-bottom:12px; margin-bottom:12px; border-bottom:1px solid var(--gray-light); font-size:0.85rem; font-weight:600; }
   .select-all-row input{ width:18px; height:18px; }
+  .tab-info-count{ background:var(--primary); }
+  .rcv-empty{ text-align:center; padding:28px 10px; color:var(--gray-dark); font-size:0.85rem; }
+  .rcv-empty > i{ font-size:1.8rem; color:var(--gray-light); margin-bottom:8px; }
   .rcv-order{ border:1px solid var(--gray-light); border-radius:var(--radius); padding:12px; margin-bottom:12px; }
   .rcv-order > summary::-webkit-details-marker, .rcv-item summary::-webkit-details-marker{ display:none; }
   .rcv-head{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
@@ -339,6 +342,7 @@
       <button class="page-tab active" id="tabHomeBtn" onclick="switchSection('home')"><i class="fas fa-layer-group"></i> <span data-t="tabHome">Home</span></button>
       <button class="page-tab" id="tabSearchBtn" onclick="switchSection('search')"><i class="fas fa-search"></i> <span data-t="tabSearch">Search Link Source</span></button>
       <button class="page-tab" id="tabRestockBtn" onclick="switchSection('restock')"><i class="fas fa-clipboard-list"></i> <span data-t="tabRestockList">Restock List</span><span class="tab-alert-count" id="restockAlertCount" style="display:none"></span></button>
+      <button class="page-tab" id="tabReceiveBtn" onclick="switchSection('receive')"><i class="fas fa-truck"></i> <span data-t="tabReceiving">Receiving</span><span class="tab-alert-count tab-info-count" id="receiveCount" style="display:none"></span></button>
       <button class="page-tab" id="tabSettingsBtn" onclick="switchSection('settings')"><i class="fas fa-cog"></i> <span data-t="tabSettings">Settings</span></button>
     </div>
 
@@ -461,24 +465,6 @@
     </div>
 
     <div id="restockSection" class="hidden">
-      <div class="admin-card hidden" id="incomingCard" style="margin-bottom:16px">
-        <div class="admin-card-header">
-          <div>
-            <h1><i class="fas fa-truck" style="color:var(--primary)"></i> Waiting to receive</h1>
-            <p>Ordered on 1688, not in the store yet. When goods arrive, check each item: good pieces go into stock, rejected ones are recorded but not added, and anything that never came can be marked not received.</p>
-          </div>
-        </div>
-        <div class="admin-card-body"><div id="incomingWrap"></div></div>
-      </div>
-      <div class="admin-card hidden" id="receivedCard" style="margin-bottom:16px">
-        <div class="admin-card-header">
-          <div>
-            <h1><i class="fas fa-clipboard-check" style="color:var(--success)"></i> Received orders</h1>
-            <p>Finished items with what was received, rejected (✖) and not received (?) — use it for supplier claims.</p>
-          </div>
-        </div>
-        <div class="admin-card-body"><div id="receivedWrap"></div></div>
-      </div>
       <div class="admin-card">
         <div class="admin-card-header restock-header">
           <div>
@@ -503,6 +489,27 @@
           <div class="admin-empty" id="restockListEmpty" data-t="emptyRestockDefault">Nothing added yet. Use "Add to list" on a product.</div>
           <div class="send-status" id="sendStatus"></div>
         </div>
+      </div>
+    </div>
+
+    <div id="receiveSection" class="hidden">
+      <div class="admin-card" id="incomingCard" style="margin-bottom:16px">
+        <div class="admin-card-header">
+          <div>
+            <h1><i class="fas fa-truck" style="color:var(--primary)"></i> Waiting to receive</h1>
+            <p>Ordered on 1688, not in the store yet. Tap an item to count it when the goods arrive.</p>
+          </div>
+        </div>
+        <div class="admin-card-body"><div id="incomingWrap"></div><div id="incomingEmpty" class="rcv-empty hidden"><i class="fas fa-truck"></i><div>Nothing waiting to be received.</div><div class="rcv-stats">Upload a 1688 order file on the Home page — its items appear here until the goods arrive.</div></div></div>
+      </div>
+      <div class="admin-card hidden" id="receivedCard" style="margin-bottom:16px">
+        <div class="admin-card-header">
+          <div>
+            <h1><i class="fas fa-clipboard-check" style="color:var(--success)"></i> Received orders</h1>
+            <p>Finished items with what was received, rejected (✖) and not received (?) — use it for supplier claims.</p>
+          </div>
+        </div>
+        <div class="admin-card-body"><div id="receivedWrap"></div></div>
       </div>
     </div>
 
@@ -628,7 +635,7 @@ try{
 const TRANSLATIONS = {
   en: {
     backToStore: 'Back to store', modePillSample: 'Sample data', modePillLive: 'Live Link Source data',
-    tabHome: 'Home', tabSearch: 'Search Link Source', tabRestockList: 'Restock List', tabSettings: 'Settings',
+    tabHome: 'Home', tabSearch: 'Search Link Source', tabRestockList: 'Restock List', tabReceiving: 'Receiving', tabSettings: 'Settings',
     homeTitle: 'Product catalog', homeDesc: "Everything found through search or added manually — pick straight from here without searching again.",
     filterPlaceholder: 'Filter your saved products...',
     catAll: 'All', catGirlClothes: 'Girl Clothes', catBoyClothes: 'Boy Clothes', catBabyShirt: 'Baby Shirt', catDresses: 'Dresses', catBabyAccessories: 'Baby Accessories', catBabyShoes: 'Baby Shoes',
@@ -678,7 +685,7 @@ const TRANSLATIONS = {
   },
   kh: {
     backToStore: 'ត្រឡប់ទៅហាង', modePillSample: 'ទិន្នន័យគំរូ', modePillLive: 'ទិន្នន័យផ្ទាល់ Link Source',
-    tabHome: 'ទំព័រដើម', tabSearch: 'ស្វែងរក Link Source', tabRestockList: 'បញ្ជីបញ្ជាទិញ', tabSettings: 'ការកំណត់',
+    tabHome: 'ទំព័រដើម', tabSearch: 'ស្វែងរក Link Source', tabRestockList: 'បញ្ជីបញ្ជាទិញ', tabReceiving: 'ទទួលទំនិញ', tabSettings: 'ការកំណត់',
     homeTitle: 'កាតាឡុកផលិតផល', homeDesc: 'អ្វីៗគ្រប់យ៉ាងដែលបានរកឃើញតាមរយៈការស្វែងរក ឬបានបន្ថែមដោយដៃ — ជ្រើសរើសពីទីនេះដោយផ្ទាល់ដោយមិនចាំបាច់ស្វែងរកម្តងទៀត។',
     filterPlaceholder: 'ត្រងផលិតផលដែលបានរក្សាទុករបស់អ្នក...',
     catAll: 'ទាំងអស់', catGirlClothes: 'សម្លៀកបំពាក់ក្មេងស្រី', catBoyClothes: 'សម្លៀកបំពាក់ក្មេងប្រុស', catBabyShirt: 'អាវកូនក្មេង', catDresses: 'រ៉ូប', catBabyAccessories: 'គ្រឿងបន្លាស់កូនក្មេង', catBabyShoes: 'ស្បែកជើងកូនក្មេង',
@@ -728,7 +735,7 @@ const TRANSLATIONS = {
   },
   zh: {
     backToStore: '返回商店', modePillSample: '示例数据', modePillLive: 'Link Source实时数据',
-    tabHome: '首页', tabSearch: '搜索Link Source', tabRestockList: '补货清单', tabSettings: '设置',
+    tabHome: '首页', tabSearch: '搜索Link Source', tabRestockList: '补货清单', tabReceiving: '收货', tabSettings: '设置',
     homeTitle: '产品目录', homeDesc: '所有通过搜索找到或手动添加的商品——直接从这里选择，无需重新搜索。',
     filterPlaceholder: '筛选已保存的产品...',
     catAll: '全部', catGirlClothes: '女童服装', catBoyClothes: '男童服装', catBabyShirt: '婴儿上衣', catDresses: '连衣裙', catBabyAccessories: '婴儿配件', catBabyShoes: '婴儿鞋',
@@ -831,10 +838,12 @@ function switchSection(name){
   document.getElementById('homeSection').classList.toggle('hidden', name !== 'home');
   document.getElementById('searchSection').classList.toggle('hidden', name !== 'search');
   document.getElementById('restockSection').classList.toggle('hidden', name !== 'restock');
+  document.getElementById('receiveSection').classList.toggle('hidden', name !== 'receive');
   document.getElementById('settingsSection').classList.toggle('hidden', name !== 'settings');
   document.getElementById('tabHomeBtn').classList.toggle('active', name === 'home');
   document.getElementById('tabSearchBtn').classList.toggle('active', name === 'search');
   document.getElementById('tabRestockBtn').classList.toggle('active', name === 'restock');
+  document.getElementById('tabReceiveBtn').classList.toggle('active', name === 'receive');
   document.getElementById('tabSettingsBtn').classList.toggle('active', name === 'settings');
   if(name === 'settings') lockSettingsSection();
 }
@@ -2288,7 +2297,7 @@ document.getElementById('csvImportBtn').onclick = async () => {
     if(db && failCount === 0){
       try{
         const q = await incomingQueue(csvOrderEntries, csvOrderKey);
-        if(q.queued) resultEl.textContent += ` ${q.pieces} piece${q.pieces === 1 ? '' : 's'} (${q.queued} item${q.queued === 1 ? '' : 's'}) waiting to receive — press "Receive stock" on the Restock list when the goods arrive.`;
+        if(q.queued) resultEl.textContent += ` ${q.pieces} piece${q.pieces === 1 ? '' : 's'} (${q.queued} item${q.queued === 1 ? '' : 's'}) waiting to receive — check them on the Receiving tab when the goods arrive.`;
         if(q.already) resultEl.textContent += ` ${q.already} item${q.already === 1 ? ' was' : 's were'} already queued or received from this order.`;
       }catch(err){
         console.warn('Queue incoming failed:', err);
@@ -2332,7 +2341,7 @@ document.getElementById('csvImportBtn').onclick = async () => {
 // ---------- Incoming stock (ordered on 1688, not arrived yet) ----------
 // The import remembers the ordered quantity per size on each catalog entry
 // (restockTool_history/{offerId}.incoming.{batchId}). Nothing touches the
-// store's stock until "Receive stock" is pressed on the Restock list.
+// store's stock until they are received on the Receiving tab.
 // Only items that are store products created by the import get queued, so
 // the size names always match.
 async function incomingQueue(entries, orderKey){
@@ -2463,7 +2472,11 @@ function renderIncoming(force){
     wrap.addEventListener('focusout', () => setTimeout(() => { if(rcvDeferred && !wrap.contains(document.activeElement)) renderIncoming(true); }, 0));
   }
   const groups = db ? incomingGroups() : [];
-  card.classList.toggle('hidden', !groups.length);
+  const waitingItems = groups.reduce((a, g) => a + g.items.length, 0);
+  const badge = document.getElementById('receiveCount');
+  if(badge){ badge.textContent = waitingItems; badge.style.display = waitingItems ? '' : 'none'; }
+  const empty = document.getElementById('incomingEmpty');
+  if(empty) empty.classList.toggle('hidden', !!groups.length);
   wrap.innerHTML = groups.map(g => {
     const all = g.items.flatMap(x => incomingLines(x));
     const itemsLeft = g.items.filter(x => rcvSum(incomingLines(x), 'left') > 0).length;
