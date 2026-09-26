@@ -81,6 +81,33 @@
   .category-filter-btn.active{ background:var(--primary); border-color:var(--primary); color:#fff; }
   .select-all-row{ display:flex; align-items:center; gap:10px; padding-bottom:12px; margin-bottom:12px; border-bottom:1px solid var(--gray-light); font-size:0.85rem; font-weight:600; }
   .select-all-row input{ width:18px; height:18px; }
+  .rcv-order{ border:1px solid var(--gray-light); border-radius:var(--radius); padding:12px; margin-bottom:12px; }
+  .rcv-order > summary::-webkit-details-marker, .rcv-item summary::-webkit-details-marker{ display:none; }
+  .rcv-head{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+  .rcv-hint{ font-size:0.72rem; color:var(--gray-dark); margin:8px 0 4px; }
+  .rcv-stats{ font-size:0.75rem; color:var(--gray-dark); margin-top:3px; }
+  .rcv-order .ok{ color:var(--success); font-weight:700; }
+  .rcv-order .bad{ color:var(--danger); font-weight:700; }
+  .rcv-order .miss{ color:#d69e2e; font-weight:700; }
+  .rcv-item{ border-top:1px solid var(--gray-light); padding:8px 0; }
+  .rcv-item summary{ display:flex; align-items:center; gap:10px; cursor:pointer; list-style:none; }
+  .rcv-thumb{ width:44px; height:44px; flex-shrink:0; border-radius:6px; overflow:hidden; background:var(--light); }
+  .rcv-thumb img{ width:100%; height:100%; object-fit:cover; }
+  .rcv-name{ font-size:0.85rem; font-weight:600; }
+  .rcv-pill{ font-size:0.68rem; font-weight:700; padding:3px 9px; border-radius:999px; background:var(--light); color:var(--gray-dark); white-space:nowrap; }
+  .rcv-pill.part{ background:#fefcbf; color:#975a16; }
+  .rcv-body{ padding:6px 0 4px 54px; }
+  .rcv-table{ border-collapse:collapse; font-size:0.78rem; min-width:420px; }
+  .rcv-table th{ font-size:0.68rem; color:var(--gray-dark); font-weight:600; padding:4px 8px; border-bottom:1px solid var(--gray-light); }
+  .rcv-table td{ padding:4px 8px; text-align:center; border-bottom:1px solid var(--light); }
+  .rcv-table td.rcv-size{ text-align:left; font-weight:600; }
+  .rcv-table td.rcv-done{ color:var(--gray); font-style:italic; }
+  .rcv-table input{ width:62px; padding:5px; border:2px solid var(--gray-light); border-radius:5px; font:inherit; text-align:center; }
+  .rcv-actions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+  .rcv-note{ flex:1; min-width:180px; padding:6px 8px; border:2px solid var(--gray-light); border-radius:5px; font:inherit; font-size:0.78rem; }
+  .rcv-prev-note{ font-size:0.72rem; color:var(--gray-dark); margin-top:4px; }
+  .rcv-log-row{ font-size:0.78rem; padding:6px 0; border-top:1px solid var(--light); }
+  @media (max-width:600px){ .rcv-body{ padding-left:0; } }
   .rl-item{ display:flex; gap:12px; align-items:center; border:1px solid var(--gray-light); border-radius:var(--radius); padding:10px; margin-bottom:10px; }
   .rl-item input[type=checkbox]{ width:18px; height:18px; flex-shrink:0; }
   .rl-item .rl-thumb{ width:56px; height:56px; flex-shrink:0; border-radius:6px; overflow:hidden; background:var(--light); display:flex; align-items:center; justify-content:center; color:var(--gray); font-size:9px; text-align:center; }
@@ -438,10 +465,19 @@
         <div class="admin-card-header">
           <div>
             <h1><i class="fas fa-truck" style="color:var(--primary)"></i> Waiting to receive</h1>
-            <p>Ordered on 1688, not in the store yet. When the goods arrive, press Receive stock to add the ordered sizes to the store app.</p>
+            <p>Ordered on 1688, not in the store yet. When goods arrive, check each item: good pieces go into stock, rejected ones are recorded but not added, and anything that never came can be marked not received.</p>
           </div>
         </div>
         <div class="admin-card-body"><div id="incomingWrap"></div></div>
+      </div>
+      <div class="admin-card hidden" id="receivedCard" style="margin-bottom:16px">
+        <div class="admin-card-header">
+          <div>
+            <h1><i class="fas fa-clipboard-check" style="color:var(--success)"></i> Received orders</h1>
+            <p>Finished items with what was received, rejected (✖) and not received (?) — use it for supplier claims.</p>
+          </div>
+        </div>
+        <div class="admin-card-body"><div id="receivedWrap"></div></div>
       </div>
       <div class="admin-card">
         <div class="admin-card-header restock-header">
@@ -2329,6 +2365,33 @@ async function incomingQueue(entries, orderKey){
   return { queued, pieces, already };
 }
 
+// ---------- Receiving (partial / reject / not received) ----------
+// Each waiting item keeps per-size lines: qty (ordered), got (good, added to
+// stock), rej (rejected — damaged / wrong, never added to stock) and miss
+// (never arrived). "Left" = qty - got - rej - miss. An item leaves the
+// waiting list only when nothing is left; its final lines then go to
+// receiveLog on the catalog entry so the Received orders card can show
+// what was rejected or missing (for supplier claims).
+const rcvDraft = {};        // typed values, kept across live re-renders
+const rcvOpen = new Set();  // expanded items
+let rcvBusy = false, rcvDeferred = false;
+
+function incomingLines(x){
+  if(Array.isArray(x.lines)) return x.lines.map(l => ({ name: l.name || '', qty: Number(l.qty) || 0, got: Number(l.got) || 0, rej: Number(l.rej) || 0, miss: Number(l.miss) || 0 }));
+  const lines = (x.sizes || []).map(s => ({ name: s.name || '', qty: Number(s.qty) || 0, got: 0, rej: 0, miss: 0 }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  if(Number(x.noSize) > 0) lines.push({ name: '', qty: Number(x.noSize), got: 0, rej: 0, miss: 0 });
+  if(!lines.length && Number(x.total) > 0) lines.push({ name: '', qty: Number(x.total), got: 0, rej: 0, miss: 0 });
+  return lines;
+}
+const rcvLeft = l => Math.max(0, l.qty - l.got - l.rej - l.miss);
+const rcvSum = (lines, k) => lines.reduce((a, l) => a + (k === 'left' ? rcvLeft(l) : (Number(l[k]) || 0)), 0);
+const rcvKey = (bid, hid, i, k) => [bid, hid, i, k].join('|');
+function rcvVal(key, def){ return Object.prototype.hasOwnProperty.call(rcvDraft, key) ? rcvDraft[key] : def; }
+function rcvNum(v){ if(v === '' || v === null || v === undefined) return 0; const n = Number(v); return Number.isInteger(n) && n >= 0 ? n : null; }
+function rcvSet(el){ rcvDraft[el.dataset.k] = el.value; }
+function rcvToggle(el){ const k = el.dataset.k; if(el.open) rcvOpen.add(k); else rcvOpen.delete(k); }
+
 function incomingGroups(){
   const groups = {};
   historyCache.forEach(h => {
@@ -2338,98 +2401,260 @@ function incomingGroups(){
         .items.push({ histId: h.id, ...x });
     });
   });
+  Object.values(groups).forEach(g => g.items.sort((a, b) => (a.productName || '').localeCompare(b.productName || '', undefined, { numeric: true })));
   return Object.values(groups).sort((a, b) => a.createdAt - b.createdAt);
 }
 
-function renderIncoming(){
+function rcvStats(lines){
+  return `<span class="ok">${rcvSum(lines, 'got')} received</span> · <span class="bad">${rcvSum(lines, 'rej')} rejected</span> · <span class="miss">${rcvSum(lines, 'miss')} not received</span> · <b>${rcvSum(lines, 'left')} waiting</b>`;
+}
+
+function rcvItemHtml(bid, x){
+  const lines = incomingLines(x);
+  const left = rcvSum(lines, 'left');
+  const openKey = bid + '|' + x.histId;
+  const h = historyCache.find(o => o.id === x.histId);
+  const img = h ? getImages(h)[0] : '';
+  const done = lines.some(l => l.got || l.rej || l.miss);
+  const rows = lines.map((l, i) => {
+    const lf = rcvLeft(l);
+    const doneTxt = [l.got ? `<span class="ok">✔${l.got}</span>` : '', l.rej ? `<span class="bad">✖${l.rej}</span>` : '', l.miss ? `<span class="miss">?${l.miss}</span>` : ''].filter(Boolean).join(' ') || '—';
+    const gk = rcvKey(bid, x.histId, i, 'g'), rk = rcvKey(bid, x.histId, i, 'r');
+    const inputs = lf > 0
+      ? `<td><input type="number" min="0" max="${lf}" inputmode="numeric" data-k="${escapeHtml(gk)}" value="${escapeHtml(String(rcvVal(gk, lf)))}" oninput="rcvSet(this)"></td>
+         <td><input type="number" min="0" max="${lf}" inputmode="numeric" data-k="${escapeHtml(rk)}" value="${escapeHtml(String(rcvVal(rk, 0)))}" oninput="rcvSet(this)"></td>`
+      : `<td colspan="2" class="rcv-done">done</td>`;
+    return `<tr><td class="rcv-size">${escapeHtml(l.name || '(no size)')}</td><td>${l.qty}</td><td>${doneTxt}</td><td>${lf}</td>${inputs}</tr>`;
+  }).join('');
+  const nk = rcvKey(bid, x.histId, 'note', 'n');
+  const notes = (x.notes || []).map(n => `<div class="rcv-prev-note">📝 ${escapeHtml(n)}</div>`).join('');
+  return `<details class="rcv-item" data-bid="${escapeHtml(bid)}" data-hid="${escapeHtml(x.histId)}" data-k="${escapeHtml(openKey)}" ontoggle="rcvToggle(this)"${rcvOpen.has(openKey) ? ' open' : ''}>
+    <summary>
+      <div class="rcv-thumb">${img ? `<img src="${escapeHtml(img)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>
+      <div style="flex:1;min-width:0">
+        <div class="rcv-name">${escapeHtml(x.productName || '')}</div>
+        <div class="rcv-stats">${lines.length} size${lines.length === 1 ? '' : 's'} · ${rcvSum(lines, 'qty')} ordered${done ? ' · ' + rcvStats(lines) : ''}</div>
+      </div>
+      <span class="rcv-pill ${done ? 'part' : ''}">${done ? 'Partly done' : 'Waiting'} · ${left}</span>
+    </summary>
+    <div class="rcv-body">
+      <div style="overflow-x:auto"><table class="rcv-table">
+        <thead><tr><th style="text-align:left">Size</th><th>Ordered</th><th>Done</th><th>Left</th><th>Good ✔</th><th>Reject ✖</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      ${notes}
+      <div class="rcv-actions">
+        <input class="rcv-note" type="text" placeholder="Note (e.g. 2 torn, wrong colour)" data-k="${escapeHtml(nk)}" value="${escapeHtml(String(rcvVal(nk, '')))}" oninput="rcvSet(this)">
+        <button class="btn btn-primary btn-small" type="button" onclick="rcvItem(this,'receive')"><i class="fas fa-check"></i> Receive this item</button>
+        <button class="btn btn-outline btn-small" type="button" onclick="rcvItem(this,'close')"><i class="fas fa-ban"></i> Rest not received</button>
+      </div>
+    </div>
+  </details>`;
+}
+
+function renderIncoming(force){
   const card = document.getElementById('incomingCard');
   const wrap = document.getElementById('incomingWrap');
   if(!card || !wrap) return;
+  // Don't rebuild under someone's fingers — wait until they leave the field.
+  if(!force && wrap.contains(document.activeElement) && /INPUT/.test(document.activeElement.tagName)){ rcvDeferred = true; return; }
+  rcvDeferred = false;
+  if(!wrap.dataset.bound){
+    wrap.dataset.bound = '1';
+    wrap.addEventListener('focusout', () => setTimeout(() => { if(rcvDeferred && !wrap.contains(document.activeElement)) renderIncoming(true); }, 0));
+  }
   const groups = db ? incomingGroups() : [];
   card.classList.toggle('hidden', !groups.length);
   wrap.innerHTML = groups.map(g => {
-    const pieces = g.items.reduce((a, x) => a + (x.total || 0), 0);
-    const names = g.items.map(x => x.productName).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    const lines = g.items.slice().sort((a, b) => (a.productName || '').localeCompare(b.productName || '', undefined, { numeric: true }))
-      .map(x => `<div class="rl-meta">${escapeHtml(x.productName || '')} — ${escapeHtml((x.sizes || []).map(s => s.name + ' ×' + s.qty).join(', ') || (x.total + ' pcs'))} <b>(${x.total})</b></div>`).join('');
-    return `<div style="border:1px solid var(--gray-light);border-radius:var(--radius);padding:12px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-        <div><b>Ordered ${escapeHtml(new Date(g.createdAt).toLocaleDateString())}</b> · ${g.items.length} item${g.items.length === 1 ? '' : 's'} · ${pieces} pieces
-          <div class="rl-meta">${escapeHtml(names.length > 1 ? names[0] + ' → ' + names[names.length - 1] : names[0] || '')}</div></div>
-        <button class="btn btn-primary btn-small" onclick="incomingReceive('${g.batchId}', this)"><i class="fas fa-box-open"></i> Receive stock</button>
+    const all = g.items.flatMap(x => incomingLines(x));
+    const itemsLeft = g.items.filter(x => rcvSum(incomingLines(x), 'left') > 0).length;
+    return `<div class="rcv-order" data-bid="${escapeHtml(g.batchId)}">
+      <div class="rcv-head">
+        <div><b>Ordered ${escapeHtml(new Date(g.createdAt).toLocaleDateString())}</b> · ${g.items.length} item${g.items.length === 1 ? '' : 's'} · ${rcvSum(all, 'qty')} pieces
+          <div class="rcv-stats">${rcvStats(all)}</div></div>
+        <div class="rcv-actions" style="margin-top:0">
+          <button class="btn btn-primary btn-small" type="button" onclick="rcvOrder(this,'receive')"><i class="fas fa-box-open"></i> Receive all (${itemsLeft})</button>
+          <button class="btn btn-outline btn-small" type="button" onclick="rcvOrder(this,'close')"><i class="fas fa-flag-checkered"></i> Close order</button>
+        </div>
       </div>
-      <details style="margin-top:8px"><summary style="cursor:pointer;font-size:0.8rem;color:var(--gray-dark)">Show sizes</summary>${lines}</details>
+      <div class="rcv-hint">Tap an item to check it. Good ✔ is added to stock, Reject ✖ is recorded but not added. "Receive all" uses the numbers shown on every item (full quantity unless you changed them).</div>
+      ${g.items.map(x => rcvItemHtml(g.batchId, x)).join('')}
     </div>`;
   }).join('');
+  renderReceived();
 }
 
-// Adds the ordered quantities to each store product's sizes in ONE batch,
-// logs a stock adjustment ("New stock received") for the store's
-// reconciliation, and marks the order as received so it can't be doubled.
-async function incomingReceive(batchId, btn){
+function rcvItem(btn, mode){
+  const el = btn.closest('.rcv-item');
+  rcvApply(el.dataset.bid, [el.dataset.hid], mode, btn);
+}
+function rcvOrder(btn, mode){
+  const bid = btn.closest('.rcv-order').dataset.bid;
+  const g = incomingGroups().find(x => x.batchId === bid);
+  if(g) rcvApply(bid, g.items.map(x => x.histId), mode, btn);
+}
+
+async function rcvApply(bid, hids, mode, btn){
   if(!db){ alert('Not connected to the database.'); return; }
-  const g = incomingGroups().find(x => x.batchId === batchId);
+  if(rcvBusy) return;
+  const g = incomingGroups().find(x => x.batchId === bid);
   if(!g) return;
+  const items = g.items.filter(x => hids.includes(x.histId) && rcvSum(incomingLines(x), 'left') > 0);
+  if(!items.length){ alert('Nothing is waiting on ' + (hids.length > 1 ? 'this order.' : 'this item.')); return; }
+
+  const errs = [];
+  const plan = items.map(x => {
+    const lines = incomingLines(x);
+    const add = lines.map((l, i) => {
+      const left = rcvLeft(l);
+      if(!left) return { g: 0, r: 0, m: 0 };
+      if(mode === 'close') return { g: 0, r: 0, m: left };
+      const gv = rcvNum(rcvVal(rcvKey(bid, x.histId, i, 'g'), left));
+      const rv = rcvNum(rcvVal(rcvKey(bid, x.histId, i, 'r'), 0));
+      const label = `${x.productName} ${l.name || '(no size)'}`;
+      if(gv === null || rv === null){ errs.push(`${label}: use whole numbers`); return { g: 0, r: 0, m: 0 }; }
+      if(gv + rv > left){ errs.push(`${label}: ${gv} good + ${rv} reject is more than the ${left} waiting`); return { g: 0, r: 0, m: 0 }; }
+      return { g: gv, r: rv, m: 0 };
+    });
+    const note = String(rcvVal(rcvKey(bid, x.histId, 'note', 'n'), '')).trim();
+    return { x, lines, add, note };
+  });
+  if(errs.length){ alert('Please fix these first:\n\n' + errs.slice(0, 10).join('\n')); return; }
+  const tot = (k, list) => (list || plan).reduce((a, p) => a + p.add.reduce((b, v) => b + v[k], 0), 0);
+  const G = tot('g'), R = tot('r'), M = tot('m');
+  if(mode === 'receive' && G + R === 0){ alert('All the numbers are 0. Type how many arrived, or use "Rest not received" for pieces that never came.'); return; }
+
+  rcvBusy = true;
   if(btn) btn.disabled = true;
   try{
     const ref = db.collection('stores').doc(STORE_MAIN_ID).collection('products');
-    const docs = await Promise.all(g.items.map(x => ref.doc(x.productId).get()));
-    const missing = [], zero = [], work = [];
-    g.items.forEach((x, i) => {
-      const p = docs[i].exists ? (docs[i].data() || {}) : null;
-      if(!p || p.active === false){ missing.push(x.productName); return; }
-      if(!(Number(p.price) > 0)) zero.push(p.name || x.productName);
-      work.push({ x, p });
+    const docs = await Promise.all(plan.map(p => ref.doc(p.x.productId).get()));
+    const missingProd = [], zero = [];
+    plan.forEach((p, i) => {
+      p.prod = docs[i].exists ? (docs[i].data() || {}) : null;
+      if(p.prod && p.prod.active === false) p.prod = null;
+      const good = p.add.reduce((a, v) => a + v.g, 0);
+      if(good && !p.prod){ missingProd.push(p.x.productName); }
+      else if(good && !(Number(p.prod.price) > 0)) zero.push(p.prod.name || p.x.productName);
     });
-    const pieces = work.reduce((a, w) => a + (w.x.total || 0), 0);
-    let msg = `Receive ${pieces} pieces into ${work.length} item${work.length === 1 ? '' : 's'} in Main Store?`;
-    if(zero.length) msg += `\n\n⚠ ${zero.length} still priced at $0 — they will show as in stock at $0 until you price them (store app → Settings → Store Pricing Rule → Apply):\n` + zero.slice(0, 8).join(', ') + (zero.length > 8 ? ', ...' : '');
-    if(missing.length) msg += `\n\n${missing.length} were deleted from the store and will be skipped: ` + missing.slice(0, 5).join(', ');
-    if(!confirm(msg)){ if(btn) btn.disabled = false; return; }
+    if(missingProd.length){
+      alert(`These were deleted from the store app, so good pieces can't be added:\n${missingProd.join(', ')}\n\nSet their Good to 0 (Reject or "Rest not received" still work), then try again.`);
+      return;
+    }
+    const leftAfter = plan.reduce((a, p) => a + p.lines.reduce((b, l, i) => b + rcvLeft(l) - p.add[i].g - p.add[i].r - p.add[i].m, 0), 0);
+    let msg;
+    if(mode === 'close'){
+      msg = `Mark ${M} piece${M === 1 ? '' : 's'} on ${plan.length} item${plan.length === 1 ? '' : 's'} as NOT received?\n\nThey leave the waiting list and are recorded as missing (for your supplier claim). Stock is not changed.\n\n` +
+        plan.map(p => `${p.x.productName}: ${p.add.reduce((a, v) => a + v.m, 0)}`).slice(0, 12).join('\n');
+    }else{
+      msg = `Receive ${plan.length === 1 ? plan[0].x.productName : plan.length + ' items'}:\n\n✔ ${G} good — added to Main Store stock\n✖ ${R} rejected — recorded, not added` +
+        (leftAfter ? `\n⏳ ${leftAfter} still waiting afterwards` : '\n\nNothing will be left waiting — ' + (plan.length === 1 ? 'this item' : 'these items') + ' will move to Received orders.');
+      if(zero.length) msg += `\n\n⚠ ${zero.length} still priced at $0 — price them in the store app (Settings → Store Pricing Rule → Apply):\n` + zero.slice(0, 8).join(', ') + (zero.length > 8 ? ', ...' : '');
+    }
+    if(!confirm(msg)) return;
 
-    const now = Date.now(), iso = new Date().toISOString(), del = firebase.firestore.FieldValue.delete();
+    const now = Date.now(), iso = new Date().toISOString(), FV = firebase.firestore.FieldValue;
     const writes = [];
-    work.forEach(({ x, p }) => {
-      const oldSizes = Array.isArray(p.sizes) ? p.sizes.map(s => ({ ...s })) : [];
-      const sizes = oldSizes.map(s => ({ ...s }));
-      const deltas = [];
-      (x.sizes || []).forEach(inc => {
-        let s = sizes.find(o => ((o.name || '') + '').trim().toLowerCase() === inc.name.trim().toLowerCase());
-        if(!s){ s = { name: inc.name, qty: 0 }; sizes.push(s); }
-        const before = Number(s.qty) || 0;
-        s.qty = before + inc.qty;
-        deltas.push({ size: s.name, oldQty: before, newQty: s.qty, delta: inc.qty });
-      });
-      const oldStock = Number(p.stock) || 0;
-      const stock = sizes.length ? sizes.reduce((a, s) => a + (Number(s.qty) || 0), 0) + (x.noSize || 0) : oldStock + (x.total || 0);
-      writes.push(b => b.update(ref.doc(x.productId), { sizes, stock, lastRestockDate: now, updatedAt: iso }));
-      writes.push(b => b.set(db.collection('stores').doc(STORE_MAIN_ID).collection('stockAdjustments').doc(), {
-        productId: x.productId, productName: p.name || x.productName, oldStock, newStock: stock,
-        totalDelta: stock - oldStock, sizeDeltas: deltas, reason: 'New stock received',
-        timestamp: now, timeStr: new Date(now).toLocaleString(), user: 'restock-tool'
-      }));
+    plan.forEach(p => {
+      const { x, lines, add, note, prod } = p;
+      const newLines = lines.map((l, i) => ({ name: l.name, qty: l.qty, got: l.got + add[i].g, rej: l.rej + add[i].r, miss: l.miss + add[i].m }));
+      const good = add.reduce((a, v) => a + v.g, 0);
+      if(good && prod){
+        const sizes = (Array.isArray(prod.sizes) ? prod.sizes : []).map(s => ({ ...s }));
+        const deltas = [];
+        let unsized = 0;
+        lines.forEach((l, i) => {
+          const n = add[i].g;
+          if(!n) return;
+          if(!l.name){ unsized += n; return; }
+          let s = sizes.find(o => ((o.name || '') + '').trim().toLowerCase() === l.name.trim().toLowerCase());
+          if(!s){ s = { name: l.name, qty: 0 }; sizes.push(s); }
+          const before = Number(s.qty) || 0;
+          s.qty = before + n;
+          deltas.push({ size: s.name, oldQty: before, newQty: s.qty, delta: n });
+        });
+        const oldStock = Number(prod.stock) || 0;
+        const stock = sizes.length ? sizes.reduce((a, s) => a + (Number(s.qty) || 0), 0) + unsized : oldStock + good;
+        writes.push(b => b.update(ref.doc(x.productId), { sizes, stock, lastRestockDate: now, updatedAt: iso }));
+        writes.push(b => b.set(db.collection('stores').doc(STORE_MAIN_ID).collection('stockAdjustments').doc(), {
+          productId: x.productId, productName: prod.name || x.productName, oldStock, newStock: stock,
+          totalDelta: stock - oldStock, sizeDeltas: deltas, reason: 'New stock received',
+          timestamp: now, timeStr: new Date(now).toLocaleString(), user: 'restock-tool'
+        }));
+      }
+      const notes = (x.notes || []).concat(note ? [note] : []);
+      const hRef = db.collection('restockTool_history').doc(x.histId);
+      if(rcvSum(newLines, 'left') > 0){
+        writes.push(b => b.update(hRef, { ['incoming.' + bid + '.lines']: newLines, ['incoming.' + bid + '.notes']: notes }));
+      }else{
+        writes.push(b => b.update(hRef, {
+          ['incoming.' + bid]: FV.delete(),
+          receivedKeys: FV.arrayUnion(x.orderKey || bid),
+          receiveLog: FV.arrayUnion({
+            batchId: bid, orderKey: x.orderKey || bid, productId: x.productId, productName: (prod && prod.name) || x.productName || '',
+            orderedAt: x.createdAt || 0, closedAt: now, lines: newLines, notes,
+            cost: prod && Number(prod.cost) > 0 ? Number(prod.cost) : 0
+          })
+        }));
+      }
     });
-    g.items.forEach(x => writes.push(b => b.update(db.collection('restockTool_history').doc(x.histId), {
-      ['incoming.' + batchId]: del,
-      receivedKeys: firebase.firestore.FieldValue.arrayUnion(x.orderKey)
-    })));
     for(let i = 0; i < writes.length; i += 450){
       const b = db.batch();
       writes.slice(i, i + 450).forEach(w => w(b));
       await b.commit();
     }
+    plan.forEach(p => Object.keys(rcvDraft).forEach(k => { if(k.startsWith(bid + '|' + p.x.histId + '|')) delete rcvDraft[k]; }));
     db.collection('activityLogs').add({
-      action: 'Stock Received (1688 order)', details: `${pieces} pcs into ${work.length} items: ` + work.map(w => w.p.name).slice(0, 20).join(', '),
+      action: mode === 'close' ? 'Stock marked not received (1688 order)' : 'Stock Received (1688 order)',
+      details: mode === 'close' ? `${M} pcs not received on ${plan.length} items` : `${G} good, ${R} rejected on ${plan.length} items: ` + plan.map(p => p.x.productName).slice(0, 20).join(', '),
       time: new Date(now).toLocaleString(), timestamp: now, user: 'restock-tool', storeId: STORE_MAIN_ID, storeName: STORE_MAIN_ID
     }).catch(() => {});
-    alert(`Received ${pieces} pieces into ${work.length} item${work.length === 1 ? '' : 's'}.` +
-          (zero.length ? `\n\n${zero.length} still at $0 — price them in the store app.` : '') +
-          '\n\nIf the store app is open on another device, refresh it before selling or syncing.');
+    alert((mode === 'close' ? `Recorded ${M} piece${M === 1 ? '' : 's'} as not received.` : `Done — ${G} added to stock, ${R} rejected.`) +
+      (G ? '\n\nIf the store app is open on another device, refresh it before selling or syncing.' : ''));
   }catch(err){
     console.warn('Receive failed:', err);
     alert('Receive failed, nothing was changed: ' + err.message);
+  }finally{
+    rcvBusy = false;
     if(btn) btn.disabled = false;
   }
+}
+
+// Finished items (nothing left waiting), grouped by order — newest first.
+function renderReceived(){
+  const card = document.getElementById('receivedCard');
+  const wrap = document.getElementById('receivedWrap');
+  if(!card || !wrap) return;
+  const groups = {};
+  historyCache.forEach(h => (h.receiveLog || []).forEach(r => {
+    if(!r || !r.batchId) return;
+    const g = groups[r.batchId] = groups[r.batchId] || { batchId: r.batchId, orderedAt: r.orderedAt || 0, closedAt: 0, items: [] };
+    g.closedAt = Math.max(g.closedAt, r.closedAt || 0);
+    g.items.push(r);
+  }));
+  const pending = {};
+  incomingGroups().forEach(g => { pending[g.batchId] = g.items.length; });
+  const list = Object.values(groups).sort((a, b) => b.closedAt - a.closedAt).slice(0, 15);
+  card.classList.toggle('hidden', !list.length);
+  wrap.innerHTML = list.map(g => {
+    g.items.sort((a, b) => (a.productName || '').localeCompare(b.productName || '', undefined, { numeric: true }));
+    const all = g.items.flatMap(r => r.lines || []);
+    const problemVal = g.items.reduce((a, r) => a + (r.cost || 0) * (rcvSum(r.lines || [], 'rej') + rcvSum(r.lines || [], 'miss')), 0);
+    const rows = g.items.map(r => {
+      const ls = r.lines || [];
+      const bad = ls.filter(l => l.rej || l.miss).map(l => `${escapeHtml(l.name || '(no size)')}${l.rej ? ` <span class="bad">✖${l.rej}</span>` : ''}${l.miss ? ` <span class="miss">?${l.miss}</span>` : ''}`).join(', ');
+      return `<div class="rcv-log-row"><b>${escapeHtml(r.productName || '')}</b> — <span class="ok">${rcvSum(ls, 'got')}</span>/${rcvSum(ls, 'qty')} received${bad ? ' · ' + bad : ''}
+        ${(r.notes || []).map(n => `<div class="rcv-prev-note">📝 ${escapeHtml(n)}</div>`).join('')}</div>`;
+    }).join('');
+    const hasProblem = rcvSum(all, 'rej') + rcvSum(all, 'miss') > 0;
+    return `<details class="rcv-order">
+      <summary style="cursor:pointer;list-style:none">
+        <b>Ordered ${escapeHtml(new Date(g.orderedAt).toLocaleDateString())}</b> · ${g.items.length} item${g.items.length === 1 ? '' : 's'} done · closed ${escapeHtml(new Date(g.closedAt).toLocaleDateString())}
+        ${pending[g.batchId] ? ` · <b>${pending[g.batchId]} still waiting</b>` : ''}
+        <div class="rcv-stats">${rcvStats(all).replace(/ · <b>0 waiting<\/b>/, '')}${hasProblem && problemVal ? ` · claim value ≈ $${problemVal.toFixed(2)} at cost` : ''}</div>
+      </summary>
+      <div style="margin-top:8px">${rows}</div>
+    </details>`;
+  }).join('');
 }
 
 function confirmRemoveFromRestock(docId){
