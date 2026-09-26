@@ -1170,6 +1170,10 @@ function toggleAddPhoto(id){
 // order-export import) are synced. Items linked by hand to an older store
 // product are never touched, so existing live photos stay safe.
 // The store item's photos are replaced by the catalog's photo list.
+// A store product that was deleted: its leftover record (active:false), or a
+// nameless leftover that the store app's Sync turned back on.
+function storeDocGone(x){ x = x || {}; return x.active === false || (!!x.deletedAt && !((x.name || '') + '').trim()); }
+
 function restockOwnImages(p){
   const arr = (Array.isArray(p.images) ? p.images : []).filter(u => typeof u === 'string' && u);
   if(typeof p.image === 'string' && p.image && !arr.includes(p.image)) arr.push(p.image);
@@ -1199,7 +1203,7 @@ document.getElementById('storePhotoSyncBtn').onclick = async () => {
   try{
     const snap = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').get();
     const store = new Map();
-    snap.forEach(d => store.set(d.id, d.data() || {}));
+    snap.forEach(d => { if(!storeDocGone(d.data())) store.set(d.id, d.data() || {}); });
     const todo = [];
     historyCache.forEach(h => {
       if(!h.storeProductId || !store.has(h.storeProductId)) return;
@@ -1282,7 +1286,7 @@ async function deleteShownPhoto(id){
     if(item.storeProductId){
       const ref = db.collection('stores').doc(STORE_MAIN_ID).collection('products').doc(item.storeProductId);
       const doc = await ref.get();
-      if(doc.exists && (doc.data() || {}).active !== false){
+      if(doc.exists && !storeDocGone(doc.data())){
         const cur = Array.isArray(doc.data().images) ? doc.data().images : [];
         let next = cur.filter(u => u !== url);
         if(!next.length) next = left.length ? left : [STORE_PLACEHOLDER_IMG];
@@ -1314,7 +1318,7 @@ function loadStoreProducts(){
       const x = d.data() || {};
       const imgs = (Array.isArray(x.images) ? x.images : []).filter(u => typeof u === 'string' && u);
       if(typeof x.image === 'string' && x.image && !imgs.includes(x.image)) imgs.push(x.image);
-      return { id: d.id, name: ((x.name || '') + '').trim(), barcode: ((x.barcode || '') + '').trim(), active: x.active !== false, images: imgs };
+      return { id: d.id, name: ((x.name || '') + '').trim(), barcode: ((x.barcode || '') + '').trim(), active: !storeDocGone(x), images: imgs };
     }).filter(p => p.name).sort((a, b) => a.name.localeCompare(b.name));
     storeProductsState = 'ready';
     renderHistory(); // linked items without their own photo pick up the store photo
@@ -2204,7 +2208,7 @@ async function storeBuildPlan(entries, prefixRaw){
   await pricingRefresh();  // always use the latest rule from the store app
   const snap = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').get();
   const existing = [];
-  snap.forEach(d => existing.push({ id: d.id, name: ((d.data().name || '') + '').trim(), active: d.data().active !== false }));
+  snap.forEach(d => existing.push({ id: d.id, name: ((d.data().name || '') + '').trim(), active: !storeDocGone(d.data()) }));
   // A product deleted in the store app can leave an empty record behind
   // (active:false) — treat it as gone so the item is created again.
   const existingIds = new Set(existing.filter(p => p.active).map(p => p.id));
@@ -2424,7 +2428,7 @@ document.getElementById('csvImportBtn').onclick = async () => {
 async function incomingQueue(entries, orderKey){
   const snap = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').get();
   const live = {};
-  snap.forEach(d => { const x = d.data() || {}; if(x.active !== false) live[d.id] = x; });
+  snap.forEach(d => { const x = d.data() || {}; if(!storeDocGone(x)) live[d.id] = x; });
   const batchId = 'r' + Date.now();
   const key = orderKey || batchId;
   const wb = db.batch();
@@ -2626,7 +2630,7 @@ async function rcvApply(bid, hids, mode, btn){
     const missingProd = [], zero = [];
     plan.forEach((p, i) => {
       p.prod = docs[i].exists ? (docs[i].data() || {}) : null;
-      if(p.prod && p.prod.active === false) p.prod = null;
+      if(p.prod && storeDocGone(p.prod)) p.prod = null;
       const good = p.add.reduce((a, v) => a + v.g, 0);
       if(good && !p.prod){ missingProd.push(p.x.productName); }
       else if(good && !(Number(p.prod.price) > 0)) zero.push(p.prod.name || p.x.productName);
