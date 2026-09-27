@@ -1334,13 +1334,14 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                     <th style="padding:0.6rem 0.8rem">Revenue</th>
                                     <th style="padding:0.6rem 0.8rem">Cost (COGS)</th>
                                     <th style="padding:0.6rem 0.8rem">Gross Profit</th>
+                                    <th style="padding:0.6rem 0.8rem">Expenses</th>
                                     <th style="padding:0.6rem 0.8rem">Net Profit</th>
                                     <th style="padding:0.6rem 0.8rem">Running Net (Month)</th>
                                 </tr></thead>
-                                <tbody id="dailyProfitList"><tr><td colspan="6" style="text-align:center;color:var(--gray);padding:1rem">No data</td></tr></tbody>
+                                <tbody id="dailyProfitList"><tr><td colspan="7" style="text-align:center;color:var(--gray);padding:1rem">No data</td></tr></tbody>
                             </table>
                         </div>
-                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-circle-info"></i> Cost is calculated from each product's current Cost of Production (set under Inventory → edit product). Net Profit splits each month's total expenses evenly across its calendar days, since expenses are only tracked per-month, not per-day.</p>
+                        <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-circle-info"></i> Cost is calculated from each product's current Cost of Production (set under Inventory → edit product). Expenses = each month's total expenses split evenly across its calendar days, plus extra expenses entered day by day as Cash Out under <b>Shipping / Delivery</b> or <b>Other</b>. Other Cash Out types (stock payments, rent, salaries, ads, owner withdrawal, equipment) are not subtracted again, since they're already counted in Cost of Goods or the monthly expenses, or aren't a running cost.</p>
                     </div>
 
                     <!-- FINANCIAL TREND BY DAY -->
@@ -1454,6 +1455,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                             <div class="stat-card" style="border-left:4px solid #f56565"><div class="stat-icon" style="background:rgba(245,101,101,0.1)"><i class="fas fa-arrow-up" style="color:#f56565"></i></div><div class="stat-info"><h3 id="cashOutTotal" style="color:#f56565">$0.00</h3><p>Cash Out <span id="cashOutSub" style="font-weight:400;font-size:0.7rem"></span></p></div></div>
                             <div class="stat-card" style="border-left:4px solid #667eea"><div class="stat-icon" style="background:rgba(102,126,234,0.1)"><i class="fas fa-scale-balanced" style="color:#667eea"></i></div><div class="stat-info"><h3 id="cashNetTotal" style="color:#667eea">$0.00</h3><p>Net Cash Flow</p></div></div>
                             <div class="stat-card" style="border-left:4px solid #4299e1"><div class="stat-icon" style="background:rgba(66,153,225,0.1)"><i class="fas fa-building-columns" style="color:#4299e1"></i></div><div class="stat-info"><h3 id="cashBankBalance" style="color:#4299e1">-</h3><p>Est. Bank Balance <span id="cashBankSub" style="font-weight:400;font-size:0.7rem"></span></p></div></div>
+                            <div class="stat-card" style="border-left:4px solid #ed8936"><div class="stat-icon" style="background:rgba(237,137,54,0.1)"><i class="fas fa-hourglass-half" style="color:#ed8936"></i></div><div class="stat-info"><h3 id="cashPendingTotal" style="color:#ed8936">-</h3><p><span id="cashPendingTitle">Pending This Month</span> <span id="cashPendingSub" style="font-weight:400;font-size:0.7rem"></span></p><p id="cashPendingAfter" style="font-size:0.72rem;color:var(--gray);margin-top:0.2rem"></p></div></div>
                         </div>
 
                         <div class="chart-card">
@@ -7787,6 +7789,7 @@ function sendToTelegram(order, callback) {
         }
         await loadReportOrigOrders();
         await loadExpensesForReportPeriod();
+        await loadExtraExpensesForReport();
         await loadCustomerTypesForReport();
         renderReports();
         loadCashData();
@@ -8159,6 +8162,33 @@ function sendToTelegram(order, callback) {
         } catch(e) { console.warn('Expense load failed:', e.message); }
     }
 
+    // Extra day-by-day expenses for Net Profit: manual Cash Out entries in the
+    // categories below. The other Cash Out categories are left out on purpose:
+    //   stock      -> already counted as Cost of Goods when the item sells
+    //   rent/salary/ads -> already in the monthly expenses
+    //   withdrawal -> owner taking money out, not a business cost
+    //   equipment  -> a purchase you keep, not a running cost
+    var PROFIT_EXTRA_CATS = ['shipping', 'other'];
+    var _reportExtraExpenses = []; // [{date:'YYYY-MM-DD', amount, category}]
+    async function loadExtraExpensesForReport() {
+        _reportExtraExpenses = [];
+        if (!db || !STATE.firebaseOnline) return;
+        var dr = getDateRange(STATE.dateFilter);
+        var sel = reportSelectedStore();
+        var ids = sel === 'ALL' ? (await cashLoadStoreList()).map(function(s){ return s.id; }) : [sel];
+        await Promise.all(ids.map(async function(id) {
+            try {
+                var snap = await db.collection('stores').doc(id).collection('cashLedger')
+                    .where('date', '>=', cashDateStr(dr.start)).where('date', '<=', cashDateStr(dr.end)).get();
+                snap.forEach(function(d) {
+                    var e = d.data();
+                    if (e.direction === 'in' || PROFIT_EXTRA_CATS.indexOf(e.category) === -1) return;
+                    _reportExtraExpenses.push({ date: e.date, amount: Number(e.amount) || 0, category: e.category });
+                });
+            } catch(e) { console.warn('Extra expense load failed for ' + id + ':', e.message); }
+        }));
+    }
+
     function sumExpensesForPeriod() {
         var t = { facility: 0, salaries: 0, facebookAds: 0, other: 0 };
         Object.keys(_reportExpenses).forEach(function(mk) {
@@ -8253,6 +8283,16 @@ function sendToTelegram(order, callback) {
         }
         var grossProfit = revenue - cogs;
 
+        // Extra expenses entered day by day as manual Cash Out (e.g. courier cost).
+        for (var xe = 0; xe < _reportExtraExpenses.length; xe++) {
+            var x = _reportExtraExpenses[xe], xp = String(x.date).split('-');
+            if (xp.length !== 3) continue;
+            var xd = new Date(+xp[0], +xp[1] - 1, +xp[2]);
+            var xk = formatDate(xd);
+            if (!byDay[xk]) byDay[xk] = { revenue: 0, cogs: 0, walkinRevenue: 0, fbRevenue: 0, sortDate: xd };
+            byDay[xk].extraExp = (byDay[xk].extraExp || 0) + x.amount;
+        }
+
         // Expenses are only entered per-month, so a partial period (e.g. "month to date")
         // must NOT be charged the whole month's expense against only part of a month's revenue.
         // Build the day-by-day rows FIRST (prorating each month's expense evenly across its
@@ -8283,16 +8323,17 @@ function sendToTelegram(order, callback) {
             var monthExp = monthlyExpenseTotal[mk] || 0;
             var dailyExpShare = monthExp / daysInMonthKey(mk);
             var fbSpendShare = (monthlyFbSpend[mk] || 0) / daysInMonthKey(mk);
-            var np = gp - dailyExpShare;
+            var extraExp = d.extraExp || 0;
+            var np = gp - dailyExpShare - extraExp;
             runningNetByMonth[mk] = (runningNetByMonth[mk] || 0) + np;
-            runningExpByMonth[mk] = (runningExpByMonth[mk] || 0) + dailyExpShare;
-            periodExpenseTotal += dailyExpShare;
+            runningExpByMonth[mk] = (runningExpByMonth[mk] || 0) + dailyExpShare + extraExp;
+            periodExpenseTotal += dailyExpShare + extraExp;
             periodNetProfit += np;
             dailyRows.push({
                 dateLabel: days[k], sortDate: d.sortDate, mk: mk,
                 revenue: d.revenue, cogs: d.cogs, grossProfit: gp,
                 walkinRevenue: d.walkinRevenue, fbRevenue: d.fbRevenue, fbSpendShare: fbSpendShare,
-                dailyExpShare: dailyExpShare, netProfit: np,
+                dailyExpShare: dailyExpShare, extraExp: extraExp, netProfit: np,
                 runningNet: runningNetByMonth[mk], runningExp: runningExpByMonth[mk]
             });
         }
@@ -8307,7 +8348,7 @@ function sendToTelegram(order, callback) {
         var elNM = document.getElementById('reportNetMargin'); if (elNM) elNM.textContent = revenue > 0 ? '(' + ((netProfit/revenue)*100).toFixed(1) + '%)' : '';
 
         if (!tbody) return;
-        if (!days.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>'; return; }
+        if (!days.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>'; return; }
         var html = '';
         for (var r = 0; r < dailyRows.length; r++) {
             var row = dailyRows[r];
@@ -8315,6 +8356,8 @@ function sendToTelegram(order, callback) {
                 '<td style="padding:0.5rem 0.8rem">$' + row.revenue.toFixed(2) + '</td>' +
                 '<td style="padding:0.5rem 0.8rem;color:#ed8936">$' + row.cogs.toFixed(2) + '</td>' +
                 '<td style="padding:0.5rem 0.8rem;color:' + (row.grossProfit >= 0 ? '#38a169' : 'var(--danger)') + '">$' + row.grossProfit.toFixed(2) + '</td>' +
+                '<td style="padding:0.5rem 0.8rem;color:#e53e3e">$' + (row.dailyExpShare + row.extraExp).toFixed(2) +
+                    (row.extraExp ? '<br><span style="font-size:0.68rem;color:var(--gray)">incl. $' + row.extraExp.toFixed(2) + ' extra</span>' : '') + '</td>' +
                 '<td style="padding:0.5rem 0.8rem;font-weight:600;color:' + (row.netProfit >= 0 ? '#667eea' : 'var(--danger)') + '">$' + row.netProfit.toFixed(2) + '</td>' +
                 '<td style="padding:0.5rem 0.8rem;color:var(--gray)">$' + row.runningNet.toFixed(2) + '</td></tr>';
         }
@@ -8327,11 +8370,11 @@ function sendToTelegram(order, callback) {
         var rows = STATE._reportDailyRows || [];
         var labels = rows.length ? rows.map(function(r){ return r.dateLabel; }) : ['No Data'];
         var revData = rows.length ? rows.map(function(r){ return r.revenue; }) : [0];
-        var expData = rows.length ? rows.map(function(r){ return r.dailyExpShare; }) : [0];
+        var expData = rows.length ? rows.map(function(r){ return r.dailyExpShare + (r.extraExp || 0); }) : [0];
         var netData = rows.length ? rows.map(function(r){ return r.netProfit; }) : [0];
         STATE.charts.netProfitTrendChart = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [
             { label: 'Revenue ($)', data: revData, borderColor: '#38a169', backgroundColor: 'rgba(56,161,105,0.08)', fill: false, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#38a169' },
-            { label: 'Expenses ($) — monthly total ÷ days in month', data: expData, borderColor: '#ed8936', backgroundColor: 'rgba(237,137,54,0.08)', fill: false, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#ed8936' },
+            { label: 'Expenses ($) — monthly share + extra Cash Out', data: expData, borderColor: '#ed8936', backgroundColor: 'rgba(237,137,54,0.08)', fill: false, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#ed8936' },
             { label: 'Net Profit ($)', data: netData, borderColor: '#667eea', backgroundColor: 'rgba(102,126,234,0.1)', fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#667eea' }
         ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { padding: 12, usePointStyle: true } } }, scales: { y: { ticks: { callback: function(v){return '$'+v;} } } } } });
     }
@@ -8500,6 +8543,30 @@ function sendToTelegram(order, callback) {
         return { sales: sales, refunds: refunds };
     }
 
+    // PENDING PAYMENTS — this month's planned expenses (Reports -> monthly expenses) that have NOT been
+    // paid yet. Paid = Cash Out entries this month in the matching category. Information only: it never
+    // changes the bank balance. The balance drops only when the real Cash Out payment is entered.
+    var CASH_PENDING_MAP = [['facility','rent','Rent'],['salaries','salary','Salaries'],['facebookAds','ads','FB Ads'],['other','other','Other']];
+    var _cashPending = null; // { month, planned:{facility..}, paid:{rent..} }
+    async function cashLoadPending(sid) {
+        var now = new Date(), mk = monthKey(now);
+        var first = new Date(now.getFullYear(), now.getMonth(), 1), last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        var ids = sid === 'ALL' ? (await cashLoadStoreList()).map(function(s){ return s.id; }) : [sid];
+        var res = { month: mk, planned: { facility: 0, salaries: 0, facebookAds: 0, other: 0 }, paid: { rent: 0, salary: 0, ads: 0, other: 0 } };
+        await Promise.all(ids.map(async function(id) {
+            var base = db.collection('stores').doc(id);
+            try {
+                var ex = await base.collection('expenses').doc(mk).get();
+                if (ex.exists) { var e = ex.data(); Object.keys(res.planned).forEach(function(k){ res.planned[k] += Number(e[k]) || 0; }); }
+            } catch(err) { console.warn('Pending: expense fetch failed for ' + id + ':', err.message); }
+            try {
+                var snap = await base.collection('cashLedger').where('date', '>=', cashDateStr(first)).where('date', '<=', cashDateStr(last)).get();
+                snap.forEach(function(d) { var l = d.data(); if (l.direction !== 'in' && res.paid.hasOwnProperty(l.category)) res.paid[l.category] += Number(l.amount) || 0; });
+            } catch(err) { console.warn('Pending: ledger fetch failed for ' + id + ':', err.message); }
+        }));
+        return res;
+    }
+
     async function loadCashData() {
         var token = ++_cashLoadToken;
         if (cashCanPickStore()) { await cashLoadStoreList(); if (!_cashSelectedStoreId) _cashSelectedStoreId = STATE.storeId; }
@@ -8508,7 +8575,7 @@ function sendToTelegram(order, callback) {
         if (!db || !STATE.firebaseOnline) { _cashData = []; _cashRefundsForScope = []; _cashOrigOrders = {}; _cashLedger = []; _cashCheckpoint = null; _cashSince = null; renderCashTab(); return; }
         var dr = getDateRange(STATE.dateFilter);
         var startTs = dr.start.getTime(), endTs = dr.end.getTime();
-        var data = [], refunds = [], origMap = {}, ledger = [], cp = null, since = null;
+        var data = [], refunds = [], origMap = {}, ledger = [], cp = null, since = null, pending = null;
         try {
             var scope = await cashFetchScope(sid, startTs, endTs);
             data = scope.sales; refunds = scope.refunds;
@@ -8561,9 +8628,10 @@ function sendToTelegram(order, callback) {
                 if (!cpSnap.empty) { cp = cpSnap.docs[0].data(); since = await cashFlowBetween(cp.date, null, sid, cp.createdAt); }
             }
         } catch(e) { console.warn('Cash data load failed:', e.message); }
+        try { pending = await cashLoadPending(sid); } catch(pe) { console.warn('Pending load failed:', pe.message); }
         if (token !== _cashLoadToken || sid !== cashActiveStoreId()) return; // a newer load, or the store changed mid-flight; drop this one
         _cashData = data; _cashRefundsForScope = refunds; _cashOrigOrders = origMap;
-        _cashLedger = ledger; _cashCheckpoint = cp; _cashSince = since;
+        _cashLedger = ledger; _cashCheckpoint = cp; _cashSince = since; _cashPending = pending;
         renderCashTab();
     }
 
@@ -8761,6 +8829,29 @@ function sendToTelegram(order, callback) {
         } else {
             setText('cashBankBalance', '-');
             setText('cashBankSub', cashIsAllMode() ? '(no store has a saved balance yet)' : '(enter your actual balance below)');
+        }
+
+        // Pending payments card (does NOT touch the bank balance above)
+        if (!_cashPending) {
+            setText('cashPendingTotal', '-'); setText('cashPendingSub', ''); setText('cashPendingAfter', '');
+        } else {
+            var pend = 0, parts = [], plannedAny = 0;
+            CASH_PENDING_MAP.forEach(function(m) {
+                var plan = _cashPending.planned[m[0]] || 0, paid = _cashPending.paid[m[1]] || 0;
+                plannedAny += plan;
+                var left = Math.max(0, plan - paid);
+                if (left > 0.004) { pend += left; parts.push(m[2] + ' ' + reportMoney(left)); }
+            });
+            var mp = _cashPending.month.split('-');
+            var monthName = new Date(+mp[0], +mp[1] - 1, 1).toLocaleString('en-US', { month: 'long' });
+            setText('cashPendingTitle', 'Pending ' + monthName);
+            setText('cashPendingTotal', reportMoney(pend));
+            if (!plannedAny) setText('cashPendingSub', '(no ' + monthName + ' expenses entered yet)');
+            else setText('cashPendingSub', parts.length ? '(' + parts.join(', ') + ')' : '(all paid)');
+            var bankNow = null;
+            if (_cashCheckpoint && _cashCheckpoint.combined) bankNow = Number(_cashCheckpoint.balance) || 0;
+            else if (_cashCheckpoint) bankNow = (Number(_cashCheckpoint.balance) || 0) + (_cashSince ? _cashSince.net : 0);
+            setText('cashPendingAfter', (bankNow != null && pend > 0) ? 'Bank after paying these: ' + reportMoney(bankNow - pend) : '');
         }
 
         var chips = document.getElementById('cashOutChips');
