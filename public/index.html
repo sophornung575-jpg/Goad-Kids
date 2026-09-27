@@ -2438,16 +2438,23 @@ function sendToTelegram(order, callback) {
     function saveProducts() {
         localStorage.setItem('goatProducts_' + STATE.storeId, JSON.stringify(STATE.products));
     }
+    // Adds addedAt / lastRestockDate to a product write — only when they have
+    // a real value, so a missing local date never wipes a good one in Firestore.
+    function withProductDates(p, payload) {
+        if (p.addedAt) payload.addedAt = p.addedAt;
+        if (p.lastRestockDate) payload.lastRestockDate = p.lastRestockDate;
+        return payload;
+    }
     function saveProductsToFirebase() {
         // Push all products to Firebase - call after bulk changes
         if (!STATE.firebaseOnline || !db) return;
         for (var i = 0; i < STATE.products.length; i++) {
             var p = STATE.products[i];
-            db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({
+            db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set(withProductDates(p, {
                 name: p.name, price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), stock: p.stock, category: p.category,
                 images: p.images || [], sizes: p.sizes || [], active: true,
                 updatedAt: new Date().toISOString()
-            }, { merge: true }).catch(function(e){ console.warn('Product sync failed:', e); });
+            }), { merge: true }).catch(function(e){ console.warn('Product sync failed:', e); });
         }
     }
     function saveOrders() {
@@ -3909,7 +3916,8 @@ function sendToTelegram(order, callback) {
             renderHistory();
             updateAdminBadges();
             checkAndPushRestockAlerts(); // auto-adds fast-selling, low-stock items to the restock.html list
-            backfillRestockDatesFromLogs(); // one-time: recover real addedAt/lastRestockDate for legacy products from activity log history
+            repairProductDatesV4(); // one-time: rebuild promotion dates from logs + transfer receipts (fixes dates lost before the save fix)
+            // backfillRestockDatesFromLogs(); // replaced by repairProductDatesV4 above — v3 would undo branch dates set from transfers
             showStatus('Synced', 'online');
             var warn = document.getElementById('localDataWarning');
             if (warn) warn.remove();
@@ -3979,7 +3987,7 @@ function sendToTelegram(order, callback) {
             for (var i = 0; i < STATE.products.length; i++) {
                 var p = STATE.products[i];
                 if (!String(p.name || '').trim()) continue; // never push a blank leftover
-                await db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set({ name: p.name, slug: p.slug || makeSlug(p.name), price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), stock: p.stock, category: p.category, images: p.images || [], sizes: p.sizes || [], active: true, updatedAt: new Date().toISOString() }, { merge: true });
+                await db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set(withProductDates(p, { name: p.name, slug: p.slug || makeSlug(p.name), price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), stock: p.stock, category: p.category, images: p.images || [], sizes: p.sizes || [], active: true, updatedAt: new Date().toISOString() }), { merge: true });
             }
             // Delete products that were deleted locally
             var deleted = JSON.parse(localStorage.getItem('goatDeletedProducts') || '[]');
@@ -4946,6 +4954,10 @@ function sendToTelegram(order, callback) {
             images: p.images || [], sizes: p.sizes || [], active: true,
             updatedAt: new Date().toISOString()
         };
+        // Promotion age clock — must reach Firestore, otherwise a "New stock
+        // received" reset is lost on the next reload / other devices.
+        if (p.lastRestockDate) productSyncPayload.lastRestockDate = p.lastRestockDate;
+        if (p.addedAt) productSyncPayload.addedAt = p.addedAt;
         if (db) {
             db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id)
             .set(productSyncPayload, { merge: true })
@@ -7307,6 +7319,94 @@ function sendToTelegram(order, callback) {
             });
             renderInventory();
         } catch (e) { console.warn('Restock date backfill failed:', e.message); }
+    }
+
+    // v4 date repair (runs once per store). Earlier dates were wrong because
+    // (a) "New stock received" edits and new products never saved their
+    // dates to Firestore, and (b) older transfer receipts never reset the
+    // clock. This rebuilds each product's dates from real evidence:
+    //   addedAt         = earliest "Add Product" log here, else first transfer
+    //                     received into this store
+    //   lastRestockDate = latest of: "New stock received" edit, or an approved
+    //                     transfer into this store that was NOT a correction
+    // Products with no evidence at all are left unchanged.
+    async function repairProductDatesV4() {
+        if (!db || !STATE.firebaseOnline || !STATE.products.length) return;
+        var flagRef = db.collection('_admin_').doc('restockDatesV4_' + STATE.storeId);
+        try { if ((await flagRef.get()).exists) return; } catch (e) { return; }
+        try {
+            var adds = {}, restocks = {}, firstArrival = {};
+            function earliest(map, k, ts) { if (!map[k] || ts < map[k]) map[k] = ts; }
+            function latest(map, k, ts) { if (!map[k] || ts > map[k]) map[k] = ts; }
+
+            // Edits / adds made at this store
+            var logSnap = await db.collection('activityLogs').where('storeId', '==', STATE.storeId).get();
+            logSnap.forEach(function(d) {
+                var l = d.data(), ts = l.timestamp || 0;
+                if (!ts || !l.details) return;
+                if (l.action === 'Add Product') {
+                    var j = l.details.indexOf(' ($');
+                    if (j > 0) earliest(adds, l.details.slice(0, j), ts);
+                } else if (l.action === 'Edit Product' && l.details.indexOf('| Reason: New stock received') !== -1) {
+                    var i = l.details.indexOf(' (Stock:');
+                    if (i > 0) latest(restocks, l.details.slice(0, i), ts);
+                }
+            });
+
+            // Correction receipts (for transfers approved before restockType was stored)
+            var corrections = [];
+            var cSnaps = await Promise.all([
+                db.collection('activityLogs').where('action', '==', 'Transfer Receipt Confirmed').get(),
+                db.collection('activityLogs').where('action', '==', 'Bulk Transfer Receipt Confirmed').get()
+            ]);
+            cSnaps.forEach(function(s) { s.forEach(function(d) {
+                var l = d.data();
+                if (l.details && l.details.indexOf('Correction') !== -1) corrections.push(l);
+            }); });
+            function isCorrection(t) {
+                if (t.restockType) return t.restockType === 'correction';
+                var at = t.approvedAt || 0;
+                return corrections.some(function(l) {
+                    var dt = (l.timestamp || 0) - at;
+                    if (dt < 0 || dt > 120000) return false; // logged within 2 min after approval
+                    if (l.action === 'Transfer Receipt Confirmed') return l.details.indexOf(t.productName + ' x') === 0;
+                    return l.details.indexOf('from ' + t.fromStoreId) !== -1;
+                });
+            }
+
+            // Transfers received into this store
+            var tSnap = await db.collection('transfers').where('toStoreId', '==', STATE.storeId).get();
+            tSnap.forEach(function(d) {
+                var t = d.data();
+                if (t.status !== 'approved' || !t.approvedAt || !t.productName) return;
+                earliest(firstArrival, t.productName, t.approvedAt);
+                if (!isCorrection(t)) latest(restocks, t.productName, t.approvedAt);
+            });
+
+            var writes = [];
+            STATE.products.forEach(function(p) {
+                var added = adds[p.name] || firstArrival[p.name] || 0;
+                var restock = Math.max(restocks[p.name] || 0, added);
+                if (!added && !restock) return; // no evidence — leave as is
+                var newAdded = added || p.addedAt || restock;
+                var newRestock = restock || newAdded;
+                if (p.addedAt === newAdded && p.lastRestockDate === newRestock) return;
+                p.addedAt = newAdded; p.lastRestockDate = newRestock;
+                writes.push(p);
+            });
+            for (var k = 0; k < writes.length; k += 400) {
+                var batch = db.batch();
+                writes.slice(k, k + 400).forEach(function(p) {
+                    batch.set(db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id),
+                        { addedAt: p.addedAt, lastRestockDate: p.lastRestockDate }, { merge: true });
+                });
+                await batch.commit();
+            }
+            if (writes.length) saveProducts();
+            await flagRef.set({ done: true, at: Date.now(), corrected: writes.length, total: STATE.products.length });
+            logActivity('Promotion Dates Repaired', writes.length + ' of ' + STATE.products.length + ' products updated from restock/transfer history');
+            renderInventory();
+        } catch (e) { console.warn('Promotion date repair (v4) failed:', e.message); }
     }
 
     function getPromotionLevel(p) {
@@ -11102,7 +11202,8 @@ function sendToTelegram(order, callback) {
             batch.set(destProductRef, destData, { merge: true });
             batch.update(db.collection('transfers').doc(transferId), {
                 status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
-                approvedAtStr: new Date().toLocaleString()
+                approvedAtStr: new Date().toLocaleString(),
+                restockType: isGenuineRestockT ? 'new' : 'correction'
             });
             await batch.commit();
 
@@ -11335,7 +11436,8 @@ function sendToTelegram(order, callback) {
                 succeeded.forEach(function(t) {
                     batch.update(db.collection('transfers').doc(t.transferId), {
                         status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
-                        approvedAtStr: new Date().toLocaleString()
+                        approvedAtStr: new Date().toLocaleString(),
+                        restockType: isGenuineRestockBulk ? 'new' : 'correction'
                     });
                 });
 
