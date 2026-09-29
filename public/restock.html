@@ -1360,7 +1360,8 @@ function suggestStoreProduct(p){
 
 function storeProductOptionsHtml(selectedId, filterText){
   const f = normLinkName(filterText);
-  const list = storeProducts.filter(sp => !f || normLinkName(sp.name).includes(f) || normLinkName(sp.barcode).includes(f) || sp.id === selectedId);
+  // Only products that match what was typed — the old selection is no longer pinned into the results.
+  const list = storeProducts.filter(sp => !f || normLinkName(sp.name).includes(f) || normLinkName(sp.barcode).includes(f));
   return `<option value="">${escapeHtml(t('chooseStoreProduct'))}</option>` +
     list.map(sp => `<option value="${escapeHtml(sp.id)}"${sp.id === selectedId ? ' selected' : ''}>${escapeHtml(sp.name)}${sp.active ? '' : ' (inactive)'}</option>`).join('');
 }
@@ -1410,8 +1411,10 @@ function filterStoreLinkOptions(histId, text){
   if(!sel) return;
   const current = sel.value;
   sel.innerHTML = storeProductOptionsHtml(current, text);
-  // With a filter, jump to the first match so Save picks what's visible.
-  if(!current && text && sel.options.length > 1) sel.selectedIndex = 1;
+  // Keep the current pick only if it still matches; otherwise jump to the first match.
+  const stillThere = current && Array.from(sel.options).some(o => o.value === current);
+  if(stillThere) sel.value = current;
+  else sel.selectedIndex = (text && sel.options.length > 1) ? 1 : 0;
 }
 
 function saveStoreLink(histId){
