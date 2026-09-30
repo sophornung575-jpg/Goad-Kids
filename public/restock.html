@@ -804,6 +804,92 @@ const TRANSLATIONS = {
   }
 };
 
+// ---------- Translate Chinese colour / size / title text for display ----------
+// Shares its cache ('goatSizeTr') with the store app (same site), so a
+// translation made or corrected in one is used by the other.
+// 中文 mode shows the original Chinese; English / ខ្មែរ show the translation.
+    var SIZE_GLOSSARY = {
+        '颜色':'Color', '颜色分类':'Color', '尺寸':'Size', '尺码':'Size', '规格':'Spec', '款式':'Style', '图案':'Pattern',
+        '均码':'One Size', '图片色':'As Pictured', '如图':'As Pictured', '珍珠白':'Pearl White', '象牙白':'Ivory', '香槟色':'Champagne', '适合身高':'Height', '身高':'Height', '建议':'Suggested ', '适合':'Fits ', '岁':'Y', '个月':'M', '月':'M', '码':'',
+        '素影':'Style ', '皇冠纱':'Crown Tulle', '水晶绒':'Crystal Velvet', '纯棉':'Cotton', '棉':'Cotton', '珊瑚绒':'Coral Fleece', '法兰绒':'Flannel', '纱布':'Gauze', '竹纤维':'Bamboo Fiber', '针织':'Knit', '蕾丝':'Lace', '网纱':'Mesh Tulle', '毛绒':'Plush',
+        '粉色':'Pink', '粉红':'Pink', '粉':'Pink', '蓝色':'Blue', '浅蓝':'Light Blue', '深蓝':'Navy', '藏青':'Navy', '天蓝':'Sky Blue', '蓝':'Blue',
+        '米色':'Beige', '米白':'Off-White', '白色':'White', '白':'White', '黑色':'Black', '黑':'Black', '红色':'Red', '红':'Red', '酒红':'Wine Red',
+        '黄色':'Yellow', '姜黄':'Mustard', '黄':'Yellow', '绿色':'Green', '牛油果绿':'Avocado Green', '绿':'Green', '紫色':'Purple', '紫':'Purple',
+        '灰色':'Grey', '灰':'Grey', '卡其':'Khaki', '咖啡':'Coffee', '咖色':'Brown', '棕色':'Brown', '橙色':'Orange', '杏色':'Apricot', '奶白':'Cream', '奶油':'Cream',
+        '条纹':'Stripe', '格子':'Plaid', '碎花':'Floral', '小熊':'Bear', '兔子':'Bunny', '恐龙':'Dinosaur', '草莓':'Strawberry', '星星':'Star', '爱心':'Heart',
+        '套装':'Set', '单件':'Single', '上衣':'Top', '裤子':'Pants', '帽子':'Hat', '发带':'Headband', '发夹':'Hair Clip', '袜子':'Socks', '毯子':'Blanket', '盖毯':'Blanket', '包巾':'Swaddle',
+        '大号':'Large', '中号':'Medium', '小号':'Small', '加厚':'Thick', '薄款':'Thin', '升级款':'Upgraded', '款':' Style'
+    };
+    var HAS_CHINESE = /[\u3400-\u9fff]/;
+    var _zhTrCache = {};
+    try { _zhTrCache = JSON.parse(localStorage.getItem('goatSizeTr') || '{}') || {}; } catch (e) { _zhTrCache = {}; }
+    function sizeTrPunct(str) {
+        return str.replace(/：/g, ': ').replace(/（/g, ' (').replace(/）/g, ')').replace(/，/g, ', ').replace(/、/g, ', ')
+                  .replace(/【/g, '[').replace(/】/g, ']').replace(/\*/g, '×').replace(/#/g, '# ')
+                  .replace(/\s{2,}/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim();
+    }
+    function sizeTrGlossary(str) {
+        var keys = Object.keys(SIZE_GLOSSARY).sort(function(a, b) { return b.length - a.length; });
+        var out = str;
+        keys.forEach(function(k) { out = out.split(k).join(' ' + SIZE_GLOSSARY[k] + ' '); });
+        return out;
+    }
+    async function sizeTrGoogle(text, from, to) {
+        var url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + from + '&tl=' + to + '&dt=t&q=' + encodeURIComponent(text);
+        var r = await fetch(url);
+        var j = await r.json();
+        return (j[0] || []).map(function(x) { return x[0]; }).join('');
+    }
+    // Chinese → English: glossary first, Google for any Chinese left (numbers never sent)
+    async function translateSizeName(original) {
+        var out = sizeTrGlossary(original);
+        var chunks = out.match(/[\u3400-\u9fff]+/g) || [];
+        for (var i = 0; i < chunks.length; i++) {
+            try { out = out.split(chunks[i]).join(' ' + (await sizeTrGoogle(chunks[i], 'zh-CN', 'en')) + ' '); }
+            catch (e) { console.warn('Translate failed for', chunks[i], e); }
+        }
+        return sizeTrPunct(out).replace(/\s+:/g, ':').replace(/(\d+)#\s*/g, '#$1 ').replace(/#\s+(\d)/g, '#$1')
+            .replace(/(\d)\s+(Y|M)\b/g, '$1$2').replace(/([^,\s])\s+(Size|Spec|Style|Pattern|Height):/g, '$1, $2:').replace(/\s+\//g, '/')
+            .replace(/\s{2,}/g, ' ').trim();
+    }
+    // English → Khmer (from the cleaned English, so wording matches both languages)
+    async function translateSizeToKhmer(en) {
+        try { return (await sizeTrGoogle(en, 'en', 'km')).trim(); } catch (e) { console.warn('Khmer translate failed', e); return ''; }
+    }
+
+
+    var _zhTrQueue = {}, _zhTrTimer = null, _zhTrRunning = false;
+    function zhLabel(text){
+      if(!text || currentLang === 'zh' || !HAS_CHINESE.test(text)) return text;
+      var t = _zhTrCache[text];
+      if(t && t.en && (currentLang !== 'kh' || t.kh)) return currentLang === 'kh' ? t.kh : t.en;
+      _zhTrQueue[text] = true;
+      if(!_zhTrTimer) _zhTrTimer = setTimeout(runZhTranslations, 250);
+      return (t && t.en) || text;   // show English (or Chinese) until the translation arrives
+    }
+    async function runZhTranslations(){
+      _zhTrTimer = null;
+      if(_zhTrRunning) return; _zhTrRunning = true;
+      var names = Object.keys(_zhTrQueue); _zhTrQueue = {};
+      var added = 0;
+      try{
+        try { var fresh = JSON.parse(localStorage.getItem('goatSizeTr') || '{}') || {}; Object.keys(fresh).forEach(function(k){ if(fresh[k] && fresh[k].en) _zhTrCache[k] = fresh[k]; }); } catch(e){}
+        for(var i = 0; i < names.length; i++){
+          var zh = names[i], cur = _zhTrCache[zh] || {};
+          var en = cur.en || await translateSizeName(zh);
+          if(!en || HAS_CHINESE.test(en)) continue;
+          var kh = cur.kh || await translateSizeToKhmer(en);
+          _zhTrCache[zh] = { en: en, kh: kh }; added++;
+        }
+        if(added){
+          try { localStorage.setItem('goatSizeTr', JSON.stringify(_zhTrCache)); } catch(e){}
+          try { renderIncoming(); } catch(e){}
+          try { renderReceived(); } catch(e){}
+          try { renderRestock(); } catch(e){}
+        }
+      } finally { _zhTrRunning = false; }
+    }
+
 let currentLang = localStorage.getItem('restockTool_lang') || 'en';
 
 function t(key){
@@ -823,6 +909,8 @@ function applyTranslations(){
   document.getElementById('langSelect').value = currentLang;
   renderHistory();
   renderRestock();
+  try { renderIncoming(true); } catch(e){}
+  try { renderReceived(); } catch(e){}
 }
 
 function setLanguage(lang){
@@ -2539,7 +2627,7 @@ function rcvItemHtml(bid, x){
       ? `<td><input type="number" min="0" max="${lf}" inputmode="numeric" data-k="${escapeHtml(gk)}" value="${escapeHtml(String(rcvVal(gk, lf)))}" oninput="rcvSet(this)"></td>
          <td><input type="number" min="0" max="${lf}" inputmode="numeric" data-k="${escapeHtml(rk)}" value="${escapeHtml(String(rcvVal(rk, 0)))}" oninput="rcvSet(this)"></td>`
       : `<td colspan="2" class="rcv-done">done</td>`;
-    return `<tr><td class="rcv-size">${escapeHtml(l.name || '(no size)')}</td><td>${l.qty}</td><td>${doneTxt}</td><td>${lf}</td>${inputs}</tr>`;
+    return `<tr><td class="rcv-size">${escapeHtml(l.name ? zhLabel(l.name) : '(no size)')}</td><td>${l.qty}</td><td>${doneTxt}</td><td>${lf}</td>${inputs}</tr>`;
   }).join('');
   const nk = rcvKey(bid, x.histId, 'note', 'n');
   const notes = (x.notes || []).map(n => `<div class="rcv-prev-note">📝 ${escapeHtml(n)}</div>`).join('');
@@ -2547,7 +2635,7 @@ function rcvItemHtml(bid, x){
     <summary>
       <div class="rcv-thumb">${img ? `<img src="${escapeHtml(img)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>
       <div style="flex:1;min-width:0">
-        <div class="rcv-name">${escapeHtml(x.productName || '')}${x.colour ? ` <span class="rcv-colour">${escapeHtml(x.colour)}</span>` : ''}</div>
+        <div class="rcv-name">${escapeHtml(x.productName || '')}${x.colour ? ` <span class="rcv-colour" title="${escapeHtml(x.colour)}">${escapeHtml(zhLabel(x.colour))}</span>` : ''}</div>
         <div class="rcv-stats">${lines.length} size${lines.length === 1 ? '' : 's'} · ${rcvSum(lines, 'qty')} ordered${done ? ' · ' + rcvStats(lines) : ''}</div>
       </div>
       <span class="rcv-pill ${done ? 'part' : ''}">${done ? 'Partly done' : 'Waiting'} · ${left}</span>
@@ -2761,7 +2849,7 @@ function renderReceived(){
     const rows = g.items.map(r => {
       const ls = r.lines || [];
       const bad = ls.filter(l => l.rej || l.miss).map(l => `${escapeHtml(l.name || '(no size)')}${l.rej ? ` <span class="bad">✖${l.rej}</span>` : ''}${l.miss ? ` <span class="miss">?${l.miss}</span>` : ''}`).join(', ');
-      return `<div class="rcv-log-row"><b>${escapeHtml(r.productName || '')}</b>${r.colour ? ` <span class="rcv-colour">${escapeHtml(r.colour)}</span>` : ''} — <span class="ok">${rcvSum(ls, 'got')}</span>/${rcvSum(ls, 'qty')} received${bad ? ' · ' + bad : ''}
+      return `<div class="rcv-log-row"><b>${escapeHtml(r.productName || '')}</b>${r.colour ? ` <span class="rcv-colour" title="${escapeHtml(r.colour)}">${escapeHtml(zhLabel(r.colour))}</span>` : ''} — <span class="ok">${rcvSum(ls, 'got')}</span>/${rcvSum(ls, 'qty')} received${bad ? ' · ' + bad : ''}
         ${(r.notes || []).map(n => `<div class="rcv-prev-note">📝 ${escapeHtml(n)}</div>`).join('')}</div>`;
     }).join('');
     const hasProblem = rcvSum(all, 'rej') + rcvSum(all, 'miss') > 0;
@@ -3045,13 +3133,13 @@ function renderRestock(){
     const statusLabel = status === 'received' ? t('statusReceived') : (status === 'ordered' ? t('statusOrdered') : (status === 'sent' ? t('statusSent') : t('statusPending')));
     const sizeLines = group.lines.map(item => `
       <div class="rl-size-line">
-        <span class="rl-size-label">${item.size ? escapeHtml(item.size) : t('qtyShort')}${(item.soldQty != null || item.stockLeft != null) ? `<br><span class="rl-size-stats">${item.soldQty != null ? escapeHtml(String(item.soldQty)) + ' ' + t('soldShort') : ''}${item.soldQty != null && item.stockLeft != null ? ' · ' : ''}${item.stockLeft != null ? `<span class="${item.stockLeft <= 1 ? 'low' : ''}">${escapeHtml(String(item.stockLeft))} ${t('leftShort')}</span>` : ''}</span>` : ''}</span>
+        <span class="rl-size-label">${item.size ? escapeHtml(zhLabel(item.size)) : t('qtyShort')}${(item.soldQty != null || item.stockLeft != null) ? `<br><span class="rl-size-stats">${item.soldQty != null ? escapeHtml(String(item.soldQty)) + ' ' + t('soldShort') : ''}${item.soldQty != null && item.stockLeft != null ? ' · ' : ''}${item.stockLeft != null ? `<span class="${item.stockLeft <= 1 ? 'low' : ''}">${escapeHtml(String(item.stockLeft))} ${t('leftShort')}</span>` : ''}</span>` : ''}</span>
         <input class="qty" type="number" min="1" value="${item.qty}" onchange="updateQty('${escapeHtml(item.docId)}', this.value)">
         <button class="rl-size-remove" onclick="confirmRemoveFromRestock('${escapeHtml(item.docId)}')" title="Remove this size"><i class="fas fa-times"></i></button>
       </div>
     `).join('');
     const totalQty = group.lines.reduce((n, l) => n + (Number(l.qty) || 0), 0);
-    const sizeSummary = group.lines.map(l => `${l.size ? escapeHtml(l.size) : t('qtyShort')}×${escapeHtml(String(l.qty))}`).join(' · ');
+    const sizeSummary = group.lines.map(l => `${l.size ? escapeHtml(zhLabel(l.size)) : t('qtyShort')}×${escapeHtml(String(l.qty))}`).join(' · ');
     const activeAlert = isActiveAlert(group);
     // One badge only: the alert if there is one, otherwise the status — and
     // the status only when the filter shows mixed statuses.
@@ -3064,7 +3152,7 @@ function renderRestock(){
         <input type="checkbox" ${groupChecked ? 'checked' : ''} onchange="toggleRestockGroupSelect('${docIdsCsv}', this.checked)">
         <div class="rl-thumb">${thumb}</div>
         <div class="rl-info">
-          <div class="rl-title">${escapeHtml(group.title)}</div>
+          <div class="rl-title" title="${escapeHtml(group.title)}">${escapeHtml(zhLabel(group.title))}</div>
           ${badge}
           <details class="rl-details" data-k="${escapeHtml(group.key)}" ${rlOpen.has(group.key) ? 'open' : ''} ontoggle="rlToggle(this)">
             <summary><span>${sizeSummary}</span><span class="rl-total">— ${totalQty} ${t('pcsShort')}</span><span class="rl-edit">${t('editSizesBtn')} <i class="fas fa-chevron-down"></i></span></summary>
@@ -3216,6 +3304,7 @@ document.getElementById('sendTelegramBtn').onclick = async () => {
 };
 
 // ---------- utils ----------
+
 function escapeHtml(str){
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
