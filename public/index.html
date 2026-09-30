@@ -1548,6 +1548,22 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
     </div>
 
     <!-- EDIT PRODUCT MODAL -->
+    <!-- SIZE TRANSLATIONS MODAL (opened by clicking a translated size in Inventory) -->
+    <div class="modal-overlay" id="sizeTranslateModal" onclick="if(event.target===this)closeSizeTranslateModal()">
+        <div class="modal" style="max-width:820px;width:96%;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 style="margin:0"><i class="fas fa-language" style="color:var(--warning)"></i> Size Translations</h3>
+                <button class="modal-close" onclick="closeSizeTranslateModal()">✕</button>
+            </div>
+            <div style="font-size:0.78rem;color:var(--gray-dark);margin:0.5rem 0 0.75rem">Chinese size names are translated automatically and shown in the language chosen with the 🇰🇭 / 🇺🇸 button. Fix any wording here. The Chinese name stays as the real size name, so stock, orders, transfers and 1688 reorders keep working.</div>
+            <div id="sizeTranslateBody"></div>
+            <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:1rem">
+                <button class="btn btn-outline btn-small" onclick="closeSizeTranslateModal()">Cancel</button>
+                <button class="btn btn-success btn-small" id="sizeTranslateSaveBtn" onclick="saveSizeTranslations()"><i class="fas fa-save"></i> Save</button>
+            </div>
+        </div>
+    </div>
+
     <!-- REFUND MODAL -->
     <div class="modal-overlay" id="refundModal" onclick="if(event.target===this)closeRefundModal()">
         <div class="modal" style="max-width:480px;width:94%;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
@@ -2370,6 +2386,7 @@ function sendToTelegram(order, callback) {
         if (m) m.textContent = STATE.language === 'en' ? '🇰🇭' : '🇺🇸';
         applyTranslations();
         showToast(STATE.language === 'en' ? 'Language: English' : 'ភាសា: ខ្មែរ', 'info');
+        ensureSizeTranslations();
     }
 
     function applyTranslations() {
@@ -3133,7 +3150,7 @@ function sendToTelegram(order, callback) {
                 var pct = Math.min(100, (s.qty / 20) * 100);
                 var color = s.qty === 0 ? 'var(--danger)' : s.qty < 3 ? 'var(--warning)' : 'var(--success)';
                 html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
-                    '<span style="min-width:36px;font-size:0.82rem;font-weight:600">' + escHtml(s.name) + '</span>' +
+                    '<span style="min-width:36px;font-size:0.82rem;font-weight:600">' + escHtml(sizeLabel(s.name)) + '</span>' +
                     '<div style="flex:1;height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden">' +
                     '<div style="width:' + pct + '%;height:100%;background:' + color + ';border-radius:4px"></div></div>' +
                     '<span style="min-width:24px;font-size:0.82rem;color:' + color + ';font-weight:700">' + s.qty + '</span>' +
@@ -5049,7 +5066,7 @@ function sendToTelegram(order, callback) {
                 sz = '<div class="size-selector"><label class="size-label">Size:</label><div class="size-options">';
                 for (var k = 0; k < p.sizes.length; k++) {
                     var s = p.sizes[k], av = s.qty > 0;
-                    sz += '<div class="size-option ' + (av ? '' : 'disabled') + '" onclick="event.stopPropagation();selectSize(this,\'' + p.id + '\',\'' + s.name + '\')" title="' + s.name + ': ' + s.qty + '">' + s.name + '<span class="size-stock-badge">' + s.qty + '</span></div>';
+                    sz += '<div class="size-option ' + (av ? '' : 'disabled') + '" onclick="event.stopPropagation();selectSize(this,\'' + p.id + '\',\'' + s.name + '\')" title="' + escHtml(sizeLabel(s.name)) + ': ' + s.qty + '">' + escHtml(sizeLabel(s.name)) + '<span class="size-stock-badge">' + s.qty + '</span></div>';
                 }
                 sz += '</div></div>';
             }
@@ -5201,7 +5218,7 @@ function sendToTelegram(order, callback) {
             sizesHtml = '<div style="margin:1rem 0"><div style="font-weight:600;margin-bottom:0.5rem">Select Size:</div><div class="size-options" id="pdSizeOptions">';
             for (var k = 0; k < p.sizes.length; k++) {
                 var s = p.sizes[k];
-                sizesHtml += '<div class="size-option ' + (s.qty > 0 ? '' : 'disabled') + '" onclick="selectPdSize(this,\'' + pid + '\',\'' + s.name + '\')">' + s.name + '<span class="size-stock-badge">' + s.qty + '</span></div>';
+                sizesHtml += '<div class="size-option ' + (s.qty > 0 ? '' : 'disabled') + '" onclick="selectPdSize(this,\'' + pid + '\',\'' + s.name + '\')">' + escHtml(sizeLabel(s.name)) + '<span class="size-stock-badge">' + s.qty + '</span></div>';
             }
             sizesHtml += '</div></div>';
         }
@@ -5326,7 +5343,7 @@ function sendToTelegram(order, callback) {
             '<img src="' + it.image + '" class="cart-item-image" style="flex-shrink:0;align-self:flex-start" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=100\'">' +
             '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">' +
                 '<div class="cart-item-name" style="font-size:0.88rem">' + it.name + '</div>' +
-                '<div style="color:var(--gray);font-size:0.78rem">Size: ' + it.size + '</div>' +
+                '<div style="color:var(--gray);font-size:0.78rem">Size: ' + escHtml(sizeLabel(it.size)) + '</div>' +
                 '<div id="item-price-' + i + '" style="font-size:0.82rem">' +
                     (discAmt > 0
                         ? '<s style="color:#aaa">$' + tt.toFixed(2) + '</s> <b style="color:var(--success)">$' + finalPrice.toFixed(2) + '</b> <span style="font-size:0.7rem;background:#d4edda;color:#155724;border-radius:4px;padding:1px 5px">-$' + discAmt.toFixed(2) + '</span>'
@@ -6677,7 +6694,7 @@ function sendToTelegram(order, callback) {
         var wrap = document.getElementById('reconcileOrderIssues');
         if (!issues.length) { wrap.innerHTML = ''; return; }
         wrap.innerHTML = issues.map(function(o) {
-            var items = (o.cart || []).map(function(c){ return c.quantity + '× ' + escHtml(c.name) + (c.size ? ' (' + escHtml(c.size) + ')' : ''); }).join(', ');
+            var items = (o.cart || []).map(function(c){ return c.quantity + '× ' + escHtml(c.name) + (c.size ? ' (' + escHtml(sizeLabel(c.size)) + ')' : ''); }).join(', ');
             var flagState = (o.stockDeducted === undefined) ? 'field missing entirely (never set)' : 'set to ' + JSON.stringify(o.stockDeducted);
             return '<div class="admin-card" style="padding:0.75rem 1rem;border-left:3px solid var(--danger)">' +
                 '<div><b>' + escHtml(o.orderId) + '</b> <span style="color:var(--gray);font-size:0.8rem">confirmed ' + escHtml(o.confirmedAt || o.orderDate || 'unknown time') + '</span></div>' +
@@ -6769,7 +6786,7 @@ function sendToTelegram(order, callback) {
             var minsAfter = Math.round((i.editTs - i.saleTs) / 60000);
             var gap = minsAfter < 60 ? (minsAfter + ' min later') : (Math.round(minsAfter/60) + ' hr later');
             return '<div class="admin-card" style="padding:0.75rem 1rem;border-left:3px solid var(--danger)">' +
-                '<div><b>' + escHtml(i.productName) + '</b>' + (i.size ? ' (' + escHtml(i.size) + ')' : '') + '</div>' +
+                '<div><b>' + escHtml(i.productName) + '</b>' + (i.size ? ' (' + escHtml(sizeLabel(i.size)) + ')' : '') + '</div>' +
                 '<div style="font-size:0.82rem;margin:0.25rem 0">Sold ' + i.qty + ' in <code>' + escHtml(i.orderId) + '</code> at ' + escHtml(new Date(i.saleTs).toLocaleString()) + '</div>' +
                 '<div style="font-size:0.82rem;color:var(--gray-dark)">Then edited ' + gap + ' (' + escHtml(i.editTime || '') + '): <code>' + escHtml(i.editDetails) + '</code></div>' +
                 '</div>';
@@ -7008,7 +7025,7 @@ function sendToTelegram(order, callback) {
                 editCell = r.diff !== 0 ? '<span style="color:var(--gray)">\u2014</span>' : '';
             }
             return '<tr>' +
-                '<td>' + escHtml(r.name) + (r.size ? ' <small style="color:var(--gray)">(' + escHtml(r.size) + ')</small>' : '') + '</td>' +
+                '<td>' + escHtml(r.name) + (r.size ? ' <small style="color:var(--gray)">(' + escHtml(sizeLabel(r.size)) + ')</small>' : '') + '</td>' +
                 '<td>' + r.opening + '</td><td>-' + r.sold + '</td><td>+' + r.refunded + '</td><td>+' + r.transferIn + '</td><td>-' + r.transferOut + '</td>' +
                 '<td>' + (r.adjustments >= 0 ? '+' : '') + r.adjustments + '</td>' +
                 '<td>' + r.expected + '</td><td>' + r.actual + '</td>' +
@@ -7115,9 +7132,9 @@ function sendToTelegram(order, callback) {
                 sizeHtml = '<div class="size-inventory-grid">';
                 for (var k = 0; k < p.sizes.length; k++) {
                     var s = p.sizes[k];
-                    if (searchSize && s.name.toUpperCase().indexOf(searchSize) === -1) continue;
+                    if (searchSize && s.name.toUpperCase().indexOf(searchSize) === -1 && String(sizeLabel(s.name)).toUpperCase().indexOf(searchSize) === -1) continue;
                     var sc = s.qty === 0 ? 'out' : (s.qty <= 3 ? 'low' : '');
-                    sizeHtml += '<div class="size-inventory-item ' + sc + '"><div class="size-name">' + s.name + '</div><div class="size-qty">' + s.qty + '</div></div>';
+                    sizeHtml += '<div class="size-inventory-item ' + sc + '"><div class="size-name"' + (HAS_CHINESE.test(s.name) ? ' onclick="openSizeTranslateModal()" title="' + escHtml(s.name) + ' — click to edit translation" style="cursor:pointer;text-decoration:underline dotted"' : '') + '>' + escHtml(sizeLabel(s.name)) + '</div><div class="size-qty">' + s.qty + '</div></div>';
                 }
                 sizeHtml += '</div>';
             } else { sizeHtml = '<span style="color:var(--gray);font-size:0.72rem">—</span>'; }
@@ -10342,7 +10359,7 @@ function sendToTelegram(order, callback) {
                     var isMatch = sizeFilter && sz.name === sizeFilter;
                     var bs = isMatch ? 'border:2px solid var(--primary);box-shadow:0 0 0 2px rgba(102,126,234,0.15)' : 'border:1px solid var(--gray-light)';
                     html += '<div style="text-align:center;background:#fff;' + bs + ';border-radius:5px;padding:2px 5px;min-width:34px">' +
-                        '<div style="font-size:0.62rem;color:var(--gray);line-height:1.2">' + escHtml(sz.name) + '</div>' +
+                        '<div style="font-size:0.62rem;color:var(--gray);line-height:1.2">' + escHtml(sizeLabel(sz.name)) + '</div>' +
                         '<div style="font-weight:700;font-size:0.74rem;color:' + szColor + ';line-height:1.2">' + sz.qty + '</div></div>';
                 });
                 html += '</div>';
@@ -10420,7 +10437,7 @@ function sendToTelegram(order, callback) {
                     var isMatch = sizeFilter && s.name === sizeFilter;
                     var borderStyle = isMatch ? 'border:2px solid var(--primary);box-shadow:0 0 0 2px rgba(102,126,234,0.15)' : 'border:1px solid var(--gray-light)';
                     html += '<div onclick="openBranchStockEdit(\'' + p.id + '\',\'' + escHtml(s.name) + '\')" style="cursor:pointer;text-align:center;background:#fff;' + borderStyle + ';border-radius:5px;padding:2px 5px;min-width:34px">' +
-                        '<div style="font-size:0.62rem;color:var(--gray);line-height:1.2">' + escHtml(s.name) + '</div>' +
+                        '<div style="font-size:0.62rem;color:var(--gray);line-height:1.2">' + escHtml(sizeLabel(s.name)) + '</div>' +
                         '<div style="font-weight:700;font-size:0.74rem;color:' + (s.qty===0?'var(--danger)':'var(--gray-dark)') + ';line-height:1.2">' + (s.qty||0) + '</div></div>';
                 });
                 html += '</div>';
@@ -10771,7 +10788,7 @@ function sendToTelegram(order, callback) {
             p.sizes.forEach(function(s) {
                 var disabled = s.qty <= 0;
                 html += '<div style="text-align:center;border:1px solid var(--gray-light);border-radius:8px;padding:0.5rem 0.4rem;' + (disabled ? 'opacity:0.4' : '') + '">' +
-                    '<div style="font-weight:600;font-size:0.82rem;margin-bottom:2px">' + escHtml(s.name) + '</div>' +
+                    '<div style="font-weight:600;font-size:0.82rem;margin-bottom:2px">' + escHtml(sizeLabel(s.name)) + '</div>' +
                     '<div style="font-size:0.7rem;color:var(--gray);margin-bottom:4px">stock: ' + s.qty + '</div>' +
                     '<input type="number" min="0" max="' + s.qty + '" value="0" ' + (disabled ? 'disabled' : '') + ' data-size="' + escHtml(s.name) + '" class="transfer-size-qty-input" style="width:100%;padding:4px;border:1px solid var(--gray-light);border-radius:6px;text-align:center;font-size:0.85rem">' +
                     '</div>';
@@ -10845,7 +10862,7 @@ function sendToTelegram(order, callback) {
             html += '<div style="display:flex;align-items:center;gap:0.6rem;background:var(--light);border-radius:8px;padding:0.5rem 0.7rem">' +
                 (it.productImage ? '<img src="' + escHtml(it.productImage) + '" style="width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0">' : '') +
                 '<div style="flex:1;min-width:0">' +
-                '<div style="font-weight:600;font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(it.productName) + (it.size !== 'One Size' ? ' <span style="color:var(--primary)">(' + escHtml(it.size) + ')</span>' : '') + '</div>' +
+                '<div style="font-weight:600;font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(it.productName) + (it.size !== 'One Size' ? ' <span style="color:var(--primary)">(' + escHtml(sizeLabel(it.size)) + ')</span>' : '') + '</div>' +
                 '</div>' +
                 '<input type="number" min="1" value="' + it.qty + '" onchange="updateTransferCartQty(' + idx + ', this.value)" style="width:55px;padding:4px 6px;border:1px solid var(--gray-light);border-radius:6px;text-align:center;font-size:0.85rem">' +
                 '<button onclick="removeTransferCartItem(' + idx + ')" style="background:none;border:none;color:var(--danger);cursor:pointer;padding:4px"><i class="fas fa-trash"></i></button>' +
@@ -11081,7 +11098,7 @@ function sendToTelegram(order, callback) {
                 '<input type="checkbox" class="transfer-select-cb" value="' + t.transferId + '" onchange="onTransferCheckboxChange()" style="margin-top:4px">' +
                 (t.productImage ? '<img src="' + escHtml(t.productImage) + '" style="width:64px;height:64px;border-radius:10px;object-fit:cover;flex-shrink:0">' : '') +
                 '<div>' +
-                '<div style="font-weight:700;font-size:0.95rem">📦 ' + escHtml(t.productName) + (t.size && t.size !== 'One Size' ? ' <span style="color:var(--primary);font-size:0.85rem">(' + escHtml(t.size) + ')</span>' : '') + '</div>' +
+                '<div style="font-weight:700;font-size:0.95rem">📦 ' + escHtml(t.productName) + (t.size && t.size !== 'One Size' ? ' <span style="color:var(--primary);font-size:0.85rem">(' + escHtml(sizeLabel(t.size)) + ')</span>' : '') + '</div>' +
                 '<div style="font-size:0.83rem;color:var(--gray-dark);margin-top:2px">Qty: <b>' + t.qty + '</b> &nbsp;|&nbsp; From: <b>' + escHtml(t.fromStoreName) + '</b></div>' +
                 (t.note ? '<div style="font-size:0.8rem;color:var(--gray);margin-top:2px">📝 ' + escHtml(t.note) + '</div>' : '') +
                 '<div style="font-size:0.75rem;color:var(--gray);margin-top:4px">' + escHtml(t.requestedAtStr || '') + '</div>' +
@@ -11123,7 +11140,7 @@ function sendToTelegram(order, callback) {
             var dir = t.fromStoreId === STATE.storeId ? '→ ' + escHtml(t.toStoreName) : '← ' + escHtml(t.fromStoreName);
             var sc = t.status === 'approved' ? 'var(--success)' : 'var(--danger)';
             html += '<tr style="border-bottom:1px solid var(--gray-light)">' +
-                '<td style="padding:6px 8px">' + escHtml(t.productName) + (t.size && t.size !== 'One Size' ? ' <small>(' + escHtml(t.size) + ')</small>' : '') + '</td>' +
+                '<td style="padding:6px 8px">' + escHtml(t.productName) + (t.size && t.size !== 'One Size' ? ' <small>(' + escHtml(sizeLabel(t.size)) + ')</small>' : '') + '</td>' +
                 '<td style="padding:6px 8px;text-align:center">' + t.qty + '</td>' +
                 '<td style="padding:6px 8px;text-align:center;font-size:0.78rem">' + dir + '</td>' +
                 '<td style="padding:6px 8px;text-align:center;color:' + sc + ';font-weight:600">' + t.status + '</td>' +
@@ -12682,7 +12699,7 @@ function sendToTelegram(order, callback) {
                 'display:inline-flex;flex-direction:column;justify-content:space-between;' +
                 'box-shadow:0 1px 3px rgba(0,0,0,0.12);margin:3px;vertical-align:top">' +
                 '<div style="font-size:7px;font-weight:bold;overflow:hidden;line-height:1.2">' + escHtml(p.name) + '</div>' +
-                '<div style="font-size:6px;color:#555">Size: <b>' + escHtml(s.name) + '</b></div>' +
+                '<div style="font-size:6px;color:#555">Size: <b>' + escHtml(sizeLabel(s.name, 'en')) + '</b></div>' +
                 '<div style="font-size:10px;font-weight:bold">$' + p.price.toFixed(2) + '</div>' +
                 '<div style="font-size:5px;color:#888;text-align:center;letter-spacing:0.5px">&#9612;&#9616;&#9612;&#9612;&#9616; ' + p.id + ' &#9616;&#9612;&#9612;&#9616;&#9612;</div>' +
                 '</div>';
@@ -12865,7 +12882,7 @@ function sendToTelegram(order, callback) {
                 labelsHtml += '<div class="lbl-wrap"><div class="lbl">' +
                     '<div class="lbl-left">' +
                     '<div class="n">' + escHtml(ld.p.name) + '</div>' +
-                    '<div class="s">Size: <b>' + escHtml(ld.size) + '</b></div>' +
+                    '<div class="s">Size: <b>' + escHtml(sizeLabel(ld.size, 'en')) + '</b></div>' +
                     '<div class="pr">$' + ld.p.price.toFixed(2) + '</div>' +
                     '</div>' +
                     '<div class="bc" data-v="' + escHtml(ld.p.id) + '"></div>' +
@@ -14325,6 +14342,221 @@ function sendToTelegram(order, callback) {
             resultEl.innerHTML = '<div style="color:var(--danger);padding:0.75rem;background:#fff5f5;border-radius:8px">Failed to load image. Try again.</div>';
         };
         img.src = url;
+    }
+
+    // ═══════════ SIZE NAME TRANSLATION (works with the 🇰🇭 / 🇺🇸 language button) ═══════════
+    // The Chinese text stays as the real size name (s.name) so stock, orders, transfers and
+    // 1688 reorders keep matching. Translations are stored beside it as s.nameEn / s.nameKh
+    // and only change what is DISPLAYED, following STATE.language.
+    var SIZE_GLOSSARY = {
+        '颜色':'Color', '颜色分类':'Color', '尺寸':'Size', '尺码':'Size', '规格':'Spec', '款式':'Style', '图案':'Pattern',
+        '均码':'One Size', '适合':'Fits ', '岁':'Y', '个月':'M', '月':'M', '码':'',
+        '素影':'Style ', '皇冠纱':'Crown Tulle', '水晶绒':'Crystal Velvet', '纯棉':'Cotton', '棉':'Cotton', '珊瑚绒':'Coral Fleece', '法兰绒':'Flannel', '纱布':'Gauze', '竹纤维':'Bamboo Fiber', '针织':'Knit', '蕾丝':'Lace', '网纱':'Mesh Tulle', '毛绒':'Plush',
+        '粉色':'Pink', '粉红':'Pink', '粉':'Pink', '蓝色':'Blue', '浅蓝':'Light Blue', '深蓝':'Navy', '藏青':'Navy', '天蓝':'Sky Blue', '蓝':'Blue',
+        '米色':'Beige', '米白':'Off-White', '白色':'White', '白':'White', '黑色':'Black', '黑':'Black', '红色':'Red', '红':'Red', '酒红':'Wine Red',
+        '黄色':'Yellow', '姜黄':'Mustard', '黄':'Yellow', '绿色':'Green', '牛油果绿':'Avocado Green', '绿':'Green', '紫色':'Purple', '紫':'Purple',
+        '灰色':'Grey', '灰':'Grey', '卡其':'Khaki', '咖啡':'Coffee', '咖色':'Brown', '棕色':'Brown', '橙色':'Orange', '杏色':'Apricot', '奶白':'Cream', '奶油':'Cream',
+        '条纹':'Stripe', '格子':'Plaid', '碎花':'Floral', '小熊':'Bear', '兔子':'Bunny', '恐龙':'Dinosaur', '草莓':'Strawberry', '星星':'Star', '爱心':'Heart',
+        '套装':'Set', '单件':'Single', '上衣':'Top', '裤子':'Pants', '帽子':'Hat', '发带':'Headband', '发夹':'Hair Clip', '袜子':'Socks', '毯子':'Blanket', '盖毯':'Blanket', '包巾':'Swaddle',
+        '大号':'Large', '中号':'Medium', '小号':'Small', '加厚':'Thick', '薄款':'Thin', '升级款':'Upgraded', '款':' Style'
+    };
+    var HAS_CHINESE = /[\u3400-\u9fff]/;
+    var _sizeTrCache = {};   // { chineseName: { en, kh } }
+    try { _sizeTrCache = JSON.parse(localStorage.getItem('goatSizeTr') || '{}') || {}; } catch (e) { _sizeTrCache = {}; }
+    function saveSizeTrCache() { try { localStorage.setItem('goatSizeTr', JSON.stringify(_sizeTrCache)); } catch (e) {} }
+
+    // Text to SHOW for a size. lang is optional ('en' / 'kh'); defaults to the current language.
+    function sizeLabel(name, lang) {
+        if (!name || !HAS_CHINESE.test(name)) return name;
+        var t = _sizeTrCache[name]; if (!t) return name;
+        lang = lang || STATE.language;
+        return (lang === 'kh' ? (t.kh || t.en) : t.en) || name;
+    }
+
+    function sizeTrPunct(str) {
+        return str.replace(/：/g, ': ').replace(/（/g, ' (').replace(/）/g, ')').replace(/，/g, ', ').replace(/、/g, ', ')
+                  .replace(/【/g, '[').replace(/】/g, ']').replace(/\*/g, '×').replace(/#/g, '# ')
+                  .replace(/\s{2,}/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim();
+    }
+    function sizeTrGlossary(str) {
+        var keys = Object.keys(SIZE_GLOSSARY).sort(function(a, b) { return b.length - a.length; });
+        var out = str;
+        keys.forEach(function(k) { out = out.split(k).join(' ' + SIZE_GLOSSARY[k] + ' '); });
+        return out;
+    }
+    async function sizeTrGoogle(text, from, to) {
+        var url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + from + '&tl=' + to + '&dt=t&q=' + encodeURIComponent(text);
+        var r = await fetch(url);
+        var j = await r.json();
+        return (j[0] || []).map(function(x) { return x[0]; }).join('');
+    }
+    // Chinese → English: glossary first, Google for any Chinese left (numbers never sent)
+    async function translateSizeName(original) {
+        var out = sizeTrGlossary(original);
+        var chunks = out.match(/[\u3400-\u9fff]+/g) || [];
+        for (var i = 0; i < chunks.length; i++) {
+            try { out = out.split(chunks[i]).join(' ' + (await sizeTrGoogle(chunks[i], 'zh-CN', 'en')) + ' '); }
+            catch (e) { console.warn('Translate failed for', chunks[i], e); }
+        }
+        return sizeTrPunct(out).replace(/\s+:/g, ':').replace(/(\d+)#\s*/g, '#$1 ').replace(/#\s+(\d)/g, '#$1')
+            .replace(/(\d)\s+(Y|M)\b/g, '$1$2').replace(/([^,\s])\s+(Size|Spec|Style|Pattern):/g, '$1, $2:')
+            .replace(/\s{2,}/g, ' ').trim();
+    }
+    // English → Khmer (from the cleaned English, so wording matches both languages)
+    async function translateSizeToKhmer(en) {
+        try { return (await sizeTrGoogle(en, 'en', 'km')).trim(); } catch (e) { console.warn('Khmer translate failed', e); return ''; }
+    }
+
+    // Writes nameEn/nameKh onto matching sizes of one store's products.
+    // Uses a transaction per product so live stock numbers are never overwritten with stale ones.
+    async function writeSizeTrToStore(storeId, onlyNames) {
+        var col = db.collection('stores').doc(storeId).collection('products');
+        var snap = await col.get(), updated = 0;
+        var targets = [];
+        snap.forEach(function(d) {
+            var sizes = d.data().sizes || [];
+            var needs = sizes.some(function(sz) {
+                var t = sz && _sizeTrCache[sz.name];
+                return t && (!onlyNames || onlyNames[sz.name]) && (sz.nameEn !== t.en || (sz.nameKh || '') !== (t.kh || ''));
+            });
+            if (needs) targets.push(d.ref);
+        });
+        for (var i = 0; i < targets.length; i++) {
+            await db.runTransaction(async function(tx) {
+                var fresh = await tx.get(targets[i]);
+                if (!fresh.exists) return;
+                var sizes = (fresh.data().sizes || []).map(function(sz) {
+                    var t = sz && _sizeTrCache[sz.name];
+                    return (t && (!onlyNames || onlyNames[sz.name])) ? Object.assign({}, sz, { nameEn: t.en, nameKh: t.kh || '' }) : sz;
+                });
+                tx.update(targets[i], { sizes: sizes });
+            });
+            updated++;
+        }
+        return updated;
+    }
+
+    function applySizeTrToLocal() {
+        (STATE.products || []).forEach(function(p) {
+            (p.sizes || []).forEach(function(sz) {
+                var t = sz && _sizeTrCache[sz.name];
+                if (t) { sz.nameEn = t.en; sz.nameKh = t.kh || ''; }
+            });
+        });
+        saveProducts();
+    }
+
+    function rerenderForSizeTr() {
+        try { renderProducts(); renderCart(); } catch (e) {}
+        var inv = document.getElementById('adminInventoryTab');
+        if (inv && inv.classList.contains('active')) { try { renderInventory(); } catch (e) {} }
+    }
+
+    // Finds Chinese sizes without a translation, translates them (EN + KH) and saves.
+    // Runs after data loads and every time the language button is pressed.
+    var _sizeTrRunning = false;
+    async function ensureSizeTranslations() {
+        if (_sizeTrRunning) return; _sizeTrRunning = true;
+        try {
+            var missing = {};
+            (STATE.products || []).forEach(function(p) {
+                (p.sizes || []).forEach(function(sz) {
+                    if (!sz || !sz.name || !HAS_CHINESE.test(sz.name)) return;
+                    // Translations saved on the product (e.g. corrected by admin) win over this device's cache
+                    if (sz.nameEn && !HAS_CHINESE.test(sz.nameEn)) _sizeTrCache[sz.name] = { en: sz.nameEn, kh: sz.nameKh || (_sizeTrCache[sz.name] || {}).kh || '' };
+                    var t = _sizeTrCache[sz.name];
+                    if (!t || !t.en || !t.kh) missing[sz.name] = true;
+                });
+            });
+            var names = Object.keys(missing), added = {}, count = 0;
+            for (var i = 0; i < names.length; i++) {
+                var zh = names[i], cur = _sizeTrCache[zh] || {};
+                var en = cur.en || await translateSizeName(zh);
+                if (!en || HAS_CHINESE.test(en)) continue;         // translation failed — try again next time
+                var kh = cur.kh || await translateSizeToKhmer(en);
+                _sizeTrCache[zh] = { en: en, kh: kh };
+                added[zh] = true; count++;
+            }
+            saveSizeTrCache();
+            if (count) {
+                rerenderForSizeTr();
+                // Only the admin saves to Firestore, so customer browsers never write product data
+                if (STATE.isAdmin && STATE.firebaseOnline && db) {
+                    applySizeTrToLocal();
+                    try { await writeSizeTrToStore(STATE.storeId, added); } catch (e) { console.warn('Saving size translations failed', e); }
+                }
+            }
+        } finally { _sizeTrRunning = false; }
+    }
+
+    // Run once data has loaded (loadData is called from several places)
+    var _loadDataOrig = loadData;
+    loadData = async function() {
+        var r = await _loadDataOrig.apply(this, arguments);
+        setTimeout(ensureSizeTranslations, 300);
+        return r;
+    };
+
+    // ── Review / correct translations (click a translated size in Inventory) ──
+    var _sizeTrRows = [];
+    async function openSizeTranslateModal() {
+        var modal = document.getElementById('sizeTranslateModal'), body = document.getElementById('sizeTranslateBody');
+        var btn = document.getElementById('sizeTranslateSaveBtn');
+        modal.classList.add('active'); btn.disabled = true;
+        body.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--gray-dark)"><i class="fas fa-spinner fa-spin"></i> Loading translations...</div>';
+        await ensureSizeTranslations();
+        var byName = {};
+        (STATE.products || []).forEach(function(p) {
+            (p.sizes || []).forEach(function(sz) {
+                if (!sz || !sz.name || !HAS_CHINESE.test(sz.name)) return;
+                if (!byName[sz.name]) byName[sz.name] = [];
+                if (byName[sz.name].indexOf(p.name) === -1) byName[sz.name].push(p.name);
+            });
+        });
+        _sizeTrRows = Object.keys(byName).map(function(zh) { var t = _sizeTrCache[zh] || {}; return { zh: zh, products: byName[zh], en: t.en || '', kh: t.kh || '' }; });
+        if (!_sizeTrRows.length) { body.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--success)"><i class="fas fa-check-circle"></i> No Chinese size names in this store.</div>'; return; }
+        var h = '<table class="inventory-table" style="width:100%;font-size:0.76rem"><thead><tr><th>Chinese / Product</th><th>English</th><th>ខ្មែរ</th></tr></thead><tbody>';
+        _sizeTrRows.forEach(function(r, i) {
+            h += '<tr><td style="max-width:200px"><div>' + escHtml(r.zh) + '</div><div style="color:var(--gray);font-size:0.66rem">' + escHtml(r.products.join(', ')) + '</div></td>' +
+                 '<td><input type="text" class="form-control" id="sizeTrEn_' + i + '" value="' + escHtml(r.en) + '" style="font-size:0.76rem;min-width:170px"></td>' +
+                 '<td><input type="text" class="form-control" id="sizeTrKh_' + i + '" value="' + escHtml(r.kh) + '" style="font-size:0.76rem;min-width:150px"></td></tr>';
+        });
+        body.innerHTML = h + '</tbody></table>';
+        btn.disabled = false;
+    }
+    function closeSizeTranslateModal() { document.getElementById('sizeTranslateModal').classList.remove('active'); }
+
+    async function saveSizeTranslations() {
+        var changed = {}, count = 0;
+        _sizeTrRows.forEach(function(r, i) {
+            var en = (document.getElementById('sizeTrEn_' + i).value || '').trim();
+            var kh = (document.getElementById('sizeTrKh_' + i).value || '').trim();
+            if (!en) return;
+            _sizeTrCache[r.zh] = { en: en, kh: kh };
+            changed[r.zh] = true; count++;
+        });
+        saveSizeTrCache(); applySizeTrToLocal(); rerenderForSizeTr();
+        if (!count) { closeSizeTranslateModal(); return; }
+        var btn = document.getElementById('sizeTranslateSaveBtn');
+        btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        try {
+            if (STATE.firebaseOnline && db) {
+                // Save to Main Store + every branch so each store shows the same wording
+                var stores = ['GOAT-1979'];
+                try { var bSnap = await db.collection('_admin_').doc('branches').get(); if (bSnap.exists) (bSnap.data().list || []).forEach(function(b) { if (stores.indexOf(b.id) === -1) stores.push(b.id); }); } catch (be) { console.warn('Branch list failed', be); }
+                if (stores.indexOf(STATE.storeId) === -1) stores.push(STATE.storeId);
+                var total = 0;
+                for (var s = 0; s < stores.length; s++) { try { total += await writeSizeTrToStore(stores[s], changed); } catch (se) { console.warn('Save failed for ' + stores[s], se); } }
+                showToast('Size translations saved (' + total + ' product record(s) across stores)', 'success');
+            } else {
+                showToast('Saved on this device only — Firebase is offline', 'warning');
+            }
+            closeSizeTranslateModal();
+        } catch (e) {
+            console.error(e); showToast('Save failed: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save';
+        }
     }
 
    </script>
