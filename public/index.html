@@ -898,10 +898,12 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                     </select>
                                 </div>
                                 <div style="display:flex;gap:0.5rem;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
-                                    <input type="text" id="branchStockSearch" class="form-control" data-translate="searchProductPh" placeholder="Search product..." oninput="renderBranchStockList()" style="flex:1 1 160px;min-width:0;font-size:0.85rem">
-                                    <select id="branchStockSizeFilter" class="form-control" onchange="renderBranchStockList()" style="flex:1 1 100px;min-width:0;font-size:0.85rem">
-                                        <option value="" data-translate="allSizes">All Sizes</option>
+                                    <input type="text" id="branchStockSearch" class="form-control" data-translate="searchProductPh" placeholder="Search name, number, size..." oninput="renderBranchStockList()" style="flex:1 1 160px;min-width:0;font-size:0.85rem">
+                                    <select id="branchStockCatFilter" class="form-control" onchange="renderBranchStockList()" style="flex:1 1 110px;min-width:0;font-size:0.85rem">
+                                        <option value="">All Categories</option>
                                     </select>
+                                    <input type="search" id="branchStockSizeFilter" class="form-control" list="branchStockSizeList" autocomplete="off" placeholder="Type size (e.g. 90, 2Y)" oninput="renderBranchStockList()" style="flex:1 1 110px;min-width:0;font-size:0.85rem">
+                                    <datalist id="branchStockSizeList"></datalist>
                                     <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;color:var(--gray-dark);white-space:nowrap;cursor:pointer">
                                         <input type="checkbox" id="branchStockInStockOnly" onchange="renderBranchStockList()"> <span data-translate="inStockOnly">In stock only</span>
                                     </label>
@@ -10274,7 +10276,7 @@ function sendToTelegram(order, callback) {
                     try {
                         var snap = await db.collection('stores').doc(s.id).collection('products').get();
                         var list = [];
-                        snap.forEach(function(d) { list.push(Object.assign({ id: d.id }, d.data())); });
+                        snap.forEach(function(d) { var dt = d.data(); if (isDeletedProductDoc(dt)) return; list.push(Object.assign({ id: d.id }, dt)); });
                         return { storeId: s.id, storeName: s.name, products: list };
                     } catch(e) {
                         console.warn('Failed to load ' + s.id + ':', e.message);
@@ -10322,7 +10324,7 @@ function sendToTelegram(order, callback) {
         try {
             var snap = await db.collection('stores').doc(branchId).collection('products').get();
             var products = [];
-            snap.forEach(function(d) { products.push(Object.assign({ id: d.id }, d.data())); });
+            snap.forEach(function(d) { var dt = d.data(); if (isDeletedProductDoc(dt)) return; products.push(Object.assign({ id: d.id }, dt)); });
             products.sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
             _branchStockData = products;
             populateBranchStockSizeFilter();
@@ -10332,10 +10334,56 @@ function sendToTelegram(order, callback) {
         }
     }
 
+    // ── Branch stock filtering helpers ──
+    // Sizes in real order: 3M, 6M, 1Y, 2Y ... 80, 90, 100 (not alphabetical 100, 2Y, 80)
+    function branchSizeKey(name) {
+        var lbl = String(sizeLabel(name) || name || '');
+        var m = lbl.match(/(\d+(?:\.\d+)?)\s*(M|Y|cm)?/i);
+        if (!m) return [2, 0, lbl.toLowerCase()];
+        var n = parseFloat(m[1]), u = (m[2] || '').toUpperCase();
+        if (u === 'M') return [0, n, lbl.toLowerCase()];
+        if (u === 'Y') return [0, n * 12, lbl.toLowerCase()];
+        return [1, n, lbl.toLowerCase()];
+    }
+    function branchSizeCompare(a, b) {
+        var ka = branchSizeKey(a), kb = branchSizeKey(b);
+        return (ka[0] - kb[0]) || (ka[1] - kb[1]) || (ka[2] < kb[2] ? -1 : ka[2] > kb[2] ? 1 : 0);
+    }
+    function branchNorm(t) { return String(t || '').toLowerCase().replace(/[_\-.\/#()]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+    // Every word typed must appear in the name, category or a size (Chinese, English or Khmer).
+    // "girl 012", "set012", "Set_012" all find "Girl Set_012".
+    function branchSearchMatch(p, sizeList, search) {
+        var words = branchNorm(search).split(' ').filter(Boolean);
+        if (!words.length) return true;
+        var parts = [p.name, p.category];
+        (sizeList || []).forEach(function(sz) {
+            if (!sz || !sz.name) return;
+            parts.push(sz.name, sizeLabel(sz.name, 'en'), sizeLabel(sz.name, 'kh'));
+        });
+        var hay = branchNorm(parts.join(' ')), hayTight = hay.replace(/\s+/g, '');
+        return words.every(function(w) { return hay.indexOf(w) !== -1 || hayTight.indexOf(w) !== -1; });
+    }
+
+    // Typed size → test function. If the text is exactly a size (in Chinese, English or Khmer),
+    // only that size matches ("90" won't also catch "190"). Otherwise any size containing it
+    // matches (e.g. "pink" or "均码").
+    function branchSizeMatcher(typed) {
+        var t = branchNorm(typed);
+        if (!t) return null;
+        function forms(n) { return [n, sizeLabel(n, 'en'), sizeLabel(n, 'kh')].map(branchNorm); }
+        var exact = _branchStockData.some(function(p) {
+            return (p.combinedSizes || p.sizes || []).some(function(sz) { return sz && sz.name && forms(sz.name).indexOf(t) !== -1; });
+        });
+        return function(name) {
+            if (!name) return false;
+            var f = forms(name);
+            return exact ? f.indexOf(t) !== -1 : f.some(function(x) { return x.indexOf(t) !== -1; });
+        };
+    }
+
     function populateBranchStockSizeFilter() {
-        var filterSel = document.getElementById('branchStockSizeFilter');
+        var filterSel = document.getElementById('branchStockSizeList');
         if (!filterSel) return;
-        var currentVal = filterSel.value;
         var sizesFound = {};
         _branchStockData.forEach(function(p) {
             var sizeList = p.combinedSizes || p.sizes; // All-Branches mode uses combinedSizes, single-branch uses sizes
@@ -10343,26 +10391,40 @@ function sendToTelegram(order, callback) {
                 sizeList.forEach(function(s) { if (s.name) sizesFound[s.name] = true; });
             }
         });
-        var sortedSizes = Object.keys(sizesFound).sort();
-        filterSel.innerHTML = '<option value="">All Sizes</option>' +
-            sortedSizes.map(function(s) { return '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>'; }).join('');
-        // Restore previous selection if it still exists in the new list
-        if (currentVal && sortedSizes.indexOf(currentVal) !== -1) filterSel.value = currentVal;
+        var sortedSizes = Object.keys(sizesFound).sort(branchSizeCompare);
+        var seenLbl = {};
+        filterSel.innerHTML = sortedSizes.map(function(s) {
+            var l = sizeLabel(s); if (seenLbl[l]) return ''; seenLbl[l] = true;
+            return '<option value="' + escHtml(l) + '"></option>';
+        }).join('');
+        // Category dropdown
+        var catSel = document.getElementById('branchStockCatFilter');
+        if (catSel) {
+            var curCat = catSel.value, cats = {};
+            _branchStockData.forEach(function(p) { if (p.category) cats[p.category] = true; });
+            var catList = Object.keys(cats).sort();
+            catSel.innerHTML = '<option value="">All Categories</option>' +
+                catList.map(function(c) { return '<option value="' + escHtml(c) + '">' + escHtml(c) + '</option>'; }).join('');
+            if (curCat && catList.indexOf(curCat) !== -1) catSel.value = curCat;
+        }
     }
 
     function renderBranchStockListAll() {
         var container = document.getElementById('branchStockListContainer');
         if (!container) return;
         var search = (document.getElementById('branchStockSearch').value || '').toLowerCase();
-        var sizeFilter = document.getElementById('branchStockSizeFilter').value;
+        var sizeFilter = (document.getElementById('branchStockSizeFilter').value || '').trim();
+        var sizeHit = branchSizeMatcher(sizeFilter) || function() { return false; };
         var inStockOnly = document.getElementById('branchStockInStockOnly').checked;
+        var catFilter = (document.getElementById('branchStockCatFilter') || {}).value || '';
         var filtered = _branchStockData.filter(function(p) {
-            if (search && (p.name||'').toLowerCase().indexOf(search) === -1) return false;
+            if (catFilter && p.category !== catFilter) return false;
+            if (search && !branchSearchMatch(p, p.combinedSizes, search)) return false;
             if (sizeFilter) {
                 if (!p.combinedSizes || !p.combinedSizes.length) return false;
-                var sz = p.combinedSizes.find(function(s){ return s.name === sizeFilter; });
-                if (!sz) return false;
-                if (inStockOnly && (sz.qty || 0) <= 0) return false; // combined qty for that size must be > 0
+                var hits = p.combinedSizes.filter(function(s){ return sizeHit(s.name); });
+                if (!hits.length) return false;
+                if (inStockOnly && !hits.some(function(s){ return (s.qty || 0) > 0; })) return false; // combined qty for that size must be > 0
             } else if (inStockOnly) {
                 if ((p.totalStock || 0) <= 0) return false; // no size selected — combined total must be > 0
             }
@@ -10370,7 +10432,7 @@ function sendToTelegram(order, callback) {
         });
 
         if (!filtered.length) {
-            var noMatchMsg = 'No products found' + (search ? ' for "' + escHtml(search) + '"' : '') + (sizeFilter ? ' with size "' + escHtml(sizeFilter) + '"' : '') + (inStockOnly ? ' in stock' : '');
+            var noMatchMsg = 'No products found' + (search ? ' for "' + escHtml(search) + '"' : '') + (catFilter ? ' in ' + escHtml(catFilter) : '') + (sizeFilter ? ' with size "' + escHtml(sizeFilter) + '"' : '') + (inStockOnly ? ' in stock' : '');
             container.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">' + noMatchMsg + '</div>';
             return;
         }
@@ -10397,7 +10459,7 @@ function sendToTelegram(order, callback) {
                 html += '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:0.6rem;padding-top:0.6rem;border-top:1px dashed var(--gray-light)">';
                 p.combinedSizes.forEach(function(sz) {
                     var szColor = sz.qty === 0 ? 'var(--danger)' : (sz.qty <= 5 ? 'var(--warning)' : 'var(--gray-dark)');
-                    var isMatch = sizeFilter && sz.name === sizeFilter;
+                    var isMatch = sizeFilter && sizeHit(sz.name);
                     var bs = isMatch ? 'border:2px solid var(--primary);box-shadow:0 0 0 2px rgba(102,126,234,0.15)' : 'border:1px solid var(--gray-light)';
                     html += '<div style="text-align:center;background:#fff;' + bs + ';border-radius:5px;padding:2px 5px;min-width:34px">' +
                         '<div style="font-size:0.62rem;color:var(--gray);line-height:1.2">' + escHtml(sizeLabel(sz.name)) + '</div>' +
@@ -10418,7 +10480,7 @@ function sendToTelegram(order, callback) {
                     html += '<div style="display:flex;gap:4px;flex-wrap:wrap">';
                     s.sizes.forEach(function(sz) {
                         var c = sz.qty === 0 ? 'var(--danger)' : 'var(--gray-dark)';
-                        var isMatch2 = sizeFilter && sz.name === sizeFilter;
+                        var isMatch2 = sizeFilter && sizeHit(sz.name);
                         var sizeSpanStyle = isMatch2 ? 'background:rgba(102,126,234,0.15);border:1.5px solid var(--primary)' : 'background:var(--light)';
                         html += '<span style="' + sizeSpanStyle + ';border-radius:5px;padding:2px 7px;color:' + c + '">' + escHtml(sz.name) + ': <b>' + (sz.qty||0) + '</b></span>';
                     });
@@ -10439,15 +10501,18 @@ function sendToTelegram(order, callback) {
         if (!container) return;
         if (_branchStockIsAllMode) { renderBranchStockListAll(); return; }
         var search = (document.getElementById('branchStockSearch').value || '').toLowerCase();
-        var sizeFilter = document.getElementById('branchStockSizeFilter').value;
+        var sizeFilter = (document.getElementById('branchStockSizeFilter').value || '').trim();
+        var sizeHit = branchSizeMatcher(sizeFilter) || function() { return false; };
         var inStockOnly = document.getElementById('branchStockInStockOnly').checked;
+        var catFilter = (document.getElementById('branchStockCatFilter') || {}).value || '';
         var filtered = _branchStockData.filter(function(p) {
-            if (search && (p.name||'').toLowerCase().indexOf(search) === -1) return false;
+            if (catFilter && p.category !== catFilter) return false;
+            if (search && !branchSearchMatch(p, p.sizes, search)) return false;
             if (sizeFilter) {
                 if (!p.sizes || !p.sizes.length) return false;
-                var sz = p.sizes.find(function(s){ return s.name === sizeFilter; });
-                if (!sz) return false;
-                if (inStockOnly && (sz.qty || 0) <= 0) return false; // specific size must be in stock
+                var hits = p.sizes.filter(function(s){ return sizeHit(s.name); });
+                if (!hits.length) return false;
+                if (inStockOnly && !hits.some(function(s){ return (s.qty || 0) > 0; })) return false; // specific size must be in stock
             } else if (inStockOnly) {
                 var total = (p.sizes && p.sizes.length) ? p.sizes.reduce(function(a,s){return a+(s.qty||0);},0) : (p.stock||0);
                 if (total <= 0) return false; // no size selected — total stock must be > 0
@@ -10456,7 +10521,7 @@ function sendToTelegram(order, callback) {
         });
 
         if (!filtered.length) {
-            var noMatchMsg2 = 'No products found' + (search ? ' for "' + escHtml(search) + '"' : '') + (sizeFilter ? ' with size "' + escHtml(sizeFilter) + '"' : '') + (inStockOnly ? ' in stock' : '') + (!search && !sizeFilter && !inStockOnly ? ' in this branch' : '');
+            var noMatchMsg2 = 'No products found' + (search ? ' for "' + escHtml(search) + '"' : '') + (catFilter ? ' in ' + escHtml(catFilter) : '') + (sizeFilter ? ' with size "' + escHtml(sizeFilter) + '"' : '') + (inStockOnly ? ' in stock' : '') + (!search && !catFilter && !sizeFilter && !inStockOnly ? ' in this branch' : '');
             container.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">' + noMatchMsg2 + '</div>';
             return;
         }
@@ -10475,7 +10540,7 @@ function sendToTelegram(order, callback) {
             if (p.sizes && p.sizes.length) {
                 html += '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">';
                 p.sizes.forEach(function(s) {
-                    var isMatch = sizeFilter && s.name === sizeFilter;
+                    var isMatch = sizeFilter && sizeHit(s.name);
                     var borderStyle = isMatch ? 'border:2px solid var(--primary);box-shadow:0 0 0 2px rgba(102,126,234,0.15)' : 'border:1px solid var(--gray-light)';
                     html += '<div onclick="openBranchStockEdit(\'' + p.id + '\',\'' + escHtml(s.name) + '\')" style="cursor:pointer;text-align:center;background:#fff;' + borderStyle + ';border-radius:5px;padding:2px 5px;min-width:34px">' +
                         '<div style="font-size:0.62rem;color:var(--gray);line-height:1.2">' + escHtml(sizeLabel(s.name)) + '</div>' +
@@ -10729,7 +10794,7 @@ function sendToTelegram(order, callback) {
             } else {
                 var snap = await db.collection('stores').doc(fromId).collection('products').get();
                 var list = [];
-                snap.forEach(function(d) { list.push(Object.assign({ id: d.id }, d.data())); });
+                snap.forEach(function(d) { var dt = d.data(); if (isDeletedProductDoc(dt)) return; list.push(Object.assign({ id: d.id }, dt)); });
                 _transferFromStoreProducts = list;
             }
             _transferFromStoreId = fromId;
