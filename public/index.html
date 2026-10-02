@@ -2661,6 +2661,34 @@ function sendToTelegram(order, callback) {
     // =============================================
     var _placingOrder = false; // Lock to prevent double submission
 
+
+    // ═══ STORAGE GUARD ═══ A full localStorage (browser limit ~5MB) used to throw
+    // QuotaExceededError mid-function — e.g. placeOrder froze on "Sending..." and the
+    // order never reached Firebase. Now: free space from caches that reload from
+    // Firebase, retry once, and if still full just warn instead of crashing.
+    (function() {
+        try {
+            var _origSet = Storage.prototype.setItem;
+            var FREEABLE = ['goatActivityLog', 'goatLoginRecords', 'confirmedOrders_', 'goatSizeTr', 'goatProducts_'];
+            function isQuota(e) { return e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014); }
+            Storage.prototype.setItem = function(key, value) {
+                try { return _origSet.call(this, key, value); }
+                catch (e) {
+                    if (!isQuota(e)) throw e;
+                    console.warn('Storage full while saving "' + key + '" — clearing cached data that reloads from Firebase');
+                    for (var f = 0; f < FREEABLE.length; f++) {
+                        for (var i = this.length - 1; i >= 0; i--) {
+                            var k = this.key(i);
+                            if (k && k !== key && k.indexOf(FREEABLE[f]) === 0) this.removeItem(k);
+                        }
+                        try { return _origSet.call(this, key, value); } catch (e2) { if (!isQuota(e2)) throw e2; }
+                    }
+                    console.warn('Storage still full — "' + key + '" kept in memory only this session');
+                }
+            };
+        } catch (e) {}
+    })();
+
     function placeOrder() {
         var n = document.getElementById('customerName').value.trim();
         var ph = document.getElementById('customerPhone').value.trim();
@@ -2804,6 +2832,19 @@ function sendToTelegram(order, callback) {
             document.getElementById('successOrderId').textContent = '📦 ' + oid;
         })(oid, order);
     }
+
+    // Safety net: if anything inside placeOrder throws, never leave the button stuck on "Sending..."
+    var _placeOrderOrig = placeOrder;
+    placeOrder = function() {
+        try { return _placeOrderOrig.apply(this, arguments); }
+        catch (e) {
+            console.error('placeOrder failed:', e);
+            _placingOrder = false;
+            var b = document.getElementById('placeOrderBtn');
+            if (b) { b.disabled = false; b.innerHTML = '<i class="fab fa-telegram-plane"></i> <span data-translate="placeOrder">Send Order via Telegram</span>'; }
+            showToast('Order could not be sent: ' + (e && e.message || e) + ' — please try again', 'error');
+        }
+    };
 
     function switchAdminTab(tab) {
         document.querySelectorAll('.admin-tab').forEach(function(t) { t.classList.remove('active'); });
