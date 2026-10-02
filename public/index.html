@@ -902,7 +902,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                     <select id="branchStockCatFilter" class="form-control" onchange="renderBranchStockList()" style="flex:1 1 110px;min-width:0;font-size:0.85rem">
                                         <option value="">All Categories</option>
                                     </select>
-                                    <input type="search" id="branchStockSizeFilter" class="form-control" list="branchStockSizeList" autocomplete="off" placeholder="Type size (e.g. 90, 2Y)" oninput="renderBranchStockList()" style="flex:1 1 110px;min-width:0;font-size:0.85rem">
+                                    <input type="search" id="branchStockSizeFilter" class="form-control" list="branchStockSizeList" autocomplete="off" placeholder="Type size (e.g. 90)" oninput="renderBranchStockList()" style="flex:1 1 110px;min-width:0;font-size:0.85rem">
                                     <datalist id="branchStockSizeList"></datalist>
                                     <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;color:var(--gray-dark);white-space:nowrap;cursor:pointer">
                                         <input type="checkbox" id="branchStockInStockOnly" onchange="renderBranchStockList()"> <span data-translate="inStockOnly">In stock only</span>
@@ -10371,6 +10371,17 @@ function sendToTelegram(order, callback) {
         var t = branchNorm(typed);
         if (!t) return null;
         function forms(n) { return [n, sizeLabel(n, 'en'), sizeLabel(n, 'kh')].map(branchNorm); }
+        // Only a number typed (e.g. "90"): match every size that contains that whole number —
+        // 90, 90cm, 90码, 身高90cm — but not 190 or 900.
+        if (/^\d+(\.\d+)?$/.test(t)) {
+            var num = parseFloat(t);
+            return function(name) {
+                if (!name) return false;
+                return [name, sizeLabel(name, 'en'), sizeLabel(name, 'kh')].some(function(x) {
+                    return (String(x || '').match(/\d+(\.\d+)?/g) || []).some(function(d) { return parseFloat(d) === num; });
+                });
+            };
+        }
         var exact = _branchStockData.some(function(p) {
             return (p.combinedSizes || p.sizes || []).some(function(sz) { return sz && sz.name && forms(sz.name).indexOf(t) !== -1; });
         });
