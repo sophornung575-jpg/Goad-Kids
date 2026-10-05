@@ -2311,9 +2311,14 @@ function orderBaseImages(e){
 }
 
 function sizeNameFromVariant(v){
-  v = (v || '') + '';
-  const m = v.match(/适合身高[:：]\s*([^\s,;，；]+)/) || v.match(/尺码[:：]\s*([^\s,;，；]+)/);
-  return (m ? m[1] : v).trim();
+  v = ((v || '') + '').trim();
+  const m = v.match(/适合身高[:：]\s*([^\s,;，；]+)/) || v.match(/参考身高[:：]\s*([^\s,;，；]+)/) ||
+            v.match(/尺码[:：]\s*([^\s,;，；]+)/) || v.match(/\bsize\s*[:：]\s*([^\s,;，；]+)/i);
+  if(m) return m[1].trim();
+  // Colour-only variant (e.g. accessories: "颜色分类: #1 Pink Crown Tulle" or
+  // "Color: ...") — that's a colour, not a size, so the item has no size.
+  if(/^(?:规格\s*[:：]\s*)?(?:颜色(?:分类)?|colou?r)\s*[:：]/i.test(v)) return '';
+  return v;
 }
 function storeSizesFromVariants(variants){
   const seen = new Set();
@@ -2854,13 +2859,16 @@ async function rcvApply(bid, hids, mode, btn){
       });
       const good = add.reduce((a, v) => a + v.g, 0);
       if(good && prod){
-        const sizes = (Array.isArray(prod.sizes) ? prod.sizes : []).map(s => ({ ...s }));
+        // Old imports saved a colour (e.g. "颜色分类: #1 Pink") as a size row with 0
+        // stock — drop those empty colour rows so the product counts as no-size.
+        const sizes = (Array.isArray(prod.sizes) ? prod.sizes : []).map(s => ({ ...s }))
+          .filter(s => sizeNameFromVariant(s.name) || Number(s.qty) > 0);
         const deltas = [];
         let unsized = 0;
         lines.forEach((l, i) => {
           const n = add[i].g;
           if(!n) return;
-          if(!l.name){ unsized += n; return; }
+          if(!l.name || !sizeNameFromVariant(l.name)){ unsized += n; return; }
           let s = sizes.find(o => ((o.name || '') + '').trim().toLowerCase() === l.name.trim().toLowerCase());
           if(!s){ s = { name: l.name, qty: 0 }; sizes.push(s); }
           const before = Number(s.qty) || 0;
@@ -3053,6 +3061,7 @@ function rlMapSize(raw, prodSizes){
   let hit = names.find(n => lc(n) === lc(s0));
   if(hit) return { name: hit, ok: true };
   const v = sizeNameFromVariant(s0);
+  if(!v) return { name: '', ok: true }; // colour-only, no size
   hit = names.find(n => lc(n) === lc(v));
   if(hit) return { name: hit, ok: true };
   const num = x => { const m = (x + '').match(/\d+(?:\.\d+)?/); return m ? m[0] : null; };
