@@ -139,7 +139,7 @@
         .product-main-image{width:100%;height:100%;object-fit:cover;transition:transform 0.5s ease}
         .product-image-container:hover .product-main-image{transform:scale(1.15)}
         .product-badge{position:absolute;top:0.75rem;right:0.75rem;padding:0.3rem 0.8rem;border-radius:2rem;font-size:0.75rem;font-weight:600;color:#fff;z-index:3}
-        .badge-new{background:var(--success)}.badge-sale{background:var(--secondary)}.badge-low{background:var(--warning);color:var(--dark)}
+        .price-old{text-decoration:line-through;color:#a0aec0;font-weight:500;font-size:0.8em;margin-right:6px}.price-promo{color:#e53e3e}.promo-off{display:inline-block;font-size:0.62em;font-weight:700;color:#fff;background:#e53e3e;border-radius:4px;padding:1px 5px;margin-left:5px;vertical-align:middle}.badge-promo{background:#e53e3e}.badge-new{background:var(--success)}.badge-sale{background:var(--secondary)}.badge-low{background:var(--warning);color:var(--dark)}
         .product-info{padding:0.75rem}.product-category{display:inline-block;background:var(--primary-light);color:var(--primary-dark);padding:0.15rem 0.5rem;border-radius:2rem;font-size:0.7rem;margin-bottom:0.3rem}
         .product-title{font-size:0.95rem;font-weight:600;margin-bottom:0.15rem}
         .product-price{font-size:1.1rem;font-weight:700;color:var(--primary);margin-bottom:0.25rem}
@@ -724,6 +724,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                 <div class="form-group"><label data-translate="productName">Product Name</label><input type="text" id="productName" class="form-control" data-translate="enterProductName" placeholder="Enter product name"></div>
                                 <div class="form-group"><label data-translate="priceUsd">Price ($)</label><input type="number" id="productPrice" class="form-control" placeholder="0.00" step="0.01"></div>
                                 <div class="form-group"><label data-translate="costPriceUsd">Cost of Production ($)</label><input type="number" id="productCostPrice" class="form-control" placeholder="0.00" step="0.01" min="0"><small style="color:var(--gray);font-size:0.72rem" data-translate="costPriceHint">What it costs you to make/stock this item (optional)</small></div>
+                                <div class="form-group"><label>Promotion Price ($)</label><input type="number" id="productPromoPrice" class="form-control" placeholder="Leave empty = no promotion" step="0.01" min="0"><small style="color:var(--gray);font-size:0.72rem">Shown as <s>normal price</s> + promotion price</small></div>
                                 <div class="form-group"><label data-translate="category">Category</label>
                                     <select id="productCategory" class="form-control">
                                         <option value="" data-translate="selectLbl">Select</option>
@@ -1749,6 +1750,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
             </div>
             <div class="form-group"><label>Price ($)</label><input type="number" id="editProductPrice" class="form-control" step="0.01"></div>
             <div class="form-group"><label>Cost of Production ($)</label><input type="number" id="editProductCostPrice" class="form-control" step="0.01" min="0" placeholder="0.00"><small style="color:var(--gray);font-size:0.72rem">What it costs you to make/stock this item (optional)</small></div>
+            <div class="form-group"><label>Promotion Price ($)</label><input type="number" id="editProductPromoPrice" class="form-control" step="0.01" min="0" placeholder="Leave empty = no promotion"><small style="color:var(--gray);font-size:0.72rem">Shown as <s>normal price</s> + promotion price. Clear it to end the promotion.</small></div>
             <div class="form-group"><label>Images</label>
                 <div class="image-preview-container" id="editImagePreviewContainer"></div>
                 <div class="flex gap-2 mt-4"><input type="text" id="editImageUrlInput" class="form-control" placeholder="Add image URL"><button class="btn btn-outline btn-small" onclick="addEditImageUrl()">Add</button></div>
@@ -2472,7 +2474,7 @@ function sendToTelegram(order, callback) {
         for (var i = 0; i < STATE.products.length; i++) {
             var p = STATE.products[i];
             db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set(withProductDates(p, {
-                name: p.name, price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), stock: p.stock, category: p.category,
+                name: p.name, price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), promoPrice: (promoPriceOf(p) != null ? p.promoPrice : null), stock: p.stock, category: p.category,
                 images: p.images || [], sizes: p.sizes || [], active: true,
                 updatedAt: new Date().toISOString()
             }), { merge: true }).catch(function(e){ console.warn('Product sync failed:', e); });
@@ -2560,6 +2562,8 @@ function sendToTelegram(order, callback) {
             raw = Math.min(itemTotal, itemTotal * val / 100);
         } else if (type === 'fixed') {
             raw = Math.min(itemTotal, val);
+        } else if (type === 'promo') {
+            raw = Math.min(itemTotal, val * (item.quantity || 1)); // promotion: $ off per piece
         }
         // Round to the cent HERE, once, so every downstream use (displayed
         // discount badge, final price, order total, receipt) subtracts from
@@ -3142,7 +3146,7 @@ function sendToTelegram(order, callback) {
             resultEl.innerHTML =
                 '<div style="background:#f0fff4;border:1px solid var(--success);border-radius:10px;padding:0.9rem">' +
                 '<div style="font-weight:700;font-size:1rem;margin-bottom:0.2rem">✅ ' + escHtml(found.name) + '</div>' +
-                '<div style="font-size:0.85rem;color:#555">$' + found.price.toFixed(2) + ' · Stock: ' + stock + '</div>' +
+                '<div style="font-size:0.85rem;color:#555">' + priceHtml(found) + ' · Stock: ' + stock + '</div>' +
 
                 // 4 action buttons
                 '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:0.75rem">' +
@@ -4049,7 +4053,7 @@ function sendToTelegram(order, callback) {
             for (var i = 0; i < STATE.products.length; i++) {
                 var p = STATE.products[i];
                 if (!String(p.name || '').trim()) continue; // never push a blank leftover
-                await db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set(withProductDates(p, { name: p.name, slug: p.slug || makeSlug(p.name), price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), stock: p.stock, category: p.category, images: p.images || [], sizes: p.sizes || [], active: true, updatedAt: new Date().toISOString() }), { merge: true });
+                await db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set(withProductDates(p, { name: p.name, slug: p.slug || makeSlug(p.name), price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), promoPrice: (promoPriceOf(p) != null ? p.promoPrice : null), stock: p.stock, category: p.category, images: p.images || [], sizes: p.sizes || [], active: true, updatedAt: new Date().toISOString() }), { merge: true });
             }
             // Delete products that were deleted locally
             var deleted = JSON.parse(localStorage.getItem('goatDeletedProducts') || '[]');
@@ -4758,6 +4762,43 @@ function sendToTelegram(order, callback) {
         return (name || '').trim().toLowerCase().replace(/\s+/g, '_');
     }
 
+    // PROMOTION PRICE — optional per product. Valid only when above 0 and below the normal price.
+    // Shown everywhere as the normal price crossed out + the promotion price. In the cart it is
+    // applied as a per-item "promo" discount, so receipts, order totals and reports stay correct.
+    function promoPriceOf(p) {
+        if (!p || p.promoPrice == null || p.promoPrice === '') return null;
+        var v = Number(p.promoPrice), base = Number(p.price) || 0;
+        return (v > 0 && v < base) ? v : null;
+    }
+    function salePriceOf(p) { var pr = promoPriceOf(p); return pr != null ? pr : (Number(p && p.price) || 0); }
+    function promoOffPct(p) { var pr = promoPriceOf(p); return pr != null ? Math.round((1 - pr / p.price) * 100) : 0; }
+    function priceHtml(p) {
+        var pr = promoPriceOf(p), base = Number(p.price) || 0;
+        if (pr == null) return '$' + base.toFixed(2);
+        return '<span class="price-old">$' + base.toFixed(2) + '</span><span class="price-promo">$' + pr.toFixed(2) + '</span><span class="promo-off">-' + promoOffPct(p) + '%</span>';
+    }
+    function readPromoInput(id, price) { // -> {ok, value}; empty = no promotion
+        var el = document.getElementById(id);
+        var raw = el ? el.value.trim() : '';
+        if (raw === '') return { ok: true, value: null };
+        var v = parseFloat(raw);
+        if (isNaN(v) || v <= 0) { showToast('Enter a valid promotion price, or leave it empty', 'error'); return { ok: false }; }
+        if (!(v < price)) { showToast('Promotion price must be lower than the normal price ($' + Number(price).toFixed(2) + ')', 'error'); return { ok: false }; }
+        return { ok: true, value: Math.round(v * 100) / 100 };
+    }
+    // Puts the product's current promotion onto a cart line (per piece), or removes an old one.
+    // A manual % / $ discount set by staff is left alone.
+    function applyPromoToCartItem(item, p) {
+        var pr = promoPriceOf(p);
+        if (pr != null && (!item.discountType || item.discountType === 'none' || item.discountType === 'promo')) {
+            item.discountType = 'promo';
+            item.discountValue = Math.round((item.price - pr) * 100) / 100;
+        } else if (pr == null && item.discountType === 'promo') {
+            item.discountType = 'none'; item.discountValue = 0;
+        }
+        recalcItemDiscount(item);
+    }
+
     function addProduct() {
         var n = document.getElementById('productName').value.trim();
         var pr = parseFloat(document.getElementById('productPrice').value);
@@ -4768,15 +4809,18 @@ function sendToTelegram(order, callback) {
         if (!n || isNaN(pr) || pr <= 0 || !c) { showToast('Fill all fields', 'error'); return; }
         if (cost !== null && (isNaN(cost) || cost < 0)) { showToast('Enter a valid cost of production', 'error'); return; }
         if (!STATE.newProductSizes.length) { showToast('Add at least one size', 'error'); return; }
+        var promoIn = readPromoInput('productPromoPrice', pr);
+        if (!promoIn.ok) return;
         var imgs = STATE.newProductImages.length ? STATE.newProductImages.slice() : ['https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=400'];
         var t = 0;
         for (var i = 0; i < STATE.newProductSizes.length; i++) { t += STATE.newProductSizes[i].qty; }
-        STATE.products.push({ id: 'p' + Date.now(), name: n, slug: makeSlug(n), price: pr, costPrice: cost, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice(), addedAt: Date.now(), lastRestockDate: Date.now(), active: true });
+        STATE.products.push({ id: 'p' + Date.now(), name: n, slug: makeSlug(n), price: pr, costPrice: cost, promoPrice: promoIn.value, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice(), addedAt: Date.now(), lastRestockDate: Date.now(), active: true });
         saveProducts();
         logActivity('Add Product', n + ' ($' + pr + ')' + (cost !== null ? ' | Cost: $' + cost.toFixed(2) : ''));
         if (STATE.firebaseOnline) syncToFirebase();
         document.getElementById('productName').value = ''; document.getElementById('productPrice').value = ''; document.getElementById('productCategory').value = '';
         if (costEl) costEl.value = '';
+        var promoEl0 = document.getElementById('productPromoPrice'); if (promoEl0) promoEl0.value = '';
         STATE.newProductSizes = []; STATE.newProductImages = [];
         renderNewProductSizes(); renderImagePreviews();
         renderProducts(); renderInventory(); updateAdminBadges();
@@ -4821,6 +4865,8 @@ function sendToTelegram(order, callback) {
         document.getElementById('editProductPrice').value = p.price;
         var editCostEl = document.getElementById('editProductCostPrice');
         if (editCostEl) editCostEl.value = (p.costPrice != null && p.costPrice !== '') ? p.costPrice : '';
+        var editPromoEl = document.getElementById('editProductPromoPrice');
+        if (editPromoEl) editPromoEl.value = (p.promoPrice != null && p.promoPrice !== '') ? p.promoPrice : '';
         var reasonEl = document.getElementById('editRevisionReason');
         var customEl = document.getElementById('editRevisionReasonCustom');
         if (reasonEl) reasonEl.value = '';
@@ -4904,6 +4950,8 @@ function sendToTelegram(order, callback) {
                 newCostPrice = cost2;
             }
         }
+        var newPromo = readPromoInput('editProductPromoPrice', isNaN(newPrice) ? p.price : newPrice);
+        if (!newPromo.ok) return;
         var newImages = STATE.editProductImages.slice();
 
         var newSizes = oldSizes, newStockIntent = oldStock;
@@ -4983,6 +5031,7 @@ function sendToTelegram(order, callback) {
         p.category = newCategory;
         p.price = newPrice;
         p.costPrice = newCostPrice;
+        p.promoPrice = newPromo.value;
         p.images = newImages;
         p.sizes = finalSizes;
         p.stock = (p.sizes && p.sizes.length) ? getTotalStock(p) : finalStock;
@@ -5012,7 +5061,7 @@ function sendToTelegram(order, callback) {
         // flushProductSyncQueue() retries it automatically once reconnected —
         // the edit is never silently lost even though we don't block on it.
         var productSyncPayload = {
-            name: p.name, slug: p.slug, price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), stock: p.stock, category: p.category,
+            name: p.name, slug: p.slug, price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), promoPrice: (promoPriceOf(p) != null ? p.promoPrice : null), stock: p.stock, category: p.category,
             images: p.images || [], sizes: p.sizes || [], active: true,
             updatedAt: new Date().toISOString()
         };
@@ -5084,13 +5133,13 @@ function sendToTelegram(order, callback) {
             if (STATE.filter.category !== 'all' && p.category !== STATE.filter.category) continue;
             if (STATE.filter.stock === 'in-stock' && !hasStock(p)) continue;
             if (STATE.filter.stock === 'out-of-stock' && hasStock(p)) continue;
-            if (p.price < STATE.filter.priceMin || p.price > STATE.filter.priceMax) continue;
+            if (salePriceOf(p) < STATE.filter.priceMin || salePriceOf(p) > STATE.filter.priceMax) continue;
             f.push(p);
         }
         // Sort
         var sort = STATE.filter.sortBy || 'default';
-        if (sort === 'price-asc') f.sort(function(a,b){return a.price-b.price;});
-        else if (sort === 'price-desc') f.sort(function(a,b){return b.price-a.price;});
+        if (sort === 'price-asc') f.sort(function(a,b){return salePriceOf(a)-salePriceOf(b);});
+        else if (sort === 'price-desc') f.sort(function(a,b){return salePriceOf(b)-salePriceOf(a);});
         else if (sort === 'name-asc') f.sort(function(a,b){return (a.name||'').localeCompare(b.name||'');});
         else if (sort === 'stock-desc') f.sort(function(a,b){return getTotalStock(b)-getTotalStock(a);});
         else if (sort === 'newest') f.sort(function(a,b){return (b.addedAt||0)-(a.addedAt||0);});
@@ -5104,6 +5153,7 @@ function sendToTelegram(order, callback) {
             if (total > 10) { bd = 'badge-new'; bt = 'NEW'; sc = 'in-stock'; st = 'In Stock'; }
             else if (total > 0) { bd = 'badge-low'; bt = 'LOW'; sc = 'low-stock'; st = 'Low Stock'; }
             else { bd = 'badge-sale'; bt = 'SOLD'; sc = 'out-of-stock'; st = 'Out of Stock'; }
+            if (total > 0 && promoPriceOf(p) != null) { bd = 'badge-promo'; bt = 'SALE -' + promoOffPct(p) + '%'; }
             var sz = '';
             if (p.sizes && p.sizes.length) {
                 sz = '<div class="size-selector"><label class="size-label">Size:</label><div class="size-options">';
@@ -5123,7 +5173,7 @@ function sendToTelegram(order, callback) {
                 '<div class="product-info">' +
                 '<span class="product-category ' + getCategoryDisplay(p.category) + '">' + p.category + '</span>' +
                 '<h3 class="product-title">' + p.name + '</h3>' +
-                '<div class="product-price">$' + p.price.toFixed(2) + '</div>' +
+                '<div class="product-price">' + priceHtml(p) + '</div>' +
                 '<div class="product-stock ' + sc + '"><i class="fas ' + (total > 0 ? 'fa-check-circle' : 'fa-times-circle') + '"></i> ' + st + ' (' + total + ')</div>' +
                 sz +
                 '<div class="product-actions"><button class="btn btn-primary btn-add-to-cart" onclick="event.stopPropagation();addToCart(\'' + p.id + '\')" ' + (!hasStock(p) ? 'disabled' : '') + '><i class="fas fa-cart-plus"></i> Add</button>' +
@@ -5145,13 +5195,14 @@ function sendToTelegram(order, callback) {
         var productLink = storeUrl + storeId + '#' + encodeURIComponent(p.name);
 
         // Build share text
-        var text = '🛍️ ' + p.name + '\n💰 $' + p.price.toFixed(2) + '\n\n' + productLink;
+        var priceTxt = promoPriceOf(p) != null ? '$' + promoPriceOf(p).toFixed(2) + ' (was $' + p.price.toFixed(2) + ', -' + promoOffPct(p) + '%)' : '$' + p.price.toFixed(2);
+        var text = '🛍️ ' + p.name + '\n💰 ' + priceTxt + '\n\n' + productLink;
 
         // Try native share (works on mobile — shows Messenger in share sheet)
         if (navigator.share) {
             navigator.share({
                 title: p.name,
-                text: '🛍️ ' + p.name + ' — $' + p.price.toFixed(2),
+                text: '🛍️ ' + p.name + ' — ' + priceTxt,
                 url: productLink
             }).catch(function() {}); // user cancelled
             return;
@@ -5164,7 +5215,7 @@ function sendToTelegram(order, callback) {
             window.open('fb-messenger://share?link=' + encodeURIComponent(productLink), '_blank');
         } else {
             // Desktop fallback — Facebook share dialog
-            window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(productLink) + '&quote=' + encodeURIComponent('🛍️ ' + p.name + ' — $' + p.price.toFixed(2)), '_blank', 'width=600,height=400');
+            window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(productLink) + '&quote=' + encodeURIComponent('🛍️ ' + p.name + ' — ' + priceTxt), '_blank', 'width=600,height=400');
         }
     }
 
@@ -5218,7 +5269,7 @@ function sendToTelegram(order, callback) {
             var img = (p.images && p.images[0]) || 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=200';
             h += '<div style="background:var(--light);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column">' +
                 '<img src="' + img + '" style="width:100%;height:160px;object-fit:cover" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=200\'">' +
-                '<div style="padding:0.75rem;flex:1"><div style="font-weight:600;font-size:0.9rem">' + p.name + '</div><div style="color:var(--primary);font-weight:700;margin:0.25rem 0">$' + p.price.toFixed(2) + '</div></div>' +
+                '<div style="padding:0.75rem;flex:1"><div style="font-weight:600;font-size:0.9rem">' + p.name + '</div><div style="color:var(--primary);font-weight:700;margin:0.25rem 0">' + priceHtml(p) + '</div></div>' +
                 '<div style="padding:0 0.75rem 0.75rem;display:flex;gap:0.5rem">' +
                 '<button class="btn btn-primary btn-small" onclick="closeWishlistModal();showTab(\'store\');setTimeout(function(){openProductDetail(\'' + p.id + '\')},200)" style="flex:1"><i class="fas fa-eye"></i> View</button>' +
                 '<button class="btn btn-danger btn-small" onclick="toggleWishlist(\'' + p.id + '\')"><i class="fas fa-trash"></i></button>' +
@@ -5239,7 +5290,7 @@ function sendToTelegram(order, callback) {
                 content_ids: [pid],
                 content_type: 'product',
                 content_name: p.name,
-                value: p.price,
+                value: salePriceOf(p),
                 currency: 'USD'
             });
         }
@@ -5275,7 +5326,7 @@ function sendToTelegram(order, callback) {
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">' +
             '<div><img id="pdMainImg" src="' + allImages[0] + '" style="width:100%;height:280px;object-fit:cover;border-radius:var(--radius-lg);cursor:zoom-in" onclick="openLightbox(this.src)" onerror="this.src=\'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=600\'">' + imagesHtml + '</div>' +
             '<div><span class="product-category ' + getCategoryDisplay(p.category) + '">' + p.category + '</span>' +
-            '<div style="font-size:1.8rem;font-weight:700;color:var(--primary);margin:0.5rem 0">$' + p.price.toFixed(2) + '</div>' +
+            '<div style="font-size:1.8rem;font-weight:700;color:var(--primary);margin:0.5rem 0">' + priceHtml(p) + '</div>' +
             '<div class="product-stock ' + stockClass + '" style="margin-bottom:0.5rem"><i class="fas ' + (total > 0 ? 'fa-check-circle' : 'fa-times-circle') + '"></i> ' + stockText + '</div>' +
             sizesHtml +
             '<div style="display:flex;gap:0.5rem;margin-top:1rem">' +
@@ -5339,8 +5390,8 @@ function sendToTelegram(order, callback) {
 
         var ex = null;
         for (var k = 0; k < STATE.cart.length; k++) { if (STATE.cart[k].productId === pid && STATE.cart[k].size === size) { ex = STATE.cart[k]; break; } }
-        if (ex) { ex.quantity++; recalcItemDiscount(ex); }
-        else STATE.cart.push({ productId: pid, name: p.name, price: p.price, size: size, quantity: 1, image: (p.images && p.images[0]) || '' });
+        if (ex) { ex.quantity++; applyPromoToCartItem(ex, p); }
+        else { var newItem = { productId: pid, name: p.name, price: p.price, size: size, quantity: 1, image: (p.images && p.images[0]) || '' }; applyPromoToCartItem(newItem, p); STATE.cart.push(newItem); }
         localStorage.setItem('goatCart', JSON.stringify(STATE.cart));
         updateCartBadge(); renderCart(); updateShipping();
         showToast(p.name + ' (' + size + ') added!', 'success');
@@ -5349,7 +5400,7 @@ function sendToTelegram(order, callback) {
                 content_ids: [pid],
                 content_type: 'product',
                 content_name: p.name,
-                value: p.price,
+                value: salePriceOf(p),
                 currency: 'USD'
             });
         }
@@ -5410,6 +5461,7 @@ function sendToTelegram(order, callback) {
                               '<option value="none"' + (iType==='none'?' selected':'') + '>🏷️ No discount</option>' +
                               '<option value="percent"' + (iType==='percent'?' selected':'') + '>% Off</option>' +
                               '<option value="fixed"' + (iType==='fixed'?' selected':'') + '>$ Off</option>' +
+                              (iType==='promo' ? '<option value="promo" selected>🔥 Promo (per pc)</option>' : '') +
                           '</select>' +
                           (iType !== 'none'
                               ? '<input type="number" min="0" step="0.01" placeholder="0" value="' + iVal + '" ' +
@@ -7188,9 +7240,9 @@ function sendToTelegram(order, callback) {
                 (isRestockDue(p) ? '<br><span style="display:inline-block;margin-top:2px;font-size:0.62rem;font-weight:700;color:#fff;background:var(--danger);border-radius:4px;padding:1px 5px"><i class="fas fa-truck-loading"></i> Needs Restock</span>' : '') +
                 '</td>' +
                 '<td><span class="product-category ' + getCategoryDisplay(p.category) + '" style="font-size:0.65rem;padding:0.1rem 0.4rem">' + p.category + '</span></td>' +
-                '<td style="font-weight:600;font-size:0.78rem">$' + p.price.toFixed(2) +
+                '<td style="font-weight:600;font-size:0.78rem">' + priceHtml(p) +
                 (p.costPrice != null ? '<br><span style="font-weight:400;font-size:0.68rem;color:var(--gray)">Cost $' + Number(p.costPrice).toFixed(2) + '</span>' +
-                    '<br><span style="font-weight:600;font-size:0.68rem;color:' + ((p.price - p.costPrice) >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + (p.price > 0 ? (((p.price - p.costPrice) / p.price) * 100).toFixed(0) : '0') + '% margin</span>' : '') +
+                    '<br><span style="font-weight:600;font-size:0.68rem;color:' + ((salePriceOf(p) - p.costPrice) >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + (salePriceOf(p) > 0 ? (((salePriceOf(p) - p.costPrice) / salePriceOf(p)) * 100).toFixed(0) : '0') + '% margin</span>' : '') +
                 '</td>' +
                 '<td>' + sizeHtml + '</td>' +
                 '<td><strong style="color:' + stockColor + ';font-size:0.78rem">' + totalStock + '</strong></td>' +
@@ -8775,6 +8827,22 @@ function sendToTelegram(order, callback) {
             await db.collection('stores').doc(cashActiveStoreId()).collection('cashLedger').add({ date: dateStr, direction: dir, category: cat, amount: amount, note: note, createdAt: Date.now() });
             document.getElementById('cashEntryAmount').value = ''; document.getElementById('cashEntryNote').value = '';
             showToast((dir === 'in' ? 'Cash in' : 'Cash out') + ' saved for ' + cashDisplayDate(dateStr), 'success');
+            // The cash book only lists entries inside the report period (default: Today). If this entry's
+            // date is outside it, widen the period so the entry you just saved actually shows up.
+            var cdr = getDateRange(STATE.dateFilter), cFrom = cashDateStr(cdr.start), cTo = cashDateStr(cdr.end);
+            if (dateStr < cFrom || dateStr > cTo) {
+                var todayStr = cashDateStr(new Date()), monthStart = todayStr.slice(0, 8) + '01';
+                var monthBtn = document.querySelector('.date-filter-btn[onclick*="\'month\'"]');
+                if (dateStr >= monthStart && dateStr <= todayStr && monthBtn) {
+                    setDateFilter('month', monthBtn);
+                } else {
+                    document.getElementById('customStartDate').value = dateStr < cFrom ? dateStr : cFrom;
+                    document.getElementById('customEndDate').value = dateStr > cTo ? dateStr : cTo;
+                    setCustomDateRange();
+                }
+                showToast('Report period widened so the ' + cashDisplayDate(dateStr) + ' entry is visible', 'info');
+                return; // setDateFilter / setCustomDateRange reload the report, which reloads the cash book
+            }
             loadCashData();
         } catch(e) { showToast('Failed to save: ' + e.message, 'error'); }
     }
@@ -12817,7 +12885,7 @@ function sendToTelegram(order, callback) {
                 'box-shadow:0 1px 3px rgba(0,0,0,0.12);margin:3px;vertical-align:top">' +
                 '<div style="font-size:7px;font-weight:bold;overflow:hidden;line-height:1.2">' + escHtml(p.name) + '</div>' +
                 '<div style="font-size:6px;color:#555">Size: <b>' + escHtml(sizeLabel(s.name, 'en')) + '</b></div>' +
-                '<div style="font-size:10px;font-weight:bold">$' + p.price.toFixed(2) + '</div>' +
+                '<div style="font-size:10px;font-weight:bold">' + (promoPriceOf(p) != null ? '<s style="font-weight:400;color:#888">$' + p.price.toFixed(2) + '</s> $' + promoPriceOf(p).toFixed(2) : '$' + p.price.toFixed(2)) + '</div>' +
                 '<div style="font-size:5px;color:#888;text-align:center;letter-spacing:0.5px">&#9612;&#9616;&#9612;&#9612;&#9616; ' + p.id + ' &#9616;&#9612;&#9612;&#9616;&#9612;</div>' +
                 '</div>';
         });
@@ -13000,7 +13068,7 @@ function sendToTelegram(order, callback) {
                     '<div class="lbl-left">' +
                     '<div class="n">' + escHtml(ld.p.name) + '</div>' +
                     '<div class="s">Size: <b>' + escHtml(sizeLabel(ld.size, 'en')) + '</b></div>' +
-                    '<div class="pr">$' + ld.p.price.toFixed(2) + '</div>' +
+                    '<div class="pr">' + (promoPriceOf(ld.p) != null ? '<s style="font-weight:400">$' + ld.p.price.toFixed(2) + '</s> $' + promoPriceOf(ld.p).toFixed(2) : '$' + ld.p.price.toFixed(2)) + '</div>' +
                     '</div>' +
                     '<div class="bc" data-v="' + escHtml(ld.p.id) + '"></div>' +
                     '</div></div>';
