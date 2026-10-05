@@ -505,6 +505,7 @@
           <div class="send-status" id="sendStatus"></div>
           <div class="rl-sendbar" id="rlSendBar" style="display:none">
             <span class="rl-selcount" id="rlSelCount"></span>
+            <button class="btn btn-outline" id="queueSelectedBtn" onclick="queueSelectedToReceiving()" disabled><i class="fas fa-box-open"></i> Move selected to Receiving</button>
             <button class="btn btn-primary" id="sendTelegramBtn" disabled><i class="fab fa-telegram-plane"></i> <span data-t="sendTelegramBtnLabel">Send selected to Telegram</span></button>
           </div>
         </div>
@@ -1559,7 +1560,7 @@ function renderHistory(){
   indexProducts(historyCache);
   const grid = document.getElementById('historyGrid');
   const empty = document.getElementById('historyEmpty');
-  let filtered = historyCache;
+  let filtered = historyCache.filter(p => !p.receiveOnly); // receive-only holders aren't catalog items
   if(historyFilterCategory) filtered = filtered.filter(p => p.category === historyFilterCategory);
   if(historyFilterText) filtered = filtered.filter(p => (p.title || '').toLowerCase().includes(historyFilterText) || (p.linkedProductName || '').toLowerCase().includes(historyFilterText) || (p.styleCode || '').toLowerCase().includes(historyFilterText));
 
@@ -2842,6 +2843,14 @@ async function rcvApply(bid, hids, mode, btn){
       await b.commit();
     }
     plan.forEach(p => Object.keys(rcvDraft).forEach(k => { if(k.startsWith(bid + '|' + p.x.histId + '|')) delete rcvDraft[k]; }));
+    // Items that came from the Restock List: mark their lines received once nothing is left waiting.
+    plan.forEach(p => {
+      const leftNow = p.lines.reduce((a, l, i) => a + rcvLeft(l) - p.add[i].g - p.add[i].r - p.add[i].m, 0);
+      if(leftNow > 0 || !Array.isArray(p.x.restockItemIds)) return;
+      p.x.restockItemIds.forEach(id => db.collection('restockTool_items').doc(id).update({
+        status: 'received', previousStatus: 'ordered', receivedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(() => {})); // line may have been removed from the list — fine
+    });
     db.collection('activityLogs').add({
       action: mode === 'close' ? 'Stock marked not received (1688 order)' : 'Stock Received (1688 order)',
       details: mode === 'close' ? `${M} pcs not received on ${plan.length} items` : `${G} good, ${R} rejected on ${plan.length} items: ` + plan.map(p => p.x.productName).slice(0, 20).join(', '),
@@ -2957,6 +2966,147 @@ function undoStatus(docId){
 function markGroupOrdered(docIdsCsv){
   docIdsCsv.split(',').forEach(id => markAsOrdered(id));
 }
+// ---------- Restock List -> Receiving ----------
+// Moves ordered Restock List items into the same "waiting to receive" queue
+// the 1688 CSV import uses, so every order is received the same way
+// (Good / Reject / Not received, stock + weighted cost updated on receive).
+// Works for items created by the import, items linked by hand, and low-stock
+// alerts from the store app. Sizes are matched to the store product's own
+// size names so receiving never creates duplicate size rows.
+function rlMapSize(raw, prodSizes){
+  const s0 = ((raw || '') + '').trim();
+  if(!s0) return { name: '', ok: true };
+  const names = (prodSizes || []).map(s => ((s.name || '') + '').trim()).filter(Boolean);
+  if(!names.length) return { name: '', ok: true }; // product has no sizes: count as plain stock
+  const lc = x => x.toLowerCase();
+  let hit = names.find(n => lc(n) === lc(s0));
+  if(hit) return { name: hit, ok: true };
+  const v = sizeNameFromVariant(s0);
+  hit = names.find(n => lc(n) === lc(v));
+  if(hit) return { name: hit, ok: true };
+  const num = x => { const m = (x + '').match(/\d+(?:\.\d+)?/); return m ? m[0] : null; };
+  const nv = num(v);
+  if(nv){ const c = names.filter(n => num(n) === nv); if(c.length === 1) return { name: c[0], ok: true }; }
+  return { name: v || s0, ok: false };
+}
+
+// The Home catalog card a restock line belongs to (if any).
+function rlCardFor(line){
+  return (line.id && historyCache.find(h => h.id === line.id && !h.receiveOnly)) ||
+         (line.url && historyCache.find(h => h.url === line.url && !h.receiveOnly)) ||
+         findLinkedSupplier(line) || null;
+}
+
+// Which Main Store product a restock line should be received into.
+function rlStoreProductFor(line, card, mainProducts){
+  const live = id => id && mainProducts.find(p => p.id === id && p.live);
+  if(card){
+    const a = live(card.storeProductId);
+    if(a) return a;
+    if((card.linkedStoreId || STORE_MAIN_ID) === STORE_MAIN_ID){ const b = live(card.linkedProductId); if(b) return b; }
+  }
+  if(line.sourceProductId && line.sourceStoreId === STORE_MAIN_ID){ const c = live(line.sourceProductId); if(c) return c; }
+  // Branch alert or unlinked card: same product name in Main Store.
+  const names = [line.sourceStoreId && line.sourceStoreId !== STORE_MAIN_ID ? line.title : null,
+                 card && card.linkedProductName, card && card.storeProductName].filter(Boolean).map(normLinkName);
+  for(const n of names){
+    const m = mainProducts.filter(p => p.live && normLinkName(p.name) === n);
+    if(m.length === 1) return m[0];
+  }
+  return null;
+}
+
+function queueSelectedToReceiving(){
+  const keys = groupRestockByProduct(restockList)
+    .filter(g => g.lines.some(l => selectedRestockIds.has(l.docId)))
+    .map(g => g.key);
+  queueGroupsToReceiving(keys);
+}
+
+let rlQueueBusy = false;
+async function queueGroupsToReceiving(keys){
+  if(!db){ alert('Not connected to the database.'); return; }
+  if(rlQueueBusy) return;
+  const groups = groupRestockByProduct(restockList).filter(g => keys.includes(g.key));
+  const todo = groups.filter(g => !g.lines.some(l => l.queuedBatch) && groupStatus(g) !== 'received');
+  if(!todo.length){ alert('Nothing to move — these are already in Receiving or received.'); return; }
+  rlQueueBusy = true;
+  try{
+    await pricingRefresh();
+    const snap = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').get();
+    const mainProducts = [];
+    snap.forEach(d => { const x = d.data() || {}; mainProducts.push({ id: d.id, name: ((x.name || '') + '').trim(), sizes: x.sizes || [], images: x.images || [], live: !storeDocGone(x) }); });
+
+    const plan = [], noProduct = [], newSizes = [];
+    todo.forEach(g => {
+      const lines = g.lines.filter(l => !l.docId.startsWith('local-') && (Number(l.qty) || 0) > 0);
+      if(!lines.length) return;
+      const card = rlCardFor(lines[0]);
+      const prod = rlStoreProductFor(lines[0], card, mainProducts);
+      if(!prod){ noProduct.push(g.title); return; }
+      const bySize = {};
+      let noSize = 0;
+      lines.forEach(l => {
+        const m = rlMapSize(l.size, prod.sizes);
+        if(!m.ok) newSizes.push(`${prod.name}: ${m.name}`);
+        if(m.name) bySize[m.name] = (bySize[m.name] || 0) + (Number(l.qty) || 0);
+        else noSize += Number(l.qty) || 0;
+      });
+      if(noSize && (prod.sizes || []).length) newSizes.push(`${prod.name}: ${noSize} pcs with no size chosen (added to total stock only)`);
+      const yuan = card ? yuanFrom(card.price) : 0;
+      const pc = pricingCalc(yuan);
+      plan.push({ g, lines, card, prod, noSize, yuan,
+        sizes: Object.keys(bySize).map(n => ({ name: n, qty: bySize[n] })),
+        total: lines.reduce((a, l) => a + (Number(l.qty) || 0), 0),
+        unitCost: pc ? pc.cost : null });
+    });
+
+    if(!plan.length){
+      alert(`Can't tell which store product ${noProduct.length === 1 ? 'this is' : 'these are'}:\n${noProduct.join(', ')}\n\nOn the Home tab, link the item to its store product (Link to store product), then try again.`);
+      return;
+    }
+    let msg = `Move ${plan.length} item${plan.length === 1 ? '' : 's'} (${plan.reduce((a, p) => a + p.total, 0)} pcs) to Receiving?\n\n` +
+      plan.slice(0, 12).map(p => `${p.prod.name}: ${p.sizes.map(s => s.name + '×' + s.qty).concat(p.noSize ? ['×' + p.noSize] : []).join(', ')}` +
+        (p.unitCost ? ` · cost $${p.unitCost.toFixed(2)}/pc` : '')).join('\n') + (plan.length > 12 ? '\n...' : '') +
+      '\n\nStock is NOT changed now — only when you receive them on the Receiving tab.';
+    if(newSizes.length) msg += `\n\n⚠ These sizes don't exist on the store product and will be ADDED as new sizes when received:\n${newSizes.slice(0, 8).join('\n')}\nCancel and fix the size names in the list if that's wrong.`;
+    if(noProduct.length) msg += `\n\nSkipped (not linked to a store product): ${noProduct.join(', ')}`;
+    const noCost = plan.filter(p => !p.unitCost).length;
+    if(noCost) msg += `\n\n${noCost} item${noCost === 1 ? ' has' : 's have'} no supplier price, so ${noCost === 1 ? 'its' : 'their'} cost price won't change.`;
+    if(!confirm(msg)) return;
+
+    const batchId = 'r' + Date.now();
+    const now = Date.now(), FV = firebase.firestore.FieldValue;
+    const wb = db.batch();
+    plan.forEach(p => {
+      const histId = p.card ? p.card.id : 'rl_' + p.prod.id;
+      const entry = {
+        orderKey: 'rl_' + batchId, productId: p.prod.id, productName: p.prod.name, colour: '',
+        sizes: p.sizes, noSize: p.noSize, total: p.total, createdAt: now,
+        unitYuan: p.yuan || null, unitCost: p.unitCost, source: 'restock-list',
+        restockItemIds: p.lines.map(l => l.docId)
+      };
+      const data = { incoming: { [batchId]: entry } };
+      // No catalog card (e.g. a low-stock alert for a hand-made product): keep the
+      // waiting order on a hidden holder doc that never shows on the Home tab.
+      if(!p.card) Object.assign(data, { receiveOnly: true, title: p.prod.name, receiveProductId: p.prod.id, images: p.prod.images.slice(0, 1) });
+      wb.set(db.collection('restockTool_history').doc(histId), data, { merge: true });
+      p.lines.forEach(l => wb.update(db.collection('restockTool_items').doc(l.docId), {
+        status: 'ordered', previousStatus: itemStatus(l), orderedAt: FV.serverTimestamp(),
+        queuedBatch: batchId, queuedHistId: histId
+      }));
+    });
+    await wb.commit();
+    plan.forEach(p => p.lines.forEach(l => selectedRestockIds.delete(l.docId)));
+    alert(`Moved ${plan.length} item${plan.length === 1 ? '' : 's'} to Receiving. Receive them there when the goods arrive.`);
+  }catch(err){
+    console.warn('Move to Receiving failed:', err);
+    alert('Could not move to Receiving, nothing was changed: ' + err.message);
+  }finally{
+    rlQueueBusy = false;
+  }
+}
+
 function markGroupReceived(docIdsCsv){
   docIdsCsv.split(',').forEach(id => markAsReceived(id));
 }
@@ -3175,6 +3325,7 @@ function renderRestock(){
     const totalQty = group.lines.reduce((n, l) => n + (Number(l.qty) || 0), 0);
     const sizeSummary = group.lines.map(l => `${l.size ? escapeHtml(zhLabel(l.size)) : t('qtyShort')}×${escapeHtml(String(l.qty))}`).join(' · ');
     const activeAlert = isActiveAlert(group);
+    const queued = group.lines.some(l => l.queuedBatch);
     // One badge only: the alert if there is one, otherwise the status — and
     // the status only when the filter shows mixed statuses.
     const showStatus = restockStatusFilter === 'all' || restockStatusFilter === 'todo';
@@ -3208,9 +3359,11 @@ function renderRestock(){
               ? `<a href="${escapeHtml(group.url)}" target="_blank" rel="noopener">${group.isSearchLink ? t('searchOn1688Arrow') : t('orderOn1688Arrow')}</a>`
               : `<span class="rl-locked-link" title="Unlock Link Source links to view"><i class="fas fa-lock"></i> ${t('linkLockedLabel')}</span>`
             ) : ''}
-          ${status === 'ordered' ? `<button class="mark-received" onclick="markGroupReceived('${docIdsCsv}')">${t('markReceivedBtn')}</button>` : ''}
+          ${queued && status !== 'received' ? `<span class="status-badge" style="background:#dbeafe;color:#1e40af" title="Receive it on the Receiving tab"><i class="fas fa-truck"></i> In Receiving</span>` : ''}
+          ${!queued && status !== 'received' ? `<button class="mark-ordered" data-k="${escapeHtml(group.key)}" onclick="queueGroupsToReceiving([this.dataset.k])" title="Ordered — wait for the goods on the Receiving tab"><i class="fas fa-box-open"></i> Move to Receiving</button>` : ''}
+          ${!queued && status === 'ordered' ? `<button class="mark-received" onclick="markGroupReceived('${docIdsCsv}')">${t('markReceivedBtn')}</button>` : ''}
           ${(status === 'pending' || status === 'sent') ? `<button class="mark-ordered" onclick="markGroupOrdered('${docIdsCsv}')">${t('markOrderedBtn')}</button>` : ''}
-          ${groupPreviousStatus(group) ? `<button class="undo-status" onclick="undoGroupStatus('${docIdsCsv}')" title="${t('undoStatusTitle')}"><i class="fas fa-undo"></i> ${t('undoStatusBtn')}</button>` : ''}
+          ${!queued && groupPreviousStatus(group) ? `<button class="undo-status" onclick="undoGroupStatus('${docIdsCsv}')" title="${t('undoStatusTitle')}"><i class="fas fa-undo"></i> ${t('undoStatusBtn')}</button>` : ''}
         </div>
       </div>
     `;
@@ -3229,6 +3382,8 @@ function updateSendBar(){
   bar.style.display = restockList.length ? 'flex' : 'none';
   const n = groupRestockByProduct(restockList).filter(g => g.lines.some(l => selectedRestockIds.has(l.docId))).length;
   document.getElementById('rlSelCount').textContent = n ? t('selectedCount').replace('{n}', n) : t('noneSelected');
+  const qb = document.getElementById('queueSelectedBtn');
+  if(qb) qb.disabled = n === 0;
 }
 
 function toggleRestockSelect(docId, checked){
