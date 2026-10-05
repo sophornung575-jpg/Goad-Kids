@@ -1124,6 +1124,17 @@ function initFirestoreListeners(){
   });
 
   loadStoreProducts();
+  repairReceiveHolders();
+}
+
+// Holder docs made by "Move to Receiving" before they carried savedAt were
+// invisible to the listener above. Give them one so their orders show up.
+function repairReceiveHolders(){
+  db.collection('restockTool_history').where('receiveOnly', '==', true).get().then(snap => {
+    snap.forEach(d => {
+      if(!d.data().savedAt) d.ref.update({ savedAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+    });
+  }).catch(err => console.warn('Receive holder repair failed:', err));
 }
 
 // ---------- shared product card ----------
@@ -1424,10 +1435,11 @@ function loadStoreProducts(){
       const x = d.data() || {};
       const imgs = (Array.isArray(x.images) ? x.images : []).filter(u => typeof u === 'string' && u);
       if(typeof x.image === 'string' && x.image && !imgs.includes(x.image)) imgs.push(x.image);
-      return { id: d.id, name: ((x.name || '') + '').trim(), barcode: ((x.barcode || '') + '').trim(), active: !storeDocGone(x), images: imgs };
+      return { id: d.id, name: ((x.name || '') + '').trim(), barcode: ((x.barcode || '') + '').trim(), active: !storeDocGone(x), images: imgs, sizes: Array.isArray(x.sizes) ? x.sizes : [] };
     }).filter(p => p.name).sort((a, b) => a.name.localeCompare(b.name));
     storeProductsState = 'ready';
     renderHistory(); // linked items without their own photo pick up the store photo
+    renderIncoming(); // fills the size suggestions on the Receiving tab
   }).catch(err => {
     console.warn('Store products load failed:', err);
     storeProductsState = 'failed';
@@ -2597,7 +2609,7 @@ const rcvOpen = new Set();  // expanded items
 let rcvBusy = false, rcvDeferred = false;
 
 function incomingLines(x){
-  if(Array.isArray(x.lines)) return x.lines.map(l => ({ name: l.name || '', qty: Number(l.qty) || 0, got: Number(l.got) || 0, rej: Number(l.rej) || 0, miss: Number(l.miss) || 0 }));
+  if(Array.isArray(x.lines)) return x.lines.map(l => ({ name: l.name || '', qty: Number(l.qty) || 0, got: Number(l.got) || 0, rej: Number(l.rej) || 0, miss: Number(l.miss) || 0, extra: Number(l.extra) || 0, added: !!l.added }));
   const lines = (x.sizes || []).map(s => ({ name: s.name || '', qty: Number(s.qty) || 0, got: 0, rej: 0, miss: 0 }))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   if(Number(x.noSize) > 0) lines.push({ name: '', qty: Number(x.noSize), got: 0, rej: 0, miss: 0 });
@@ -2641,10 +2653,11 @@ function rcvItemHtml(bid, x){
     const doneTxt = [l.got ? `<span class="ok">✔${l.got}</span>` : '', l.rej ? `<span class="bad">✖${l.rej}</span>` : '', l.miss ? `<span class="miss">?${l.miss}</span>` : ''].filter(Boolean).join(' ') || '—';
     const gk = rcvKey(bid, x.histId, i, 'g'), rk = rcvKey(bid, x.histId, i, 'r');
     const inputs = lf > 0
-      ? `<td><input type="number" min="0" max="${lf}" inputmode="numeric" data-k="${escapeHtml(gk)}" value="${escapeHtml(String(rcvVal(gk, lf)))}" oninput="rcvSet(this)"></td>
+      ? `<td><input type="number" min="0" inputmode="numeric" data-k="${escapeHtml(gk)}" value="${escapeHtml(String(rcvVal(gk, lf)))}" oninput="rcvSet(this)"></td>
          <td><input type="number" min="0" max="${lf}" inputmode="numeric" data-k="${escapeHtml(rk)}" value="${escapeHtml(String(rcvVal(rk, 0)))}" oninput="rcvSet(this)"></td>`
       : `<td colspan="2" class="rcv-done">done</td>`;
-    return `<tr><td class="rcv-size">${escapeHtml(l.name ? zhLabel(l.name) : '(no size)')}</td><td>${l.qty}</td><td>${doneTxt}</td><td>${lf}</td>${inputs}</tr>`;
+    const tag = (l.added ? ' <span class="miss" title="Size added at receiving">+new</span>' : '') + (l.extra ? ` <span class="ok" title="Received more than ordered">+${l.extra} extra</span>` : '');
+    return `<tr><td class="rcv-size">${escapeHtml(l.name ? zhLabel(l.name) : '(no size)')}${tag}</td><td>${l.qty}</td><td>${doneTxt}</td><td>${lf}</td>${inputs}</tr>`;
   }).join('');
   const nk = rcvKey(bid, x.histId, 'note', 'n');
   const notes = (x.notes || []).map(n => `<div class="rcv-prev-note">📝 ${escapeHtml(n)}</div>`).join('');
@@ -2662,6 +2675,12 @@ function rcvItemHtml(bid, x){
         <thead><tr><th style="text-align:left">Size</th><th>Ordered</th><th>Done</th><th>Left</th><th>Good ✔</th><th>Reject ✖</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
       ${notes}
+      <div class="rcv-actions rcv-addsize">
+        <input class="rcv-note" type="text" list="${escapeHtml('rcvSizes_' + x.histId)}" placeholder="Extra size (e.g. 140)" data-role="addSizeName" style="max-width:150px">
+        <datalist id="${escapeHtml('rcvSizes_' + x.histId)}">${rcvProductSizes(x.productId).map(n => `<option value="${escapeHtml(n)}">`).join('')}</datalist>
+        <input type="number" min="1" inputmode="numeric" placeholder="Qty" data-role="addSizeQty" style="width:70px">
+        <button class="btn btn-outline btn-small" type="button" onclick="rcvAddSize(this)"><i class="fas fa-plus"></i> Add size</button>
+      </div>
       <div class="rcv-actions">
         <input class="rcv-note" type="text" placeholder="Note (e.g. 2 torn, wrong colour)" data-k="${escapeHtml(nk)}" value="${escapeHtml(String(rcvVal(nk, '')))}" oninput="rcvSet(this)">
         <button class="btn btn-primary btn-small" type="button" onclick="rcvItem(this,'receive')"><i class="fas fa-check"></i> Receive this item</button>
@@ -2707,6 +2726,50 @@ function renderIncoming(force){
   renderReceived();
 }
 
+// Size names of the store product, for the "Add size" suggestions.
+function rcvProductSizes(pid){
+  if(LINK_STORE_ID !== STORE_MAIN_ID) return []; // cache holds another store's products on this device
+  if(storeProductsState === 'idle') loadStoreProducts();
+  const sp = storeProducts.find(p => p.id === pid);
+  return sp && Array.isArray(sp.sizes) ? sp.sizes.map(s => ((s && s.name) || s || '') + '').filter(Boolean) : [];
+}
+
+// Adds a size the supplier sent that wasn't on the order (or more of one
+// that was). It becomes a normal waiting line, then is received as usual.
+async function rcvAddSize(btn){
+  if(!db){ alert('Not connected to the database.'); return; }
+  const el = btn.closest('.rcv-item');
+  const bid = el.dataset.bid, hid = el.dataset.hid;
+  const nameRaw = el.querySelector('[data-role="addSizeName"]').value.trim();
+  const qty = rcvNum(el.querySelector('[data-role="addSizeQty"]').value);
+  if(!qty){ alert('Type how many pieces of that size arrived.'); return; }
+  const g = incomingGroups().find(o => o.batchId === bid);
+  const x = g && g.items.find(o => o.histId === hid);
+  if(!x){ return; }
+  let known = [];
+  try{
+    const pd = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').doc(x.productId).get();
+    known = ((pd.exists && pd.data().sizes) || []).map(s => ((s && s.name) || s || '') + '').filter(Boolean);
+  }catch(e){ known = rcvProductSizes(x.productId); }
+  const m = known.length ? rlMapSize(nameRaw, known.map(n => ({ name: n }))) : { name: nameRaw, ok: true };
+  const name = m.name;
+  if(!name && known.length){ alert('Type the size name.'); return; }
+  if(name && known.length && !m.ok && !confirm(`"${name}" is not a size of ${x.productName} yet. It will be ADDED as a new size when received.\n\nContinue?`)) return;
+  const lines = incomingLines(x);
+  const same = lines.find(l => l.name.trim().toLowerCase() === name.toLowerCase());
+  if(same){ same.qty += qty; same.extra = (same.extra || 0) + qty; }
+  else lines.push({ name, qty, got: 0, rej: 0, miss: 0, extra: qty, added: true });
+  try{
+    await db.collection('restockTool_history').doc(hid).update({
+      ['incoming.' + bid + '.lines']: lines,
+      ['incoming.' + bid + '.total']: lines.reduce((a, l) => a + l.qty, 0)
+    });
+    rcvOpen.add(bid + '|' + hid);
+  }catch(err){
+    alert('Could not add the size: ' + err.message);
+  }
+}
+
 function rcvItem(btn, mode){
   const el = btn.closest('.rcv-item');
   rcvApply(el.dataset.bid, [el.dataset.hid], mode, btn);
@@ -2736,8 +2799,8 @@ async function rcvApply(bid, hids, mode, btn){
       const rv = rcvNum(rcvVal(rcvKey(bid, x.histId, i, 'r'), 0));
       const label = `${x.productName} ${l.name || '(no size)'}`;
       if(gv === null || rv === null){ errs.push(`${label}: use whole numbers`); return { g: 0, r: 0, m: 0 }; }
-      if(gv + rv > left){ errs.push(`${label}: ${gv} good + ${rv} reject is more than the ${left} waiting`); return { g: 0, r: 0, m: 0 }; }
-      return { g: gv, r: rv, m: 0 };
+      // More than ordered is allowed (supplier sent extra) — the extra is recorded.
+      return { g: gv, r: rv, m: 0, over: Math.max(0, gv + rv - left) };
     });
     const note = String(rcvVal(rcvKey(bid, x.histId, 'note', 'n'), '')).trim();
     return { x, lines, add, note };
@@ -2764,13 +2827,15 @@ async function rcvApply(bid, hids, mode, btn){
       alert(`These were deleted from the store app, so good pieces can't be added:\n${missingProd.join(', ')}\n\nSet their Good to 0 (Reject or "Rest not received" still work), then try again.`);
       return;
     }
-    const leftAfter = plan.reduce((a, p) => a + p.lines.reduce((b, l, i) => b + rcvLeft(l) - p.add[i].g - p.add[i].r - p.add[i].m, 0), 0);
+    const leftAfter = plan.reduce((a, p) => a + p.lines.reduce((b, l, i) => b + Math.max(0, rcvLeft(l) - p.add[i].g - p.add[i].r - p.add[i].m), 0), 0);
+    const overTot = plan.reduce((a, p) => a + p.add.reduce((b, v) => b + (v.over || 0), 0), 0);
     let msg;
     if(mode === 'close'){
       msg = `Mark ${M} piece${M === 1 ? '' : 's'} on ${plan.length} item${plan.length === 1 ? '' : 's'} as NOT received?\n\nThey leave the waiting list and are recorded as missing (for your supplier claim). Stock is not changed.\n\n` +
         plan.map(p => `${p.x.productName}: ${p.add.reduce((a, v) => a + v.m, 0)}`).slice(0, 12).join('\n');
     }else{
       msg = `Receive ${plan.length === 1 ? plan[0].x.productName : plan.length + ' items'}:\n\n✔ ${G} good — added to Main Store stock\n✖ ${R} rejected — recorded, not added` +
+        (overTot ? `\n➕ ${overTot} more than ordered — recorded as extra` : '') +
         (leftAfter ? `\n⏳ ${leftAfter} still waiting afterwards` : '\n\nNothing will be left waiting — ' + (plan.length === 1 ? 'this item' : 'these items') + ' will move to Received orders.');
       if(zero.length) msg += `\n\n⚠ ${zero.length} still priced at $0 — price them in the store app (Settings → Store Pricing Rule → Apply):\n` + zero.slice(0, 8).join(', ') + (zero.length > 8 ? ', ...' : '');
     }
@@ -2780,7 +2845,13 @@ async function rcvApply(bid, hids, mode, btn){
     const writes = [];
     plan.forEach(p => {
       const { x, lines, add, note, prod } = p;
-      const newLines = lines.map((l, i) => ({ name: l.name, qty: l.qty, got: l.got + add[i].g, rej: l.rej + add[i].r, miss: l.miss + add[i].m }));
+      const newLines = lines.map((l, i) => {
+        const over = add[i].over || 0;
+        const nl = { name: l.name, qty: l.qty + over, got: l.got + add[i].g, rej: l.rej + add[i].r, miss: l.miss + add[i].m };
+        if(l.extra || over) nl.extra = (l.extra || 0) + over;
+        if(l.added) nl.added = true;
+        return nl;
+      });
       const good = add.reduce((a, v) => a + v.g, 0);
       if(good && prod){
         const sizes = (Array.isArray(prod.sizes) ? prod.sizes : []).map(s => ({ ...s }));
@@ -2845,7 +2916,7 @@ async function rcvApply(bid, hids, mode, btn){
     plan.forEach(p => Object.keys(rcvDraft).forEach(k => { if(k.startsWith(bid + '|' + p.x.histId + '|')) delete rcvDraft[k]; }));
     // Items that came from the Restock List: mark their lines received once nothing is left waiting.
     plan.forEach(p => {
-      const leftNow = p.lines.reduce((a, l, i) => a + rcvLeft(l) - p.add[i].g - p.add[i].r - p.add[i].m, 0);
+      const leftNow = p.lines.reduce((a, l, i) => a + Math.max(0, rcvLeft(l) - p.add[i].g - p.add[i].r - p.add[i].m), 0);
       if(leftNow > 0 || !Array.isArray(p.x.restockItemIds)) return;
       p.x.restockItemIds.forEach(id => db.collection('restockTool_items').doc(id).update({
         status: 'received', previousStatus: 'ordered', receivedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -3089,7 +3160,8 @@ async function queueGroupsToReceiving(keys){
       const data = { incoming: { [batchId]: entry } };
       // No catalog card (e.g. a low-stock alert for a hand-made product): keep the
       // waiting order on a hidden holder doc that never shows on the Home tab.
-      if(!p.card) Object.assign(data, { receiveOnly: true, title: p.prod.name, receiveProductId: p.prod.id, images: p.prod.images.slice(0, 1) });
+      if(!p.card) Object.assign(data, { receiveOnly: true, title: p.prod.name, receiveProductId: p.prod.id, images: p.prod.images.slice(0, 1),
+        savedAt: FV.serverTimestamp() }); // the catalog listener only loads docs that have savedAt
       wb.set(db.collection('restockTool_history').doc(histId), data, { merge: true });
       p.lines.forEach(l => wb.update(db.collection('restockTool_items').doc(l.docId), {
         status: 'ordered', previousStatus: itemStatus(l), orderedAt: FV.serverTimestamp(),
