@@ -2090,7 +2090,8 @@ function detectOrderExport(){
         supplier: idx.supplier > -1 && row[idx.supplier] ? ((row[idx.supplier] || '') + '').trim() : '—',
         url: 'https://detail.1688.com/offer/' + offerId + '.html',
         styleCode: idx.styleCode > -1 ? ((row[idx.styleCode] || '') + '').trim() : '',
-        sizesSet: new Set(), qtyBySize: {}, qtyTotal: 0
+        sizesSet: new Set(), qtyBySize: {}, qtyTotal: 0,
+        yuanSum: 0, yuanQty: 0
       };
     }
     const variant = rawTitle.slice(grouped[gk].title.length).trim().replace(/^[\s,;、]+/, '');
@@ -2101,6 +2102,8 @@ function detectOrderExport(){
       const sz = sizeNameFromVariant(variant);
       grouped[gk].qtyBySize[sz] = (grouped[gk].qtyBySize[sz] || 0) + q;
       grouped[gk].qtyTotal += q;
+      const py = idx.price > -1 ? yuanFrom(row[idx.price]) : 0;
+      if(py > 0){ grouped[gk].yuanSum += py * q; grouped[gk].yuanQty += q; }
     }
     if(idx.orderNo > -1){ const on = ((row[idx.orderNo] || '') + '').trim(); if(on) orderNos.add(on); }
   }
@@ -2108,7 +2111,9 @@ function detectOrderExport(){
   const entries = Object.values(grouped).map(e => ({
     offerId: e.offerId, colour: e.colour, title: e.title, price: e.price, supplier: e.supplier, url: e.url,
     styleCode: e.styleCode || '', sizes: Array.from(e.sizesSet),
-    qtyBySize: e.qtyBySize, qtyTotal: e.qtyTotal
+    qtyBySize: e.qtyBySize, qtyTotal: e.qtyTotal,
+    // Average yuan paid per piece in THIS order (used for the weighted cost on receive)
+    avgYuan: e.yuanQty > 0 ? Math.round(e.yuanSum / e.yuanQty * 100) / 100 : yuanFrom(e.price)
   }));
   orderAssignKeys(entries);
   // One key per 1688 order file, so the same order can't be received twice.
@@ -2452,6 +2457,12 @@ document.getElementById('csvImportBtn').onclick = async () => {
         title: e.colour ? e.title + ' · ' + e.colour : e.title, price: e.price, moq: '—', supplier: e.supplier,
         image: '', url: e.url, sizes: e.sizes || [], isSearchLink: false, offerId: e.offerId
       };
+      // Re-order of an item already in the catalog: keep the sizes from earlier
+      // orders and add any new ones, instead of replacing the list.
+      const prevCard = historyCache.find(h => h.id === id);
+      if(prevCard && Array.isArray(prevCard.sizes) && prevCard.sizes.length){
+        data.sizes = Array.from(new Set([...prevCard.sizes, ...data.sizes]));
+      }
       if(e.colour) data.colour = e.colour;
       if(e.styleCode) data.styleCode = e.styleCode;
       // A new colour card starts with the offer's photos so it isn't blank.
@@ -2534,6 +2545,7 @@ document.getElementById('csvImportBtn').onclick = async () => {
 // Only items that are store products created by the import get queued, so
 // the size names always match.
 async function incomingQueue(entries, orderKey){
+  await pricingRefresh();  // exchange rate for this order's unit cost
   const snap = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').get();
   const live = {};
   snap.forEach(d => { const x = d.data() || {}; if(!storeDocGone(x)) live[d.id] = x; });
@@ -2558,9 +2570,13 @@ async function incomingQueue(entries, orderKey){
     pending.forEach(([bid, x]) => { if(x && x.orderKey === key) wb.update(db.collection('restockTool_history').doc(hid), { ['incoming.' + bid]: firebase.firestore.FieldValue.delete() }); });
     const sizes = Object.keys(e.qtyBySize).filter(n => n).map(n => ({ name: n, qty: e.qtyBySize[n] }));
     const noSize = e.qtyBySize[''] || 0;
+    // What one piece cost in THIS order ($ = yuan / rate). null = no rate set.
+    const pc = pricingCalc(e.avgYuan || yuanFrom(e.price));
+    const unitCost = pc ? pc.cost : null;
     wb.set(db.collection('restockTool_history').doc(hid), { incoming: { [batchId]: {
       orderKey: key, productId: pid, productName: live[pid].name || hd.storeProductName || '', colour: e.colour || '',
-      sizes, noSize, total: e.qtyTotal, createdAt: Date.now()
+      sizes, noSize, total: e.qtyTotal, createdAt: Date.now(),
+      unitYuan: e.avgYuan || yuanFrom(e.price) || null, unitCost
     } } }, { merge: true });
     queued++; pieces += e.qtyTotal;
   }
@@ -2781,10 +2797,26 @@ async function rcvApply(bid, hids, mode, btn){
         });
         const oldStock = Number(prod.stock) || 0;
         const stock = sizes.length ? sizes.reduce((a, s) => a + (Number(s.qty) || 0), 0) + unsized : oldStock + good;
-        writes.push(b => b.update(ref.doc(x.productId), { sizes, stock, lastRestockDate: now, updatedAt: iso }));
+        const upd = { sizes, stock, lastRestockDate: now, updatedAt: iso };
+        // Weighted-average cost: blend the pieces still on the shelf (old cost)
+        // with the pieces just received (this order's cost), so profit stays right
+        // when a re-order comes in at a different price.
+        const oldCost = prod.costPrice != null && prod.costPrice !== '' ? Number(prod.costPrice) : null;
+        const newUnit = Number(x.unitCost) > 0 ? Number(x.unitCost) : null;
+        let newCost = oldCost;
+        if(newUnit){
+          const onShelf = Math.max(0, oldStock);
+          newCost = (oldCost > 0 && onShelf > 0)
+            ? Math.round((onShelf * oldCost + good * newUnit) / (onShelf + good) * 100) / 100
+            : newUnit;
+          upd.costPrice = newCost;
+        }
+        p.costChange = newUnit && newCost !== oldCost ? { name: prod.name || x.productName, oldCost, newCost } : null;
+        writes.push(b => b.update(ref.doc(x.productId), upd));
         writes.push(b => b.set(db.collection('stores').doc(STORE_MAIN_ID).collection('stockAdjustments').doc(), {
           productId: x.productId, productName: prod.name || x.productName, oldStock, newStock: stock,
           totalDelta: stock - oldStock, sizeDeltas: deltas, reason: 'New stock received',
+          oldCostPrice: oldCost, newCostPrice: newCost, orderUnitCost: newUnit,
           timestamp: now, timeStr: new Date(now).toLocaleString(), user: 'restock-tool'
         }));
       }
@@ -2799,7 +2831,7 @@ async function rcvApply(bid, hids, mode, btn){
           receiveLog: FV.arrayUnion({
             batchId: bid, orderKey: x.orderKey || bid, productId: x.productId, productName: (prod && prod.name) || x.productName || '', colour: x.colour || '',
             orderedAt: x.createdAt || 0, closedAt: now, lines: newLines, notes,
-            cost: prod && Number(prod.cost) > 0 ? Number(prod.cost) : 0
+            cost: Number(x.unitCost) > 0 ? Number(x.unitCost) : (prod && Number(prod.costPrice) > 0 ? Number(prod.costPrice) : 0)
           })
         }));
       }
@@ -2815,7 +2847,9 @@ async function rcvApply(bid, hids, mode, btn){
       details: mode === 'close' ? `${M} pcs not received on ${plan.length} items` : `${G} good, ${R} rejected on ${plan.length} items: ` + plan.map(p => p.x.productName).slice(0, 20).join(', '),
       time: new Date(now).toLocaleString(), timestamp: now, user: 'restock-tool', storeId: STORE_MAIN_ID, storeName: STORE_MAIN_ID
     }).catch(() => {});
+    const costMsgs = plan.filter(p => p.costChange).map(p => `${p.costChange.name}: $${p.costChange.oldCost != null ? Number(p.costChange.oldCost).toFixed(2) : '—'} → $${p.costChange.newCost.toFixed(2)}`);
     alert((mode === 'close' ? `Recorded ${M} piece${M === 1 ? '' : 's'} as not received.` : `Done — ${G} added to stock, ${R} rejected.`) +
+      (costMsgs.length ? `\n\nCost price updated (average of old + new stock):\n` + costMsgs.slice(0, 10).join('\n') + (costMsgs.length > 10 ? '\n...' : '') : '') +
       (G ? '\n\nIf the store app is open on another device, refresh it before selling or syncing.' : ''));
   }catch(err){
     console.warn('Receive failed:', err);
