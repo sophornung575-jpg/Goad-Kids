@@ -3270,9 +3270,11 @@ function sendToTelegram(order, callback) {
         }
         if (existing) {
             existing.quantity += qty;
-            recalcItemDiscount(existing);
+            applyPromoToCartItem(existing, p);
         } else {
-            STATE.cart.push({ productId: pid, name: p.name, price: p.price, size: sizeName, quantity: qty, image: (p.images && p.images[0]) || '' });
+            var scanItem = { productId: pid, name: p.name, price: p.price, size: sizeName, quantity: qty, image: (p.images && p.images[0]) || '' };
+            applyPromoToCartItem(scanItem, p); // promotion price applies to scanned items too
+            STATE.cart.push(scanItem);
         }
         // Save cart
         try { localStorage.setItem('goatCart', JSON.stringify(STATE.cart)); } catch(e) {}
@@ -12908,7 +12910,7 @@ function sendToTelegram(order, callback) {
                 ' style="width:16px;height:16px;cursor:pointer" onchange="toggleLabelSelect(\'' + p.id + '\',this.checked)">' +
                 '<label for="lbl_' + p.id + '" style="flex:1;cursor:pointer;min-width:0">' +
                 '<div style="font-weight:600;font-size:0.82rem">' + escHtml(p.name) + '</div>' +
-                '<div style="font-size:0.72rem;color:var(--gray)">' + escHtml(sizes) + ' &middot; $' + p.price.toFixed(2) + '</div>' +
+                '<div style="font-size:0.72rem;color:var(--gray)">' + escHtml(sizes) + ' &middot; ' + priceHtml(p) + '</div>' +
                 '</label>' +
                 '<input type="number" value="' + (_labelSelected[p.id] || 1) + '" min="1" max="50"' +
                 ' style="width:50px;padding:2px 4px;border:1px solid var(--gray-light);border-radius:4px;font-size:0.8rem"' +
