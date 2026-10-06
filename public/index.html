@@ -4879,6 +4879,45 @@ function sendToTelegram(order, callback) {
         renderEditSizes();
         document.getElementById('editProductModal').classList.add('active');
         document.getElementById('editProductModal').classList.remove('hidden');
+        refreshEditStockFromServer(p);
+    }
+
+    // Stock can change outside this screen (sales on another device, transfers, and
+    // stock RECEIVED in the restock tool). If this device still holds the old numbers,
+    // saving a stock edit was rejected as a "conflict". So when the edit window opens,
+    // fetch the live stock and show THAT, so staff edit the real current quantities.
+    async function refreshEditStockFromServer(p) {
+        if (!db) return;
+        var pid = p.id;
+        try {
+            var snap = await db.collection('stores').doc(STATE.storeId).collection('products').doc(pid).get();
+            if (!snap.exists) return;
+            var live = snap.data() || {};
+            var liveSizes = Array.isArray(live.sizes) ? live.sizes : [];
+            var liveStock = (live.stock != null) ? Number(live.stock) || 0 : (p.stock || 0);
+            var same = liveStock === (p.stock || 0) && JSON.stringify(liveSizes.map(function(s){ return [s.name, Number(s.qty) || 0]; })) ===
+                JSON.stringify((p.sizes || []).map(function(s){ return [s.name, Number(s.qty) || 0]; }));
+            if (same) return;
+            p.sizes = liveSizes.map(function(s){ return Object.assign({}, s); });
+            p.stock = liveStock;
+            if (live.costPrice !== undefined) p.costPrice = live.costPrice;
+            if (live.lastRestockDate) p.lastRestockDate = live.lastRestockDate;
+            saveProducts();
+            // Only refresh the form if it's still this product and the user hasn't typed into the sizes yet.
+            if (document.getElementById('editProductId').value !== pid) return;
+            var typed = Array.prototype.some.call(document.querySelectorAll('.edit-size-qty'), function(inp) {
+                var j = +inp.dataset.idx; return STATE._editSizes[j] && String(STATE._editSizes[j].qty) !== inp.value;
+            });
+            if (typed) { showToast('Stock was updated elsewhere (now ' + liveStock + '). Close and reopen to edit the latest numbers.', 'warning'); return; }
+            STATE._editSizes = p.sizes.map(function(s){ return {name: s.name, qty: s.qty}; });
+            renderEditSizes();
+            var costEl = document.getElementById('editProductCostPrice');
+            if (costEl && p.costPrice != null && p.costPrice !== '') costEl.value = p.costPrice;
+            showToast('Loaded the latest stock (' + liveStock + ') — e.g. goods received in the restock tool', 'info');
+            if (typeof renderInventory === 'function') renderInventory();
+        } catch (e) {
+            console.warn('Live stock refresh failed:', e);
+        }
     }
 
     function closeEditModal() { document.getElementById('editProductModal').classList.remove('active'); document.getElementById('editProductModal').classList.add('hidden'); }
