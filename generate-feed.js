@@ -15,9 +15,20 @@ const firebaseConfig = {
 
 const BRAND_NAME  = 'Goat Kids';
 const CURRENCY    = 'USD';
-const STORE_URL   = 'https://sophornung575-jpg.github.io/Goad-Kids/goat_kids_v3_multistore.html';
+const STORE_URL   = 'https://goat-kids-store.web.app/';   // live store (old github.io page is no longer updated)
 const CONDITION   = 'new';
 const MAIN_STORE  = 'GOAT-1979';
+// Used only if the branch list can't be read, so branch stock is never silently left out.
+const FALLBACK_BRANCHES = [
+    { id: 'GOAT-GOAT-KIDS-271-0889', name: 'Goat Kids 271' },
+    { id: 'GOAT-GOAT-KIDS-PH-6012', name: 'Goat Kids PH' }
+];
+
+// Deleted products keep a record (active:false) — they must never count as stock.
+function isDeleted(d) {
+    d = d || {};
+    return d.active === false || (!!d.deletedAt && !String(d.name || '').trim());
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function escXML(str) {
@@ -43,10 +54,14 @@ async function main() {
     try {
         const bSnap = await getDoc(doc(db, '_admin_', 'branches'));
         if (bSnap.exists()) {
-            (bSnap.data().list || []).forEach(b => stores.push({ id: b.id, name: b.name }));
+            (bSnap.data().list || []).forEach(b => { if (b && b.id && b.id !== MAIN_STORE) stores.push({ id: b.id, name: b.name }); });
         }
     } catch (e) {
-        console.warn('Could not load branches:', e.message);
+        console.warn('⚠️ Could not load branch list:', e.message);
+    }
+    if (stores.length === 1) {
+        console.warn('⚠️ Branch list empty/unreadable — using the known branches instead.');
+        FALLBACK_BRANCHES.forEach(b => stores.push(b));
     }
     console.log(`Loading products from ${stores.length} store(s):`, stores.map(s => s.name).join(', '));
 
@@ -56,9 +71,11 @@ async function main() {
         try {
             const snap = await getDocs(collection(db, 'stores', store.id, 'products'));
             snap.forEach(docSnap => {
-                const p = { id: docSnap.id, ...docSnap.data() };
+                const data = docSnap.data() || {};
+                if (isDeleted(data)) return;                       // deleted items never count
+                const p = { ...data, id: docSnap.id };            // the real doc id wins over a stray "id" field
                 const slug = p.slug || makeSlug(p.name);
-                if (!slug || !p.name) return;
+                if (!slug || !String(p.name || '').trim()) return;
 
                 if (!bySlug[slug]) {
                     bySlug[slug] = {
@@ -68,32 +85,31 @@ async function main() {
                         price: parseFloat(p.price) || 0,
                         category: p.category || '',
                         images: p.images || [],
-                        sizes: p.sizes ? JSON.parse(JSON.stringify(p.sizes)) : null,
+                        sizes: [],                                // filled by the merge below (once)
                         stock: 0,
                         description: p.description || p.name
                     };
                 } else {
-                    // Prefer version with images
+                    // Same product in another store. Keep the Main Store's id + price so variant ids stay stable.
+                    if (store.id === MAIN_STORE) {
+                        bySlug[slug].id = p.id;
+                        if (parseFloat(p.price) > 0) bySlug[slug].price = parseFloat(p.price);
+                    }
                     if ((!bySlug[slug].images || !bySlug[slug].images.length) && p.images && p.images.length) {
                         bySlug[slug].images = p.images;
                     }
                 }
 
-                // Merge sizes
-                if (p.sizes && p.sizes.length) {
-                    if (!bySlug[slug].sizes || !bySlug[slug].sizes.length) {
-                        bySlug[slug].sizes = p.sizes.map(s => ({ ...s }));
-                    } else {
-                        p.sizes.forEach(sz => {
-                            const existing = bySlug[slug].sizes.find(x => x.name === sz.name);
-                            if (existing) existing.qty = (existing.qty || 0) + (sz.qty || 0);
-                            else bySlug[slug].sizes.push({ ...sz });
-                        });
-                    }
-                }
+                // Merge sizes — each store's quantities are added exactly once
+                (Array.isArray(p.sizes) ? p.sizes : []).forEach(sz => {
+                    if (!sz || !String(sz.name || '').trim()) return;
+                    const existing = bySlug[slug].sizes.find(x => x.name === sz.name);
+                    if (existing) existing.qty = (existing.qty || 0) + (Number(sz.qty) || 0);
+                    else bySlug[slug].sizes.push({ name: sz.name, qty: Number(sz.qty) || 0 });
+                });
 
                 const stk = (p.sizes && p.sizes.length)
-                    ? p.sizes.reduce((a, s) => a + (s.qty || 0), 0)
+                    ? p.sizes.reduce((a, s) => a + (Number(s && s.qty) || 0), 0)
                     : (p.stock || 0);
                 bySlug[slug].stock += stk;
             });
@@ -103,8 +119,8 @@ async function main() {
     }
 
     // Filter: only in-stock, priced products
-    const products = Object.values(bySlug).filter(p => p.stock > 0 && p.price > 0);
-    console.log(`Found ${products.length} in-stock product(s) across all stores.`);
+    const products = Object.values(bySlug).filter(p => p.price > 0);
+    console.log(`Found ${products.length} product(s) (${products.filter(p => p.stock > 0).length} in stock) across ${stores.length} store(s).`);
 
     // ── Build XML ─────────────────────────────────────────────────────────────
     const now = new Date().toISOString();
@@ -125,7 +141,7 @@ async function main() {
 
         if (p.sizes && p.sizes.length > 0) {
             for (const sz of p.sizes) {
-                if ((sz.qty || 0) <= 0) continue;
+                const qty = Math.max(0, sz.qty || 0);
                 const variantId = p.id + '_' + sz.name.replace(/\s+/g, '_');
                 lines.push('  <item>');
                 lines.push(`    <g:id>${escXML(variantId)}</g:id>`);
@@ -134,7 +150,7 @@ async function main() {
                 lines.push(`    <description>${escXML(p.description || p.name)}</description>`);
                 lines.push(`    <link>${escXML(productLink)}</link>`);
                 if (image) lines.push(`    <g:image_link>${escXML(image)}</g:image_link>`);
-                lines.push('    <g:availability>in stock</g:availability>');
+                lines.push(`    <g:availability>${qty > 0 ? 'in stock' : 'out of stock'}</g:availability>`);
                 lines.push(`    <g:price>${escXML(price)}</g:price>`);
                 lines.push(`    <g:brand>${escXML(BRAND_NAME)}</g:brand>`);
                 lines.push(`    <g:condition>${CONDITION}</g:condition>`);
@@ -143,7 +159,7 @@ async function main() {
                 lines.push(`    <g:size>${escXML(sz.name)}</g:size>`);
                 lines.push('    <g:gender>unisex</g:gender>');
                 lines.push('    <g:age_group>kids</g:age_group>');
-                lines.push(`    <g:quantity_to_sell_on_facebook>${sz.qty || 0}</g:quantity_to_sell_on_facebook>`);
+                lines.push(`    <g:quantity_to_sell_on_facebook>${qty}</g:quantity_to_sell_on_facebook>`);
                 lines.push('  </item>');
                 lines.push('');
             }
@@ -154,7 +170,7 @@ async function main() {
             lines.push(`    <description>${escXML(p.description || p.name)}</description>`);
             lines.push(`    <link>${escXML(productLink)}</link>`);
             if (image) lines.push(`    <g:image_link>${escXML(image)}</g:image_link>`);
-            lines.push('    <g:availability>in stock</g:availability>');
+            lines.push(`    <g:availability>${(p.stock || 0) > 0 ? 'in stock' : 'out of stock'}</g:availability>`);
             lines.push(`    <g:price>${escXML(price)}</g:price>`);
             lines.push(`    <g:brand>${escXML(BRAND_NAME)}</g:brand>`);
             lines.push(`    <g:condition>${CONDITION}</g:condition>`);
@@ -162,7 +178,7 @@ async function main() {
             if (p.category) lines.push(`    <g:product_type>${escXML(p.category)}</g:product_type>`);
             lines.push('    <g:gender>unisex</g:gender>');
             lines.push('    <g:age_group>kids</g:age_group>');
-            lines.push(`    <g:quantity_to_sell_on_facebook>${p.stock || 0}</g:quantity_to_sell_on_facebook>`);
+            lines.push(`    <g:quantity_to_sell_on_facebook>${Math.max(0, p.stock || 0)}</g:quantity_to_sell_on_facebook>`);
             lines.push('  </item>');
             lines.push('');
         }
