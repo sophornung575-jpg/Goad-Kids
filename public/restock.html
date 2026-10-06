@@ -513,6 +513,21 @@
     </div>
 
     <div id="receiveSection" class="hidden">
+      <div class="admin-card" id="manualRcvCard" style="margin-bottom:16px">
+        <div class="admin-card-header">
+          <div>
+            <h1><i class="fas fa-plus-circle" style="color:var(--primary)"></i> Add stock manually</h1>
+            <p>For goods that didn't come from a 1688 file or the Restock List (local supplier, returns, found stock...).</p>
+          </div>
+        </div>
+        <div class="admin-card-body">
+          <div class="rcv-actions" style="margin-top:0">
+            <input class="rcv-note" id="mrSearch" type="text" list="mrProducts" placeholder="Type product name or barcode..." style="flex:1;min-width:220px" onfocus="mrLoadProducts()" oninput="mrPick()">
+            <datalist id="mrProducts"></datalist>
+          </div>
+          <div id="mrForm"></div>
+        </div>
+      </div>
       <div class="admin-card" id="incomingCard" style="margin-bottom:16px">
         <div class="admin-card-header">
           <div>
@@ -2911,6 +2926,8 @@ async function rcvApply(bid, hids, mode, btn){
           receiveLog: FV.arrayUnion({
             batchId: bid, orderKey: x.orderKey || bid, productId: x.productId, productName: (prod && prod.name) || x.productName || '', colour: x.colour || '',
             orderedAt: x.createdAt || 0, closedAt: now, lines: newLines, notes,
+            unitCost: Number(x.unitCost) > 0 ? Number(x.unitCost) : null, unitYuan: x.unitYuan || null,
+            restockItemIds: Array.isArray(x.restockItemIds) ? x.restockItemIds : null,
             cost: Number(x.unitCost) > 0 ? Number(x.unitCost) : (prod && Number(prod.costPrice) > 0 ? Number(prod.costPrice) : 0)
           })
         }));
@@ -2948,6 +2965,208 @@ async function rcvApply(bid, hids, mode, btn){
   }
 }
 
+// ---------- Add stock manually ----------
+// Builds a waiting entry by hand (same shape as a CSV / Restock List one), so
+// manual stock goes through the normal receiving: Good / Reject, weighted cost,
+// stock-adjustment record and Received orders history.
+let mrProducts = null, mrProductsLoading = null, mrCurrent = null;
+function mrLoadProducts(force){
+  if(!db) return Promise.resolve([]);
+  if(mrProducts && !force) return Promise.resolve(mrProducts);
+  if(mrProductsLoading) return mrProductsLoading;
+  mrProductsLoading = db.collection('stores').doc(STORE_MAIN_ID).collection('products').get().then(snap => {
+    mrProducts = [];
+    snap.forEach(d => {
+      const x = d.data() || {};
+      if(storeDocGone(x)) return;
+      mrProducts.push({ id: d.id, name: ((x.name || '') + '').trim(), barcode: ((x.barcode || '') + '').trim(),
+        sizes: Array.isArray(x.sizes) ? x.sizes : [], stock: Number(x.stock) || 0, costPrice: x.costPrice, images: Array.isArray(x.images) ? x.images : [] });
+    });
+    mrProducts.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    document.getElementById('mrProducts').innerHTML = mrProducts.map(p =>
+      `<option value="${escapeHtml(p.name)}">${escapeHtml(p.barcode ? 'Barcode ' + p.barcode : '')}</option>`).join('');
+    return mrProducts;
+  }).catch(err => { console.warn('Manual stock: product load failed', err); mrProducts = null; return []; })
+    .finally(() => { mrProductsLoading = null; });
+  return mrProductsLoading;
+}
+async function mrPick(){
+  const q = document.getElementById('mrSearch').value.trim().toLowerCase();
+  const list = await mrLoadProducts();
+  const p = q ? (list.find(o => o.name.toLowerCase() === q) || list.find(o => o.barcode && o.barcode.toLowerCase() === q)) : null;
+  if(p === mrCurrent) return;
+  mrCurrent = p || null;
+  mrRenderForm();
+}
+function mrRenderForm(){
+  const el = document.getElementById('mrForm');
+  const p = mrCurrent;
+  if(!p){ el.innerHTML = ''; return; }
+  const sizeRows = (p.sizes.length ? p.sizes : [{ name: '', qty: Number(p.stock) || 0 }]).map((s, i) => {
+    const nm = ((s && s.name) || '') + '';
+    return `<tr><td class="rcv-size">${escapeHtml(nm ? zhLabel(nm) : '(no size)')}</td><td style="color:var(--gray)">${Number(s && s.qty) || 0} now</td>
+      <td><input type="number" min="0" inputmode="numeric" placeholder="0" data-mr-size="${escapeHtml(nm)}" style="width:80px"></td></tr>`;
+  }).join('');
+  el.innerHTML = `<div class="rcv-item" style="margin-top:10px">
+    <div style="font-weight:700;margin-bottom:6px">${escapeHtml(p.name)}${p.barcode ? ` <span style="color:var(--gray);font-weight:400">· ${escapeHtml(p.barcode)}</span>` : ''}</div>
+    <table class="rcv-table"><thead><tr><th>Size</th><th>In stock</th><th>Adding</th></tr></thead><tbody>${sizeRows}</tbody></table>
+    <div class="rcv-actions">
+      <input class="rcv-note" type="text" id="mrNewSize" placeholder="New size (optional)" style="max-width:150px">
+      <input type="number" min="0" inputmode="numeric" id="mrNewQty" placeholder="Qty" style="width:70px">
+    </div>
+    <div class="rcv-actions">
+      <label style="font-size:0.85rem">Cost per piece $ <input type="number" min="0" step="0.01" id="mrCost" placeholder="${p.costPrice != null && p.costPrice !== '' ? Number(p.costPrice).toFixed(2) : 'optional'}" style="width:90px"></label>
+      <input class="rcv-note" type="text" id="mrNote" placeholder="Note (supplier, reason...)" style="flex:1;min-width:160px">
+    </div>
+    <div class="rcv-actions">
+      <button class="btn btn-primary btn-small" type="button" onclick="mrSubmit(true, this)"><i class="fas fa-check"></i> Receive now</button>
+      <button class="btn btn-outline btn-small" type="button" onclick="mrSubmit(false, this)"><i class="fas fa-clock"></i> Add to waiting (arrives later)</button>
+      <button class="btn btn-outline btn-small" type="button" onclick="mrReset()">Cancel</button>
+    </div>
+    <div class="rcv-stats" style="margin-top:6px">Leave cost empty to keep the current cost price. "Receive now" opens the normal receive check, so you can still mark rejects.</div>
+  </div>`;
+}
+function mrReset(){
+  mrCurrent = null;
+  document.getElementById('mrSearch').value = '';
+  mrRenderForm();
+}
+async function mrSubmit(receiveNow, btn){
+  if(!db || !mrCurrent){ return; }
+  const p = mrCurrent;
+  const bySize = {};
+  let noSize = 0, bad = false;
+  document.querySelectorAll('#mrForm [data-mr-size]').forEach(inp => {
+    if(inp.value.trim() === '') return;
+    const n = rcvNum(inp.value);
+    if(n === null){ bad = true; return; }
+    if(!n) return;
+    const nm = inp.dataset.mrSize;
+    if(nm) bySize[nm] = (bySize[nm] || 0) + n; else noSize += n;
+  });
+  const extraName = document.getElementById('mrNewSize').value.trim();
+  const extraQtyRaw = document.getElementById('mrNewQty').value.trim();
+  if(extraName || extraQtyRaw){
+    const n = rcvNum(extraQtyRaw);
+    if(!n){ alert('Type how many pieces of the new size.'); return; }
+    let nm = extraName;
+    if(nm && p.sizes.length){ const m = rlMapSize(nm, p.sizes); if(m.ok && m.name) nm = m.name; }
+    if(nm) bySize[nm] = (bySize[nm] || 0) + n; else noSize += n;
+  }
+  if(bad){ alert('Use whole numbers for the quantities.'); return; }
+  const sizes = Object.keys(bySize).map(n => ({ name: n, qty: bySize[n] }));
+  const total = sizes.reduce((a, l) => a + l.qty, 0) + noSize;
+  if(!total){ alert('Type how many pieces you are adding.'); return; }
+  const costRaw = document.getElementById('mrCost').value.trim();
+  const unitCost = costRaw === '' ? null : Number(costRaw);
+  if(costRaw !== '' && !(unitCost >= 0)){ alert('Cost must be a number, or leave it empty.'); return; }
+  const note = document.getElementById('mrNote').value.trim();
+
+  const card = historyCache.find(h => !h.receiveOnly && (h.storeProductId === p.id ||
+    (h.linkedProductId === p.id && (h.linkedStoreId || STORE_MAIN_ID) === STORE_MAIN_ID)));
+  const histId = card ? card.id : 'rl_' + p.id;
+  const batchId = 'm' + Date.now();
+  const FV = firebase.firestore.FieldValue;
+  const entry = {
+    orderKey: 'manual_' + batchId, productId: p.id, productName: p.name, colour: '',
+    lines: sizes.map(l => ({ name: l.name, qty: l.qty, got: 0, rej: 0, miss: 0 })).concat(noSize ? [{ name: '', qty: noSize, got: 0, rej: 0, miss: 0 }] : []),
+    total, createdAt: Date.now(), unitCost: unitCost > 0 ? Math.round(unitCost * 100) / 100 : null,
+    notes: ['Added manually' + (note ? ': ' + note : '')], source: 'manual'
+  };
+  const data = { incoming: { [batchId]: entry } };
+  if(!card) Object.assign(data, { receiveOnly: true, title: p.name, receiveProductId: p.id, images: p.images.slice(0, 1), savedAt: FV.serverTimestamp() });
+  if(btn) btn.disabled = true;
+  try{
+    await db.collection('restockTool_history').doc(histId).set(data, { merge: true });
+  }catch(err){
+    alert('Could not save, nothing was changed: ' + err.message);
+    if(btn) btn.disabled = false;
+    return;
+  }
+  mrReset();
+  mrProducts = null; // stock changed — reload next time
+  if(!receiveNow){ alert(`Added to waiting — ${total} pcs of ${p.name}. Receive it below when it arrives.`); return; }
+  // Wait for the live list to pick up the new entry, then run the normal receive (all pieces Good by default).
+  for(let i = 0; i < 25; i++){
+    if(incomingGroups().some(g => g.batchId === batchId && g.items.some(x => x.histId === histId))) break;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  if(!incomingGroups().some(g => g.batchId === batchId)){ alert('Saved to waiting. Receive it below (the list was slow to refresh).'); return; }
+  rcvOpen.add(batchId + '|' + histId);
+  await rcvApply(batchId, [histId], 'receive');
+}
+
+// Undo "Rest not received": pieces marked missing go back on the waiting list
+// (Receiving tab). Pieces already received or rejected stay as they are, so
+// stock is not touched. Used when staff closed an order by mistake.
+async function rcvReopen(bid, pairs){
+  if(!db){ alert('Not connected to the database.'); return; }
+  if(rcvBusy) return;
+  const found = [];
+  pairs.forEach(([hid, ca]) => {
+    const h = historyCache.find(o => o.id === hid);
+    const r = h && (h.receiveLog || []).find(o => o && o.batchId === bid && (Number(o.closedAt) || 0) === ca);
+    if(r && rcvSum(r.lines || [], 'miss') > 0) found.push({ h, r });
+  });
+  if(!found.length){ alert('Nothing to reopen — it may already be back in Receiving.'); return; }
+  const pcs = found.reduce((a, f) => a + rcvSum(f.r.lines || [], 'miss'), 0);
+  if(!confirm(`Reopen ${pcs} not-received piece${pcs === 1 ? '' : 's'} on ${found.length} item${found.length === 1 ? '' : 's'}?\n\n` +
+    found.slice(0, 12).map(f => `${f.r.productName}: ${rcvSum(f.r.lines || [], 'miss')}`).join('\n') +
+    `\n\nThey go back to the Receiving tab as waiting. Pieces already received stay in stock — nothing is counted twice.`)) return;
+  rcvBusy = true;
+  try{
+    const FV = firebase.firestore.FieldValue, b = db.batch();
+    found.forEach(({ h, r }) => {
+      const lines = (r.lines || []).map(l => {
+        const nl = { name: l.name || '', qty: Number(l.qty) || 0, got: Number(l.got) || 0, rej: Number(l.rej) || 0, miss: 0 };
+        if(l.extra) nl.extra = l.extra;
+        if(l.added) nl.added = true;
+        return nl;
+      });
+      const entry = {
+        orderKey: r.orderKey || bid, productId: r.productId, productName: r.productName || '', colour: r.colour || '',
+        lines, total: lines.reduce((a, l) => a + l.qty, 0), notes: (r.notes || []).concat(['Reopened ' + new Date().toLocaleDateString() + ' (closed by mistake)']),
+        createdAt: r.orderedAt || Date.now(),
+        unitCost: Number(r.unitCost) > 0 ? Number(r.unitCost) : (Number(r.cost) > 0 ? Number(r.cost) : null),
+        unitYuan: r.unitYuan || null
+      };
+      if(Array.isArray(r.restockItemIds)) entry.restockItemIds = r.restockItemIds;
+      b.update(db.collection('restockTool_history').doc(h.id), {
+        ['incoming.' + bid]: entry,
+        receiveLog: FV.arrayRemove(r),
+        receivedKeys: FV.arrayRemove(r.orderKey || bid)
+      });
+      // Restock List lines that were ticked "received" by the mistaken close go back to "ordered".
+      (r.restockItemIds || []).forEach(id => b.update(db.collection('restockTool_items').doc(id), { status: 'ordered', previousStatus: 'received' }));
+    });
+    try{ await b.commit(); }
+    catch(e){
+      // A linked Restock List line may have been deleted — retry without touching the list.
+      const b2 = db.batch();
+      found.forEach(({ h, r }) => {
+        const lines = (r.lines || []).map(l => ({ ...l, miss: 0 }));
+        b2.update(db.collection('restockTool_history').doc(h.id), {
+          ['incoming.' + bid]: { orderKey: r.orderKey || bid, productId: r.productId, productName: r.productName || '', colour: r.colour || '',
+            lines, total: lines.reduce((a, l) => a + (Number(l.qty) || 0), 0), notes: (r.notes || []).concat(['Reopened (closed by mistake)']),
+            createdAt: r.orderedAt || Date.now(), unitCost: Number(r.unitCost) > 0 ? Number(r.unitCost) : (Number(r.cost) > 0 ? Number(r.cost) : null) },
+          receiveLog: FV.arrayRemove(r), receivedKeys: FV.arrayRemove(r.orderKey || bid)
+        });
+      });
+      await b2.commit();
+    }
+    db.collection('activityLogs').add({
+      action: 'Reopened not-received stock (1688 order)', details: `${pcs} pcs back to waiting on ${found.length} items: ` + found.map(f => f.r.productName).slice(0, 20).join(', '),
+      time: new Date().toLocaleString(), timestamp: Date.now(), user: 'restock-tool', storeId: STORE_MAIN_ID, storeName: STORE_MAIN_ID
+    }).catch(() => {});
+    alert(`Reopened — ${pcs} piece${pcs === 1 ? ' is' : 's are'} waiting again on the Receiving tab.`);
+  }catch(err){
+    console.warn('Reopen failed:', err);
+    alert('Could not reopen, nothing was changed: ' + err.message);
+  }finally{
+    rcvBusy = false;
+  }
+}
+
 // Finished items (nothing left waiting), grouped by order — newest first.
 function renderReceived(){
   const card = document.getElementById('receivedCard');
@@ -2958,7 +3177,7 @@ function renderReceived(){
     if(!r || !r.batchId) return;
     const g = groups[r.batchId] = groups[r.batchId] || { batchId: r.batchId, orderedAt: r.orderedAt || 0, closedAt: 0, items: [] };
     g.closedAt = Math.max(g.closedAt, r.closedAt || 0);
-    g.items.push(r);
+    g.items.push({ ...r, _hid: h.id, _raw: r });
   }));
   const pending = {};
   incomingGroups().forEach(g => { pending[g.batchId] = g.items.length; });
@@ -2971,17 +3190,23 @@ function renderReceived(){
     const rows = g.items.map(r => {
       const ls = r.lines || [];
       const bad = ls.filter(l => l.rej || l.miss).map(l => `${escapeHtml(l.name || '(no size)')}${l.rej ? ` <span class="bad">✖${l.rej}</span>` : ''}${l.miss ? ` <span class="miss">?${l.miss}</span>` : ''}`).join(', ');
-      return `<div class="rcv-log-row"><b>${escapeHtml(r.productName || '')}</b>${r.colour ? ` <span class="rcv-colour" title="${escapeHtml(r.colour)}">${escapeHtml(zhLabel(r.colour))}</span>` : ''} — <span class="ok">${rcvSum(ls, 'got')}</span>/${rcvSum(ls, 'qty')} received${bad ? ' · ' + bad : ''}
+      const missN = rcvSum(ls, 'miss');
+      const reopenBtn = missN ? ` <button class="btn btn-outline btn-small" type="button" title="Put the ${missN} not-received piece${missN === 1 ? '' : 's'} back on the waiting list"
+        onclick="rcvReopen('${escapeHtml(g.batchId)}', [[this.dataset.hid, Number(this.dataset.ca)]])" data-hid="${escapeHtml(r._hid)}" data-ca="${Number(r.closedAt) || 0}"><i class="fas fa-undo"></i> Reopen ${missN}</button>` : '';
+      return `<div class="rcv-log-row"><b>${escapeHtml(r.productName || '')}</b>${r.colour ? ` <span class="rcv-colour" title="${escapeHtml(r.colour)}">${escapeHtml(zhLabel(r.colour))}</span>` : ''} — <span class="ok">${rcvSum(ls, 'got')}</span>/${rcvSum(ls, 'qty')} received${bad ? ' · ' + bad : ''}${reopenBtn}
         ${(r.notes || []).map(n => `<div class="rcv-prev-note">📝 ${escapeHtml(n)}</div>`).join('')}</div>`;
     }).join('');
     const hasProblem = rcvSum(all, 'rej') + rcvSum(all, 'miss') > 0;
+    const missItems = g.items.filter(r => rcvSum(r.lines || [], 'miss') > 0);
+    const reopenAll = missItems.length > 1
+      ? `<div style="margin-top:8px"><button class="btn btn-outline btn-small" type="button" onclick='rcvReopen(${JSON.stringify(g.batchId)}, ${escapeHtml(JSON.stringify(missItems.map(r => [r._hid, Number(r.closedAt) || 0])))})'><i class="fas fa-undo"></i> Reopen all not-received (${rcvSum(missItems.flatMap(r => r.lines || []), 'miss')} pcs)</button></div>` : '';
     return `<details class="rcv-order">
       <summary style="cursor:pointer;list-style:none">
         <b>Ordered ${escapeHtml(new Date(g.orderedAt).toLocaleDateString())}</b> · ${g.items.length} item${g.items.length === 1 ? '' : 's'} done · closed ${escapeHtml(new Date(g.closedAt).toLocaleDateString())}
         ${pending[g.batchId] ? ` · <b>${pending[g.batchId]} still waiting</b>` : ''}
         <div class="rcv-stats">${rcvStats(all).replace(/ · <b>0 waiting<\/b>/, '')}${hasProblem && problemVal ? ` · claim value ≈ $${problemVal.toFixed(2)} at cost` : ''}</div>
       </summary>
-      <div style="margin-top:8px">${rows}</div>
+      <div style="margin-top:8px">${rows}</div>${reopenAll}
     </details>`;
   }).join('');
 }
