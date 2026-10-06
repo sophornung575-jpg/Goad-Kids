@@ -2864,6 +2864,8 @@ function sendToTelegram(order, callback) {
             switchInvTab('products', document.querySelector('.inv-subbtn'));
             // Fire-and-forget: capture today's opening stock snapshot if not already done today
             maybeCaptureOpeningSnapshot();
+            // Pick up products / stock added by the restock tool since this page was opened.
+            refreshProductsFromServer();
         }
         else if (tab === 'reports') {
             document.querySelectorAll('.admin-tab')[2].classList.add('active');
@@ -3867,6 +3869,35 @@ function sendToTelegram(order, callback) {
             console.error('❌ firestore.googleapis.com NOT reachable — network/firewall issue');
         }
         console.log('Diagnostic complete. Share above with developer.');
+    }
+
+    // Reloads this store's products from the database (same mapping as loadData) and
+    // re-renders. Used where stale local data would hide new / restocked items.
+    async function refreshProductsFromServer() {
+        if (!db || !STATE.firebaseOnline) return false;
+        try {
+            var s = await db.collection('stores').doc(STATE.storeId).collection('products').get();
+            var p = [];
+            s.forEach(function(d) {
+                var dt = d.data();
+                if (isDeletedProductDoc(dt)) return;
+                p.push(Object.assign({}, dt, {
+                    id: d.id, name: dt.name || '', slug: dt.slug || makeSlug(dt.name || ''),
+                    price: dt.price || 0, stock: dt.stock || 0, category: dt.category || '',
+                    images: dt.images || [], sizes: dt.sizes || [], addedAt: dt.addedAt || 0,
+                    lastRestockDate: dt.lastRestockDate || dt.addedAt || 0, active: dt.active !== false
+                }));
+            });
+            if (!p.length) return false;
+            STATE.products = p;
+            saveProducts();
+            try { renderProducts(); } catch (e) {}
+            try { renderInventory(); } catch (e) {}
+            return true;
+        } catch (e) {
+            console.warn('Product refresh failed:', e.message);
+            return false;
+        }
     }
 
     async function loadData() {
@@ -10407,7 +10438,7 @@ function sendToTelegram(order, callback) {
                     try {
                         var snap = await db.collection('stores').doc(s.id).collection('products').get();
                         var list = [];
-                        snap.forEach(function(d) { var dt = d.data(); if (isDeletedProductDoc(dt)) return; list.push(Object.assign({ id: d.id }, dt)); });
+                        snap.forEach(function(d) { var dt = d.data(); if (isDeletedProductDoc(dt)) return; list.push(Object.assign({}, dt, { id: d.id })); });
                         return { storeId: s.id, storeName: s.name, products: list };
                     } catch(e) {
                         console.warn('Failed to load ' + s.id + ':', e.message);
@@ -10455,7 +10486,7 @@ function sendToTelegram(order, callback) {
         try {
             var snap = await db.collection('stores').doc(branchId).collection('products').get();
             var products = [];
-            snap.forEach(function(d) { var dt = d.data(); if (isDeletedProductDoc(dt)) return; products.push(Object.assign({ id: d.id }, dt)); });
+            snap.forEach(function(d) { var dt = d.data(); if (isDeletedProductDoc(dt)) return; products.push(Object.assign({}, dt, { id: d.id })); });
             products.sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
             _branchStockData = products;
             populateBranchStockSizeFilter();
@@ -10931,12 +10962,15 @@ function sendToTelegram(order, callback) {
 
         try {
             if (fromId === STATE.storeId) {
-                // Source is this device's own store — use local STATE directly, no fetch needed
+                // Source is this device's own store. Products created or restocked by the
+                // restock tool (CSV import, Receiving) are written straight to the database,
+                // so the list loaded when this page opened can be out of date — reload it.
+                await refreshProductsFromServer();
                 _transferFromStoreProducts = STATE.products;
             } else {
                 var snap = await db.collection('stores').doc(fromId).collection('products').get();
                 var list = [];
-                snap.forEach(function(d) { var dt = d.data(); if (isDeletedProductDoc(dt)) return; list.push(Object.assign({ id: d.id }, dt)); });
+                snap.forEach(function(d) { var dt = d.data(); if (isDeletedProductDoc(dt)) return; list.push(Object.assign({}, dt, { id: d.id })); });
                 _transferFromStoreProducts = list;
             }
             _transferFromStoreId = fromId;
@@ -11534,6 +11568,7 @@ function sendToTelegram(order, callback) {
 
             // Ensure slug is set on destination product for future transfers
             if (!destData.slug) destData.slug = productSlug;
+            delete destData.id; // a copied source "id" field made the branch item point at the Main Store's id
 
             // Keep cost of production in sync with the sending store on every transfer
             if (p.costPrice != null && p.costPrice !== '') destData.costPrice = p.costPrice;
@@ -11554,7 +11589,8 @@ function sendToTelegram(order, callback) {
 
             // Write atomically
             var batch = db.batch();
-            batch.set(sourceRef, Object.assign({}, p), { merge: true });
+            var pWrite = Object.assign({}, p); delete pWrite.id;
+            batch.set(sourceRef, pWrite, { merge: true });
             batch.set(destProductRef, destData, { merge: true });
             batch.update(db.collection('transfers').doc(transferId), {
                 status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
@@ -11566,6 +11602,9 @@ function sendToTelegram(order, callback) {
             // Keep local STATE in sync if this product is in the local store
             var localP = STATE.products.find(function(x){ return x.id === destProductRef.id; });
             if (localP) { localP.sizes = destData.sizes; localP.stock = destData.stock; localP.costPrice = destData.costPrice; localP.lastRestockDate = destData.lastRestockDate; saveProducts(); }
+            // A product NEW to this store was never in the local list, so it couldn't be found
+            // (search, transfer, inventory) until the page was reloaded. Reload it now.
+            if (t.toStoreId === STATE.storeId || t.fromStoreId === STATE.storeId) await refreshProductsFromServer();
 
             logActivity('Transfer Receipt Confirmed', t.productName + ' x' + t.qty + ' from ' + t.fromStoreName + (isGenuineRestockT ? ' | New stock' : ' | Correction (clock not reset)'));
             _sendTelegramRaw(
@@ -11779,12 +11818,15 @@ function sendToTelegram(order, callback) {
                 // Write updated source products back to fromStoreId
                 Object.keys(sourceProductCache).forEach(function(pid) {
                     var p = sourceProductCache[pid];
-                    batch.set(db.collection('stores').doc(fromStoreId).collection('products').doc(pid), Object.assign({}, p), { merge: true });
+                    var realId = p.id || pid; // found by name -> its own id, never create a duplicate doc under pid
+                    var pW = Object.assign({}, p); delete pW.id;
+                    batch.set(db.collection('stores').doc(fromStoreId).collection('products').doc(realId), pW, { merge: true });
                 });
 
                 // Write updated destination products (deduplicated)
                 Object.keys(destProductCache).forEach(function(key) {
                     var dest = destProductCache[key];
+                    delete dest.data.id;
                     batch.set(dest.ref, dest.data, { merge: true });
                 });
 
@@ -11825,6 +11867,7 @@ function sendToTelegram(order, callback) {
             console.warn('All failed:', failed);
         }
 
+        await refreshProductsFromServer(); // new items at this store show up without a page reload
         renderInventory(); renderProducts();
         loadTransfers();
 
