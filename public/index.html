@@ -4876,6 +4876,7 @@ function sendToTelegram(order, callback) {
         STATE.editProductImages = (p.images || []).slice();
         renderEditImagePreviews();
         STATE._editSizes = p.sizes ? p.sizes.map(function(s){ return {name:s.name, qty:s.qty}; }) : [];
+        STATE._editNoSizeStock = Number(p.stock) || 0;
         renderEditSizes();
         document.getElementById('editProductModal').classList.add('active');
         document.getElementById('editProductModal').classList.remove('hidden');
@@ -4905,11 +4906,13 @@ function sendToTelegram(order, callback) {
             saveProducts();
             // Only refresh the form if it's still this product and the user hasn't typed into the sizes yet.
             if (document.getElementById('editProductId').value !== pid) return;
+            var nsBox = document.getElementById('editNoSizeStock');
             var typed = Array.prototype.some.call(document.querySelectorAll('.edit-size-qty'), function(inp) {
                 var j = +inp.dataset.idx; return STATE._editSizes[j] && String(STATE._editSizes[j].qty) !== inp.value;
-            });
+            }) || (nsBox && nsBox.value !== String(Number(STATE._editNoSizeStock) || 0));
             if (typed) { showToast('Stock was updated elsewhere (now ' + liveStock + '). Close and reopen to edit the latest numbers.', 'warning'); return; }
             STATE._editSizes = p.sizes.map(function(s){ return {name: s.name, qty: s.qty}; });
+            STATE._editNoSizeStock = liveStock;
             renderEditSizes();
             var costEl = document.getElementById('editProductCostPrice');
             if (costEl && p.costPrice != null && p.costPrice !== '') costEl.value = p.costPrice;
@@ -4933,7 +4936,11 @@ function sendToTelegram(order, callback) {
                     '</div>';
             });
         } else {
-            sh = '<p style="color:var(--gray);font-size:0.85rem">No sizes — add one below</p>';
+            // No sizes (e.g. accessories): edit the total quantity directly.
+            sh = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">' +
+                '<span style="flex:1;font-size:0.85rem;font-weight:600">Quantity (no sizes)</span>' +
+                '<input type="number" class="form-control" id="editNoSizeStock" value="' + (Number(STATE._editNoSizeStock) || 0) + '" min="0" style="width:90px;font-size:0.85rem">' +
+                '</div><p style="color:var(--gray);font-size:0.75rem;margin:0">This item has no sizes. Add sizes below only if it really comes in sizes.</p>';
         }
         document.getElementById('editSizeInventory').innerHTML = sh;
     }
@@ -4947,6 +4954,13 @@ function sendToTelegram(order, callback) {
             if (STATE._editSizes[i].name.toLowerCase() === name.toLowerCase()) {
                 showToast('Size "' + name + '" already exists', 'warning'); return;
             }
+        }
+        if (!STATE._editSizes.length) {
+            var nsEl = document.getElementById('editNoSizeStock');
+            var cur = nsEl ? (parseInt(nsEl.value) || 0) : (Number(STATE._editNoSizeStock) || 0);
+            if (cur > 0 && !confirm('This item has ' + cur + ' pcs with no size. After adding sizes, stock is counted per size only.\n\nPut those ' + cur + ' pcs into size "' + name + '"?\n(Cancel = add "' + name + '" with ' + qty + ' and the ' + cur + ' unsized pcs are dropped)')) {
+                // keep qty as typed
+            } else if (cur > 0) { qty = qty + cur; }
         }
         STATE._editSizes.push({ name: name, qty: qty });
         document.getElementById('editNewSizeName').value = '';
@@ -5006,6 +5020,14 @@ function sendToTelegram(order, callback) {
                 };
             });
             newStockIntent = newSizes.reduce(function(t, s){ return t + (s.qty || 0); }, 0);
+        } else {
+            // No sizes: the quantity box is the stock.
+            var nsInput = document.getElementById('editNoSizeStock');
+            if (nsInput) {
+                var nsVal = parseInt(nsInput.value, 10);
+                if (isNaN(nsVal) || nsVal < 0) { showToast('Enter a valid quantity (0 or more)', 'error'); return; }
+                newSizes = []; newStockIntent = nsVal;
+            }
         }
 
         // Did the person editing actually mean to change stock?
