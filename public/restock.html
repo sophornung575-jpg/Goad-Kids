@@ -331,6 +331,19 @@
 
     .size-qty-grid{ max-height:none; }
   }
+
+  /* ===== RECEIVING: segmented view (Waiting / Received) ===== */
+  .rcv-toolbar{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+  .rcv-seg{ display:inline-flex; background:var(--light); border:1px solid var(--gray-light); border-radius:12px; padding:4px; gap:4px; }
+  .rcv-seg button{ border:none; background:none; padding:8px 16px; border-radius:9px; font-weight:600; font-size:0.9rem; color:var(--gray-dark); cursor:pointer; display:flex; align-items:center; gap:8px; transition:all .15s; }
+  .rcv-seg button:hover{ color:var(--primary); }
+  .rcv-seg button.active{ background:#fff; color:var(--primary); box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+  .rcv-seg-count{ background:var(--gray-light); color:var(--gray-dark); font-size:0.72rem; padding:1px 7px; border-radius:10px; min-width:20px; text-align:center; }
+  .rcv-seg button.active .rcv-seg-count{ background:var(--primary); color:#fff; }
+  #rcvSegReceived.active .rcv-seg-count{ background:var(--success); }
+  #rcvManualToggle.active{ background:var(--primary); color:#fff; border-color:var(--primary); }
+  .rcv-view-off{ display:none !important; }
+  @media(max-width:600px){ .rcv-toolbar{ flex-direction:column; align-items:stretch; } .rcv-seg{ width:100%; } .rcv-seg button{ flex:1; justify-content:center; padding:8px 6px; } }
 </style>
 </head>
 <body>
@@ -513,7 +526,14 @@
     </div>
 
     <div id="receiveSection" class="hidden">
-      <div class="admin-card" id="manualRcvCard" style="margin-bottom:16px">
+      <div class="rcv-toolbar">
+        <div class="rcv-seg" role="tablist">
+          <button type="button" id="rcvSegWaiting" class="active" onclick="setRcvView('waiting')"><i class="fas fa-truck"></i> Waiting <span class="rcv-seg-count" id="rcvSegWaitingCount">0</span></button>
+          <button type="button" id="rcvSegReceived" onclick="setRcvView('received')"><i class="fas fa-clipboard-check"></i> Received <span class="rcv-seg-count" id="rcvSegReceivedCount">0</span></button>
+        </div>
+        <button type="button" class="btn btn-outline btn-small" id="rcvManualToggle" onclick="toggleManualRcv()"><i class="fas fa-plus"></i> Add stock manually</button>
+      </div>
+      <div class="admin-card rcv-view-off" id="manualRcvCard" style="margin-bottom:16px">
         <div class="admin-card-header">
           <div>
             <h1><i class="fas fa-plus-circle" style="color:var(--primary)"></i> Add stock manually</h1>
@@ -537,14 +557,14 @@
         </div>
         <div class="admin-card-body"><div id="incomingWrap"></div><div id="incomingEmpty" class="rcv-empty hidden"><i class="fas fa-truck"></i><div>Nothing waiting to be received.</div><div class="rcv-stats">Upload a 1688 order file on the Home page — its items appear here until the goods arrive.</div></div></div>
       </div>
-      <div class="admin-card hidden" id="receivedCard" style="margin-bottom:16px">
+      <div class="admin-card rcv-view-off" id="receivedCard" style="margin-bottom:16px">
         <div class="admin-card-header">
           <div>
             <h1><i class="fas fa-clipboard-check" style="color:var(--success)"></i> Received orders</h1>
             <p>Finished items with what was received, rejected (✖) and not received (?) — use it for supplier claims.</p>
           </div>
         </div>
-        <div class="admin-card-body"><div id="receivedWrap"></div></div>
+        <div class="admin-card-body"><div id="receivedWrap"></div><div id="receivedEmpty" class="rcv-empty hidden"><i class="fas fa-clipboard-check"></i><div>No received orders yet.</div><div class="rcv-stats">Items move here once they are fully received or closed.</div></div></div>
       </div>
     </div>
 
@@ -954,6 +974,21 @@ let productIndex = {}; // id -> product, refreshed whenever search results or th
 
 function indexProducts(list){
   list.forEach(p => { productIndex[p.id] = p; });
+}
+
+// ---------- Receiving page: Waiting / Received switch + manual-add panel ----------
+function setRcvView(view){
+  const waiting = view !== 'received';
+  document.getElementById('incomingCard').classList.toggle('rcv-view-off', !waiting);
+  document.getElementById('receivedCard').classList.toggle('rcv-view-off', waiting);
+  document.getElementById('rcvSegWaiting').classList.toggle('active', waiting);
+  document.getElementById('rcvSegReceived').classList.toggle('active', !waiting);
+}
+function toggleManualRcv(){
+  const card = document.getElementById('manualRcvCard');
+  const open = card.classList.toggle('rcv-view-off') === false;
+  document.getElementById('rcvManualToggle').classList.toggle('active', open);
+  if(open){ const inp = document.getElementById('mrSearch'); if(inp) inp.focus(); }
 }
 
 // ---------- page tabs (Home / Search) ----------
@@ -2725,6 +2760,8 @@ function renderIncoming(force){
   const waitingItems = groups.reduce((a, g) => a + g.items.length, 0);
   const badge = document.getElementById('receiveCount');
   if(badge){ badge.textContent = waitingItems; badge.style.display = waitingItems ? '' : 'none'; }
+  const segWait = document.getElementById('rcvSegWaitingCount');
+  if(segWait) segWait.textContent = waitingItems;
   const empty = document.getElementById('incomingEmpty');
   if(empty) empty.classList.toggle('hidden', !!groups.length);
   wrap.innerHTML = groups.map(g => {
@@ -3182,7 +3219,11 @@ function renderReceived(){
   const pending = {};
   incomingGroups().forEach(g => { pending[g.batchId] = g.items.length; });
   const list = Object.values(groups).sort((a, b) => b.closedAt - a.closedAt).slice(0, 15);
-  card.classList.toggle('hidden', !list.length);
+  card.classList.remove('hidden');
+  const recEmpty = document.getElementById('receivedEmpty');
+  if(recEmpty) recEmpty.classList.toggle('hidden', !!list.length);
+  const recCount = document.getElementById('rcvSegReceivedCount');
+  if(recCount) recCount.textContent = list.length;
   wrap.innerHTML = list.map(g => {
     g.items.sort((a, b) => (a.productName || '').localeCompare(b.productName || '', undefined, { numeric: true }));
     const all = g.items.flatMap(r => r.lines || []);
