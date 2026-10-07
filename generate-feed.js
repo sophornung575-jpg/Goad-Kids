@@ -119,8 +119,19 @@ async function main() {
     }
 
     // Filter: only in-stock, priced products
-    const products = Object.values(bySlug).filter(p => p.price > 0);
-    console.log(`Found ${products.length} product(s) (${products.filter(p => p.stock > 0).length} in stock) across ${stores.length} store(s).`);
+    // Only AVAILABLE products go to Facebook (same as before): sold-out products are
+    // left out completely, and for products with sizes only the sizes still in stock are listed.
+    const priced = Object.values(bySlug).filter(p => p.price > 0);
+    const products = [];
+    for (const p of priced) {
+        if (p.sizes && p.sizes.length > 0) {
+            const inStockSizes = p.sizes.filter(sz => (sz.qty || 0) > 0);
+            if (inStockSizes.length) products.push(Object.assign({}, p, { sizes: inStockSizes }));
+        } else if ((p.stock || 0) > 0) {
+            products.push(p);
+        }
+    }
+    console.log(`Found ${priced.length} priced product(s); ${products.length} available and sent to Facebook across ${stores.length} store(s).`);
 
     // ── Build XML ─────────────────────────────────────────────────────────────
     const now = new Date().toISOString();
