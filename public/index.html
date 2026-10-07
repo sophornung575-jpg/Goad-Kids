@@ -1006,6 +1006,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                 </div>
                                 <div class="store-info-item"><small>Cloud Sync</small><button class="btn btn-success w-full" onclick="syncToFirebase()"><i class="fas fa-cloud-upload-alt"></i> Sync to Cloud</button>
                                     <button class="btn btn-outline btn-small w-full" style="margin-top:6px" onclick="copyCostPricesFromStore271()"><i class="fas fa-dollar-sign"></i> Copy Cost Prices from Goat Kids 271 → All Stores</button>
+                                    <button class="btn btn-outline btn-small w-full" style="margin-top:6px" onclick="copyPromoPricesToAllStores()"><i class="fas fa-tags"></i> Copy Discounts from this store → All Stores</button>
                                 </div>
                                 <div class="store-info-item">
                                     <small>This Store Name</small>
@@ -4247,6 +4248,93 @@ function sendToTelegram(order, callback) {
         }
     }
 
+    // ── SHARED PROMOTION PRICE ACROSS ALL STORES ──────────────────────────────
+    // The discount (promoPrice) is the same in every store, like Cost of Production.
+    // Products are matched between stores by slug (falls back to exact name).
+    async function getAllStoreList() {
+        var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
+        try {
+            var bSnap = await db.collection('_admin_').doc('branches').get();
+            if (bSnap.exists) (bSnap.data().list || []).forEach(function(b) { if (b && b.id && b.id !== 'GOAT-1979') stores.push({ id: b.id, name: b.name || b.id }); });
+        } catch (e) { console.warn('Branch list load failed:', e.message); }
+        return stores;
+    }
+    async function findSameProductInStore(storeId, p) {
+        var col = db.collection('stores').doc(storeId).collection('products');
+        var slug = p.slug || makeSlug(p.name || '');
+        var hits = [];
+        var snap = await col.where('slug', '==', slug).get();
+        snap.forEach(function(d) { if (!isDeletedProductDoc(d.data())) hits.push(d.id); });
+        if (!hits.length && p.name) {
+            var snap2 = await col.where('name', '==', p.name).get();
+            snap2.forEach(function(d) { if (!isDeletedProductDoc(d.data())) hits.push(d.id); });
+        }
+        return hits;
+    }
+    // Called automatically after a product's promotion price is set, changed or removed.
+    async function syncPromoToOtherStores(p) {
+        if (!db || !p) return;
+        var promo = promoPriceOf(p) != null ? p.promoPrice : null;
+        try {
+            var stores = (await getAllStoreList()).filter(function(s) { return s.id !== STATE.storeId; });
+            var updated = 0, notFound = [];
+            for (var i = 0; i < stores.length; i++) {
+                var ids = await findSameProductInStore(stores[i].id, p);
+                if (!ids.length) { notFound.push(stores[i].name); continue; }
+                for (var j = 0; j < ids.length; j++) {
+                    await db.collection('stores').doc(stores[i].id).collection('products').doc(ids[j])
+                        .set({ promoPrice: promo, updatedAt: new Date().toISOString() }, { merge: true });
+                    updated++;
+                }
+            }
+            if (updated) showToast((promo != null ? 'Discount applied' : 'Discount removed') + ' in ' + updated + ' other store' + (updated === 1 ? '' : 's'), 'success');
+            if (notFound.length) console.log('Promotion sync: "' + p.name + '" not found in ' + notFound.join(', '));
+        } catch (e) {
+            console.warn('Promotion sync to other stores failed:', e);
+            showToast('Discount saved here, but could not update the other stores — use "Copy Discounts → All Stores" in Settings later', 'error');
+        }
+    }
+    // Settings button: copy every discount from THIS store to all other stores (also clears
+    // discounts in other stores where this store has none, so all stores end up identical).
+    async function copyPromoPricesToAllStores() {
+        if (!db) { showToast('Firebase offline', 'error'); return; }
+        var here = STATE.storeName || STATE.storeId;
+        if (!confirm('Make the discounts in every other store the same as in ' + here + '?\n\n• Products on sale here get the same sale price in the other stores\n• Products NOT on sale here have their discount removed in the other stores\n\nContinue?')) return;
+        function normKey(name, slug) { return (slug && slug.trim()) ? slug.trim().toLowerCase() : makeSlug(name || ''); }
+        try {
+            var src = {};
+            STATE.products.forEach(function(p) { src[normKey(p.name, p.slug)] = (promoPriceOf(p) != null ? p.promoPrice : null); });
+            var stores = (await getAllStoreList()).filter(function(s) { return s.id !== STATE.storeId; });
+            var total = 0, onSale = 0;
+            for (var t = 0; t < stores.length; t++) {
+                var col = db.collection('stores').doc(stores[t].id).collection('products');
+                var snap = await col.get();
+                var todo = [];
+                snap.forEach(function(d) {
+                    var dt = d.data();
+                    if (isDeletedProductDoc(dt)) return;
+                    var k = normKey(dt.name, dt.slug);
+                    if (!(k in src)) return;
+                    var cur = (dt.promoPrice == null || dt.promoPrice === '') ? null : dt.promoPrice;
+                    if (String(cur) === String(src[k])) return; // already the same, skip the write
+                    todo.push({ id: d.id, promo: src[k] });
+                });
+                for (var i = 0; i < todo.length; i += 400) {
+                    var batch = db.batch();
+                    todo.slice(i, i + 400).forEach(function(x) { batch.update(col.doc(x.id), { promoPrice: x.promo, updatedAt: new Date().toISOString() }); });
+                    await batch.commit();
+                }
+                todo.forEach(function(x) { if (x.promo != null) onSale++; });
+                console.log(stores[t].name + ': ' + todo.length + ' discount(s) updated');
+                total += todo.length;
+            }
+            showToast(total ? ('Discounts updated on ' + total + ' product(s) in ' + stores.length + ' other store(s)') : 'All stores already have the same discounts', 'success');
+        } catch (e) {
+            console.error('Copy discounts failed:', e);
+            showToast('Copy discounts failed — check your connection and try again', 'error');
+        }
+    }
+
     // One-time migration: copy Cost of Production from Goat Kids 271 to Main Store & Goat Kids PH
     // Matches products by slug (falls back to name-derived slug). 271's cost always wins on conflict.
     // Usage (browser console, while app is loaded and online): copyCostPricesFromStore271()
@@ -5174,6 +5262,7 @@ function sendToTelegram(order, callback) {
         p.category = newCategory;
         p.price = newPrice;
         p.costPrice = newCostPrice;
+        var _oldPromoNorm = promoPriceOf(p);
         p.promoPrice = newPromo.value;
         p.images = newImages;
         p.sizes = finalSizes;
@@ -5208,6 +5297,8 @@ function sendToTelegram(order, callback) {
             images: p.images || [], sizes: p.sizes || [], active: true,
             updatedAt: new Date().toISOString()
         };
+        // Discount is shared by every store: if it changed here, push it to the same product in the other stores.
+        if (_oldPromoNorm !== promoPriceOf(p)) syncPromoToOtherStores(p);
         // Promotion age clock — must reach Firestore, otherwise a "New stock
         // received" reset is lost on the next reload / other devices.
         if (p.lastRestockDate) productSyncPayload.lastRestockDate = p.lastRestockDate;
@@ -11625,6 +11716,7 @@ function sendToTelegram(order, callback) {
 
             // Keep cost of production in sync with the sending store on every transfer
             if (p.costPrice != null && p.costPrice !== '') destData.costPrice = p.costPrice;
+            destData.promoPrice = (promoPriceOf(p) != null ? p.promoPrice : null); // discount is shared by all stores
 
             if (destData.sizes && destData.sizes.length > 0 && t.size !== 'One Size') {
                 var found = false;
@@ -11654,7 +11746,7 @@ function sendToTelegram(order, callback) {
 
             // Keep local STATE in sync if this product is in the local store
             var localP = STATE.products.find(function(x){ return x.id === destProductRef.id; });
-            if (localP) { localP.sizes = destData.sizes; localP.stock = destData.stock; localP.costPrice = destData.costPrice; localP.lastRestockDate = destData.lastRestockDate; saveProducts(); }
+            if (localP) { localP.sizes = destData.sizes; localP.stock = destData.stock; localP.costPrice = destData.costPrice; localP.promoPrice = destData.promoPrice; localP.lastRestockDate = destData.lastRestockDate; saveProducts(); }
             // A product NEW to this store was never in the local list, so it couldn't be found
             // (search, transfer, inventory) until the page was reloaded. Reload it now.
             if (t.toStoreId === STATE.storeId || t.fromStoreId === STATE.storeId) await refreshProductsFromServer();
@@ -11850,6 +11942,7 @@ function sendToTelegram(order, callback) {
 
             // Add to destination (in memory)
             if (srcP.costPrice != null && srcP.costPrice !== '') dest.data.costPrice = srcP.costPrice;
+            dest.data.promoPrice = (promoPriceOf(srcP) != null ? srcP.promoPrice : null); // discount is shared by all stores
             if (dest.data.sizes && dest.data.sizes.length > 0 && t.size !== 'One Size') {
                 var found = false;
                 dest.data.sizes.forEach(function(s){ if (s.name === t.size) { s.qty += t.qty; found = true; } });
