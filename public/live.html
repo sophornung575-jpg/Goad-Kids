@@ -89,6 +89,21 @@ tr:last-child td{border-bottom:0}
 </style>
 </head>
 <body>
+<dialog id="receiptDlg" style="border:0;border-radius:14px;padding:18px;max-width:380px;width:92vw;box-shadow:0 12px 40px rgba(0,0,0,.25)">
+  <h3 style="margin:0 0 4px">🧾 Print receipt</h3>
+  <div id="rcItem" class="hint" style="margin-bottom:10px"></div>
+  <label for="rcName">Customer name</label><input type="text" id="rcName" placeholder="Name from the live comment">
+  <label for="rcPhone">Phone</label><input type="text" id="rcPhone" inputmode="tel">
+  <label for="rcLoc">Location / address</label><input type="text" id="rcLoc">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+    <div><label for="rcSize">Size</label><input type="text" id="rcSize"></div>
+    <div><label for="rcQty">Qty</label><input type="number" id="rcQty" min="1" value="1"></div>
+    <div><label for="rcFee">Delivery $</label><input type="number" id="rcFee" min="0" step="0.25"></div>
+  </div>
+  <p id="rcTotal" style="font-weight:600;margin:10px 0"></p>
+  <div class="row"><button class="btn" id="rcPrint">Print</button><button class="btn ghost" id="rcCancel">Cancel</button></div>
+</dialog>
+<style>.cell-in{width:100%;min-width:110px;font:inherit;padding:4px 6px;border:1px solid transparent;border-radius:6px;background:transparent}.cell-in.wide{min-width:150px}.cell-in:hover,.cell-in:focus{border-color:#cbd5e1;background:#fff;outline:none}#receiptDlg label{display:block;font-size:.85rem;margin:8px 0 3px}#receiptDlg input{width:100%}#receiptDlg::backdrop{background:rgba(15,23,42,.45)}</style>
 
 
 <header class="top">
@@ -235,7 +250,7 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
     <div id="reportMsg"></div>
   </div>
   <div class="tablewrap"><table>
-    <thead><tr><th>Time</th><th>Customer</th><th>Comment</th><th>Photo</th><th>Code / product</th><th>Size</th><th>Phone</th><th>Stock</th><th>Answer to copy</th><th>Replied</th></tr></thead>
+    <thead><tr><th>Time</th><th>Customer</th><th>Comment</th><th>Photo</th><th>Code / product</th><th>Size</th><th>Phone</th><th>Location</th><th>Stock</th><th>Answer to copy</th><th>Replied</th></tr></thead>
     <tbody id="reportBody"><tr><td colspan="9" class="hint">No comments yet. Start reading the live or paste comments.</td></tr></tbody>
   </table></div>
 </section>
@@ -628,6 +643,36 @@ const ORDER_T = {
   }
 };
 
+/* ============ LOCATION DETECTION ============ */
+const PROVINCES = [
+  ["Phnom Penh","ភ្នំពេញ",/\bphnom ?penh\b|\bpp\b/i],["Banteay Meanchey","បន្ទាយមានជ័យ",/banteay/i],["Battambang","បាត់ដំបង",/battambang|batdambang/i],
+  ["Kampong Cham","កំពង់ចាម",/k(?:a|o)mpong ?cham/i],["Kampong Chhnang","កំពង់ឆ្នាំង",/k(?:a|o)mpong ?chhnang/i],["Kampong Speu","កំពង់ស្ពឺ",/k(?:a|o)mpong ?speu/i],
+  ["Kampong Thom","កំពង់ធំ",/k(?:a|o)mpong ?thom/i],["Kampot","កំពត",/kampot/i],["Kandal","កណ្ដាល",/kandal/i],["Kep","កែប",/\bkep\b/i],["Koh Kong","កោះកុង",/koh ?kong/i],
+  ["Kratie","ក្រចេះ",/kratie/i],["Mondulkiri","មណ្ឌលគិរី",/mondul?kiri/i],["Oddar Meanchey","ឧត្តរមានជ័យ",/oddar/i],["Pailin","ប៉ៃលិន",/pailin/i],
+  ["Sihanoukville","ព្រះសីហនុ",/sihanouk|kompong ?som/i],["Preah Vihear","ព្រះវិហារ",/preah ?vihear/i],["Prey Veng","ព្រៃវែង",/prey ?veng/i],["Pursat","ពោធិ៍សាត់",/pursat/i],
+  ["Ratanakiri","រតនគិរី",/ratanak?iri/i],["Siem Reap","សៀមរាប",/siem ?reap/i],["Stung Treng","ស្ទឹងត្រែង",/stung ?treng/i],["Svay Rieng","ស្វាយរៀង",/svay ?rieng/i],
+  ["Takeo","តាកែវ",/takeo/i],["Tbong Khmum","ត្បូងឃ្មុំ",/tbong ?khmum/i]
+];
+function findProvince(text){
+  const t = String(text||"");
+  const hit = PROVINCES.find(([en,km,re]) => re.test(t) || t.includes(km) || (km==="កណ្ដាល" && t.includes("កណ្តាល")));
+  return hit ? hit[0] : "";
+}
+/* Whatever is left after taking out the code, phone, size and order words is treated as the address. */
+function findLocation(rest, code, size){
+  let t = " " + String(rest||"") + " ";
+  if (code) t = t.split(code).join(" ");
+  if (size) t = t.replace(new RegExp(`(size|សាយ|ទំហំ|ខ្នាត)?\\s*${String(size).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}(?![0-9A-Za-z])`,"i")," ");
+  t = t.replace(/(?:^|\s)(?:x|×|qty)\s*\d{1,2}(?=\s|$)|\b\d{1,2}\s*(?:pcs|pc)\b/gi," ")
+       .replace(/[\u{1F000}-\u{1FAFF}☀-➿️]/gu," ")
+       .replace(/[#*_~|<>[\]{}()"'`]+/g," ");
+  // Drop whole words only — Khmer is written without spaces, so never cut inside a word.
+  const FILLER = /^(cf|order|buy|want|price|size|please|pls|plz|ok|yes|ទិញ|កម្ម៉ង់|ចង់បាន|យក|សាយ|ទំហំ|ខ្នាត|តម្លៃ|ប៉ុន្មាន|បង|អូន|សូម|ផង|ទេ|បាទ|ចាស|ចា|ណា)[,.!?]*$/i;
+  t = t.split(/\s+/).filter(w => w && !FILLER.test(w)).join(" ")
+       .replace(/^[\s,.;:!?-]+|[\s,.;:!?-]+$/g,"").trim();
+  return (t.match(/[A-Za-z\u1780-\u17FF]/g)||[]).length >= 2 ? t : "";
+}
+
 /* ============ REPORT ============ */
 const REPORT = { rows:[], seen:new Set(), timer:null, after:null };
 async function analyze(c){ // c = {id, name, text, time}
@@ -635,16 +680,18 @@ async function analyze(c){ // c = {id, name, text, time}
   const { phone, rest } = findPhone(c.text);
   const code = findCode(rest), p = code ? byCode(code) : null;
   const intents = Object.keys(INTENT).filter(k=>INTENT[k].test(rest));
-  const row = { ...c, phone, code, product:p?p.name:"", price:p?p.price:"", size:"", stock:"", type:"", answer:"", replied:false };
+  const row = { ...c, phone, code, product:p?p.name:"", price:p?p.price:"", size:"", stock:"", type:"", answer:"", replied:false, location:"", province:"" };
+  if (row.name === "Customer") row.name = "";   // Facebook hides names — staff can type it in the report
   if (!code){ row.type="No code"; row.answer = L.map(l=>rotate("ask"+l,R[l].ask)).join("\n"); return row; }
   if (!p){ row.type="Unknown code"; row.answer = L.map(l=>R[l].notfound(code)[0]).join("\n"); return row; }
   if ($("refresh").checked) await refreshOne(p);
   const st = stockState(p), size = mentionedSize(rest,p) || "";
-  row.size = size; row.stock = Object.entries(p.stores||{}).map(([lb,x])=>`${lb}: ${size?((x.bySize||{})[size]||0):x.total}`).join(" · ") || String(p.total);
+  row.size = size;
+  row.location = findLocation(rest, code, size); row.province = findProvince(row.location || rest); row.stock = Object.entries(p.stores||{}).map(([lb,x])=>`${lb}: ${size?((x.bySize||{})[size]||0):x.total}`).join(" · ") || String(p.total);
   const isOrder = !!phone || intents.includes("order");
   row.type = isOrder ? "Order" : "Question";
   const sizeOut = size && p.bySize && (p.bySize[size]||0)<=0;
-  const name = c.name || "";
+  const name = row.name || "";
   if (st==="out"){ row.answer = L.map(l=>rotate("out"+l+code,R[l].out(code,p))).join("\n"); return row; }
   if (sizeOut){ row.answer = L.map(l=>R[l].sizeOut(code,size)[0]).join("\n"); return row; }
   const avail = availSizes(p);
@@ -657,12 +704,13 @@ async function analyze(c){ // c = {id, name, text, time}
   row.answer = L.map(l=>withStores(rotate("in"+l+code,R[l].in(code,p,avail.join(", "),st==="low")),p,l,size)).join("\n\n");
   return row;
 }
+function tidyAnswer(a){ return String(a||"").replace(/(អរគុណ|Thank you) !/g,"$1!").replace(/✅ , /g,"✅ "); }
 async function addComments(list){
   if (!S.products.length){ msg("reportMsg","warn","Connect or load sample products first, so codes can be matched."); return 0; }
   let added = 0;
   for (const c of list){
     if (!c.text || REPORT.seen.has(c.id)) continue;
-    REPORT.seen.add(c.id); REPORT.rows.push(await analyze(c)); added++;
+    REPORT.seen.add(c.id); const r = await analyze(c); r.answer = tidyAnswer(r.answer); REPORT.rows.push(r); added++;
   }
   if (added) renderReport();
   return added;
@@ -684,15 +732,19 @@ function renderReport(){
   const cls = t => t==="Order" ? "in" : t==="Question" ? "low" : "out";
   $("reportBody").innerHTML = rows.length ? rows.map(({r,i})=>`<tr style="${r.replied?"opacity:.5":""}">
     <td>${esc(new Date(r.time).toLocaleTimeString())}</td>
-    <td>${esc(r.name||"—")}<div><span class="pill ${cls(r.type)}">${esc(r.type)}</span></div></td>
+    <td><input class="cell-in" data-edit="name" data-i="${i}" value="${esc(r.name)}" placeholder="Name (see live)"><div><span class="pill ${cls(r.type)}">${esc(r.type)}</span></div></td>
     <td>${esc(r.text)}</td>
     <td>${r.code?thumbHtml(productByCode(r.code),true):""}</td>
     <td>${r.code?`<span class="code">${esc(r.code)}</span>`:"—"}<div class="hint">${esc(r.product)}${r.price!==""?" · "+money(r.price):""}</div></td>
-    <td>${esc(r.size||"—")}</td><td>${esc(r.phone||"—")}</td><td>${esc(r.stock||"—")}</td>
+    <td>${esc(r.size||"—")}</td>
+    <td><input class="cell-in" data-edit="phone" data-i="${i}" value="${esc(r.phone)}" placeholder="—" inputmode="tel"></td>
+    <td><input class="cell-in wide" data-edit="location" data-i="${i}" value="${esc(r.location)}" placeholder="—">${r.province?`<div class="hint">📍 ${esc(r.province)}</div>`:""}</td>
+    <td>${esc(r.stock||"—")}</td>
     <td style="min-width:240px"><div class="r" style="white-space:pre-wrap">${esc(r.answer)}</div>
-      <button class="btn ghost" style="margin-top:6px;padding:5px 10px" data-copyrow="${i}">Copy answer</button></td>
+      <button class="btn ghost" style="margin-top:6px;padding:5px 10px" data-copyrow="${i}">Copy answer</button>
+      ${r.code && r.product ? `<button class="btn" style="margin-top:6px;padding:5px 10px" data-print="${i}">🧾 Receipt</button>` : ""}</td>
     <td><input type="checkbox" aria-label="Replied" data-done="${i}" ${r.replied?"checked":""}></td>
-  </tr>`).join("") : `<tr><td colspan="10" class="hint">No comments yet. Start reading the live or paste comments.</td></tr>`;
+  </tr>`).join("") : `<tr><td colspan="11" class="hint">No comments yet. Start reading the live or paste comments.</td></tr>`;
   const orders = REPORT.rows.filter(r=>r.type==="Order").length;
   $("reportInfo").textContent = `${REPORT.rows.length} comments · ${orders} orders`;
 }
@@ -794,8 +846,8 @@ function fbStop(){ clearInterval(REPORT.timer); REPORT.timer=null; $("btnFbStart
 function reportCsv(){
   if (!REPORT.rows.length){ msg("reportMsg","warn","The report is empty."); return; }
   const q = s => `"${String(s??"").replace(/"/g,'""')}"`;
-  const head = ["Time","Customer","Type","Comment","Code","Product","Price","Size","Phone","Stock","Answer","Replied"];
-  const body = REPORT.rows.map(r=>[new Date(r.time).toLocaleString(),r.name,r.type,r.text,r.code,r.product,r.price,r.size,r.phone,r.stock,r.answer,r.replied?"Yes":"No"].map(q).join(","));
+  const head = ["Time","Customer","Type","Comment","Code","Product","Price","Size","Phone","Location","Province","Stock","Answer","Replied"];
+  const body = REPORT.rows.map(r=>[new Date(r.time).toLocaleString(),r.name,r.type,r.text,r.code,r.product,r.price,r.size,r.phone,r.location,r.province,r.stock,r.answer,r.replied?"Yes":"No"].map(q).join(","));
   const blob = new Blob(["\ufeff"+[head.join(",")].concat(body).join("\r\n")],{type:"text/csv;charset=utf-8"});
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
   a.download = `goat_kids_live_report_${new Date().toISOString().slice(0,16).replace(/[:T]/g,"-")}.csv`; a.click();
@@ -810,7 +862,7 @@ async function saveReport(){
       const b = S.db.batch();
       REPORT.rows.slice(i,i+400).forEach(r=>{
         b.set(S.db.collection("live_report").doc(String(r.id).replace(/\//g,"_")), {
-          liveId:vid, time:r.time, customer:r.name, type:r.type, comment:r.text, code:r.code, product:r.product,
+          liveId:vid, time:r.time, customer:r.name, type:r.type, comment:r.text, code:r.code, product:r.product, location:r.location||"", province:r.province||"",
           price:r.price, size:r.size, phone:r.phone, stock:r.stock, answer:r.answer, replied:r.replied,
           savedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
       });
@@ -877,6 +929,70 @@ $("reportBody").addEventListener("click",async e=>{
   if (i!==undefined){ try{ await navigator.clipboard.writeText(REPORT.rows[i].answer); e.target.textContent="Copied"; setTimeout(()=>e.target.textContent="Copy answer",1500);}catch(err){} }
 });
 $("reportBody").addEventListener("change",e=>{ const i=e.target.dataset.done; if(i===undefined) return; REPORT.rows[i].replied=e.target.checked; renderReport(); });
+// Staff corrections (name, phone, location) are kept without re-drawing the table while typing.
+$("reportBody").addEventListener("input",e=>{ const k=e.target.dataset.edit, i=e.target.dataset.i; if(!k||i===undefined) return; REPORT.rows[i][k]=e.target.value; if(k==="location") REPORT.rows[i].province=findProvince(e.target.value); });
+$("reportBody").addEventListener("click",e=>{ const i=e.target.dataset.print; if(i!==undefined) openReceipt(Number(i)); });
+
+/* ============ RECEIPT ============ */
+let RC = null;
+function openReceipt(i){
+  const r = REPORT.rows[i]; if (!r) return; RC = i;
+  const q = m => /(?:x|×|qty|ចំនួន)\s*(\d{1,2})\b|\b(\d{1,2})\s*(?:pcs|pc|ឈុត|អាវ|ដុំ)/i.exec(m);
+  const qm = q(r.text||""); const qty = qm ? Number(qm[1]||qm[2]) : 1;
+  $("rcName").value = r.name||""; $("rcPhone").value = r.phone||""; $("rcLoc").value = r.location||"";
+  $("rcQty").value = r.qty || qty || 1; $("rcSize").value = r.size||"";
+  $("rcFee").value = r.fee != null ? r.fee : (LS.get("gkl_rcFee", "") ?? "");
+  $("rcItem").textContent = `[${r.code}] ${r.product} · ${money(r.price)}`;
+  rcTotals(); $("receiptDlg").showModal();
+}
+function rcTotals(){
+  const r = REPORT.rows[RC]; if(!r) return;
+  const qty = Math.max(1, Number($("rcQty").value)||1), fee = Number($("rcFee").value)||0, sub = (Number(r.price)||0)*qty;
+  $("rcTotal").textContent = `Subtotal ${money(sub)} + delivery ${money(fee)} = ${money(sub+fee)}`;
+}
+function receiptHtml(r){
+  const qty = Math.max(1, Number(r.qty)||1), fee = Number(r.fee)||0, price = Number(r.price)||0, sub = price*qty;
+  const no = "LIVE-" + String(r.id||"").split("_").pop().slice(-6).toUpperCase();
+  const row = (a,b,cls="") => `<div class="rw ${cls}"><span>${a}</span><span>${b}</span></div>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(no)}</title><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;700&display=swap" rel="stylesheet"><style>
+    @page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{font:13px/1.4 "Noto Sans Khmer",Arial,sans-serif;width:74mm;margin:0 auto;color:#000}
+    h1{font-size:20px;text-align:center;margin:2px 0 0;letter-spacing:1px}.c{text-align:center}.s{font-size:11px}.dash{border-top:1px dashed #000;margin:7px 0}
+    .rw{display:flex;justify-content:space-between;gap:8px}.b{font-weight:700}.big{font-size:16px}.lbl{color:#000;font-weight:700}
+  </style></head><body>
+    <h1>GOAT KIDS</h1><div class="c s">Live order receipt</div>
+    <div class="dash"></div>
+    ${row("Receipt", esc(no))}${row("Date", esc(new Date().toLocaleString()))}${row("Comment", esc(new Date(r.time).toLocaleTimeString()))}
+    <div class="dash"></div>
+    <div><span class="lbl">Customer:</span> ${esc(r.name||"—")}</div>
+    <div><span class="lbl">Phone:</span> <span class="big b">${esc(r.phone||"—")}</span></div>
+    <div><span class="lbl">Location:</span> ${esc(r.location||"—")}${r.province && !(r.location||"").toLowerCase().includes(r.province.toLowerCase())?` (${esc(r.province)})`:""}</div>
+    <div class="dash"></div>
+    <div class="b">[${esc(r.code)}] ${esc(r.product)}</div>
+    ${row(`${r.size?`Size ${esc(r.size)} · `:""}${qty} × ${money(price)}`, money(sub))}
+    <div class="dash"></div>
+    ${row("Subtotal", money(sub))}${row("Delivery", money(fee))}
+    ${row("TOTAL", money(sub+fee), "b big")}
+    <div class="c" style="margin-top:4px">Cash on delivery</div>
+    <div class="dash"></div>
+    <div class="c s">អរគុណសម្រាប់ការគាំទ្រ! · Thank you!</div>
+  </body></html>`;
+}
+function printReceipt(){
+  const r = REPORT.rows[RC]; if(!r) return;
+  r.name = $("rcName").value.trim(); r.phone = $("rcPhone").value.trim(); r.location = $("rcLoc").value.trim();
+  r.province = findProvince(r.location); r.size = $("rcSize").value.trim() || r.size;
+  r.qty = Math.max(1, Number($("rcQty").value)||1); r.fee = Number($("rcFee").value)||0; LS.set("gkl_rcFee", $("rcFee").value);
+  r.printed = true;
+  const fr = document.createElement("iframe"); fr.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0"; document.body.appendChild(fr);
+  fr.contentDocument.open(); fr.contentDocument.write(receiptHtml(r)); fr.contentDocument.close();
+  const go = ()=>{ try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ alert("Could not open printing: " + e.message); } setTimeout(()=>fr.remove(), 60000); };
+  // wait for the Khmer font so the receipt prints correctly
+  const fonts = fr.contentDocument.fonts; (fonts && fonts.ready ? Promise.race([fonts.ready, new Promise(r=>setTimeout(r,1500))]) : Promise.resolve()).then(()=>setTimeout(go,150));
+  $("receiptDlg").close(); renderReport();
+}
+["rcQty","rcFee"].forEach(id=>$(id).addEventListener("input", rcTotals));
+$("rcPrint").onclick = printReceipt;
+$("rcCancel").onclick = ()=>$("receiptDlg").close();
 $("fbVideo").value = LS.get("gkl_fbVideo","");
 try{ $("fbToken").value = sessionStorage.getItem("gkl_fbToken")||""; }catch(e){}
 $("btnPreviewRules").onclick = previewRules;
