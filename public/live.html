@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Goat Kids Live Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Noto+Sans+Khmer:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<style>
+:root{
+  --paper:#EEF3F0; --panel:#FFFFFF; --ink:#1D2833; --muted:#5E6B76; --line:#D4DDD8;
+  --teal:#0F6E6A; --teal-soft:#DCEFEC; --live:#D9223A; --live-soft:#FDE7EA; --amber:#B86E00;
+  --font:"Bricolage Grotesque","Noto Sans Khmer",system-ui,-apple-system,"Segoe UI",sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+
+header.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding:18px 24px;border-bottom:1px solid var(--line);background:var(--panel)}
+.brand{font-size:1.5rem;font-weight:800;letter-spacing:-.02em;margin:0}
+.onair{display:inline-flex;align-items:center;gap:8px;background:var(--live);color:#fff;font-weight:600;font-size:.85rem;padding:5px 12px 5px 10px;border-radius:999px}
+.onair::before{content:"";width:9px;height:9px;border-radius:50%;background:#fff;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.onair::before{animation:none}}
+.status{margin-left:auto;font-size:.9rem;color:var(--muted)}
+.status b{color:var(--ink)}
+
+nav.tabs{display:flex;gap:4px;padding:0 24px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto}
+nav.tabs button{border:0;background:none;padding:12px 14px;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap;font-weight:600}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--teal)}
+
+main{max-width:1100px;margin:0 auto;padding:24px}
+section.view{display:none}
+section.view.active{display:block}
+h2{font-size:1.35rem;margin:0 0 4px;letter-spacing:-.01em}
+.lead{color:var(--muted);margin:0 0 20px;max-width:70ch}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:18px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.grid2{grid-template-columns:1fr}}
+label{display:block;font-size:.88rem;font-weight:600;margin:10px 0 4px}
+input[type=text],input[type=number],select,textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:9px 10px;background:#fff}
+textarea{min-height:120px;resize:vertical}
+textarea.out{min-height:340px;font-size:.95rem}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+.btn{border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:6px;padding:9px 16px;cursor:pointer;font-weight:600}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.hint{font-size:.85rem;color:var(--muted)}
+.msg{padding:10px 12px;border-radius:6px;margin-top:12px;font-size:.92rem}
+.msg.ok{background:var(--teal-soft);color:var(--teal)}
+.msg.err{background:var(--live-soft);color:var(--live)}
+.msg.warn{background:#FFF3DC;color:var(--amber)}
+
+.disclosure{border:2px solid var(--live);background:var(--live-soft);border-radius:10px;padding:14px 16px;margin-bottom:18px}
+.disclosure strong{color:var(--live)}
+
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:#F6F9F7;font-weight:600}
+tr:last-child td{border-bottom:0}
+.code{font-weight:800;font-size:1.15rem;letter-spacing:.06em;color:var(--teal)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.8rem;font-weight:600}
+.pill.in{background:var(--teal-soft);color:var(--teal)}
+.pill.low{background:#FFF3DC;color:var(--amber)}
+.pill.out{background:var(--live-soft);color:var(--live)}
+
+.replies{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.reply{border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff}
+.reply .c{color:var(--muted);font-size:.88rem;margin-bottom:6px}
+.reply .r{white-space:pre-wrap}
+.reply .meta{font-size:.8rem;color:var(--muted);margin-top:6px}
+.check{display:flex;align-items:center;gap:8px;font-weight:400}
+.check input{width:auto}
+.thumb{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #e5e0d6;background:#f4f1ea;cursor:zoom-in;display:block}
+.thumb.sm{width:44px;height:44px}
+.nothumb{width:56px;height:56px;border-radius:8px;background:#f4f1ea;display:flex;align-items:center;justify-content:center;font-size:11px;color:#999}
+#zoom{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:999;cursor:zoom-out;padding:20px}
+#zoom img{max-width:100%;max-height:90vh;border-radius:12px}
+#zoom div{color:#fff;text-align:center;margin-top:10px;font-size:18px}
+</style>
+</head>
+<body>
+
+
+<header class="top">
+  <a href="index.html" style="color:inherit;text-decoration:none;font-weight:600;margin-right:6px" title="Back to the store admin">&larr; Store</a>
+  <h1 class="brand">Goat Kids Live Desk</h1>
+  <span class="onair">AI host label always on</span>
+  <div class="status" id="status">Not connected</div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-view="connect">Connect</button>
+  <button role="tab" aria-selected="false" data-view="products">Products &amp; codes</button>
+  <button role="tab" aria-selected="false" data-view="script">Live script</button>
+  <button role="tab" aria-selected="false" data-view="comments">Comment replies</button>
+  <button role="tab" aria-selected="false" data-view="export">Virbo export</button>
+</nav>
+
+<main>
+
+<!-- CONNECT -->
+<section class="view active" id="view-connect">
+  <h2>Connect to your product data</h2>
+  <p class="lead">This tool only reads your products. It writes only to its own collections, <b>live_codes</b> and <b>live_report</b>. Your store data is never changed.</p>
+  <div class="grid2">
+    <div class="box">
+      <label for="cfg">Firebase config (paste the object from your store file)</label>
+      <textarea id="cfg" placeholder='{ "apiKey": "...", "authDomain": "goat-kids-store.firebaseapp.com", "projectId": "goat-kids-store", ... }'></textarea>
+      <label for="stores">Stores to load (one per line: store ID = short name)</label>
+      <textarea id="stores" style="min-height:70px">GOAT-GOAT-KIDS-271-0889 = 271
+GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
+      <p class="hint" style="margin:4px 0 0">Products are read from stores / store ID / products. The same product in both stores is matched by its <b>id</b> field.</p>
+      <label class="check"><input type="checkbox" id="incInactive"> Include inactive products</label>
+      <div class="row">
+        <button class="btn" id="btnConnect">Connect and load products</button>
+        <button class="btn ghost" id="btnSample">Try with sample products</button>
+      </div>
+      <div id="connectMsg"></div>
+    </div>
+    <div class="box">
+      <h3 style="margin:0 0 6px;font-size:1.05rem">Field names</h3>
+      <p class="hint" style="margin:0 0 6px">Leave on Auto and the tool guesses common names. Set them if the guess is wrong.</p>
+      <label for="fName">Product name field</label><input type="text" id="fName" value="auto">
+      <label for="fPrice">Price field</label><input type="text" id="fPrice" value="auto">
+      <label for="fStock">Stock field (number, or per-size object)</label><input type="text" id="fStock" value="auto">
+      <label for="fSizes">Sizes field</label><input type="text" id="fSizes" value="auto">
+      <label for="lowStock">Show "only a few left" at or below</label><input type="number" id="lowStock" value="3" min="0">
+    </div>
+  </div>
+</section>
+
+<!-- PRODUCTS -->
+<section class="view" id="view-products">
+  <h2>Products and 4-digit live codes</h2>
+  <p class="lead">Each product gets a short code customers can type in a comment. Codes are saved and never change, so a code you showed on yesterday's live still works today.</p>
+  <div class="row" style="margin:0 0 14px">
+    <button class="btn" id="btnAssign">Assign codes to new products</button>
+    <input type="text" id="search" placeholder="Search name or code" style="max-width:260px">
+    <span class="hint" id="countInfo"></span>
+  </div>
+  <div class="box" style="margin:0 0 14px">
+    <h3 style="margin:0 0 6px;font-size:1.05rem">Codes on the Facebook catalog</h3>
+    <p class="hint" style="margin:0 0 8px">Show the codes in front of product titles in Facebook (live product tags and ads) only while you sell live. The catalog updates within about an hour, so press Show 1–2 hours before the live.</p>
+    <div class="row">
+      <button class="btn" id="btnFbShow">Show codes on Facebook</button>
+      <button class="btn ghost" id="btnFbHide">Hide codes on Facebook</button>
+      <span class="hint" id="fbCodeState">Status unknown — connect first.</span>
+    </div>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Live code</th><th>Photo</th><th>Product</th><th>Price</th><th>Size : qty by store</th><th>Total stock</th><th>Script</th></tr></thead>
+    <tbody id="prodBody"><tr><td colspan="6" class="hint">Connect first, or try the sample products.</td></tr></tbody>
+  </table></div>
+</section>
+
+<!-- SCRIPT -->
+<section class="view" id="view-script">
+  <h2>Live presenter script</h2>
+  <p class="lead">Tick products on the Products tab, then generate. The AI host disclosure is built into every script and is put back automatically if it gets deleted.</p>
+  <div class="disclosure"><strong>Always included:</strong> <span id="discPreview"></span></div>
+  <div class="box">
+    <div class="grid2">
+      <div>
+        <label for="lang">Language</label>
+        <select id="lang"><option value="km">Khmer</option><option value="en">English</option><option value="both">Khmer + English</option></select>
+      </div>
+      <div>
+        <label for="repeatEvery">Repeat the AI disclosure every</label>
+        <select id="repeatEvery"><option value="3">3 products</option><option value="5" selected>5 products</option><option value="8">8 products</option></select>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn" id="btnScript">Generate script</button>
+      <button class="btn ghost" id="btnCopyScript">Copy script</button>
+      <span class="hint" id="selInfo"></span>
+    </div>
+  </div>
+  <label for="scriptOut">Live title</label>
+  <input type="text" id="titleOut" readonly>
+  <label for="scriptOut">Script (you can edit it)</label>
+  <textarea class="out" id="scriptOut"></textarea>
+  <div id="scriptMsg"></div>
+</section>
+
+<!-- COMMENTS -->
+<section class="view" id="view-comments">
+  <h2>Live comment report</h2>
+  <p class="lead">The tool reads the comments on your Facebook live, finds the 4-digit code and phone number, and builds one report. Each row has a ready answer you copy and paste into the live yourself.</p>
+  <div class="grid2">
+    <div class="box">
+      <h3 style="margin:0 0 6px;font-size:1.05rem">Read from Facebook</h3>
+      <label for="fbToken">Page access token</label>
+      <input type="text" id="fbToken" placeholder="Paste the Goat Kids page token" autocomplete="off">
+      <label for="fbVideo">Live video link (optional — leave empty and the tool finds the live running now)</label>
+      <input type="text" id="fbVideo" placeholder="https://www.facebook.com/.../videos/1234567890">
+      <label for="fbEvery">Check for new comments every</label>
+      <select id="fbEvery"><option value="5">5 seconds</option><option value="10" selected>10 seconds</option><option value="20">20 seconds</option></select>
+      <div class="row">
+        <button class="btn" id="btnFbStart">Start reading</button>
+        <button class="btn ghost" id="btnFbStop" disabled>Stop</button>
+      </div>
+      <div id="fbMsg"></div>
+      <p class="hint">The token is kept only in this browser. Never put it inside the file you upload to GitHub.</p>
+    </div>
+    <div class="box">
+      <h3 style="margin:0 0 6px;font-size:1.05rem">Or paste comments</h3>
+      <label for="comments">One comment per line, as Name: comment</label>
+      <textarea id="comments" placeholder="Dara: 1003 price?&#10;Srey Pov: 1001 size 110 មានទេ?&#10;Sokha: CF 1002 012 345 678"></textarea>
+      <div class="row"><button class="btn" id="btnPaste">Add to report</button></div>
+    </div>
+  </div>
+  <div class="box">
+    <div class="grid2">
+      <div><label for="rLang">Answer language</label>
+        <select id="rLang"><option value="km">Khmer</option><option value="en">English</option><option value="both">Khmer + English</option></select></div>
+      <div><label class="check" style="margin-top:34px"><input type="checkbox" id="refresh" checked> Re-check stock from Firebase for each new comment</label></div>
+    </div>
+    <div class="row">
+      <button class="btn" id="btnCsvReport">Download report (CSV)</button>
+      <button class="btn ghost" id="btnSaveReport">Save report to Firebase</button>
+      <button class="btn ghost" id="btnClearReport">Clear report</button>
+      <label class="check"><input type="checkbox" id="hideNoCode"> Hide comments without a code</label>
+      <span class="hint" id="reportInfo"></span>
+    </div>
+    <div id="reportMsg"></div>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Time</th><th>Customer</th><th>Comment</th><th>Photo</th><th>Code / product</th><th>Size</th><th>Phone</th><th>Stock</th><th>Answer to copy</th><th>Replied</th></tr></thead>
+    <tbody id="reportBody"><tr><td colspan="9" class="hint">No comments yet. Start reading the live or paste comments.</td></tr></tbody>
+  </table></div>
+</section>
+
+<!-- EXPORT -->
+<section class="view" id="view-export">
+  <h2>Export Q&amp;A rules for Virbo</h2>
+  <p class="lead">One rule per product: the keyword is the live code, the reply shows price, sizes and stock. Stock in these rules is a snapshot, so export again right before each live.</p>
+  <div class="box">
+    <div class="grid2">
+      <div><label for="eLang">Reply language</label>
+        <select id="eLang"><option value="km">Khmer</option><option value="en">English</option><option value="both">Khmer + English</option></select></div>
+      <div><label class="check" style="margin-top:34px"><input type="checkbox" id="eSelected"> Only products ticked for the script</label></div>
+    </div>
+    <div class="row">
+      <button class="btn" id="btnCsv">Download rules (CSV)</button>
+      <button class="btn ghost" id="btnPreviewRules">Preview</button>
+    </div>
+    <div id="exportMsg"></div>
+  </div>
+  <textarea class="out" id="rulesOut" readonly></textarea>
+</section>
+
+</main>
+
+<script>
+/* ============ STATE ============ */
+const S = { db:null, mode:null, products:[], codes:{}, selected:new Set(), rot:{} };
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const LS = { get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}} };
+
+/* ============ PERMANENT AI DISCLOSURE ============
+   These lines are added by code, not by the user.
+   ensureDisclosure() is run on generate AND on copy. */
+const DISCLOSURE = {
+  km: "សួស្តីបងប្អូនទាំងអស់គ្នា! ខ្ញុំជាពិធីករនិម្មិត (AI) របស់ Goat Kids។ វីដេអូនេះបង្កើតដោយ AI។",
+  en: "Hi everyone! I'm the Goat Kids virtual host — an AI presenter. This video is AI-generated."
+};
+const DISCLOSURE_REMIND = {
+  km: "រំលឹក៖ ខ្ញុំជាពិធីករ AI។ ខមិនលេខកូដ 4 ខ្ទង់ ដើម្បីដឹងតម្លៃ និងស្តុកភ្លាមៗ។",
+  en: "Reminder: I'm an AI host. Comment the 4-digit code to get price and stock right away."
+};
+const TITLE_TAG = "[AI virtual host]";
+function disclosureFor(lang){ return lang==="both" ? DISCLOSURE.km+"\n"+DISCLOSURE.en : DISCLOSURE[lang]; }
+function ensureDisclosure(text, lang){
+  const d = disclosureFor(lang);
+  const hasKm = text.includes(DISCLOSURE.km), hasEn = text.includes(DISCLOSURE.en);
+  const ok = lang==="km" ? hasKm : lang==="en" ? hasEn : (hasKm && hasEn);
+  return { text: ok ? text : d + "\n\n" + text, restored: !ok };
+}
+
+/* ============ FIELD HELPERS ============ */
+const GUESS = {
+  name:["name","productName","title","nameEn","nameKh"],
+  price:["price","salePrice","sellPrice","retailPrice","unitPrice"],
+  stock:["stock","qty","quantity","stockQty","inventory","sizeStock","stocks"],
+  sizes:["sizes","size","sizeList","variants"]
+};
+function pick(doc, key){
+  const v = $( {name:"fName",price:"fPrice",stock:"fStock",sizes:"fSizes"}[key] ).value.trim();
+  if (v && v.toLowerCase()!=="auto") return doc[v];
+  for (const k of GUESS[key]) if (doc[k]!==undefined && doc[k]!==null && doc[k]!=="") return doc[k];
+  return undefined;
+}
+/* Returns {total, bySize:{size:qty}|null, sizes:[]} from many possible shapes */
+function readStock(doc){
+  const raw = pick(doc,"stock"), sizesRaw = pick(doc,"sizes");
+  let bySize = null, total = 0, sizes = [];
+  if (Array.isArray(sizesRaw) && sizesRaw.length && typeof sizesRaw[0]==="object"){
+    bySize = {}; sizesRaw.forEach(x=>{ const s=x.size??x.name??x.label; bySize[s]=(bySize[s]||0)+(Number(x.qty??x.stock??x.quantity)||0); });
+  } else if (raw && typeof raw==="object" && !Array.isArray(raw)){
+    bySize = {}; for (const [k,v] of Object.entries(raw)){ bySize[k]=Number(v)||0; }
+  } else if (Array.isArray(raw)){
+    bySize = {}; raw.forEach(x=>{ if(x&&typeof x==="object"){ const s=x.size??x.name??x.label; bySize[s]=Number(x.stock??x.qty??x.quantity)||0; } });
+  } else if (Array.isArray(sizesRaw) && sizesRaw.length && typeof sizesRaw[0]==="object"){
+    bySize = {}; sizesRaw.forEach(x=>{ const s=x.size??x.name??x.label; bySize[s]=Number(x.stock??x.qty??x.quantity)||0; });
+  }
+  if (bySize){ total = Object.values(bySize).reduce((a,b)=>a+b,0); sizes = Object.keys(bySize); }
+  else { total = Number(raw)||0;
+    if (Array.isArray(sizesRaw)) sizes = sizesRaw.map(String);
+    else if (typeof sizesRaw==="string") sizes = sizesRaw.split(/[,/|]/).map(s=>s.trim()).filter(Boolean);
+  }
+  return { total, bySize, sizes };
+}
+function normalize(id, doc){
+  const st = readStock(doc);
+  const price = Number(String(pick(doc,"price")??"").replace(/[^0-9.]/g,""));
+  return { id, name: String(pick(doc,"name") ?? id), price: isFinite(price)?price:0, ...st };
+}
+function firstImage(doc){
+  const im = doc && (doc.images ?? doc.image ?? doc.imageUrl ?? doc.photo);
+  const one = Array.isArray(im) ? im[0] : im;
+  if (!one) return "";
+  return typeof one==="string" ? one : (one.url || one.src || "");
+}
+function thumbHtml(p, small){
+  if (!p || !p.image) return `<div class="nothumb">no photo</div>`;
+  return `<img class="thumb${small?" sm":""}" loading="lazy" src="${esc(p.image)}" alt="${esc(p.name)}" data-zoom="${esc(p.id)}" onerror="this.outerHTML='<div class=&quot;nothumb&quot;>no photo</div>'">`;
+}
+const money = n => "$" + (Number(n)||0).toFixed(2);
+function stockState(p){ const low = Number($("lowStock").value)||0;
+  if (p.total<=0) return "out"; if (p.total<=low) return "low"; return "in"; }
+function availSizes(p){ return p.bySize ? Object.entries(p.bySize).filter(([,q])=>q>0).map(([s])=>s) : p.sizes; }
+
+/* ============ CONNECT ============ */
+function setStatus(html){ $("status").innerHTML = html; }
+function msg(el, type, text){ $(el).innerHTML = `<div class="msg ${type}">${esc(text)}</div>`; }
+
+function parseConfig(txt){
+  let t = txt.trim().replace(/^[^{]*/,"").replace(/[^}]*$/,"");
+  try { return JSON.parse(t); } catch(e){}
+  // allow JS object style: apiKey: "x"
+  try { return JSON.parse(t.replace(/([{,]\s*)([A-Za-z_]\w*)\s*:/g,'$1"$2":').replace(/'/g,'"').replace(/,\s*}/g,"}")); } catch(e){ return null; }
+}
+
+async function connect(){
+  const cfg = parseConfig($("cfg").value);
+  if (!cfg || !cfg.projectId){ msg("connectMsg","err","The config could not be read. Paste the firebaseConfig object including projectId."); return; }
+  LS.set("gkl_cfg",$("cfg").value); LS.set("gkl_stores",$("stores").value); LS.set("gkl_inactive",$("incInactive").checked);
+  saveFields();
+  try{
+    const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(cfg);
+    S.db = app.firestore(); S.mode = "firebase";
+    await loadProducts();
+    msg("connectMsg","ok",`Loaded ${S.products.length} products from ${storeList().map(x=>x.label).join(" and ")}.`);
+  }catch(e){
+    msg("connectMsg","err","Could not load products: "+(e.message||e)+". Check the store IDs and Firestore rules.");
+  }
+}
+function storeList(){
+  return $("stores").value.split("\n").map(l=>l.trim()).filter(Boolean).map(l=>{
+    const [id,label] = l.split("=").map(x=>x.trim()); return { id, label: label || id };
+  });
+}
+/* Merge the same product (matched by its "id" field) across stores, keeping each store's stock separate */
+function mergeStores(perStore){ // perStore: [{label, docs:[{path, data}]}]
+  const inc = $("incInactive").checked, map = new Map();
+  perStore.forEach(({label, docs})=>docs.forEach(({path,data})=>{
+    if (!inc && data.active===false) return;
+    const key = String(data.id || path.split("/").pop());
+    const n = normalize(key, data);
+    let p = map.get(key);
+    if (!p){ p = { id:key, name:n.name, price:n.price, category:data.category||"", image:firstImage(data), stores:{}, refs:{} }; map.set(key,p); }
+    if (!p.image) p.image = firstImage(data);
+    p.stores[label] = { total:n.total, bySize:n.bySize || Object.fromEntries(n.sizes.map(z=>[z,0])) };
+    p.refs[label] = path;
+  }));
+  map.forEach(p=>combine(p));
+  return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name));
+}
+function combine(p){
+  const by = {};
+  Object.values(p.stores).forEach(st=>Object.entries(st.bySize||{}).forEach(([z,q])=>{ by[z]=(by[z]||0)+q; }));
+  p.bySize = by; p.sizes = Object.keys(by);
+  p.total = Object.values(p.stores).reduce((a,st)=>a+st.total,0);
+  return p;
+}
+async function loadProducts(){
+  const stores = storeList();
+  if (!stores.length) throw new Error("Add at least one store ID.");
+  const perStore = await Promise.all(stores.map(async st=>{
+    const snap = await S.db.collection("stores").doc(st.id).collection("products").get();
+    return { label:st.label, docs: snap.docs.map(d=>({ path:d.ref.path, data:d.data() })) };
+  }));
+  S.products = mergeStores(perStore);
+  const cs = await S.db.collection("live_codes").get();
+  S.codes = {}; cs.docs.forEach(d=>{ const x=d.data(); if(x.code) S.codes[d.id]=String(x.code); });
+  const st = cs.docs.find(d=>d.id==="_settings"); showFbState(st ? st.data() : null);
+  setStatus(`Connected: <b>${esc(stores.map(x=>x.label).join(" + "))}</b> · ${S.products.length} products`);
+  renderProducts();
+}
+async function refreshOne(p){
+  if (S.mode!=="firebase" || !p.refs) return p;
+  try{
+    await Promise.all(Object.entries(p.refs).map(async([label,path])=>{
+      const d = await S.db.doc(path).get();
+      if (d.exists){ const n = normalize(p.id,d.data()); p.stores[label] = { total:n.total, bySize:n.bySize || {} }; p.price = n.price; }
+      else p.stores[label] = { total:0, bySize:{} };
+    }));
+    combine(p);
+  }catch(e){}
+  return p;
+}
+/* "271: 2 (23, 24) · PH: 0" — shown in every answer */
+function storeLine(p, lang, size){
+  const parts = Object.entries(p.stores||{}).map(([label,st])=>{
+    if (size){ const q = (st.bySize||{})[size]||0; return `${label}: ${q}`; }
+    const z = Object.entries(st.bySize||{}).filter(([,q])=>q>0).map(([k])=>k);
+    return `${label}: ${st.total}${z.length?` (${z.join(", ")})`:""}`;
+  });
+  if (!parts.length) return "";
+  const head = lang==="km" ? (size?`ស្តុកទំហំ ${size} តាមសាខា`:"ស្តុកតាមសាខា") : (size?`Size ${size} stock by store`:"Stock by store");
+  return `${head}: ${parts.join(" · ")}`;
+}
+function withStores(text, p, lang, size){ const l = storeLine(p, lang, size); return l ? text + "\n" + l : text; }
+
+function loadSample(){
+  S.mode = "sample"; S.db = null;
+  S.products = [
+    {id:"p1784008000581",name:"Girl Shoes_031",price:11,stores:{"271":{total:3,bySize:{"23":1,"24":1,"25":1}},"PH":{total:2,bySize:{"23":1,"24":1,"25":0}}}},
+    {id:"p1784008000600",name:"Dino cotton set",price:12.5,stores:{"271":{total:6,bySize:{"90":2,"100":2,"110":2}},"PH":{total:0,bySize:{"90":0,"100":0,"110":0}}}},
+    {id:"p1784008000777",name:"Floral summer dress",price:15,stores:{"271":{total:0,bySize:{"100":0,"110":0}},"PH":{total:2,bySize:{"100":2,"110":0}}}},
+    {id:"p1784008000888",name:"Grey zip hoodie",price:18,stores:{"271":{total:0,bySize:{"110":0}},"PH":{total:0,bySize:{"110":0}}}}
+  ].map(combine);
+  S.codes = {};
+  setStatus("Sample products (not saved)");
+  msg("connectMsg","warn","Sample mode: codes are not saved. Connect Firebase for real use.");
+  renderProducts();
+}
+
+/* ============ CODES ============ */
+async function assignCodes(){
+  if (!S.products.length) return;
+  const used = new Set(Object.values(S.codes));
+  let next = 1001, added = 0;
+  const nextFree = ()=>{ while(used.has(String(next)) && next<=9999) next++; return next<=9999 ? String(next++) : null; };
+  const batch = S.mode==="firebase" ? S.db.batch() : null;
+  for (const p of S.products){
+    if (S.codes[p.id]) continue;
+    const c = nextFree(); if (!c){ alert("All 4-digit codes are used."); break; }
+    S.codes[p.id] = c; used.add(c); added++;
+    if (batch) batch.set(S.db.collection("live_codes").doc(p.id), { code:c, productId:p.id, name:p.name, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  }
+  try{ if (batch && added) await batch.commit(); }
+  catch(e){ alert("Codes could not be saved to Firebase: "+(e.message||e)+"\nCheck that Firestore rules allow writing to live_codes."); }
+  $("countInfo").textContent = added ? `${added} new codes assigned.` : "Every product already has a code.";
+  renderProducts();
+}
+const byCode = code => S.products.find(p=>S.codes[p.id]===code);
+
+/* ============ CODES ON FACEBOOK CATALOG (read by generate-feed.js) ============ */
+function showFbState(x){
+  const on = !!(x && x.showOnFacebook);
+  const when = x && x.updatedAt && x.updatedAt.toDate ? " (changed " + x.updatedAt.toDate().toLocaleString() + ")" : "";
+  $("fbCodeState").innerHTML = on ? `<b>Showing</b> on Facebook${when}` : `<b>Hidden</b> on Facebook${when}`;
+}
+async function setFbCodes(on){
+  if (S.mode!=="firebase"){ alert("Connect Firebase first."); return; }
+  try{
+    if (on) await assignCodes();
+    await S.db.collection("live_codes").doc("_settings").set({ showOnFacebook:on, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+    const d = await S.db.collection("live_codes").doc("_settings").get();
+    showFbState(d.data());
+    alert(on ? "Codes will appear in the Facebook catalog after the next feed update (about an hour). In Commerce Manager you can press 'Update now' on the data source to speed it up."
+             : "Codes will be removed from the Facebook catalog after the next feed update (about an hour).");
+  }catch(e){ alert("Could not save: " + (e.message||e)); }
+}
+
+/* ============ PRODUCTS TABLE ============ */
+function renderProducts(){
+  const q = $("search").value.trim().toLowerCase();
+  const rows = S.products.filter(p=>!q || p.name.toLowerCase().includes(q) || (S.codes[p.id]||"").includes(q));
+  const pillTxt = {in:"In stock",low:"Few left",out:"Out of stock"};
+  $("prodBody").innerHTML = rows.length ? rows.map(p=>{
+    const s = stockState(p), code = S.codes[p.id];
+    const sizeTxt = p.stores ? Object.entries(p.stores).map(([lb,st])=>`<b>${esc(lb)}</b> ${Object.entries(st.bySize||{}).map(([k,v])=>`${esc(k)}:${v}`).join(", ")||"—"}`).join("<br>") : esc(p.sizes.join(", "));
+    return `<tr>
+      <td>${code?`<span class="code">${code}</span>`:'<span class="hint">none yet</span>'}</td>
+      <td>${thumbHtml(p)}</td>
+      <td>${esc(p.name)}<div class="hint">${esc(p.id)}</div></td>
+      <td>${money(p.price)}</td><td>${sizeTxt||"—"}</td>
+      <td><span class="pill ${s}">${pillTxt[s]} (${p.total})</span></td>
+      <td><input type="checkbox" aria-label="Use ${esc(p.name)} in script" data-sel="${esc(p.id)}" ${S.selected.has(p.id)?"checked":""} ${code?"":"disabled"}></td>
+    </tr>`; }).join("") : `<tr><td colspan="7" class="hint">No products match.</td></tr>`;
+  if (!q) $("countInfo").textContent ||= `${S.products.length} products, ${Object.keys(S.codes).length} with codes.`;
+  updateSelInfo();
+}
+function updateSelInfo(){ $("selInfo").textContent = `${S.selected.size} product(s) ticked`; }
+
+/* ============ SCRIPT ============ */
+const T = {
+  km:{
+    open:"ថ្ងៃនេះ Goat Kids មានសម្លៀកបំពាក់កុមារស្អាតៗ មកបង្ហាញជូន។ សូមខមិនលេខកូដ 4 ខ្ទង់ ដើម្បីដឹងតម្លៃ ទំហំ និងស្តុក។",
+    item:(c,p,sz,st)=>`កូដ ${c} — ${p.name}\nតម្លៃ ${money(p.price)}${sz?` · ទំហំ ${sz}`:""}\n${st}\nចង់បាន សូមខមិន ${c} ឬ CF ${c}។`,
+    in:"មានស្តុកគ្រប់គ្រាន់។", low:n=>`នៅសល់តែ ${n} ប៉ុណ្ណោះ ប្រញាប់ឡើង!`, out:"អស់ពីស្តុកហើយ។",
+    close:"អរគុណដែលបានទស្សនា! សូមខមិនលេខកូដ ឬឆាតមកផេក ហើយយើងនឹងផ្ញើទំនិញជូន។"
+  },
+  en:{
+    open:"Today Goat Kids is showing new kids' clothes. Comment the 4-digit code to get the price, sizes and stock.",
+    item:(c,p,sz,st)=>`Code ${c} — ${p.name}\nPrice ${money(p.price)}${sz?` · Sizes ${sz}`:""}\n${st}\nWant it? Comment ${c} or CF ${c}.`,
+    in:"Plenty in stock.", low:n=>`Only ${n} left — be quick!`, out:"This one is sold out.",
+    close:"Thanks for watching! Comment the code or message our page and we will send you the product."
+  }
+};
+function scriptFor(lang){
+  const L = lang==="both" ? ["km","en"] : [lang];
+  const every = Number($("repeatEvery").value);
+  const items = S.products.filter(p=>S.selected.has(p.id) && S.codes[p.id]);
+  const parts = [disclosureFor(lang), L.map(l=>T[l].open).join("\n")];
+  items.forEach((p,i)=>{
+    if (i>0 && i%every===0) parts.push(L.map(l=>DISCLOSURE_REMIND[l]).join("\n"));
+    const s = stockState(p), sz = availSizes(p).join(", ");
+    parts.push(L.map(l=>withStores(T[l].item(S.codes[p.id],p,sz, s==="out"?T[l].out : s==="low"?T[l].low(p.total):T[l].in),p,l)).join("\n\n"));
+  });
+  parts.push(L.map(l=>T[l].close).join("\n"));
+  return { text: parts.join("\n\n———\n\n"), count: items.length };
+}
+function genScript(){
+  const lang = $("lang").value;
+  if (!S.selected.size){ msg("scriptMsg","warn","Tick at least one product on the Products tab first."); return; }
+  const r = scriptFor(lang);
+  $("scriptOut").value = r.text;
+  $("titleOut").value = `${TITLE_TAG} Goat Kids Live · ${r.count} item${r.count>1?"s":""}`;
+  msg("scriptMsg","ok",`Script ready for ${r.count} product(s). Turn on Facebook's AI label when you go live.`);
+}
+async function copyScript(){
+  const lang = $("lang").value;
+  const r = ensureDisclosure($("scriptOut").value, lang);
+  $("scriptOut").value = r.text;
+  try{ await navigator.clipboard.writeText(r.text);
+    msg("scriptMsg", r.restored?"warn":"ok", r.restored ? "Copied. The AI host disclosure was missing, so it was added back at the top." : "Copied with the AI host disclosure.");
+  }catch(e){ $("scriptOut").select(); msg("scriptMsg","warn","Select all and copy manually."); }
+}
+
+/* ============ COMMENT REPLIES ============ */
+const INTENT = {
+  price:/price|how ?much|\$|តម្លៃ|ថ្លៃ|ប៉ុន្មាន/i,
+  size:/size|សាយ|ទំហំ|ខ្នាត/i,
+  stock:/stock|available|have|មាន|នៅ|អស់/i,
+  order:/\bcf\b|order|buy|want|ទិញ|កម្ម៉ង់|ចង់បាន|យក/i
+};
+const R = {
+  km:{
+    ask:["សូមខមិនលេខកូដ 4 ខ្ទង់ ដែលបង្ហាញលើអេក្រង់ ដើម្បីយើងពិនិត្យជូន 🙏","សូមប្រាប់លេខកូដទំនិញ 4 ខ្ទង់ យើងនឹងឆ្លើយតម្លៃ និងស្តុកភ្លាម 🙏"],
+    notfound:c=>[`រកមិនឃើញកូដ ${c} ទេ សូមពិនិត្យលេខកូដលើអេក្រង់ម្តងទៀត 🙏`],
+    out:(c,p)=>[`សុំទោស កូដ ${c} (${p.name}) អស់ពីស្តុកហើយ 🙏`,`កូដ ${c} លក់អស់ហើយ សូមមើលកូដផ្សេងទៀត 🙏`],
+    sizeOut:(c,s)=>[`សុំទោស កូដ ${c} ទំហំ ${s} អស់ហើយ 🙏`],
+    in:(c,p,sz,low)=>[
+      `កូដ ${c} — ${p.name}: ${money(p.price)} ✅ មានស្តុក${low?` (នៅសល់តែ ${p.total})`:""}${sz?`\nទំហំដែលមាន: ${sz}`:""}\nសូមខមិនទំហំ ឬឆាតមកផេក យើងនឹងផ្ញើទំនិញជូន!`,
+      `✅ ${p.name} (កូដ ${c}) តម្លៃ ${money(p.price)}${low?` · នៅតែ ${p.total}`:""}${sz?`\nទំហំ: ${sz}`:""}\nឆាតមកផេកដើម្បីកម្ម៉ង់ យើងនឹងផ្ញើជូនបង!`,
+      `កូដ ${c} នៅមាន ✅ ${money(p.price)}${low?` (សល់ ${p.total})`:""}${sz?` · ទំហំ ${sz}`:""}\nប្រាប់ទំហំ និងអាសយដ្ឋានក្នុងឆាត យើងផ្ញើជូនភ្លាម!`
+    ]
+  },
+  en:{
+    ask:["Please comment the 4-digit code shown on screen and we'll check it for you 🙏","Tell us the 4-digit product code and we'll reply with price and stock right away 🙏"],
+    notfound:c=>[`We couldn't find code ${c}. Please check the code on screen 🙏`],
+    out:(c,p)=>[`Sorry, code ${c} (${p.name}) is out of stock right now 🙏`,`Code ${c} is sold out — please check our other codes 🙏`],
+    sizeOut:(c,s)=>[`Sorry, code ${c} in size ${s} is out of stock 🙏`],
+    in:(c,p,sz,low)=>[
+      `Code ${c} — ${p.name}: ${money(p.price)} ✅ In stock${low?` (only ${p.total} left)`:""}${sz?`\nAvailable sizes: ${sz}`:""}\nComment your size or message our page and we'll send you the product!`,
+      `✅ ${p.name} (code ${c}) is ${money(p.price)}${low?` · only ${p.total} left`:""}${sz?`\nSizes: ${sz}`:""}\nMessage our page to order and we'll send it to you!`,
+      `Code ${c} is available ✅ ${money(p.price)}${low?` (${p.total} left)`:""}${sz?` · sizes ${sz}`:""}\nSend your size and address by message and we'll ship it!`
+    ]
+  }
+};
+function rotate(key, arr){ const i = (S.rot[key]||0) % arr.length; S.rot[key]=i+1; return arr[i]; }
+function mentionedSize(comment, p){
+  const list = p.bySize ? Object.keys(p.bySize) : p.sizes;
+  const rest = comment.replace(/\b\d{4}\b/, " ");
+  return list.find(s=>new RegExp(`(^|[^0-9A-Za-z])${String(s).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}([^0-9A-Za-z]|$)`,"i").test(rest));
+}
+async function replyFor(comment, lang){
+  const L = lang==="both" ? ["km","en"] : [lang];
+  const m = comment.match(/\b\d{4}\b/);
+  const intents = Object.keys(INTENT).filter(k=>INTENT[k].test(comment));
+  if (!m) return { text: L.map(l=>rotate("ask"+l,R[l].ask)).join("\n"), info:"No code found" + (intents.length?` · asked about ${intents.join(", ")}`:"") };
+  const code = m[0], p = byCode(code);
+  if (!p) return { text: L.map(l=>R[l].notfound(code)[0]).join("\n"), info:`Code ${code} not in the list` };
+  if ($("refresh").checked) await refreshOne(p);
+  const st = stockState(p), size = mentionedSize(comment, p);
+  if (st==="out") return { text: L.map(l=>rotate("out"+l+code,R[l].out(code,p))).join("\n"), info:`${p.name} · out of stock` };
+  if (size && p.bySize && (p.bySize[size]||0)<=0) return { text: L.map(l=>R[l].sizeOut(code,size)[0]).join("\n"), info:`${p.name} · size ${size} out` };
+  const sz = availSizes(p).join(", ");
+  return { text: L.map(l=>rotate("in"+l+code,R[l].in(code,p,sz,st==="low"))).join("\n\n"), info:`${p.name} · ${p.total} in stock${size?` · asked size ${size}`:""}` };
+}
+/* ============ PHONE + ORDER DETECTION ============ */
+/* Cambodian mobile: 0XX or +855/855 XX, then 6-7 digits, spaces/dots/dashes allowed */
+const PHONE_RE = /(?:\+?855[\s.\-]?|\b0)([1-9]\d)[\s.\-]?(\d{3})[\s.\-]?(\d{3,4})\b/;
+function findPhone(text){
+  const m = String(text).match(PHONE_RE); if (!m) return { phone:"", rest:text };
+  return { phone: `0${m[1]} ${m[2]} ${m[3]}`, rest: text.replace(m[0]," ") };
+}
+function findCode(text){
+  const all = String(text).match(/\b\d{4}\b/g) || [];
+  return all.find(c=>byCode(c)) || all[0] || "";
+}
+const ORDER_T = {
+  km:{
+    ok:(n,c,p,ph,sz)=>[`អរគុណ ${n}! បានទទួលការកម្ម៉ង់ កូដ ${c} (${p.name}${sz?` ទំហំ ${sz}`:""}) ${money(p.price)} ✅ យើងនឹងទាក់ទងលេខ ${ph} ដើម្បីបញ្ជាក់ ហើយផ្ញើទំនិញជូន។`,
+                      `✅ ${n} កូដ ${c}${sz?` ទំហំ ${sz}`:""} ${money(p.price)} កត់ទុករួចហើយ! យើងនឹងតេទៅ ${ph} ឆាប់ៗនេះ។`],
+    needPhone:(n,c)=>[`អរគុណ ${n}! សូមខមិនលេខទូរស័ព្ទ ដើម្បីបញ្ជាក់ការកម្ម៉ង់ កូដ ${c} 🙏`],
+    needSize:(n,c,sz)=>[`អរគុណ ${n}! កូដ ${c} មានទំហំ ${sz} សូមប្រាប់ទំហំដែលចង់បាន 🙏`]
+  },
+  en:{
+    ok:(n,c,p,ph,sz)=>[`Thank you ${n}! Order for code ${c} (${p.name}${sz?`, size ${sz}`:""}) ${money(p.price)} received ✅ We'll call ${ph} to confirm and send your product.`,
+                      `✅ ${n}, code ${c}${sz?` size ${sz}`:""} ${money(p.price)} is noted! We'll call ${ph} soon.`],
+    needPhone:(n,c)=>[`Thank you ${n}! Please comment your phone number to confirm code ${c} 🙏`],
+    needSize:(n,c,sz)=>[`Thank you ${n}! Code ${c} comes in ${sz}. Which size would you like? 🙏`]
+  }
+};
+
+/* ============ REPORT ============ */
+const REPORT = { rows:[], seen:new Set(), timer:null, after:null };
+async function analyze(c){ // c = {id, name, text, time}
+  const lang = $("rLang").value, L = lang==="both" ? ["km","en"] : [lang];
+  const { phone, rest } = findPhone(c.text);
+  const code = findCode(rest), p = code ? byCode(code) : null;
+  const intents = Object.keys(INTENT).filter(k=>INTENT[k].test(rest));
+  const row = { ...c, phone, code, product:p?p.name:"", price:p?p.price:"", size:"", stock:"", type:"", answer:"", replied:false };
+  if (!code){ row.type="No code"; row.answer = L.map(l=>rotate("ask"+l,R[l].ask)).join("\n"); return row; }
+  if (!p){ row.type="Unknown code"; row.answer = L.map(l=>R[l].notfound(code)[0]).join("\n"); return row; }
+  if ($("refresh").checked) await refreshOne(p);
+  const st = stockState(p), size = mentionedSize(rest,p) || "";
+  row.size = size; row.stock = Object.entries(p.stores||{}).map(([lb,x])=>`${lb}: ${size?((x.bySize||{})[size]||0):x.total}`).join(" · ") || String(p.total);
+  const isOrder = !!phone || intents.includes("order");
+  row.type = isOrder ? "Order" : "Question";
+  const sizeOut = size && p.bySize && (p.bySize[size]||0)<=0;
+  const name = c.name || "";
+  if (st==="out"){ row.answer = L.map(l=>rotate("out"+l+code,R[l].out(code,p))).join("\n"); return row; }
+  if (sizeOut){ row.answer = L.map(l=>R[l].sizeOut(code,size)[0]).join("\n"); return row; }
+  const avail = availSizes(p);
+  if (isOrder){
+    if (!phone) row.answer = L.map(l=>ORDER_T[l].needPhone(name,code)[0]).join("\n");
+    else if (!size && avail.length>1) row.answer = L.map(l=>ORDER_T[l].needSize(name,code,avail.join(", "))[0]).join("\n");
+    else row.answer = L.map(l=>withStores(rotate("ord"+l+code,ORDER_T[l].ok(name,code,p,phone,size||avail[0]||"")),p,l,size||avail[0]||"")).join("\n\n");
+    return row;
+  }
+  row.answer = L.map(l=>withStores(rotate("in"+l+code,R[l].in(code,p,avail.join(", "),st==="low")),p,l,size)).join("\n\n");
+  return row;
+}
+async function addComments(list){
+  if (!S.products.length){ msg("reportMsg","warn","Connect or load sample products first, so codes can be matched."); return 0; }
+  let added = 0;
+  for (const c of list){
+    if (!c.text || REPORT.seen.has(c.id)) continue;
+    REPORT.seen.add(c.id); REPORT.rows.push(await analyze(c)); added++;
+  }
+  if (added) renderReport();
+  return added;
+}
+function productByCode(c){ return S.products.find(p=>S.codes[p.id]===String(c)); }
+document.addEventListener("click",e=>{
+  const t = e.target.closest("[data-zoom]");
+  const z = document.getElementById("zoom");
+  if (t){ const p = S.products.find(x=>x.id===t.dataset.zoom); if(!p) return;
+    z.querySelector("img").src = p.image; z.querySelector("img").alt = p.name;
+    z.querySelector("div").textContent = `${S.codes[p.id]||""} — ${p.name} · ${money(p.price)}`;
+    z.style.display="flex"; return; }
+  if (e.target.closest("#zoom")) z.style.display="none";
+});
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") document.getElementById("zoom").style.display="none"; });
+function renderReport(){
+  const hide = $("hideNoCode").checked;
+  const rows = REPORT.rows.map((r,i)=>({r,i})).filter(({r})=>!hide || r.code);
+  const cls = t => t==="Order" ? "in" : t==="Question" ? "low" : "out";
+  $("reportBody").innerHTML = rows.length ? rows.map(({r,i})=>`<tr style="${r.replied?"opacity:.5":""}">
+    <td>${esc(new Date(r.time).toLocaleTimeString())}</td>
+    <td>${esc(r.name||"—")}<div><span class="pill ${cls(r.type)}">${esc(r.type)}</span></div></td>
+    <td>${esc(r.text)}</td>
+    <td>${r.code?thumbHtml(productByCode(r.code),true):""}</td>
+    <td>${r.code?`<span class="code">${esc(r.code)}</span>`:"—"}<div class="hint">${esc(r.product)}${r.price!==""?" · "+money(r.price):""}</div></td>
+    <td>${esc(r.size||"—")}</td><td>${esc(r.phone||"—")}</td><td>${esc(r.stock||"—")}</td>
+    <td style="min-width:240px"><div class="r" style="white-space:pre-wrap">${esc(r.answer)}</div>
+      <button class="btn ghost" style="margin-top:6px;padding:5px 10px" data-copyrow="${i}">Copy answer</button></td>
+    <td><input type="checkbox" aria-label="Replied" data-done="${i}" ${r.replied?"checked":""}></td>
+  </tr>`).join("") : `<tr><td colspan="10" class="hint">No comments yet. Start reading the live or paste comments.</td></tr>`;
+  const orders = REPORT.rows.filter(r=>r.type==="Order").length;
+  $("reportInfo").textContent = `${REPORT.rows.length} comments · ${orders} orders`;
+}
+async function pasteComments(){
+  const now = Date.now();
+  const list = $("comments").value.split("\n").map(s=>s.trim()).filter(Boolean).map((line,i)=>{
+    const m = line.match(/^([^:：]{1,40})[:：]\s*(.+)$/);
+    return { id:"paste-"+now+"-"+i, name:m?m[1].trim():"", text:m?m[2]:line, time:now };
+  });
+  const n = await addComments(list);
+  $("comments").value = "";
+  msg("reportMsg","ok",`${n} comment(s) added.`);
+}
+
+/* ============ FACEBOOK READING (read only) ============ */
+function videoId(v){
+  const t = String(v||"");
+  const m = t.match(/\/videos\/(?:[^\/?#]*\/)?(\d{8,})/) || t.match(/\/producer\/(?:v\d+\/)?(\d{8,})/) || t.match(/[?&]v=(\d{8,})/) || t.match(/^\s*(\d{8,}(?:_\d{8,})?)\s*$/);
+  return m ? m[1] : "";
+}
+const GRAPH = "https://graph.facebook.com/v26.0/";
+async function gget(path, token){
+  const res = await fetch(GRAPH + path + (path.includes("?")?"&":"?") + "access_token=" + encodeURIComponent(token));
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  return data;
+}
+async function findCurrentLive(token){
+  const d = await gget(`me/live_videos?broadcast_status=${encodeURIComponent('["LIVE"]')}&fields=id,title,status,video{id}&limit=5`, token);
+  const live = (d.data||[])[0];
+  if (!live) return null;
+  return { id: (live.video && live.video.id) || live.id, title: live.title || "" };
+}
+async function resolveVideo(token){
+  const fromLink = videoId($("fbVideo").value);
+  if (fromLink){
+    let firstErr = null;
+    try { await gget(`${fromLink}/comments?limit=1&fields=id`, token); return { id: fromLink, how: "link" }; }
+    catch(e){ firstErr = e; }
+    // Video comments need extra permissions; the same comments are readable through the
+    // page's post, whose ID is PAGEID_VIDEOID.
+    if (!fromLink.includes("_")){
+      try {
+        const me = await gget("me?fields=id", token);
+        const postId = `${me.id}_${fromLink}`;
+        await gget(`${postId}/comments?limit=1&fields=id`, token);
+        return { id: postId, how: "link" };
+      } catch(e){ /* fall through */ }
+    }
+    if (!/nonexist|does not exist|unsupported get/i.test(firstErr.message)) throw firstErr;
+    /* not a video id (page or post id) — fall through to auto-find */
+  }
+  let live;
+  try { live = await findCurrentLive(token); }
+  catch(e){
+    if (/permission/i.test(e.message)) throw new Error("This token can't search for the live by itself. Paste the live video link (the one with /videos/ and a long number) into the link box, then press Start reading again.");
+    throw e;
+  }
+  if (!live) throw new Error(fromLink
+    ? "That link is not a live video, and no live is running on the page right now. Start the live first, then press Start reading again."
+    : "No live is running on the page right now. Start the live first, then press Start reading.");
+  return { id: live.id, how: "auto", title: live.title };
+}
+async function fbFetch(){
+  const token = $("fbToken").value.trim(), vid = REPORT.vid;
+  const base = `${vid}/comments?filter=stream&order=reverse_chronological&limit=100&fields=id,message,created_time`;
+  let data;
+  if (!REPORT.noFrom){
+    try { data = await gget(base + ",from{name,id}", token); }
+    catch(e){
+      if (!/permission/i.test(e.message)) throw e;
+      REPORT.noFrom = true;
+      msg("fbMsg","warn","Facebook hides customer names from this app, so names will show as \"Customer\". Orders, codes and phones still work.");
+    }
+  }
+  if (!data) data = await gget(base, token);
+  const list = (data.data||[]).reverse().map(c=>({ id:c.id, name:(c.from&&c.from.name)||"Customer", text:c.message||"", time:c.created_time }));
+  return addComments(list);
+}
+async function fbStart(){
+  const token = $("fbToken").value.trim();
+  if (!token){ msg("fbMsg","err","Paste the Goat Kids page token first."); return; }
+  if (!S.products.length){ msg("fbMsg","err","Connect or load products first, so codes can be matched."); return; }
+  LS.set("gkl_fbVideo",$("fbVideo").value); try{ sessionStorage.setItem("gkl_fbToken",token); }catch(e){}
+  msg("fbMsg","warn","Looking for the live…");
+  try{
+    const v = await resolveVideo(token); REPORT.vid = v.id;
+    const n = await fbFetch();
+    msg("fbMsg","ok",(v.how==="auto" ? `Found the live running now${v.title?` ("${v.title}")`:""}. ` : "") + `Reading live ${v.id}. ${n} comment(s) loaded.`);
+  }
+  catch(e){ msg("fbMsg","err","Facebook said: "+e.message); return; }
+  $("btnFbStart").disabled = true; $("btnFbStop").disabled = false;
+  REPORT.timer = setInterval(async()=>{ try{ const n = await fbFetch(); if(n) msg("fbMsg","ok",`${n} new comment(s) at ${new Date().toLocaleTimeString()}.`); }
+    catch(e){ msg("fbMsg","err","Facebook said: "+e.message); } }, Number($("fbEvery").value)*1000);
+}
+function fbStop(){ clearInterval(REPORT.timer); REPORT.timer=null; $("btnFbStart").disabled=false; $("btnFbStop").disabled=true; msg("fbMsg","warn","Stopped reading."); }
+
+/* ============ REPORT EXPORT / SAVE ============ */
+function reportCsv(){
+  if (!REPORT.rows.length){ msg("reportMsg","warn","The report is empty."); return; }
+  const q = s => `"${String(s??"").replace(/"/g,'""')}"`;
+  const head = ["Time","Customer","Type","Comment","Code","Product","Price","Size","Phone","Stock","Answer","Replied"];
+  const body = REPORT.rows.map(r=>[new Date(r.time).toLocaleString(),r.name,r.type,r.text,r.code,r.product,r.price,r.size,r.phone,r.stock,r.answer,r.replied?"Yes":"No"].map(q).join(","));
+  const blob = new Blob(["\ufeff"+[head.join(",")].concat(body).join("\r\n")],{type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `goat_kids_live_report_${new Date().toISOString().slice(0,16).replace(/[:T]/g,"-")}.csv`; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+async function saveReport(){
+  if (S.mode!=="firebase"){ msg("reportMsg","warn","Connect Firebase first. Sample mode cannot save."); return; }
+  if (!REPORT.rows.length){ msg("reportMsg","warn","The report is empty."); return; }
+  const vid = REPORT.vid || videoId($("fbVideo").value) || "manual-"+new Date().toISOString().slice(0,10);
+  try{
+    for (let i=0;i<REPORT.rows.length;i+=400){
+      const b = S.db.batch();
+      REPORT.rows.slice(i,i+400).forEach(r=>{
+        b.set(S.db.collection("live_report").doc(String(r.id).replace(/\//g,"_")), {
+          liveId:vid, time:r.time, customer:r.name, type:r.type, comment:r.text, code:r.code, product:r.product,
+          price:r.price, size:r.size, phone:r.phone, stock:r.stock, answer:r.answer, replied:r.replied,
+          savedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      });
+      await b.commit();
+    }
+    msg("reportMsg","ok",`Saved ${REPORT.rows.length} row(s) to live_report.`);
+  }catch(e){ msg("reportMsg","err","Could not save: "+(e.message||e)+". Check Firestore rules for live_report."); }
+}
+
+/* ============ VIRBO EXPORT ============ */
+function rulesRows(){
+  const lang = $("eLang").value, L = lang==="both" ? ["km","en"] : [lang];
+  const onlySel = $("eSelected").checked;
+  return S.products.filter(p=>S.codes[p.id] && (!onlySel || S.selected.has(p.id))).map(p=>{
+    const c = S.codes[p.id], st = stockState(p), sz = availSizes(p).join(", ");
+    const r1 = L.map(l=> st==="out" ? R[l].out(c,p)[0] : withStores(R[l].in(c,p,sz,st==="low")[0],p,l)).join("\n");
+    const r2 = L.map(l=> st==="out" ? R[l].out(c,p)[1] : withStores(R[l].in(c,p,sz,st==="low")[1],p,l)).join("\n");
+    return { rule:`Code ${c} ${p.name}`, keywords:c, r1, r2 };
+  });
+}
+function rulesCsv(rows){
+  const q = s => `"${String(s).replace(/"/g,'""')}"`;
+  return "\ufeff" + ["Rule Name,Keywords,Reply 1,Reply 2"].concat(rows.map(r=>[r.rule,r.keywords,r.r1,r.r2].map(q).join(","))).join("\r\n");
+}
+function previewRules(){
+  const rows = rulesRows();
+  if (!rows.length){ msg("exportMsg","warn","No products with codes to export. Assign codes first."); return null; }
+  $("rulesOut").value = rows.map(r=>`${r.rule}\nKeyword: ${r.keywords}\nReply 1: ${r.r1}\nReply 2: ${r.r2}`).join("\n\n———\n\n");
+  msg("exportMsg","ok",`${rows.length} rule(s). Stock snapshot taken ${new Date().toLocaleString()}.`);
+  return rows;
+}
+function downloadCsv(){
+  const rows = previewRules(); if (!rows) return;
+  const blob = new Blob([rulesCsv(rows)],{type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `goat_kids_virbo_rules_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+/* ============ WIRING ============ */
+function saveFields(){ ["fName","fPrice","fStock","fSizes","lowStock"].forEach(id=>LS.set("gkl_"+id,$(id).value)); }
+document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("nav.tabs button").forEach(x=>x.setAttribute("aria-selected", x===b));
+  document.querySelectorAll("section.view").forEach(v=>v.classList.toggle("active", v.id==="view-"+b.dataset.view));
+}));
+$("btnConnect").onclick = connect;
+$("btnSample").onclick = loadSample;
+$("btnAssign").onclick = assignCodes;
+$("btnFbShow").onclick = ()=>setFbCodes(true);
+$("btnFbHide").onclick = ()=>setFbCodes(false);
+$("search").oninput = renderProducts;
+$("prodBody").addEventListener("change",e=>{ const id=e.target.dataset.sel; if(!id) return; e.target.checked?S.selected.add(id):S.selected.delete(id); updateSelInfo(); });
+$("btnScript").onclick = genScript;
+$("btnCopyScript").onclick = copyScript;
+$("btnPaste").onclick = pasteComments;
+$("btnFbStart").onclick = fbStart;
+$("btnFbStop").onclick = fbStop;
+$("btnCsvReport").onclick = reportCsv;
+$("btnSaveReport").onclick = saveReport;
+$("btnClearReport").onclick = ()=>{ if(!confirm("Clear the whole report?")) return; REPORT.rows=[]; REPORT.seen.clear(); renderReport(); };
+$("hideNoCode").onchange = renderReport;
+$("reportBody").addEventListener("click",async e=>{
+  const i = e.target.dataset.copyrow;
+  if (i!==undefined){ try{ await navigator.clipboard.writeText(REPORT.rows[i].answer); e.target.textContent="Copied"; setTimeout(()=>e.target.textContent="Copy answer",1500);}catch(err){} }
+});
+$("reportBody").addEventListener("change",e=>{ const i=e.target.dataset.done; if(i===undefined) return; REPORT.rows[i].replied=e.target.checked; renderReport(); });
+$("fbVideo").value = LS.get("gkl_fbVideo","");
+try{ $("fbToken").value = sessionStorage.getItem("gkl_fbToken")||""; }catch(e){}
+$("btnPreviewRules").onclick = previewRules;
+$("btnCsv").onclick = downloadCsv;
+$("lang").onchange = ()=>{ $("discPreview").textContent = disclosureFor($("lang").value); };
+["fName","fPrice","fStock","fSizes","lowStock"].forEach(id=>{ const v=LS.get("gkl_"+id,null); if(v!==null) $(id).value=v; $(id).onchange=()=>{saveFields(); if(S.mode==="firebase") loadProducts(); else renderProducts();}; });
+$("cfg").value = LS.get("gkl_cfg",""); $("stores").value = LS.get("gkl_stores",$("stores").value); $("incInactive").checked = LS.get("gkl_inactive",false);
+$("discPreview").textContent = disclosureFor($("lang").value);
+// Inside the store app: use the store's own Firebase project, and only for signed-in staff
+// (the same login as the store's Admin Panel).
+(function(){
+  let cfgTxt = ""; try{ cfgTxt = localStorage.getItem("goatFirebaseConfig") || ""; }catch(e){}
+  if (!$("cfg").value.trim() && cfgTxt) $("cfg").value = cfgTxt;
+  const cfg = parseConfig($("cfg").value);
+  if (!cfg || !cfg.projectId) return;
+  if (!firebase.apps.length) firebase.initializeApp(cfg);
+// ---------- staff login required (same login as the store's Admin Panel) ----------
+(function(){
+  var started=false; var DOMAIN = '@staff.goatkids.app';
+  function isStaff(u){ return !!(u && u.email && u.email.toLowerCase().slice(-DOMAIN.length) === DOMAIN); }
+  function block(){
+    if (document.getElementById('staffGate')) return;
+    var d = document.createElement('div'); d.id = 'staffGate';
+    d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.92);color:#fff;display:flex;align-items:center;justify-content:center;font:16px system-ui,sans-serif;padding:20px;text-align:center';
+    d.innerHTML = '<div style="max-width:420px"><h2 style="margin:0 0 10px">Staff login needed</h2><p>Log in to the store&#39;s <b>Admin Panel</b> on this device first, then open this page again.</p><p><a href="index.html" style="color:#93c5fd">Go to the store</a></p></div>';
+    (document.body || document.documentElement).appendChild(d);
+  }
+  function unblock(){ var d = document.getElementById('staffGate'); if (d) d.remove(); }
+  try {
+    firebase.auth().onAuthStateChanged(function(u){ if (isStaff(u)) { unblock(); if (!started) { started = true; connect(); } } else block(); });
+  } catch (e) { console.warn('Auth not available:', e); }
+})();
+})();
+</script>
+<div id="zoom" role="dialog" aria-label="Product photo"><figure style="margin:0"><img alt=""><div></div></figure></div>
+</body>
+</html>
