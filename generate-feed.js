@@ -57,17 +57,19 @@ async function main() {
 
     // Load live-selling codes (written by the Live Desk tool). Matched by product id, then by name.
     const codeById = {}, codeByName = {};
+    let showCodes = false;   // switched on/off with the Show/Hide buttons in the Live Desk
     try {
         const cSnap = await getDocs(collection(db, 'live_codes'));
         cSnap.forEach(d => {
             const x = d.data() || {};
+            if (d.id === '_settings') { showCodes = x.showOnFacebook === true; return; }
             if (!x.code) return;
             const code = String(x.code);
             codeById[d.id] = code;
             if (x.productId) codeById[String(x.productId)] = code;
             if (x.name) codeByName[String(x.name).trim().toLowerCase()] = code;
         });
-        console.log(`Loaded ${Object.keys(codeById).length} live code key(s).`);
+        console.log(`Loaded ${Object.keys(codeById).length} live code key(s). Codes on Facebook: ${showCodes ? 'SHOWN' : 'hidden'}.`);
     } catch (e) {
         console.warn('⚠️ Could not load live codes — titles will have no code:', e.message);
     }
@@ -176,8 +178,8 @@ async function main() {
         const image = (p.images && p.images[0]) || '';
         const price = p.price.toFixed(2) + ' ' + CURRENCY;
         const productLink = STORE_URL + '#' + encodeURIComponent(p.name);
-        const liveCode = (p.liveKeys || []).map(k => codeById[k]).find(Boolean)
-                      || codeByName[String(p.name).trim().toLowerCase()] || '';
+        const liveCode = !showCodes ? '' : ((p.liveKeys || []).map(k => codeById[k]).find(Boolean)
+                      || codeByName[String(p.name).trim().toLowerCase()] || '');
 
         if (p.sizes && p.sizes.length > 0) {
             for (const sz of p.sizes) {
