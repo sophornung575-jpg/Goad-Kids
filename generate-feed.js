@@ -39,6 +39,12 @@ function escXML(str) {
         .replace(/"/g, '&quot;');
 }
 
+// Live-selling code shown in front of the title, e.g. "[1258] Cutie Dresses_107 - Size 120".
+// Codes come from the Live Desk tool (collection live_codes, one doc per product id).
+function withCode(code, title) {
+    return code ? `[${code}] ${title}` : title;
+}
+
 function makeSlug(name) {
     return (name || '').trim().toLowerCase().replace(/\s+/g, '_');
 }
@@ -48,6 +54,23 @@ async function main() {
     console.log('Initialising Firebase...');
     const app = initializeApp(firebaseConfig);
     const db  = getFirestore(app);
+
+    // Load live-selling codes (written by the Live Desk tool). Matched by product id, then by name.
+    const codeById = {}, codeByName = {};
+    try {
+        const cSnap = await getDocs(collection(db, 'live_codes'));
+        cSnap.forEach(d => {
+            const x = d.data() || {};
+            if (!x.code) return;
+            const code = String(x.code);
+            codeById[d.id] = code;
+            if (x.productId) codeById[String(x.productId)] = code;
+            if (x.name) codeByName[String(x.name).trim().toLowerCase()] = code;
+        });
+        console.log(`Loaded ${Object.keys(codeById).length} live code key(s).`);
+    } catch (e) {
+        console.warn('⚠️ Could not load live codes — titles will have no code:', e.message);
+    }
 
     // Load all branch store IDs
     const stores = [{ id: MAIN_STORE, name: 'Main Store' }];
@@ -74,6 +97,7 @@ async function main() {
                 const data = docSnap.data() || {};
                 if (isDeleted(data)) return;                       // deleted items never count
                 const p = { ...data, id: docSnap.id };            // the real doc id wins over a stray "id" field
+                const liveKeys = [data.id, docSnap.id].filter(Boolean).map(String);
                 const slug = p.slug || makeSlug(p.name);
                 if (!slug || !String(p.name || '').trim()) return;
 
@@ -87,7 +111,8 @@ async function main() {
                         images: p.images || [],
                         sizes: [],                                // filled by the merge below (once)
                         stock: 0,
-                        description: p.description || p.name
+                        description: p.description || p.name,
+                        liveKeys: []
                     };
                 } else {
                     // Same product in another store. Keep the Main Store's id + price so variant ids stay stable.
@@ -99,6 +124,8 @@ async function main() {
                         bySlug[slug].images = p.images;
                     }
                 }
+
+                liveKeys.forEach(k => { if (!bySlug[slug].liveKeys.includes(k)) bySlug[slug].liveKeys.push(k); });
 
                 // Merge sizes — each store's quantities are added exactly once
                 (Array.isArray(p.sizes) ? p.sizes : []).forEach(sz => {
@@ -149,6 +176,8 @@ async function main() {
         const image = (p.images && p.images[0]) || '';
         const price = p.price.toFixed(2) + ' ' + CURRENCY;
         const productLink = STORE_URL + '#' + encodeURIComponent(p.name);
+        const liveCode = (p.liveKeys || []).map(k => codeById[k]).find(Boolean)
+                      || codeByName[String(p.name).trim().toLowerCase()] || '';
 
         if (p.sizes && p.sizes.length > 0) {
             for (const sz of p.sizes) {
@@ -157,7 +186,7 @@ async function main() {
                 lines.push('  <item>');
                 lines.push(`    <g:id>${escXML(variantId)}</g:id>`);
                 lines.push(`    <g:item_group_id>${escXML(p.id)}</g:item_group_id>`);
-                lines.push(`    <title>${escXML(p.name + ' - Size ' + sz.name)}</title>`);
+                lines.push(`    <title>${escXML(withCode(liveCode, p.name + ' - Size ' + sz.name))}</title>`);
                 lines.push(`    <description>${escXML(p.description || p.name)}</description>`);
                 lines.push(`    <link>${escXML(productLink)}</link>`);
                 if (image) lines.push(`    <g:image_link>${escXML(image)}</g:image_link>`);
@@ -177,7 +206,7 @@ async function main() {
         } else {
             lines.push('  <item>');
             lines.push(`    <g:id>${escXML(p.id)}</g:id>`);
-            lines.push(`    <title>${escXML(p.name)}</title>`);
+            lines.push(`    <title>${escXML(withCode(liveCode, p.name))}</title>`);
             lines.push(`    <description>${escXML(p.description || p.name)}</description>`);
             lines.push(`    <link>${escXML(productLink)}</link>`);
             if (image) lines.push(`    <g:image_link>${escXML(image)}</g:image_link>`);
