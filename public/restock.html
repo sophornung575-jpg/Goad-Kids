@@ -661,6 +661,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script>
 // Same Firebase project as the Goat Kids retail store app, but this tool
 // only ever touches its own three collections below (restockTool_shops,
@@ -684,6 +685,23 @@ try{
   console.error('Firebase init error:', e);
   db = null;
 }
+
+// ---------- staff login required (same login as the store's Admin Panel) ----------
+(function(){
+  var DOMAIN = '@staff.goatkids.app';
+  function isStaff(u){ return !!(u && u.email && u.email.toLowerCase().slice(-DOMAIN.length) === DOMAIN); }
+  function block(){
+    if (document.getElementById('staffGate')) return;
+    var d = document.createElement('div'); d.id = 'staffGate';
+    d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.92);color:#fff;display:flex;align-items:center;justify-content:center;font:16px system-ui,sans-serif;padding:20px;text-align:center';
+    d.innerHTML = '<div style="max-width:420px"><h2 style="margin:0 0 10px">Staff login needed</h2><p>Log in to the store&#39;s <b>Admin Panel</b> on this device first, then open this page again.</p><p><a href="index.html" style="color:#93c5fd">Go to the store</a></p></div>';
+    (document.body || document.documentElement).appendChild(d);
+  }
+  function unblock(){ var d = document.getElementById('staffGate'); if (d) d.remove(); }
+  try {
+    firebase.auth().onAuthStateChanged(function(u){ if (isStaff(u)) unblock(); else block(); });
+  } catch (e) { console.warn('Auth not available:', e); }
+})();
 </script>
 <script>
 // ---------- translations ----------
