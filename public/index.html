@@ -49,6 +49,7 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-app-compat.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-firestore-compat.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-auth-compat.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
         // =============================================
@@ -62,7 +63,7 @@
             return null;
         }
 
-        var db = null;
+        var db = null, auth = null;
         var firebaseConfig = getFirebaseConfig();
 
         if (!firebaseConfig) {
@@ -80,12 +81,83 @@
         try {
             firebase.initializeApp(firebaseConfig);
             db = firebase.firestore();
+            try { auth = firebase.auth(); } catch (ae) { console.warn('Firebase Auth not loaded:', ae); auth = null; }
             // Note: enablePersistence causes multi-tab conflicts — relying on Firebase's
             // built-in connection handling instead. localStorage serves as our offline cache.
 
         } catch(e) {
             console.error('Firebase init error:', e);
             db = null;
+        }
+
+        // =============================================
+        // STAFF LOGIN (Firebase Authentication)
+        // Each store + role has its own Firebase account, e.g.
+        //   full.goat-1979@staff.goatkids.app   (Full Admin of the main store)
+        //   orders.goat-goat-kids-271-0889@staff.goatkids.app
+        //   super.global@staff.goatkids.app     (master key)
+        // Staff still type only the role password; the app signs in to the
+        // matching account. Firestore rules use this login to tell staff from
+        // customers.
+        // =============================================
+        var STAFF_DOMAIN = 'staff.goatkids.app';
+        function staffEmail(role, storeId) {
+            return (String(role) + '.' + String(storeId || 'global')).toLowerCase().replace(/[^a-z0-9.-]/g, '-') + '@' + STAFF_DOMAIN;
+        }
+        function isStaffUser() {
+            var u = auth && auth.currentUser;
+            return !!(u && u.email && u.email.toLowerCase().slice(-(STAFF_DOMAIN.length + 1)) === '@' + STAFF_DOMAIN);
+        }
+        // Resolves once Firebase has restored any saved login (or after 6s at most).
+        var authReady = new Promise(function(resolve) {
+            if (!auth) { resolve(); return; }
+            var done = false;
+            var unsub = auth.onAuthStateChanged(function() { if (!done) { done = true; try { unsub(); } catch (e) {} resolve(); } });
+            setTimeout(function() { if (!done) { done = true; resolve(); } }, 6000);
+        });
+        // Returns 'ok' | 'created' | 'wrong' | 'weak' | 'offline' | 'noauth' | 'fail:<code>'
+        async function staffSignIn(email, pw, allowCreate) {
+            if (!auth) return 'noauth';
+            try { await auth.signInWithEmailAndPassword(email, pw); return 'ok'; }
+            catch (e) {
+                var c = (e && e.code) || '';
+                if (c === 'auth/network-request-failed') return 'offline';
+                var notFoundOrWrong = c === 'auth/user-not-found' || c === 'auth/invalid-credential' || c === 'auth/invalid-login-credentials';
+                if (allowCreate && notFoundOrWrong) {
+                    try { await auth.createUserWithEmailAndPassword(email, pw); return 'created'; }
+                    catch (e2) {
+                        var c2 = (e2 && e2.code) || '';
+                        if (c2 === 'auth/email-already-in-use') return 'wrong';   // account exists with another password
+                        if (c2 === 'auth/weak-password') return 'weak';
+                        if (c2 === 'auth/network-request-failed') return 'offline';
+                        return 'fail:' + (c2 || e2.message);
+                    }
+                }
+                if (notFoundOrWrong || c === 'auth/wrong-password') return 'wrong';
+                return 'fail:' + (c || e.message);
+            }
+        }
+        // Changes the Firebase password of a staff account (used by Change Password).
+        // Signs in on a separate, temporary app so the current admin stays logged in.
+        async function syncStaffPassword(email, oldPw, newPw) {
+            if (!auth) return 'noauth';
+            var name = 'pwsync-' + Date.now();
+            var tmp = firebase.initializeApp(firebaseConfig, name);
+            try {
+                var a = tmp.auth();
+                try { await a.signInWithEmailAndPassword(email, oldPw); }
+                catch (e) {
+                    var c = (e && e.code) || '';
+                    if (c === 'auth/user-not-found' || c === 'auth/invalid-credential' || c === 'auth/invalid-login-credentials') {
+                        try { await a.createUserWithEmailAndPassword(email, newPw); return 'created'; }
+                        catch (e2) { return (e2 && e2.code) === 'auth/email-already-in-use' ? 'wrong' : 'fail:' + ((e2 && e2.code) || ''); }
+                    }
+                    return 'fail:' + c;
+                }
+                await a.currentUser.updatePassword(newPw);
+                return 'ok';
+            } catch (e) { return 'fail:' + ((e && e.code) || e.message); }
+            finally { try { await tmp.auth().signOut(); } catch (e) {} try { await tmp.delete(); } catch (e) {} }
         }
     </script>
     <style>
@@ -640,6 +712,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                     <button class="admin-tab active" onclick="switchAdminTab('orders')"><i class="fas fa-clipboard-list"></i> <span data-translate="orders">Orders</span><span class="admin-tab-badge" id="ordersBadge">0</span></button>
                     <button class="admin-tab" onclick="switchAdminTab('inventory')"><i class="fas fa-boxes"></i> <span data-translate="inventory">Inventory</span><span class="admin-tab-badge" id="inventoryBadge">0</span></button>
                     <a class="admin-tab-link" href="restock.html" title="Search 1688 suppliers and build a restock list"><i class="fas fa-truck-loading"></i> <span>Restock</span></a>
+                    <a class="admin-tab-link" href="live.html" title="Facebook live selling: product codes and order capture"><i class="fas fa-video"></i> <span>Live</span></a>
                     <button class="admin-tab" onclick="switchAdminTab('reports')"><i class="fas fa-chart-bar"></i> <span data-translate="reports">Reports</span></button>
                     <button type="button" class="nav-pin-btn" onclick="toggleAdminNavPin()" title="Keep the menu open"><i class="fas fa-thumbtack"></i> <span>Keep open</span></button>
                 </div>
@@ -3652,6 +3725,28 @@ function sendToTelegram(order, callback) {
 
         var synced = await savePasswords(passwords);
 
+        // Keep the role's Firebase login account on the same password.
+        var authNote = '';
+        if (synced && auth && (role === 'full' || role === 'orders' || role === 'inventory')) {
+            var acct = staffEmail(role, STATE.storeId), ar;
+            var me = auth.currentUser;
+            if (me && me.email && me.email.toLowerCase() === acct) {
+                try { await me.updatePassword(np); ar = 'ok'; }
+                catch (e) {
+                    if (e && e.code === 'auth/requires-recent-login') {
+                        try { await me.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(acct, cur)); await me.updatePassword(np); ar = 'ok'; }
+                        catch (e2) { ar = 'fail:' + ((e2 && e2.code) || ''); }
+                    } else ar = 'fail:' + ((e && e.code) || '');
+                }
+            } else {
+                ar = await syncStaffPassword(acct, cur, np);
+            }
+            if (ar !== 'ok' && ar !== 'created') {
+                console.warn('Login account password not updated:', acct, ar);
+                authNote = ' ⚠️ The secure login account was not updated (' + ar + ') — ask the owner to reset it in Firebase Authentication.';
+            }
+        }
+
         if (btn) btn.disabled = false;
         document.getElementById('changePwCurrent').value = '';
         document.getElementById('changePwNew').value = '';
@@ -3660,7 +3755,7 @@ function sendToTelegram(order, callback) {
         if (synced) {
             // Confirmed written to Firebase — this is the real source of truth,
             // so the new password is now active everywhere for this store.
-            statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Password changed successfully!</span>';
+            statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Password changed successfully!</span>' + (authNote ? '<br><span style="color:var(--danger)">' + authNote + '</span>' : '');
             showToast('Password changed', 'success');
             logActivity('Password Changed', 'Role: ' + role);
         } else if (db && STATE.firebaseOnline) {
@@ -3686,10 +3781,22 @@ function sendToTelegram(order, callback) {
             return;
         }
         var valid = false, name = '';
+        var ROLE_NAMES = { full: 'Full Admin', orders: 'Order Manager', inventory: 'Inventory Manager' };
+        var authOk = false, strictRules = false, authResult = '';
+        // 1) Secure path: the Firebase account for this store + role
+        var r1 = await staffSignIn(staffEmail(role, STATE.storeId), pw, false);
+        if (r1 === 'ok') { valid = true; authOk = true; name = ROLE_NAMES[role] || role; }
+        // 2) Master key → Super Admin account
+        if (!valid && r1 !== 'offline') {
+            var r2 = await staffSignIn(staffEmail('super', 'global'), pw, false);
+            if (r2 === 'ok') { valid = true; authOk = true; name = 'Super Admin'; role = 'full'; }
+        }
         var passwords = getStoredPasswords();
-        // Try per-store Firestore credentials first, fall back to legacy shared doc, then localStorage
+        // 3) Old password check — only while the Firebase accounts are being set up.
+        //    Once the strict rules are on, the password doc can't be read without
+        //    logging in, so this path switches itself off.
         var firestoreReached = false;
-        try {
+        if (!valid) try {
             var doc = await db.collection('_admin_').doc(STATE.storeId).get();
             if (!doc.exists) doc = await db.collection('_admin_').doc('credentials').get();
             var data = doc.exists ? doc.data() : null;
@@ -3703,14 +3810,21 @@ function sendToTelegram(order, callback) {
                 else if (role === 'inventory' && pw === data.inventoryPass) { valid = true; name = 'Inventory Manager'; }
                 if (data.masterKey && pw === data.masterKey) { valid = true; name = 'Super Admin'; role = 'full'; }
             }
-        } catch (e) { /* offline — fall through to localStorage passwords */ }
+        } catch (e) { if (e && e.code === 'permission-denied') strictRules = true; /* else offline — fall through to localStorage passwords */ }
         // localStorage passwords — only used when Firestore couldn't be reached (offline).
         // If Firestore WAS reached, its answer is final: an old/changed password must not
         // still work here just because this device's local cache hasn't been refreshed.
-        if (!valid && !firestoreReached) {
+        if (!valid && !firestoreReached && !strictRules) {
             if (role === 'full' && pw === passwords.fullPass) { valid = true; name = 'Full Admin'; }
             else if (role === 'orders' && pw === passwords.ordersPass) { valid = true; name = 'Order Manager'; }
             else if (role === 'inventory' && pw === passwords.inventoryPass) { valid = true; name = 'Inventory Manager'; }
+        }
+        // Old password was right but there is no Firebase account yet → create it now,
+        // so this login (and every later one) goes through the secure path.
+        if (valid && !authOk) {
+            authResult = await staffSignIn(name === 'Super Admin' ? staffEmail('super', 'global') : staffEmail(role, STATE.storeId), pw, true);
+            authOk = (authResult === 'ok' || authResult === 'created');
+            if (!authOk) console.warn('Staff account setup did not finish:', authResult);
         }
         if (!valid) {
             attempts.count++;
@@ -3731,6 +3845,13 @@ function sendToTelegram(order, callback) {
         localStorage.setItem('goatLoginAttempts', JSON.stringify(STATE.loginAttempts));
         STATE.isAdmin = true; STATE.adminRole = role;
         localStorage.setItem('goatAdmin', 'true'); localStorage.setItem('goatAdminRole', role);
+        if (authOk) {
+            // Refresh this device's password cache from Firestore now that we're signed in.
+            db.collection('_admin_').doc(STATE.storeId).get().then(function(d) {
+                if (d.exists) cachePasswordsFrom(d.data(), getStoredPasswords());
+            }).catch(function() {});
+            if (STATE.firebaseOnline) setTimeout(function() { loadData(); }, 300);   // orders are only loaded for signed-in staff
+        }
         addLoginRecord(name, role, true);
         renderPending(); renderHistory(); renderInventory(); updateAdminBadges();
         updateDiscountPanelVisibility(); // also re-renders cart if items present
@@ -3747,9 +3868,17 @@ function sendToTelegram(order, callback) {
         else { document.querySelectorAll('.admin-tab')[0].style.display = ''; document.querySelectorAll('.admin-tab')[1].style.display = ''; document.querySelectorAll('.admin-tab')[2].style.display = ''; }
         document.getElementById('adminPassword').value = '';
         showToast('Welcome ' + name + '!', 'success');
+        if (!authOk) {
+            var why = authResult === 'weak' ? 'This password is shorter than 6 characters. Please change it in Settings → Change Password.'
+                    : authResult === 'wrong' ? 'The secure account for this role has a different password. Ask the owner to reset it in Firebase.'
+                    : authResult === 'offline' ? 'No internet — the secure login will be finished next time you log in online.'
+                    : 'Secure login could not be finished (' + authResult + ').';
+            setTimeout(function() { showToast('⚠️ ' + why, 'warning'); }, 1500);
+        }
     }
 
     function adminLogout() {
+        try { if (auth && auth.currentUser) auth.signOut(); } catch (e) {}
         STATE.isAdmin = false; STATE.adminRole = '';
         localStorage.removeItem('goatAdmin'); localStorage.removeItem('goatAdminRole');
         updateDiscountPanelVisibility();
@@ -4000,6 +4129,11 @@ function sendToTelegram(order, callback) {
             localStorage.setItem('goatDeletedProducts', '[]');
             loadInventoryRules(); // non-blocking; re-renders inventory once rules arrive
 
+            // Orders, refunds, passwords and settings are staff-only. Customers'
+            // browsers no longer download other people's orders.
+            await authReady;
+            var staffSession = !auth || isStaffUser();
+            if (staffSession) {
             // ── Orders ──
             // NOTE: previously this fetched the ENTIRE order history unbounded, every
             // single page load, forever. Combined with saveOrders() re-archiving the
@@ -4066,6 +4200,7 @@ function sendToTelegram(order, callback) {
                     cachePasswordsFrom(creds, Object.assign({ fullPass: 'admin123', ordersPass: 'orders123', inventoryPass: 'inventory123' }, getStoredPasswords()));
                 }
             } catch(e) { console.warn('Password load failed:', e); }
+            } // end staff-only
 
             // ── STEP 5: Update UI with fresh data ──
             renderProducts();
@@ -4073,13 +4208,13 @@ function sendToTelegram(order, callback) {
             renderPending();
             renderHistory();
             updateAdminBadges();
-            checkAndPushRestockAlerts(); // auto-adds fast-selling, low-stock items to the restock.html list
-            repairProductDatesV4(); // one-time: rebuild promotion dates from logs + transfer receipts (fixes dates lost before the save fix)
+            if (staffSession) checkAndPushRestockAlerts(); // auto-adds fast-selling, low-stock items to the restock.html list
+            if (staffSession) repairProductDatesV4(); // one-time: rebuild promotion dates from logs + transfer receipts (fixes dates lost before the save fix)
             // backfillRestockDatesFromLogs(); // replaced by repairProductDatesV4 above — v3 would undo branch dates set from transfers
             showStatus('Synced', 'online');
             var warn = document.getElementById('localDataWarning');
             if (warn) warn.remove();
-            loadTelegramConfigFromFirebase(); // sync telegram config to all devices
+            if (staffSession) loadTelegramConfigFromFirebase(); // sync telegram config to staff devices
             setTimeout(function() { document.getElementById('statusBar').classList.remove('show'); }, 3000);
 
         } catch(e) {
@@ -5995,7 +6130,9 @@ function sendToTelegram(order, callback) {
                 console.log('✅ Recovered queued new order:', o.orderId);
             } catch (e) {
                 console.warn('New-order retry failed for', o.orderId, e);
-                remaining.push(o);
+                // permission-denied here means the order already exists in Firestore
+                // (customers may create an order once but not overwrite it).
+                if (!(e && e.code === 'permission-denied')) remaining.push(o);
             }
         }
         localStorage.setItem('goatNewOrderQueue', JSON.stringify(remaining));
@@ -13010,7 +13147,27 @@ function sendToTelegram(order, callback) {
             document.getElementById('adminNavLinkMobile').classList.remove('hidden');
             document.getElementById('adminLoginBtn').classList.add('hidden');
             document.getElementById('adminLoginBtnMobile').classList.add('hidden');
+            // Sessions from before the secure login don't have a Firebase account
+            // signed in — ask for one fresh login so this device keeps working.
+            authReady.then(function() {
+                if (auth && STATE.isAdmin && !isStaffUser()) {
+                    adminLogout();
+                    setTimeout(function() { showToast('Security upgrade: please log in to Admin again (one time only).', 'info'); }, 600);
+                }
+            });
         }
+
+        // If the staff login ends (e.g. the role password was changed on another
+        // device), drop admin mode so nobody keeps working in a session that can't save.
+        authReady.then(function() {
+            if (!auth) return;
+            auth.onAuthStateChanged(function(u) {
+                if (!u && STATE.isAdmin) {
+                    adminLogout();
+                    setTimeout(function() { showToast('Your admin login ended. Please log in again.', 'info'); }, 600);
+                }
+            });
+        });
 
         // Store ID — configurable per device, defaults to GOAT-1979
         var sid = localStorage.getItem('goatStoreId') || 'GOAT-1979';
