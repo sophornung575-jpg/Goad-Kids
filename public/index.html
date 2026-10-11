@@ -769,6 +769,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                             <div class="orders-col-header history-header">
                                 <span><i class="fas fa-history"></i> <span data-translate="historyLbl">History</span> <span class="admin-count" id="historyCount">0</span></span>
                                 <div style="display:flex;gap:0.4rem;align-items:center">
+                                    <button class="btn btn-outline btn-small" id="problemFilterBtn" onclick="toggleProblemFilter()" title="Orders with an open problem (size, colour, damage)"><i class="fas fa-triangle-exclamation" style="color:var(--danger)"></i> <span class="hide-xs" data-translate="problemsLbl">Problems</span> <span class="admin-count" id="problemCount" style="background:var(--danger)">0</span></button>
                                     <button class="btn btn-outline btn-small" onclick="openArchiveViewer()" title="View & export archived orders"><i class="fas fa-box-archive"></i> <span class="hide-xs" data-translate="archiveBtn">Archive</span></button>
                                     <button class="btn btn-outline btn-small" onclick="openOrderExportModal()"><i class="fas fa-download"></i></button>
                                 </div>
@@ -1720,6 +1721,28 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
         </div>
     </div>
 
+    <!-- PROBLEM ORDER MODAL (report / resolve) -->
+    <div class="modal-overlay" id="problemModal" onclick="if(event.target===this)closeProblemModal()">
+        <div class="modal" style="max-width:420px;width:94%" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 style="margin:0;color:var(--danger)" id="problemModalTitle">⚠️ Report a problem</h3>
+                <button class="modal-close" onclick="closeProblemModal()">✕</button>
+            </div>
+            <div class="modal-body" style="padding:1rem">
+                <div id="problemOrderInfo" style="background:var(--light);border-radius:8px;padding:0.75rem;margin-bottom:1rem;font-size:0.85rem"></div>
+                <div class="form-group">
+                    <label style="font-size:0.85rem;font-weight:600" id="problemSelectLbl">Problem type</label>
+                    <select id="problemSelect" class="form-control" style="font-size:0.85rem"></select>
+                </div>
+                <div class="form-group">
+                    <label style="font-size:0.85rem;font-weight:600" data-translate="problemNote">Note</label>
+                    <textarea id="problemNoteInput" class="form-control" rows="3" style="font-size:0.85rem" placeholder="e.g. customer needs size 110 instead of 100"></textarea>
+                </div>
+                <button class="btn btn-danger" style="width:100%" id="problemSaveBtn" onclick="saveProblem()"><i class="fas fa-save"></i> <span data-translate="saveBtnLbl">Save</span></button>
+            </div>
+        </div>
+    </div>
+
     <!-- REFUND MODAL -->
     <div class="modal-overlay" id="refundModal" onclick="if(event.target===this)closeRefundModal()">
         <div class="modal" style="max-width:480px;width:94%;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
@@ -2433,7 +2456,7 @@ function sendToTelegram(order, callback) {
             noPendingOrders:'No pending orders',noOrderHistory:'No order history',
             noRefundsYet:'No refunds yet',noMatches:'No matches',pageLbl:'Page',
             allBtn:'All',printBill:'Print Bill',payment:'Payment',cash:'Cash',
-            qrCode:'QR Code',moreRefund:'More Refund',refund:'Refund',
+            qrCode:'QR Code',moreRefund:'More Refund',refund:'Refund',problemBtn:'Problem',problemsLbl:'Problems',problemBadge:'Problem',resolveBtn:'Resolve',noProblems:'No open problems',reportProblemTitle:'Report a problem',resolveProblemTitle:'Resolve problem',problemType:'Problem type',problemNote:'Note',problemOutcome:'How was it resolved?',saveBtnLbl:'Save',pbWrongSize:'Wrong size',pbWrongColour:'Wrong colour',pbDamaged:'Damaged',pbOther:'Other',pbExchanged:'Exchanged',pbRefunded:'Refunded',archivedOrderNote:'Order is in the Archive',
             inventoryLbl:'Inventory',productsBtn:'Products',addNew:'Add New',transfer:'Transfer',
             branchStock:'Branch Stock',settings:'Settings',scanBtn:'Scan',
             labelsBtn:'Labels',saveBtn:'Save',editBtn:'Edit',deleteBtn:'Delete',
@@ -2497,7 +2520,7 @@ function sendToTelegram(order, callback) {
             noPendingOrders:'មិនមានការបញ្ជាទិញកំពុងរង់ចាំ',noOrderHistory:'មិនមានប្រវត្តិការបញ្ជាទិញ',
             noRefundsYet:'មិនទាន់មានការសងប្រាក់វិញ',noMatches:'រកមិនឃើញ',pageLbl:'ទំព័រ',
             allBtn:'ទាំងអស់',printBill:'បោះពុម្ពវិក័យប័ត្រ',payment:'ការទូទាត់',cash:'សាច់ប្រាក់',
-            qrCode:'កូដ QR',moreRefund:'សងបន្ថែម',refund:'សងប្រាក់វិញ',
+            qrCode:'កូដ QR',moreRefund:'សងបន្ថែម',refund:'សងប្រាក់វិញ',problemBtn:'មានបញ្ហា',problemsLbl:'ការកម្ម៉ង់មានបញ្ហា',problemBadge:'មានបញ្ហា',resolveBtn:'ដោះស្រាយរួច',noProblems:'គ្មានបញ្ហាដែលនៅបើក',reportProblemTitle:'រាយការណ៍បញ្ហា',resolveProblemTitle:'ដោះស្រាយបញ្ហា',problemType:'ប្រភេទបញ្ហា',problemNote:'កំណត់ចំណាំ',problemOutcome:'ដោះស្រាយដោយរបៀបណា?',saveBtnLbl:'រក្សាទុក',pbWrongSize:'ខុសទំហំ',pbWrongColour:'ខុសពណ៌',pbDamaged:'ខូច',pbOther:'ផ្សេងៗ',pbExchanged:'បានប្តូរ',pbRefunded:'បានសងប្រាក់',archivedOrderNote:'ការកម្ម៉ង់នៅក្នុង Archive',
             inventoryLbl:'ស្តុកទំនិញ',productsBtn:'ផលិតផល',addNew:'បន្ថែមថ្មី',transfer:'ផ្ទេរ',
             branchStock:'ស្តុកសាខា',settings:'ការកំណត់',scanBtn:'ស្កេន',
             labelsBtn:'ស្លាក',saveBtn:'រក្សាទុក',editBtn:'កែសម្រួល',deleteBtn:'លុប',
@@ -4155,6 +4178,7 @@ function sendToTelegram(order, callback) {
             await authReady;
             var staffSession = !auth || isStaffUser();
             if (staffSession) {
+            loadOrderIssues(); // open "problem" orders — non-blocking, re-renders history when done
             // ── Orders ──
             // NOTE: previously this fetched the ENTIRE order history unbounded, every
             // single page load, forever. Combined with saveOrders() re-archiving the
@@ -6733,6 +6757,129 @@ function sendToTelegram(order, callback) {
         }
     }
 
+    // =============================================
+    // PROBLEM ORDERS (after delivery: wrong size / colour / damaged)
+    // The order itself stays exactly as it is (Confirmed / Partial refund), so
+    // stock, sales and reports are untouched. The problem is kept in its own
+    // record, stores/{storeId}/orderIssues/{orderId}, so it never gets lost even
+    // when the order moves to the Archive. Money and stock changes for an
+    // exchange go through the normal Refund flow.
+    // =============================================
+    STATE.orderIssues = STATE.orderIssues || {};
+    STATE.historyProblemOnly = false;
+    var _problemState = { mode: null, orderId: null };
+    var PROBLEM_TYPES = ['wrong_size', 'wrong_colour', 'damaged', 'other'];
+    var PROBLEM_OUTCOMES = ['exchanged', 'refunded', 'other'];
+    function problemTypeLabel(k) { return ({ wrong_size: t('pbWrongSize'), wrong_colour: t('pbWrongColour'), damaged: t('pbDamaged'), other: t('pbOther') })[k] || k || ''; }
+    function problemOutcomeLabel(k) { return ({ exchanged: t('pbExchanged'), refunded: t('pbRefunded'), other: t('pbOther') })[k] || k || ''; }
+    function openIssueFor(oid) { var x = STATE.orderIssues[oid]; return x && x.open ? x : null; }
+    function _issuesCacheKey() { return 'goatOrderIssues_' + STATE.storeId; }
+    function _saveIssuesCache() { try { localStorage.setItem(_issuesCacheKey(), JSON.stringify(STATE.orderIssues)); } catch (e) {} }
+    async function loadOrderIssues() {
+        try { STATE.orderIssues = JSON.parse(localStorage.getItem(_issuesCacheKey()) || '{}') || {}; } catch (e) { STATE.orderIssues = {}; }
+        if (db) {
+            try {
+                var snap = await db.collection('stores').doc(STATE.storeId).collection('orderIssues').where('open', '==', true).get();
+                var fresh = {};
+                snap.forEach(function(d) { fresh[d.id] = d.data(); });
+                STATE.orderIssues = fresh;
+                _saveIssuesCache();
+            } catch (e) { console.warn('Problem orders load failed:', e.message); }
+        }
+        try { renderHistory(); } catch (e) {}
+    }
+    function updateProblemCount() {
+        var n = Object.keys(STATE.orderIssues || {}).filter(function(k) { return STATE.orderIssues[k] && STATE.orderIssues[k].open; }).length;
+        var el = document.getElementById('problemCount'); if (el) el.textContent = n;
+        var btn = document.getElementById('problemFilterBtn');
+        if (btn) { btn.style.background = STATE.historyProblemOnly ? '#fff5f5' : ''; btn.style.borderColor = STATE.historyProblemOnly ? 'var(--danger)' : ''; }
+    }
+    // Open problems, newest first. Orders already moved to the Archive are shown
+    // from the summary saved with the problem.
+    function problemOrdersList() {
+        return Object.keys(STATE.orderIssues || {}).map(function(k) { return STATE.orderIssues[k]; })
+            .filter(function(x) { return x && x.open; })
+            .sort(function(a, b) { return (b.openedAt || 0) - (a.openedAt || 0); })
+            .map(function(x) {
+                var o = STATE.confirmedOrders.find(function(c) { return c.orderId === x.orderId; });
+                return o || { orderId: x.orderId, orderDate: x.orderDate || '', customerName: x.customerName, customerPhone: x.customerPhone,
+                    total: x.total || 0, paymentMethod: x.paymentMethod, cart: x.cart || [], status: x.orderStatus || 'confirmed', _archivedStub: true };
+            });
+    }
+    function toggleProblemFilter() {
+        STATE.historyProblemOnly = !STATE.historyProblemOnly;
+        STATE.historyPage = 0;
+        renderHistory(document.getElementById('orderSearch') ? document.getElementById('orderSearch').value.trim() : '');
+    }
+    function openReportProblem(oid) {
+        var o = STATE.confirmedOrders.find(function(c) { return c.orderId === oid; });
+        if (!o) { showToast('Order not found', 'error'); return; }
+        _problemState = { mode: 'report', orderId: oid };
+        document.getElementById('problemModalTitle').textContent = '⚠️ ' + t('reportProblemTitle');
+        document.getElementById('problemSelectLbl').textContent = t('problemType');
+        document.getElementById('problemSelect').innerHTML = PROBLEM_TYPES.map(function(k) { return '<option value="' + k + '">' + escHtml(problemTypeLabel(k)) + '</option>'; }).join('');
+        document.getElementById('problemNoteInput').value = '';
+        document.getElementById('problemOrderInfo').innerHTML = '<b>' + escHtml(o.orderId) + '</b> · 👤 ' + escHtml(o.customerName || '') + ' · 📞 ' + escHtml(o.customerPhone || '') + '<br>$' + (o.total || 0).toFixed(2);
+        document.getElementById('problemModal').classList.add('active');
+    }
+    function openResolveProblem(oid) {
+        var x = openIssueFor(oid); if (!x) return;
+        _problemState = { mode: 'resolve', orderId: oid };
+        document.getElementById('problemModalTitle').textContent = '✅ ' + t('resolveProblemTitle');
+        document.getElementById('problemSelectLbl').textContent = t('problemOutcome');
+        document.getElementById('problemSelect').innerHTML = PROBLEM_OUTCOMES.map(function(k) { return '<option value="' + k + '">' + escHtml(problemOutcomeLabel(k)) + '</option>'; }).join('');
+        document.getElementById('problemNoteInput').value = '';
+        document.getElementById('problemOrderInfo').innerHTML = '<b>' + escHtml(oid) + '</b> · 👤 ' + escHtml(x.customerName || '') + '<br>⚠️ ' + escHtml(problemTypeLabel(x.type)) + (x.note ? ' — ' + escHtml(x.note) : '');
+        document.getElementById('problemModal').classList.add('active');
+    }
+    function closeProblemModal() {
+        document.getElementById('problemModal').classList.remove('active');
+        _problemState = { mode: null, orderId: null };
+    }
+    async function saveProblem() {
+        var oid = _problemState.orderId, mode = _problemState.mode;
+        if (!oid || !mode) return;
+        var choice = document.getElementById('problemSelect').value;
+        var note = document.getElementById('problemNoteInput').value.trim();
+        var btn = document.getElementById('problemSaveBtn');
+        var now = Date.now(), data;
+        if (mode === 'report') {
+            if (openIssueFor(oid)) { closeProblemModal(); return; }
+            var o = STATE.confirmedOrders.find(function(c) { return c.orderId === oid; });
+            if (!o) { showToast('Order not found', 'error'); return; }
+            data = {
+                orderId: oid, storeId: STATE.storeId, open: true, type: choice, note: note,
+                openedAt: now, openedAtStr: new Date(now).toLocaleString(), openedBy: STATE.adminRole || '',
+                // Summary so the problem can still be shown if the order moves to the Archive
+                customerName: o.customerName || '', customerPhone: o.customerPhone || '', total: o.total || 0,
+                orderDate: o.orderDate || '', paymentMethod: o.paymentMethod || '', orderStatus: o.status || 'confirmed',
+                cart: (o.cart || []).map(function(it) { return { name: it.name, size: it.size || '', quantity: it.quantity }; })
+            };
+        } else {
+            var cur = openIssueFor(oid); if (!cur) { closeProblemModal(); return; }
+            data = Object.assign({}, cur, { open: false, outcome: choice, resolveNote: note,
+                resolvedAt: now, resolvedAtStr: new Date(now).toLocaleString(), resolvedBy: STATE.adminRole || '' });
+        }
+        if (btn) btn.disabled = true;
+        try {
+            if (db) await db.collection('stores').doc(STATE.storeId).collection('orderIssues').doc(oid).set(data, { merge: true });
+            STATE.orderIssues[oid] = data;
+            if (!data.open) delete STATE.orderIssues[oid];
+            _saveIssuesCache();
+            if (mode === 'report') {
+                logActivity('Problem Reported', oid + ' — ' + problemTypeLabel(data.type) + (note ? ': ' + note : ''));
+                showToast('⚠️ ' + t('problemBadge') + ' — ' + oid, 'warning');
+            } else {
+                logActivity('Problem Resolved', oid + ' — ' + problemOutcomeLabel(data.outcome) + (note ? ': ' + note : ''));
+                showToast('✅ ' + t('resolveBtn') + ' — ' + oid, 'success');
+            }
+            closeProblemModal();
+            renderHistory(document.getElementById('orderSearch') ? document.getElementById('orderSearch').value.trim() : '');
+        } catch (e) {
+            showToast('Could not save — nothing was changed: ' + e.message, 'error');
+        } finally { if (btn) btn.disabled = false; }
+    }
+
     function renderHistory(searchQ) {
         var c = document.getElementById('historyContainer');
         document.getElementById('historyCount').textContent = STATE.confirmedOrders.length;
@@ -6745,11 +6892,13 @@ function sendToTelegram(order, callback) {
         var orders = STATE.confirmedOrders.slice().sort(function(a, b) {
             return (b.timestamp || 0) - (a.timestamp || 0);
         });
+        updateProblemCount();
+        if (STATE.historyProblemOnly) orders = problemOrdersList();
         if (searchQ) {
             var q = searchQ.toLowerCase();
             orders = orders.filter(function(o){ return (o.orderId||'').toLowerCase().indexOf(q)!==-1||(o.customerName||'').toLowerCase().indexOf(q)!==-1||(o.customerPhone||'').toLowerCase().indexOf(q)!==-1; });
         }
-        if (!orders.length) { c.innerHTML = '<div class="admin-empty"><i class="fas fa-archive"></i><p>' + (searchQ ? t('noMatches') : t('noOrderHistory')) + '</p></div>'; updateHistoryPager(0,0); return; }
+        if (!orders.length) { c.innerHTML = '<div class="admin-empty"><i class="fas fa-archive"></i><p>' + (searchQ ? t('noMatches') : (STATE.historyProblemOnly ? t('noProblems') : t('noOrderHistory'))) + '</p></div>'; updateHistoryPager(0,0); return; }
 
         // Pagination
         var ps = STATE.historyPageSize, pg = STATE.historyPage || 0;
@@ -6776,11 +6925,15 @@ function sendToTelegram(order, callback) {
             var discBadge2 = (o.discount > 0) ? ' <span style="font-size:0.72rem;background:#d4edda;color:#276749;border-radius:4px;padding:1px 5px;margin-left:4px">-$' + o.discount.toFixed(2) + '</span>' : '';
             var statusIcon = ok ? '✅' : isPartialRefund ? '↩️' : '❌';
             var statusLabel = isPartialRefund ? ' <span style="font-size:0.7rem;background:#fff3cd;color:#856404;border-radius:4px;padding:1px 5px;margin-left:4px">Partial Refund · -$' + (o.refundAmount||0).toFixed(2) + '</span>' : '';
+            var issue = openIssueFor(o.orderId);
+            var issueHtml = issue ? '<div style="margin:0.35rem 0;padding:0.35rem 0.5rem;border-radius:6px;background:#fff5f5;border:1px solid #feb2b2;color:#c53030;font-size:0.8rem"><b>⚠️ ' + escHtml(t('problemBadge')) + ': ' + escHtml(problemTypeLabel(issue.type)) + '</b>' + (issue.note ? ' — ' + escHtml(issue.note) : '') + '<br><span style="color:var(--gray-dark);font-size:0.72rem">' + escHtml(issue.openedAtStr || '') + (issue.openedBy ? ' · ' + escHtml(issue.openedBy) : '') + (o._archivedStub ? ' · ' + escHtml(t('archivedOrderNote')) : '') + '</span></div>' : '';
+            var problemBtn = (ok || isPartialRefund) && !issue && !o._archivedStub ? '<button class="btn btn-warning" onclick="openReportProblem(\'' + o.orderId + '\')"><i class="fas fa-triangle-exclamation"></i> ' + t('problemBtn') + '</button>' : '';
+            var resolveBtn = issue ? '<button class="btn btn-success" onclick="openResolveProblem(\'' + o.orderId + '\')"><i class="fas fa-check"></i> ' + t('resolveBtn') + '</button>' : '';
             h += '<div class="order-card-mini ' + (o.status||'') + '">' +
                 '<div class="oc-head"><div class="oc-id">' + statusIcon + ' ' + escHtml(o.orderId) + statusLabel + '<br><span style="font-weight:400;color:var(--gray)">' + escHtml(o.orderDate||o.confirmedAt||'') + '</span></div><div class="oc-total">$' + (o.total||0).toFixed(2) + discBadge2 + '</div></div>' +
                 '<div class="oc-info">👤 ' + escHtml(o.customerName||'N/A') + ' · 📞 ' + escHtml(o.customerPhone||'') + ' · ' + (o.paymentMethod === 'qr' ? '📱 ' + t('qrCode') : '💵 ' + t('cash')) + '</div>' +
-                '<div class="oc-items">' + escHtml(itemsSummary) + '</div>' +
-                ((ok || isPartialRefund) ? '<div class="oc-actions"><button class="btn btn-receipt" onclick="printReceipt(\'' + o.orderId + '\')"><i class="fas fa-print"></i> ' + t('printBill') + '</button><button class="btn btn-danger" onclick="refundOrder(\'' + o.orderId + '\')"><i class="fas fa-undo"></i> ' + (isPartialRefund ? t('moreRefund') : t('refund')) + '</button></div>' : '') +
+                '<div class="oc-items">' + escHtml(itemsSummary) + '</div>' + issueHtml +
+                (((ok || isPartialRefund) && !o._archivedStub) ? '<div class="oc-actions"><button class="btn btn-receipt" onclick="printReceipt(\'' + o.orderId + '\')"><i class="fas fa-print"></i> ' + t('printBill') + '</button><button class="btn btn-danger" onclick="refundOrder(\'' + o.orderId + '\')"><i class="fas fa-undo"></i> ' + (isPartialRefund ? t('moreRefund') : t('refund')) + '</button>' + problemBtn + resolveBtn + '</div>' : (resolveBtn ? '<div class="oc-actions">' + resolveBtn + '</div>' : '')) +
                 '</div>';
         }
         c.innerHTML = h;
