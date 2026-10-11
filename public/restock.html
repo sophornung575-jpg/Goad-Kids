@@ -166,6 +166,9 @@
   .rl-sendbar .btn{ white-space:nowrap; }
   .tab-alert-count{ display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; margin-left:4px; border-radius:999px; background:var(--danger); color:#fff; font-size:0.65rem; font-weight:700; }
   .status-received{ background:#ebf4ff; color:#2c5282; }
+  .status-dead{ background:#f1f1f1; color:#6b6b6b; }
+  .mark-dead{ background:none; border:1px solid #c0c0c0; color:#6b6b6b; border-radius:5px; padding:3px 8px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
+  .mark-dead:hover{ background:#6b6b6b; color:#fff; }
   .mark-ordered{ background:none; border:1px solid var(--success); color:var(--success); border-radius:5px; padding:3px 8px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
   .mark-ordered:hover{ background:var(--success); color:#fff; }
   .mark-received{ background:none; border:1px solid var(--info); color:var(--info); border-radius:5px; padding:3px 8px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
@@ -503,12 +506,8 @@
         </div>
         <div class="admin-card-body">
           <div class="status-filter" id="statusFilter">
-            <button class="status-filter-btn active" data-status="todo" data-label="To do" data-label-key="statusTodo" onclick="setRestockFilter('todo')">To do</button>
-            <button class="status-filter-btn" data-status="all" data-label="All" data-label-key="statusAll" onclick="setRestockFilter('all')">All</button>
-            <button class="status-filter-btn" data-status="pending" data-label="Not sent" data-label-key="statusPending" onclick="setRestockFilter('pending')">Not sent</button>
-            <button class="status-filter-btn" data-status="sent" data-label="Sent" data-label-key="statusSent" onclick="setRestockFilter('sent')">Sent</button>
-            <button class="status-filter-btn" data-status="ordered" data-label="Ordered" data-label-key="statusOrdered" onclick="setRestockFilter('ordered')">Ordered</button>
-            <button class="status-filter-btn" data-status="received" data-label="Received" data-label-key="statusReceived" onclick="setRestockFilter('received')">Received</button>
+            <button class="status-filter-btn active" data-status="todo" data-label="Restock list" data-label-key="viewRestockList" onclick="setRestockFilter('todo')">Restock list</button>
+            <button class="status-filter-btn" data-status="dead" data-label="Dead items" data-label-key="viewDeadItems" onclick="setRestockFilter('dead')">Dead items</button>
           </div>
           <div class="select-all-row">
             <input type="checkbox" id="selectAllRestock">
@@ -520,6 +519,8 @@
           <div class="rl-sendbar" id="rlSendBar" style="display:none">
             <span class="rl-selcount" id="rlSelCount"></span>
             <button class="btn btn-outline" id="queueSelectedBtn" onclick="queueSelectedToReceiving()" disabled><i class="fas fa-box-open"></i> Move selected to Receiving</button>
+            <button class="btn btn-outline" id="deadSelectedBtn" onclick="deadSelectedGroups()" disabled><i class="fas fa-ban"></i> <span data-t="deadSelectedBtn">Move selected to Dead items</span></button>
+            <button class="btn btn-outline" id="restoreSelectedBtn" onclick="restoreSelectedGroups()" style="display:none" disabled><i class="fas fa-rotate-left"></i> <span data-t="restoreSelectedBtn">Restore selected</span></button>
             <button class="btn btn-primary" id="sendTelegramBtn" disabled><i class="fab fa-telegram-plane"></i> <span data-t="sendTelegramBtnLabel">Send selected to Telegram</span></button>
           </div>
         </div>
@@ -755,6 +756,7 @@ const TRANSLATIONS = {
     unlock1688BtnLabel: 'Unlock Link Source', lock1688BtnLabel: 'Lock Link Source', linkLockedLabel: 'Link locked', enterUnlockPasswordPrompt: 'Enter password to view Link Source links:',
     markOrderedBtn: 'Mark ordered', markReceivedBtn: 'Mark received', qtyShort: 'Qty', alertBadge: 'Low-stock alert', alertMeta: 'Sold {sold} in {days} days · {left} left in store', soldShort: 'sold', leftShort: 'left', alertTabTitle: 'Low-stock alerts waiting to be ordered', linkToStoreBtn: 'Link to store product', notLinkedTitle: 'Not linked to a store product yet', linkedToLabel: 'Store product:', changeLinkBtn: 'Change', filterStoreProducts: 'Type to filter your products...', chooseStoreProduct: '— Choose a store product —', saveLinkBtn: 'Save', cancelBtn: 'Cancel', unlinkBtn: 'Unlink', storeProductsLoading: 'Loading store products...', storeProductsFailed: 'Could not load store products.', suggestedMatch: 'Suggested by supplier code', linkedSupplierLabel: 'Supplier:', notLinkedYet: 'No supplier linked yet — link it from the Home tab',
     undoStatusBtn: 'Undo', undoStatusTitle: 'Revert to the previous status',
+    viewRestockList: 'Restock list', viewDeadItems: 'Dead items', deadBtn: 'Dead item', deadBtnTitle: 'No need to order — move to Dead items', restoreBtn: 'Restore', deadSelectedBtn: 'Move selected to Dead items', restoreSelectedBtn: 'Restore selected', deadBadge: 'Dead item', emptyDeadItems: 'No dead items.', confirmDead: 'Move {n} item(s) to Dead items? They will not be ordered. You can restore them later.',
     searchLinkLabel: 'Search link', directLinkLabel: 'Direct link', uncategorizedOption: '— Uncategorized —'
   },
   kh: {
@@ -805,6 +807,7 @@ const TRANSLATIONS = {
     unlock1688BtnLabel: 'ដោះសោ Link Source', lock1688BtnLabel: 'ចាក់សោ Link Source', linkLockedLabel: 'តំណភ្ជាប់បានចាក់សោ', enterUnlockPasswordPrompt: 'បញ្ចូលពាក្យសម្ងាត់ដើម្បីមើលតំណភ្ជាប់ Link Source៖',
     markOrderedBtn: 'សម្គាល់ថាបានបញ្ជាទិញ', markReceivedBtn: 'សម្គាល់ថាបានទទួល', qtyShort: 'ចំនួន', alertBadge: 'ជូនដំណឹងស្តុកទាប', alertMeta: 'លក់បាន {sold} ក្នុង {days} ថ្ងៃ · នៅសល់ {left} ក្នុងហាង', soldShort: 'លក់', leftShort: 'សល់', alertTabTitle: 'ការជូនដំណឹងស្តុកទាបដែលរង់ចាំបញ្ជាទិញ', linkToStoreBtn: 'ភ្ជាប់ទៅទំនិញក្នុងហាង', notLinkedTitle: 'មិនទាន់ភ្ជាប់ទំនិញក្នុងហាង', linkedToLabel: 'ទំនិញក្នុងហាង:', changeLinkBtn: 'ប្តូរ', filterStoreProducts: 'វាយដើម្បីស្វែងរកទំនិញ...', chooseStoreProduct: '— ជ្រើសរើសទំនិញក្នុងហាង —', saveLinkBtn: 'រក្សាទុក', cancelBtn: 'បោះបង់', unlinkBtn: 'ផ្តាច់', storeProductsLoading: 'កំពុងផ្ទុកទំនិញក្នុងហាង...', storeProductsFailed: 'មិនអាចផ្ទុកទំនិញក្នុងហាងបានទេ។', suggestedMatch: 'ណែនាំតាមលេខកូដអ្នកផ្គត់ផ្គង់', linkedSupplierLabel: 'អ្នកផ្គត់ផ្គង់:', notLinkedYet: 'មិនទាន់ភ្ជាប់អ្នកផ្គត់ផ្គង់ — ភ្ជាប់វានៅផ្ទាំង Home',
     undoStatusBtn: 'ត្រឡប់', undoStatusTitle: 'ត្រឡប់ទៅស្ថានភាពមុន',
+    viewRestockList: 'បញ្ជីបញ្ជាទិញបន្ថែម', viewDeadItems: 'ទំនិញលែងបញ្ជាទិញ', deadBtn: 'លែងបញ្ជាទិញ', deadBtnTitle: 'មិនចាំបាច់បញ្ជាទិញ — ផ្លាស់ទៅ Dead items', restoreBtn: 'ដាក់មកវិញ', deadSelectedBtn: 'ផ្លាស់ទំនិញដែលបានជ្រើសទៅ Dead items', restoreSelectedBtn: 'ដាក់ទំនិញដែលបានជ្រើសមកវិញ', deadBadge: 'លែងបញ្ជាទិញ', emptyDeadItems: 'មិនមានទំនិញលែងបញ្ជាទិញទេ។', confirmDead: 'ផ្លាស់ទំនិញ {n} មុខទៅ Dead items? វានឹងមិនត្រូវបានបញ្ជាទិញទេ។ អាចដាក់មកវិញបានពេលក្រោយ។',
     searchLinkLabel: 'តំណស្វែងរក', directLinkLabel: 'តំណផ្ទាល់', uncategorizedOption: '— មិនទាន់មានប្រភេទ —'
   },
   zh: {
@@ -855,6 +858,7 @@ const TRANSLATIONS = {
     unlock1688BtnLabel: '解锁Link Source', lock1688BtnLabel: '锁定Link Source', linkLockedLabel: '链接已锁定', enterUnlockPasswordPrompt: '输入密码以查看Link Source链接:',
     markOrderedBtn: '标记为已订购', markReceivedBtn: '标记为已收货', qtyShort: '数量', alertBadge: '低库存提醒', alertMeta: '{days}天内售出 {sold} 件 · 店内剩余 {left} 件', soldShort: '已售', leftShort: '剩余', alertTabTitle: '等待订购的低库存提醒', linkToStoreBtn: '关联店内商品', notLinkedTitle: '尚未关联店内商品', linkedToLabel: '店内商品：', changeLinkBtn: '更改', filterStoreProducts: '输入以筛选商品...', chooseStoreProduct: '— 选择店内商品 —', saveLinkBtn: '保存', cancelBtn: '取消', unlinkBtn: '取消关联', storeProductsLoading: '正在加载店内商品...', storeProductsFailed: '无法加载店内商品。', suggestedMatch: '根据货号推荐', linkedSupplierLabel: '供应商：', notLinkedYet: '尚未关联供应商——请在首页关联',
     undoStatusBtn: '撤销', undoStatusTitle: '恢复到之前的状态',
+    viewRestockList: '补货清单', viewDeadItems: '不再订购', deadBtn: '不再订购', deadBtnTitle: '无需订购 — 移到不再订购', restoreBtn: '恢复', deadSelectedBtn: '将所选移到不再订购', restoreSelectedBtn: '恢复所选', deadBadge: '不再订购', emptyDeadItems: '没有不再订购的商品。', confirmDead: '将 {n} 款移到不再订购？不会订购这些商品，之后可以恢复。',
     searchLinkLabel: '搜索链接', directLinkLabel: '直接链接', uncategorizedOption: '— 未分类 —'
   }
 };
@@ -3463,6 +3467,44 @@ function rlStoreProductFor(line, card, mainProducts){
   return null;
 }
 
+// ---------- Dead items ----------
+// "Dead item" = no need to order. Kept (status 'dead') so it can be restored, and so
+// the store app's low-stock alert does not keep re-adding the same product.
+function selectedGroupKeys(){
+  return groupRestockByProduct(restockList)
+    .filter(g => g.lines.some(l => selectedRestockIds.has(l.docId)))
+    .map(g => g.key);
+}
+async function setGroupsDead(keys, toDead){
+  const groups = groupRestockByProduct(restockList).filter(g => keys.includes(g.key))
+    .filter(g => toDead ? isToDecideGroup(g) : isDeadGroup(g));
+  if(!groups.length) return;
+  if(toDead && !confirm(t('confirmDead').replace('{n}', groups.length))) return;
+  const lines = groups.flatMap(g => g.lines);
+  const restoreTo = l => (['pending', 'sent', 'ordered'].includes(l.previousStatus) ? l.previousStatus : 'pending');
+  try{
+    if(db){
+      const FV = firebase.firestore.FieldValue, wb = db.batch();
+      lines.filter(l => !l.docId.startsWith('local-')).forEach(l => wb.update(db.collection('restockTool_items').doc(l.docId), toDead
+        ? { status: 'dead', previousStatus: itemStatus(l), deadAt: FV.serverTimestamp() }
+        : { status: restoreTo(l), previousStatus: FV.delete(), deadAt: FV.delete() }));
+      await wb.commit();
+    }
+    lines.filter(l => !db || l.docId.startsWith('local-')).forEach(l => {
+      if(toDead){ l.previousStatus = itemStatus(l); l.status = 'dead'; } else { l.status = restoreTo(l); delete l.previousStatus; }
+    });
+    lines.forEach(l => selectedRestockIds.delete(l.docId));
+    renderRestock();
+  }catch(err){
+    console.warn('Dead items update failed:', err);
+    alert('Could not update, nothing was changed: ' + err.message);
+  }
+}
+function deadGroups(keys){ return setGroupsDead(keys, true); }
+function restoreGroups(keys){ return setGroupsDead(keys, false); }
+function deadSelectedGroups(){ return deadGroups(selectedGroupKeys()); }
+function restoreSelectedGroups(){ return restoreGroups(selectedGroupKeys()); }
+
 function queueSelectedToReceiving(){
   const keys = groupRestockByProduct(restockList)
     .filter(g => g.lines.some(l => selectedRestockIds.has(l.docId)))
@@ -3583,6 +3625,9 @@ function updateQty(docId, val){
 }
 
 let selectedRestockIds = new Set();
+// Two views only: 'todo' = the Restock List (items still to decide), 'dead' = Dead items.
+// Each item is decided once: Move to Receiving (it then waits on the Receiving tab)
+// or Dead item (no need to order). Received / in-Receiving items leave the list.
 let restockStatusFilter = 'todo';
 const rlOpen = new Set(); // product cards whose size editor is expanded — survives re-renders
 function rlToggle(el){ const k = el.dataset.k; if(el.open) rlOpen.add(k); else rlOpen.delete(k); }
@@ -3641,6 +3686,7 @@ function updateUnlock1688ButtonUI(){
 }
 
 function itemStatus(item){
+  if(item.status === 'dead') return 'dead';
   if(item.status === 'received') return 'received';
   if(item.status === 'ordered') return 'ordered';
   if(item.status === 'sent') return 'sent';
@@ -3695,21 +3741,27 @@ function isActiveAlert(group){
 
 function getFilteredRestockGroups(){
   const groups = groupRestockByProduct(restockList);
-  const list = restockStatusFilter === 'all'
-    ? groups
-    : restockStatusFilter === 'todo'
-      ? groups.filter(g => { const st = groupStatus(g); return st === 'pending' || st === 'sent'; })
-      : groups.filter(g => groupStatus(g) === restockStatusFilter);
+  const list = restockStatusFilter === 'dead'
+    ? groups.filter(isDeadGroup)
+    : groups.filter(isToDecideGroup);
   // Active alerts always float to the top so they can't get buried
   return list.map((g, i) => ({ g, i }))
     .sort((a, b) => (isActiveAlert(b.g) - isActiveAlert(a.g)) || (a.i - b.i))
     .map(x => x.g);
 }
 
+function isDeadGroup(g){ return groupStatus(g) === 'dead'; }
+// Still on the Restock List: not dead, not received, and not already waiting on the Receiving tab.
+// (Old items marked "ordered" by hand but never moved to Receiving stay here, so they can be moved.)
+function isToDecideGroup(g){
+  const st = groupStatus(g);
+  return st !== 'dead' && st !== 'received' && !g.lines.some(l => l.queuedBatch);
+}
 function setRestockFilter(status){
-  restockStatusFilter = status;
+  restockStatusFilter = status === 'dead' ? 'dead' : 'todo';
+  selectedRestockIds.clear(); // never act on items that are hidden in the other view
   document.querySelectorAll('.status-filter-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.status === status);
+    btn.classList.toggle('active', btn.dataset.status === restockStatusFilter);
   });
   renderRestock();
 }
@@ -3724,9 +3776,7 @@ function renderRestock(){
   selectedRestockIds = new Set([...selectedRestockIds].filter(id => restockList.some(i => i.docId === id)));
 
   const allGroups = groupRestockByProduct(restockList);
-  const counts = { all: allGroups.length, todo: 0, pending: 0, sent: 0, ordered: 0, received: 0 };
-  allGroups.forEach(g => counts[groupStatus(g)]++);
-  counts.todo = counts.pending + counts.sent;
+  const counts = { todo: allGroups.filter(isToDecideGroup).length, dead: allGroups.filter(isDeadGroup).length };
   document.querySelectorAll('.status-filter-btn').forEach(btn => {
     btn.textContent = `${btn.dataset.label} (${counts[btn.dataset.status]})`;
   });
@@ -3746,7 +3796,7 @@ function renderRestock(){
     empty.style.display = 'block';
     empty.textContent = restockList.length === 0
       ? t('emptyRestockDefault')
-      : t('noItemsMatchFilter');
+      : (restockStatusFilter === 'dead' ? t('emptyDeadItems') : t('noItemsMatchFilter'));
     sendBtn.disabled = selectedRestockIds.size === 0;
     updateSelectAllRestockState();
     updateSendBar();
@@ -3776,10 +3826,9 @@ function renderRestock(){
     const queued = group.lines.some(l => l.queuedBatch);
     // One badge only: the alert if there is one, otherwise the status — and
     // the status only when the filter shows mixed statuses.
-    const showStatus = restockStatusFilter === 'all' || restockStatusFilter === 'todo';
-    const badge = activeAlert
-      ? `<span class="status-badge status-alert"><i class="fas fa-triangle-exclamation"></i> ${t('alertBadge')}</span>`
-      : (showStatus ? `<span class="status-badge status-${status}">${statusLabel}</span>` : '');
+    const badge = status === 'dead'
+      ? `<span class="status-badge status-dead"><i class="fas fa-ban"></i> ${t('deadBadge')}</span>`
+      : (activeAlert ? `<span class="status-badge status-alert"><i class="fas fa-triangle-exclamation"></i> ${t('alertBadge')}</span>` : '');
     return `
       <div class="rl-item${status === 'received' ? ' is-received' : ''}${activeAlert ? ' is-alert' : ''}">
         <input type="checkbox" ${groupChecked ? 'checked' : ''} onchange="toggleRestockGroupSelect('${docIdsCsv}', this.checked)">
@@ -3791,7 +3840,6 @@ function renderRestock(){
             <summary><span>${sizeSummary}</span><span class="rl-total">— ${totalQty} ${t('pcsShort')}</span><span class="rl-edit">${t('editSizesBtn')} <i class="fas fa-chevron-down"></i></span></summary>
             <div class="rl-more">
               ${group.sourceStoreName ? `<span class="status-badge" style="background:#e0e7ff;color:#3730a3"><i class="fas fa-store"></i> ${escapeHtml(group.sourceStoreName)}</span>` : ''}
-              ${activeAlert ? `<span class="status-badge status-${status}">${statusLabel}</span>` : ''}
               ${group.isAlert && group.alertTotalSold != null
                 ? `<div class="rl-meta" style="color:var(--danger)">${t('alertMeta').replace('{sold}', escapeHtml(String(group.alertTotalSold))).replace('{days}', escapeHtml(String(group.alertWindowDays || 7))).replace('{left}', escapeHtml(String(group.alertStockLeft != null ? group.alertStockLeft : '?')))}</div>`
                 : `<div class="rl-meta">${group.isSearchLink ? t('searchLinkLabel') : t('directLinkLabel')}</div>`}
@@ -3807,11 +3855,10 @@ function renderRestock(){
               ? `<a href="${escapeHtml(group.url)}" target="_blank" rel="noopener">${group.isSearchLink ? t('searchOn1688Arrow') : t('orderOn1688Arrow')}</a>`
               : `<span class="rl-locked-link" title="Unlock Link Source links to view"><i class="fas fa-lock"></i> ${t('linkLockedLabel')}</span>`
             ) : ''}
-          ${queued && status !== 'received' ? `<span class="status-badge" style="background:#dbeafe;color:#1e40af" title="Receive it on the Receiving tab"><i class="fas fa-truck"></i> In Receiving</span>` : ''}
-          ${!queued && status !== 'received' ? `<button class="mark-ordered" data-k="${escapeHtml(group.key)}" onclick="queueGroupsToReceiving([this.dataset.k])" title="Ordered — wait for the goods on the Receiving tab"><i class="fas fa-box-open"></i> Move to Receiving</button>` : ''}
-          ${!queued && status === 'ordered' ? `<button class="mark-received" onclick="markGroupReceived('${docIdsCsv}')">${t('markReceivedBtn')}</button>` : ''}
-          ${(status === 'pending' || status === 'sent') ? `<button class="mark-ordered" onclick="markGroupOrdered('${docIdsCsv}')">${t('markOrderedBtn')}</button>` : ''}
-          ${!queued && groupPreviousStatus(group) ? `<button class="undo-status" onclick="undoGroupStatus('${docIdsCsv}')" title="${t('undoStatusTitle')}"><i class="fas fa-undo"></i> ${t('undoStatusBtn')}</button>` : ''}
+          ${status === 'dead'
+            ? `<button class="undo-status" data-k="${escapeHtml(group.key)}" onclick="restoreGroups([this.dataset.k])"><i class="fas fa-rotate-left"></i> ${t('restoreBtn')}</button>`
+            : `<button class="mark-ordered" data-k="${escapeHtml(group.key)}" onclick="queueGroupsToReceiving([this.dataset.k])" title="Ordered — wait for the goods on the Receiving tab"><i class="fas fa-box-open"></i> Move to Receiving</button>
+               <button class="mark-dead" data-k="${escapeHtml(group.key)}" onclick="deadGroups([this.dataset.k])" title="${t('deadBtnTitle')}"><i class="fas fa-ban"></i> ${t('deadBtn')}</button>`}
         </div>
       </div>
     `;
@@ -3830,8 +3877,9 @@ function updateSendBar(){
   bar.style.display = restockList.length ? 'flex' : 'none';
   const n = groupRestockByProduct(restockList).filter(g => g.lines.some(l => selectedRestockIds.has(l.docId))).length;
   document.getElementById('rlSelCount').textContent = n ? t('selectedCount').replace('{n}', n) : t('noneSelected');
-  const qb = document.getElementById('queueSelectedBtn');
-  if(qb) qb.disabled = n === 0;
+  const dead = restockStatusFilter === 'dead';
+  const show = (id, on) => { const el = document.getElementById(id); if(el){ el.style.display = on ? '' : 'none'; el.disabled = n === 0; } };
+  show('queueSelectedBtn', !dead); show('sendTelegramBtn', !dead); show('deadSelectedBtn', !dead); show('restoreSelectedBtn', dead);
 }
 
 function toggleRestockSelect(docId, checked){
