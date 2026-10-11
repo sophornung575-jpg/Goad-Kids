@@ -103,6 +103,27 @@ tr:last-child td{border-bottom:0}
   <p id="rcTotal" style="font-weight:600;margin:10px 0"></p>
   <div class="row"><button class="btn" id="rcPrint">Print</button><button class="btn ghost" id="rcCancel">Cancel</button></div>
 </dialog>
+<dialog id="sendDlg" style="border:0;border-radius:14px;padding:18px;max-width:420px;width:94vw;box-shadow:0 12px 40px rgba(0,0,0,.25)">
+  <h3 style="margin:0 0 4px">📤 Send to Store (Pending order)</h3>
+  <div id="sdItem" class="hint" style="margin-bottom:6px"></div>
+  <label for="sdStore">Store / branch the order goes to</label><select id="sdStore" style="width:100%"></select>
+  <div id="sdStock" class="hint" style="margin-top:4px"></div>
+  <label for="sdName">Customer name *</label><input type="text" id="sdName">
+  <label for="sdPhone">Phone *</label><input type="text" id="sdPhone" inputmode="tel">
+  <label for="sdAddr">Address *</label><input type="text" id="sdAddr">
+  <label for="sdCity">City / province</label><input type="text" id="sdCity">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+    <div><label for="sdSize">Size</label><select id="sdSize" style="width:100%"></select></div>
+    <div><label for="sdQty">Qty</label><input type="number" id="sdQty" min="1" value="1"></div>
+    <div><label for="sdFee">Delivery $</label><input type="number" id="sdFee" min="0" step="0.25"></div>
+  </div>
+  <label for="sdShip">Shipping</label><select id="sdShip" style="width:100%"><option>Phnom Penh</option><option>Province</option><option>Pickup</option></select>
+  <p id="sdTotal" style="font-weight:600;margin:10px 0 4px"></p>
+  <p class="hint" style="margin:0 0 8px">Creates a <b>Pending</b> order in the Store App. Stock is NOT taken now — only when Order Manager presses Confirm.</p>
+  <div id="sdMsg"></div>
+  <div class="row"><button class="btn" id="sdSend">Send to Store</button><button class="btn ghost" id="sdCancel">Cancel</button></div>
+</dialog>
+<style>#sendDlg label{display:block;font-size:.85rem;margin:8px 0 3px}#sendDlg input,#sendDlg select{width:100%}#sendDlg::backdrop{background:rgba(15,23,42,.45)}</style>
 <style>.cell-in{width:100%;min-width:110px;font:inherit;padding:4px 6px;border:1px solid transparent;border-radius:6px;background:transparent}.cell-in.wide{min-width:150px}.cell-in:hover,.cell-in:focus{border-color:#cbd5e1;background:#fff;outline:none}#receiptDlg label{display:block;font-size:.85rem;margin:8px 0 3px}#receiptDlg input{width:100%}#receiptDlg::backdrop{background:rgba(15,23,42,.45)}</style>
 
 
@@ -742,7 +763,10 @@ function renderReport(){
     <td>${esc(r.stock||"—")}</td>
     <td style="min-width:240px"><div class="r" style="white-space:pre-wrap">${esc(r.answer)}</div>
       <button class="btn ghost" style="margin-top:6px;padding:5px 10px" data-copyrow="${i}">Copy answer</button>
-      ${r.code && r.product ? `<button class="btn" style="margin-top:6px;padding:5px 10px" data-print="${i}">🧾 Receipt</button>` : ""}</td>
+      ${r.code && r.product ? (r.sentOrderId
+        ? `<div style="margin-top:6px"><span class="pill in">✅ Sent: ${esc(r.sentOrderId)}${r.sentStoreLabel?" · "+esc(r.sentStoreLabel):""}</span></div>`
+        : `<button class="btn" style="margin-top:6px;padding:5px 10px" data-send="${i}">📤 Send to Store</button>`) : ""}
+      ${r.code && r.product ? `<button class="btn ghost" style="margin-top:6px;padding:5px 10px" data-print="${i}">🧾 Packing slip</button>` : ""}</td>
     <td><input type="checkbox" aria-label="Replied" data-done="${i}" ${r.replied?"checked":""}></td>
   </tr>`).join("") : `<tr><td colspan="11" class="hint">No comments yet. Start reading the live or paste comments.</td></tr>`;
   const orders = REPORT.rows.filter(r=>r.type==="Order").length;
@@ -864,6 +888,7 @@ async function saveReport(){
         b.set(S.db.collection("live_report").doc(String(r.id).replace(/\//g,"_")), {
           liveId:vid, time:r.time, customer:r.name, type:r.type, comment:r.text, code:r.code, product:r.product, location:r.location||"", province:r.province||"",
           price:r.price, size:r.size, phone:r.phone, stock:r.stock, answer:r.answer, replied:r.replied,
+          ...(r.sentOrderId ? { sentOrderId:r.sentOrderId, sentStoreId:r.sentStoreId||"", sentStoreLabel:r.sentStoreLabel||"" } : {}),
           savedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
       });
       await b.commit();
@@ -931,7 +956,137 @@ $("reportBody").addEventListener("click",async e=>{
 $("reportBody").addEventListener("change",e=>{ const i=e.target.dataset.done; if(i===undefined) return; REPORT.rows[i].replied=e.target.checked; renderReport(); });
 // Staff corrections (name, phone, location) are kept without re-drawing the table while typing.
 $("reportBody").addEventListener("input",e=>{ const k=e.target.dataset.edit, i=e.target.dataset.i; if(!k||i===undefined) return; REPORT.rows[i][k]=e.target.value; if(k==="location") REPORT.rows[i].province=findProvince(e.target.value); });
-$("reportBody").addEventListener("click",e=>{ const i=e.target.dataset.print; if(i!==undefined) openReceipt(Number(i)); });
+$("reportBody").addEventListener("click",e=>{ const i=e.target.dataset.print; if(i!==undefined) openReceipt(Number(i)); const si=e.target.dataset.send; if(si!==undefined) openSend(Number(si)); });
+
+/* ============ SEND TO STORE ============
+   Turns one live comment row into a PENDING order in the Store App, using the
+   exact order shape the store's placeOrder() writes to
+   stores/{storeId}/orders/{orderId}. That write is what triggers the normal
+   new-order Telegram alert (notifyNewOrder). Stock is never touched here — the
+   Store App takes stock only when Order Manager presses Confirm.
+   Safety:
+   - The store comes from the product's own document path, so the order goes to
+     the branch the operator picks in the dialog, never a default store.
+   - One Firestore transaction both creates the order and marks the comment in
+     live_report as sent, so a comment can become at most ONE order, even with
+     two devices pressing Send at the same time.
+   - Order IDs keep the store's "ORD-<milliseconds>" format (the Store App reads
+     the time from it). Inside the transaction the ID is checked first; if it is
+     already taken the number is moved forward, so an existing order is never
+     overwritten. */
+let SD = null, sdBusy = false;
+function sdStoreOf(path){ const a = String(path||"").split("/"); return { storeId:a[1]||"", docId:a[3]||"" }; }
+function sdLiveDocId(r){ return String(r.id).replace(/\//g,"_"); }
+async function openSend(i){
+  const r = REPORT.rows[i]; if (!r) return;
+  if (S.mode!=="firebase"){ alert("Connect Firebase first. Sample mode cannot send orders."); return; }
+  if (r.sentOrderId){ alert("Already sent as " + r.sentOrderId); return; }
+  const p = productByCode(r.code);
+  if (!p || !p.refs || !Object.keys(p.refs).length){ alert("This code does not match a product in the connected stores."); return; }
+  SD = { i, r, p, branch:{} };
+  $("sdMsg").innerHTML = ""; $("sdSend").disabled = true;
+  $("sdItem").textContent = `[${r.code}] ${p.name}`;
+  // Fresh stock + price for every store that carries this product
+  const labels = storeList().reduce((m,x)=>{ m[x.label]=x.id; return m; },{});
+  await Promise.all(Object.entries(p.refs).map(async([label,path])=>{
+    try{
+      const d = await S.db.doc(path).get();
+      if (!d.exists) return;
+      const n = normalize(p.id, d.data()); const raw = d.data();
+      const hasSizes = Array.isArray(raw.sizes) && raw.sizes.length && typeof raw.sizes[0]==="object";
+      SD.branch[label] = { label, path, ...sdStoreOf(path), price:n.price, bySize:n.bySize||{}, total:n.total, hasSizes,
+        image: firstImage(raw) || p.image || "", name: String(raw.name || p.name) };
+    }catch(e){}
+  }));
+  const list = Object.values(SD.branch);
+  if (!list.length){ alert("Could not read this product from the stores. Check the connection."); SD = null; return; }
+  const want = r.size || "";
+  const best = list.find(b=>want ? (b.bySize[want]||0) >= 1 : b.total > 0) || list[0];
+  $("sdStore").innerHTML = list.map(b=>`<option value="${esc(b.label)}"${b===best?" selected":""}>${esc(b.label)} (${esc(b.storeId)}) — stock ${want?`size ${esc(want)}: ${b.bySize[want]||0}`:b.total}</option>`).join("");
+  $("sdName").value = r.name||""; $("sdPhone").value = r.phone||""; $("sdAddr").value = r.location||"";
+  $("sdCity").value = r.province||"";
+  $("sdQty").value = r.qty || 1;
+  $("sdFee").value = r.fee != null ? r.fee : (LS.get("gkl_rcFee","") ?? "");
+  $("sdShip").value = /phnom ?penh/i.test(r.province||"") ? "Phnom Penh" : (r.province ? "Province" : "Pickup");
+  sdFillSizes(); $("sendDlg").showModal();
+}
+function sdBranch(){ return SD && SD.branch[$("sdStore").value]; }
+function sdFillSizes(){
+  const b = sdBranch(); if (!b) return;
+  const cur = $("sdSize").value || SD.r.size || "";
+  if (b.hasSizes){
+    const sizes = Object.keys(b.bySize);
+    $("sdSize").innerHTML = `<option value="">— choose size —</option>` + sizes.map(z=>`<option value="${esc(z)}"${z===cur?" selected":""}>${esc(z)} (${b.bySize[z]||0} left)</option>`).join("");
+  } else {
+    $("sdSize").innerHTML = `<option value="One Size">One Size (${b.total} left)</option>`;
+  }
+  sdUpdate();
+}
+function sdUpdate(){
+  const b = sdBranch(); if (!b) return;
+  const size = $("sdSize").value, qty = Math.max(1, Math.floor(Number($("sdQty").value)||1)), fee = Number($("sdFee").value)||0;
+  const left = b.hasSizes ? (size ? (b.bySize[size]||0) : null) : b.total;
+  const sub = (Number(b.price)||0) * qty;
+  $("sdTotal").textContent = `${qty} × ${money(b.price)} = ${money(sub)} + delivery ${money(fee)} = ${money(sub+fee)}`;
+  $("sdStock").textContent = left===null ? `Store ${b.storeId}: choose a size.` : `Store ${b.storeId}: ${left} in stock for this ${b.hasSizes?"size":"item"}.`;
+  $("sdSend").disabled = sdBusy || left===null || left < qty;
+  if (left!==null && left < qty) $("sdStock").textContent += " Not enough here — pick another store or size.";
+}
+async function sendToStore(){
+  if (sdBusy || !SD) return;
+  const b = sdBranch(), r = SD.r;
+  const name = $("sdName").value.trim(), phone = $("sdPhone").value.trim(), addr = $("sdAddr").value.trim(), city = $("sdCity").value.trim();
+  const size = $("sdSize").value, qty = Math.max(1, Math.floor(Number($("sdQty").value)||1)), fee = Number($("sdFee").value)||0;
+  if (!name || !phone || !addr){ msg("sdMsg","err","Fill Name, Phone & Address."); return; }
+  if (b.hasSizes && !size){ msg("sdMsg","err","Choose a size."); return; }
+  if (!b.storeId || !b.docId){ msg("sdMsg","err","Could not tell which store this product belongs to."); return; }
+  sdBusy = true; $("sdSend").disabled = true; $("sdSend").textContent = "Sending...";
+  const price = Number(b.price)||0, sub = price*qty;
+  const cart = [{ productId:b.docId, name:b.name, size: b.hasSizes ? size : "One Size", quantity:qty, price, subtotal:sub,
+    image:b.image||"", discountAmt:0, discountType:"none", discountValue:0 }];
+  const liveRef = S.db.collection("live_report").doc(sdLiveDocId(r));
+  const ordersCol = S.db.collection("stores").doc(b.storeId).collection("orders");
+  const vid = REPORT.vid || videoId($("fbVideo").value) || "";
+  try{
+    const result = await S.db.runTransaction(async tx=>{
+      const lv = await tx.get(liveRef);
+      if (lv.exists && lv.data().sentOrderId) return { already: lv.data().sentOrderId, store: lv.data().sentStoreLabel||"" };
+      let ts = Date.now(), oid = "ORD-" + ts;
+      for (let k=0; k<20; k++){ const ex = await tx.get(ordersCol.doc(oid)); if (!ex.exists) break; ts++; oid = "ORD-" + ts; if (k===19) throw new Error("Could not get a free Order ID, try again."); }
+      const order = {
+        orderId:oid, timestamp:ts, orderDate:new Date(ts).toLocaleString(),
+        status:"pending", shippingMethod:$("sdShip").value, customerName:name,
+        customerPhone:phone, customerAddress:addr, customerCity:city,
+        customerNotes:`Live order · code ${r.code}${vid?" · live "+vid:""} · comment: ${String(r.text||"").slice(0,200)}`,
+        paymentMethod:"cod", storeId:b.storeId,
+        cart, subtotal:sub, shipping:fee, discount:0, discountType:"none", discountValue:0, total:sub+fee,
+        source:"live", liveCommentId:String(r.id), liveCode:String(r.code||"")
+      };
+      tx.set(ordersCol.doc(oid), order);
+      tx.set(liveRef, { liveId:vid, time:r.time, customer:name, code:r.code, product:r.product, phone, location:addr, size:cart[0].size,
+        sentOrderId:oid, sentStoreId:b.storeId, sentStoreLabel:b.label, sentAt:firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      return { oid };
+    });
+    if (result.already){
+      r.sentOrderId = result.already; r.sentStoreLabel = result.store;
+      msg("reportMsg","warn",`This comment was already sent as ${result.already}. No new order was made.`);
+    } else {
+      r.sentOrderId = result.oid; r.sentStoreId = b.storeId; r.sentStoreLabel = b.label;
+      r.name = name; r.phone = phone; r.location = addr; r.size = cart[0].size; r.qty = qty; r.fee = fee;
+      LS.set("gkl_rcFee", $("sdFee").value);
+      msg("reportMsg","ok",`Sent to ${b.label} as ${result.oid} (Pending). Confirm and print the receipt in the Store App.`);
+    }
+    $("sendDlg").close(); renderReport();
+  }catch(e){
+    msg("sdMsg","err","Could not send: " + (e.message||e) + ". Nothing was saved — you can try again.");
+  }finally{
+    sdBusy = false; $("sdSend").textContent = "Send to Store"; if (SD) sdUpdate();
+  }
+}
+$("sdStore").addEventListener("change", sdFillSizes);
+["sdSize","sdQty","sdFee"].forEach(id=>$(id).addEventListener(id==="sdSize"?"change":"input", sdUpdate));
+$("sdSend").onclick = sendToStore;
+$("sdCancel").onclick = ()=>$("sendDlg").close();
 
 /* ============ RECEIPT ============ */
 let RC = null;
@@ -959,9 +1114,9 @@ function receiptHtml(r){
     h1{font-size:20px;text-align:center;margin:2px 0 0;letter-spacing:1px}.c{text-align:center}.s{font-size:11px}.dash{border-top:1px dashed #000;margin:7px 0}
     .rw{display:flex;justify-content:space-between;gap:8px}.b{font-weight:700}.big{font-size:16px}.lbl{color:#000;font-weight:700}
   </style></head><body>
-    <h1>GOAT KIDS</h1><div class="c s">Live order receipt</div>
+    <h1>GOAT KIDS</h1><div class="c s">Live order · packing slip</div>
     <div class="dash"></div>
-    ${row("Receipt", esc(no))}${row("Date", esc(new Date().toLocaleString()))}${row("Comment", esc(new Date(r.time).toLocaleTimeString()))}
+    ${r.sentOrderId ? row("Order ID", `<b>${esc(r.sentOrderId)}</b>`) + row("Store", esc(r.sentStoreLabel||"")) : `<div class="c b">NOT SENT TO STORE YET</div>`}${row("Slip", esc(no))}${row("Date", esc(new Date().toLocaleString()))}${row("Comment", esc(new Date(r.time).toLocaleTimeString()))}
     <div class="dash"></div>
     <div><span class="lbl">Customer:</span> ${esc(r.name||"—")}</div>
     <div><span class="lbl">Phone:</span> <span class="big b">${esc(r.phone||"—")}</span></div>
@@ -972,7 +1127,7 @@ function receiptHtml(r){
     <div class="dash"></div>
     ${row("Subtotal", money(sub))}${row("Delivery", money(fee))}
     ${row("TOTAL", money(sub+fee), "b big")}
-    <div class="c" style="margin-top:4px">Cash on delivery</div>
+    <div class="c s" style="margin-top:4px">Official receipt &amp; payment: Store App</div>
     <div class="dash"></div>
     <div class="c s">អរគុណសម្រាប់ការគាំទ្រ! · Thank you!</div>
   </body></html>`;
