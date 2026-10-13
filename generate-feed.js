@@ -39,6 +39,33 @@ function escXML(str) {
         .replace(/"/g, '&quot;');
 }
 
+// Chinese size numbers: "90cm" → "90", "2Y-3Y" → "100", "12-18M" → "80".
+// Same rules as normalizeSizeName() in index.html. Unrecognised sizes (shoe sizes etc.) stay as they are.
+function chineseSizeFromMonths(m) {
+    if (m <= 3) return 59;  if (m <= 6) return 66;  if (m <= 9) return 73;
+    if (m <= 18) return 80; if (m <= 24) return 90; if (m <= 36) return 100;
+    if (m <= 48) return 110; if (m <= 72) return 120; if (m <= 96) return 130;
+    if (m <= 120) return 140; if (m <= 144) return 150; return 160;
+}
+function normalizeSizeName(name) {
+    if (name === null || name === undefined) return name;
+    var t = String(name).trim(), c, n;
+    var U = '(Y|YRS?|YEARS?|M|MOS?|MONTHS?|岁|个月|月)';
+    var toMonths = function (num, unit) { unit = unit.toUpperCase(); return (unit.charAt(0) === 'Y' || unit === '岁') ? num * 12 : num; };
+    // Height first: 90cm, 90码, 110码/4Y, 73cm(6-12个月), 110/4Y, 100 (2-3Y) → the cm number
+    if ((c = t.match(/^(\d{2,3})\s*(?:cm|码)/i)) || (c = t.match(/^(\d{2,3})\s*[\/(（]/))) {
+        n = parseInt(c[1], 10);
+        if (n >= 50 && n <= 180) return String(n);
+    }
+    // Age range: 2Y-3Y, 2-3Y, 2-3岁, 12-18M, 6-12个月 (uses the older age of the range)
+    if ((c = t.match(new RegExp('^(\\d{1,2})\\s*' + U + '?\\s*[-~–至到\\/]\\s*(\\d{1,2})\\s*' + U + '$', 'i'))))
+        return String(chineseSizeFromMonths(toMonths(parseInt(c[3], 10), c[4])));
+    // Single age: 3Y, 3岁, 6M, 18个月
+    if ((c = t.match(new RegExp('^(\\d{1,2})\\s*' + U + '$', 'i'))))
+        return String(chineseSizeFromMonths(toMonths(parseInt(c[1], 10), c[2])));
+    return t;
+}
+
 // Live-selling code shown in front of the title, e.g. "[1258] Cutie Dresses_107 - Size 120".
 // Codes come from the Live Desk tool (collection live_codes, one doc per product id).
 function withCode(code, title) {
@@ -132,9 +159,11 @@ async function main() {
                 // Merge sizes — each store's quantities are added exactly once
                 (Array.isArray(p.sizes) ? p.sizes : []).forEach(sz => {
                     if (!sz || !String(sz.name || '').trim()) return;
-                    const existing = bySlug[slug].sizes.find(x => x.name === sz.name);
+                    // 90 and 90cm are the same size → merged. The first raw name keeps the Facebook variant id stable.
+                    const label = normalizeSizeName(sz.name);
+                    const existing = bySlug[slug].sizes.find(x => x.label === label);
                     if (existing) existing.qty = (existing.qty || 0) + (Number(sz.qty) || 0);
-                    else bySlug[slug].sizes.push({ name: sz.name, qty: Number(sz.qty) || 0 });
+                    else bySlug[slug].sizes.push({ name: sz.name, label, qty: Number(sz.qty) || 0 });
                 });
 
                 const stk = (p.sizes && p.sizes.length)
@@ -188,7 +217,7 @@ async function main() {
                 lines.push('  <item>');
                 lines.push(`    <g:id>${escXML(variantId)}</g:id>`);
                 lines.push(`    <g:item_group_id>${escXML(p.id)}</g:item_group_id>`);
-                lines.push(`    <title>${escXML(withCode(liveCode, p.name + ' - Size ' + sz.name))}</title>`);
+                lines.push(`    <title>${escXML(withCode(liveCode, p.name + ' - Size ' + (sz.label || sz.name)))}</title>`);
                 lines.push(`    <description>${escXML(p.description || p.name)}</description>`);
                 lines.push(`    <link>${escXML(productLink)}</link>`);
                 if (image) lines.push(`    <g:image_link>${escXML(image)}</g:image_link>`);
@@ -198,7 +227,7 @@ async function main() {
                 lines.push(`    <g:condition>${CONDITION}</g:condition>`);
                 lines.push('    <g:google_product_category>Apparel &amp; Accessories &gt; Clothing &gt; Baby &amp; Toddler Clothing</g:google_product_category>');
                 if (p.category) lines.push(`    <g:product_type>${escXML(p.category)}</g:product_type>`);
-                lines.push(`    <g:size>${escXML(sz.name)}</g:size>`);
+                lines.push(`    <g:size>${escXML(sz.label || sz.name)}</g:size>`);
                 lines.push('    <g:gender>unisex</g:gender>');
                 lines.push('    <g:age_group>kids</g:age_group>');
                 lines.push(`    <g:quantity_to_sell_on_facebook>${qty}</g:quantity_to_sell_on_facebook>`);
