@@ -2386,15 +2386,41 @@ function orderBaseImages(e){
   return base ? restockOwnImages(base) : [];
 }
 
+// Chinese size numbers: 90cm → 90, 2Y-3Y → 100, 110码/4Y → 110. Same rules as the store app.
+function chineseSizeFromMonths(m) {
+    if (m <= 3) return 59;  if (m <= 6) return 66;  if (m <= 9) return 73;
+    if (m <= 18) return 80; if (m <= 24) return 90; if (m <= 36) return 100;
+    if (m <= 48) return 110; if (m <= 72) return 120; if (m <= 96) return 130;
+    if (m <= 120) return 140; if (m <= 144) return 150; return 160;
+}
+function normalizeSizeName(name) {
+    if (name === null || name === undefined) return name;
+    var t = String(name).trim(), c, n;
+    var U = '(Y|YRS?|YEARS?|M|MOS?|MONTHS?|岁|个月|月)';
+    var toMonths = function (num, unit) { unit = unit.toUpperCase(); return (unit.charAt(0) === 'Y' || unit === '岁') ? num * 12 : num; };
+    // Height first: 90cm, 90码, 110码/4Y, 73cm(6-12个月), 110/4Y, 100 (2-3Y) → the cm number
+    if ((c = t.match(/^(\d{2,3})\s*(?:cm|码)/i)) || (c = t.match(/^(\d{2,3})\s*[\/(（]/))) {
+        n = parseInt(c[1], 10);
+        if (n >= 50 && n <= 180) return String(n);
+    }
+    // Age range: 2Y-3Y, 2-3Y, 2-3岁, 12-18M, 6-12个月 (uses the older age of the range)
+    if ((c = t.match(new RegExp('^(\\d{1,2})\\s*' + U + '?\\s*[-~–至到\\/]\\s*(\\d{1,2})\\s*' + U + '$', 'i'))))
+        return String(chineseSizeFromMonths(toMonths(parseInt(c[3], 10), c[4])));
+    // Single age: 3Y, 3岁, 6M, 18个月
+    if ((c = t.match(new RegExp('^(\\d{1,2})\\s*' + U + '$', 'i'))))
+        return String(chineseSizeFromMonths(toMonths(parseInt(c[1], 10), c[2])));
+    return t;
+}
+
 function sizeNameFromVariant(v){
   v = ((v || '') + '').trim();
   const m = v.match(/适合身高[:：]\s*([^\s,;，；]+)/) || v.match(/参考身高[:：]\s*([^\s,;，；]+)/) ||
             v.match(/尺码[:：]\s*([^\s,;，；]+)/) || v.match(/\bsize\s*[:：]\s*([^\s,;，；]+)/i);
-  if(m) return m[1].trim();
+  if(m) return normalizeSizeName(m[1].trim());
   // Colour-only variant (e.g. accessories: "颜色分类: #1 Pink Crown Tulle" or
   // "Color: ...") — that's a colour, not a size, so the item has no size.
   if(/^(?:规格\s*[:：]\s*)?(?:颜色(?:分类)?|colou?r)\s*[:：]/i.test(v)) return '';
-  return v;
+  return normalizeSizeName(v);
 }
 function storeSizesFromVariants(variants){
   const seen = new Set();
@@ -3019,7 +3045,8 @@ async function rcvApply(bid, hids, mode, btn){
           const n = add[i].g;
           if(!n) return;
           if(!l.name || !sizeNameFromVariant(l.name)){ unsized += n; return; }
-          let s = sizes.find(o => ((o.name || '') + '').trim().toLowerCase() === l.name.trim().toLowerCase());
+          let s = sizes.find(o => ((o.name || '') + '').trim().toLowerCase() === l.name.trim().toLowerCase())
+               || sizes.find(o => normalizeSizeName(o.name) === normalizeSizeName(l.name));  // 90cm row = 90
           if(!s){ s = { name: l.name, qty: 0 }; sizes.push(s); }
           const before = Number(s.qty) || 0;
           s.qty = before + n;
@@ -3433,7 +3460,7 @@ function rlMapSize(raw, prodSizes){
   if(hit) return { name: hit, ok: true };
   const v = sizeNameFromVariant(s0);
   if(!v) return { name: '', ok: true }; // colour-only, no size
-  hit = names.find(n => lc(n) === lc(v));
+  hit = names.find(n => lc(n) === lc(v)) || names.find(n => normalizeSizeName(n) === normalizeSizeName(v));
   if(hit) return { name: hit, ok: true };
   const num = x => { const m = (x + '').match(/\d+(?:\.\d+)?/); return m ? m[0] : null; };
   const nv = num(v);
