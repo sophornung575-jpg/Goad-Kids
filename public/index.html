@@ -5095,7 +5095,7 @@ function sendToTelegram(order, callback) {
     }
 
     function addSizeToNewProduct() {
-        var n = document.getElementById('newSizeName').value.trim().toUpperCase();
+        var n = normalizeSizeName(document.getElementById('newSizeName').value.trim().toUpperCase());
         var q = parseInt(document.getElementById('newSizeQty').value) || 0;
         if (!n) { showToast('Enter size name', 'error'); return; }
         var f = false;
@@ -5303,12 +5303,12 @@ function sendToTelegram(order, callback) {
     }
 
     function addEditSize() {
-        var name = document.getElementById('editNewSizeName').value.trim();
+        var name = normalizeSizeName(document.getElementById('editNewSizeName').value.trim());
         var qty = parseInt(document.getElementById('editNewSizeQty').value) || 0;
         if (!name) { showToast('Enter a size name', 'warning'); return; }
         // Check duplicate
         for (var i = 0; i < STATE._editSizes.length; i++) {
-            if (STATE._editSizes[i].name.toLowerCase() === name.toLowerCase()) {
+            if (String(normalizeSizeName(STATE._editSizes[i].name)).toLowerCase() === String(name).toLowerCase()) {   // 90 and 90cm = same size
                 showToast('Size "' + name + '" already exists', 'warning'); return;
             }
         }
@@ -6263,7 +6263,7 @@ function sendToTelegram(order, callback) {
 
         // Send Telegram cancellation message
         var itemLines = (order.cart || []).map(function(it) {
-            return '  • ' + it.name + (it.size && it.size !== 'One Size' ? ' (' + it.size + ')' : '') + ' x' + it.quantity;
+            return '  • ' + it.name + (it.size && it.size !== 'One Size' ? ' (' + normalizeSizeName(it.size) + ')' : '') + ' x' + it.quantity;
         }).join('\n');
         var msg = '❌ <b>ORDER CANCELLED</b>\n\n' +
             '🧾 Order: ' + oid + '\n' +
@@ -10109,7 +10109,7 @@ function sendToTelegram(order, callback) {
         var shippingFeeRefunded = includeShipping ? (order.shipping || 0) : 0;
 
         // Confirm
-        var itemSummary = refundItems.map(function(it){ return it.quantity + '× ' + it.name + ' (' + it.size + ')'; }).join('\n');
+        var itemSummary = refundItems.map(function(it){ return it.quantity + '× ' + it.name + ' (' + normalizeSizeName(it.size) + ')'; }).join('\n');
         var confirmText = 'Confirm refund?\n\nItems:\n' + itemSummary +
             (shippingFeeRefunded > 0 ? '\n\nDelivery fee also refunded: $' + shippingFeeRefunded.toFixed(2) : '') +
             '\n\nRefund: $' + refundAmount.toFixed(2) + '\nReason: ' + reason;
@@ -10245,7 +10245,7 @@ function sendToTelegram(order, callback) {
 
         // Telegram notification
         var itemLines = refundItems.map(function(it) {
-            return '  • ' + it.name + (it.size && it.size !== 'One Size' ? ' (' + it.size + ')' : '') + ' x' + it.quantity;
+            return '  • ' + it.name + (it.size && it.size !== 'One Size' ? ' (' + normalizeSizeName(it.size) + ')' : '') + ' x' + it.quantity;
         }).join('\n');
         var refundCaption = '↩️ <b>REFUND PROCESSED</b>' + (refundRecord.isPartial ? ' (Partial)' : '') + '\n\n' +
             '🧾 Order: ' + order.orderId + '\n' +
@@ -11737,7 +11737,7 @@ function sendToTelegram(order, callback) {
                 };
                 // Use set() with the stable ID — retrying overwrites, never duplicates
                 batch.set(db.collection('transfers').doc(transferId), transfer);
-                itemLines.push('  • ' + it.productName + (it.size !== 'One Size' ? ' (' + it.size + ')' : '') + ' x' + it.qty);
+                itemLines.push('  • ' + it.productName + (it.size !== 'One Size' ? ' (' + normalizeSizeName(it.size) + ')' : '') + ' x' + it.qty);
                 if (it.productImage) imageUrls.push(it.productImage);
             });
 
@@ -15145,9 +15145,40 @@ function sendToTelegram(order, callback) {
     try { _sizeTrCache = JSON.parse(localStorage.getItem('goatSizeTr') || '{}') || {}; } catch (e) { _sizeTrCache = {}; }
     function saveSizeTrCache() { try { localStorage.setItem('goatSizeTr', JSON.stringify(_sizeTrCache)); } catch (e) {} }
 
+    // ═══════════ CHINESE SIZE NUMBERS ═══════════
+    // Shows every size as the Chinese height number: "90cm" → "90", "2Y-3Y" → "100", "110码/4Y" → "110".
+    // Display only — the stored s.name is NOT changed, so old orders, refunds and transfers still match.
+    // Shoe sizes (23, 30…) and anything not recognised are left exactly as they are.
+    function chineseSizeFromMonths(m) {
+        if (m <= 3) return 59;  if (m <= 6) return 66;  if (m <= 9) return 73;
+        if (m <= 18) return 80; if (m <= 24) return 90; if (m <= 36) return 100;
+        if (m <= 48) return 110; if (m <= 72) return 120; if (m <= 96) return 130;
+        if (m <= 120) return 140; if (m <= 144) return 150; return 160;
+    }
+    function normalizeSizeName(name) {
+        if (name === null || name === undefined) return name;
+        var t = String(name).trim(), c, n;
+        var U = '(Y|YRS?|YEARS?|M|MOS?|MONTHS?|岁|个月|月)';
+        var toMonths = function (num, unit) { unit = unit.toUpperCase(); return (unit.charAt(0) === 'Y' || unit === '岁') ? num * 12 : num; };
+        // Height first: 90cm, 90码, 110码/4Y, 73cm(6-12个月), 110/4Y, 100 (2-3Y) → the cm number
+        if ((c = t.match(/^(\d{2,3})\s*(?:cm|码)/i)) || (c = t.match(/^(\d{2,3})\s*[\/(（]/))) {
+            n = parseInt(c[1], 10);
+            if (n >= 50 && n <= 180) return String(n);
+        }
+        // Age range: 2Y-3Y, 2-3Y, 2-3岁, 12-18M, 6-12个月 (uses the older age of the range)
+        if ((c = t.match(new RegExp('^(\\d{1,2})\\s*' + U + '?\\s*[-~–至到\\/]\\s*(\\d{1,2})\\s*' + U + '$', 'i'))))
+            return String(chineseSizeFromMonths(toMonths(parseInt(c[3], 10), c[4])));
+        // Single age: 3Y, 3岁, 6M, 18个月
+        if ((c = t.match(new RegExp('^(\\d{1,2})\\s*' + U + '$', 'i'))))
+            return String(chineseSizeFromMonths(toMonths(parseInt(c[1], 10), c[2])));
+        return t;
+    }
+
     // Text to SHOW for a size. lang is optional ('en' / 'kh'); defaults to the current language.
     function sizeLabel(name, lang) {
-        if (!name || !HAS_CHINESE.test(name)) return name;
+        if (!name) return name;
+        var num = normalizeSizeName(name);
+        if (num !== String(name).trim() || !HAS_CHINESE.test(name)) return num;   // recognised size → Chinese number
         var t = _sizeTrCache[name]; if (!t) return name;
         lang = lang || STATE.language;
         return (lang === 'kh' ? (t.kh || t.en) : t.en) || name;
