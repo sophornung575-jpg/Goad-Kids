@@ -161,6 +161,9 @@
         }
     </script>
     <style>
+        /* Customers never see Login; nobody sees Sync until logged in as staff */
+        body.customer-view #adminLoginBtn, body.customer-view #adminLoginBtnMobile,
+        body.not-admin #syncBtn, body.not-admin #syncBtnMobile { display:none !important; }
         *{margin:0;padding:0;box-sizing:border-box}
         :root{--primary:#667eea;--primary-light:#a3b4f6;--primary-dark:#5a67d8;--secondary:#ed64a6;--success:#48bb78;--warning:#ecc94b;--danger:#f56565;--info:#4299e1;--dark:#2d3748;--light:#f7fafc;--gray:#a0aec0;--gray-light:#e2e8f0;--gray-dark:#4a5568;--radius:8px;--radius-lg:12px;--radius-xl:16px;--shadow:0 1px 3px rgba(0,0,0,0.1);--shadow-lg:0 10px 15px rgba(0,0,0,0.1)}
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--light);color:var(--dark);line-height:1.5;min-height:100vh}
@@ -614,7 +617,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
             <a href="#" class="nav-link" onclick="showTab('store');closeMobileMenu();return false"><i class="fas fa-store"></i> Store</a>
             <a href="#" class="nav-link hidden" id="adminNavLinkMobile" onclick="showTab('admin');closeMobileMenu();return false"><i class="fas fa-cog"></i> Admin</a>
             <button class="btn btn-outline w-full mt-4" onclick="openAdminModal();closeMobileMenu()" id="adminLoginBtnMobile"><i class="fas fa-user-shield"></i> Admin Login</button>
-            <button class="btn btn-success w-full mt-4" onclick="syncToFirebase();closeMobileMenu()"><i class="fas fa-cloud-upload-alt"></i> Sync</button>
+            <button class="btn btn-success w-full mt-4" onclick="syncToFirebase();closeMobileMenu()" id="syncBtnMobile"><i class="fas fa-cloud-upload-alt"></i> Sync</button>
         </nav>
     </header>
 
@@ -2643,6 +2646,15 @@ function sendToTelegram(order, callback) {
     function isCustomerShop() {
         return localStorage.getItem('goatCustomerShop') === '1' && !STATE.isAdmin;
     }
+    // Shows/hides the Login and Sync buttons. Staff on a customer-view device open the
+    // shop once with ?staff at the end of the address to get the Login button back.
+    function updateCustomerChrome() {
+        if (/[?&]staff\b/.test(location.search)) localStorage.setItem('goatStaffDevice', '1');
+        var b = document.body; if (!b) return;
+        b.classList.toggle('customer-view', localStorage.getItem('goatCustomerShop') === '1' &&
+                                            localStorage.getItem('goatStaffDevice') !== '1' && !STATE.isAdmin);
+        b.classList.toggle('not-admin', !STATE.isAdmin);
+    }
     function productsCacheKey() {
         return isCustomerShop() ? 'goatProducts_SHOP' : 'goatProducts_' + STATE.storeId;
     }
@@ -3951,6 +3963,7 @@ function sendToTelegram(order, callback) {
         STATE.loginAttempts['attempts_' + role] = { count: 0, lastAttempt: now, lockedUntil: 0 };
         localStorage.setItem('goatLoginAttempts', JSON.stringify(STATE.loginAttempts));
         STATE.isAdmin = true; STATE.adminRole = role;
+        localStorage.setItem('goatStaffDevice', '1'); updateCustomerChrome();
         if (localStorage.getItem('goatCustomerShop') === '1') loadProductsLocal();   // staff work on the real store list, not the combined shop
         localStorage.setItem('goatAdmin', 'true'); localStorage.setItem('goatAdminRole', role);
         if (authOk) {
@@ -4005,6 +4018,7 @@ function sendToTelegram(order, callback) {
         var re = document.getElementById('reportLockError'); if (re) re.textContent = '';
         showTab('store');
         showToast('Logged out', 'info');
+        updateCustomerChrome();
         if (localStorage.getItem('goatCustomerShop') === '1') { loadProductsLocal(); renderProducts(); loadData(); }
     }
 
@@ -10853,6 +10867,7 @@ function sendToTelegram(order, callback) {
         localStorage.setItem('goatStoreChosen', '1');
         localStorage.removeItem('goatShowStorePicker');
         localStorage.removeItem('goatCustomerShop');
+        localStorage.setItem('goatStaffDevice', '1');
         if (!s.isMain) {
             localStorage.setItem('goatPartnerStoreId', 'GOAT-1979');
             localStorage.setItem('goatPartnerStoreName', 'Main Store');
@@ -13445,6 +13460,7 @@ function sendToTelegram(order, callback) {
         STATE.storeId = sid;
         document.getElementById('storeIdDisplay').textContent = sid;
         updateBranchDisplay();
+        updateCustomerChrome();
 
         // ── STORE SELECTOR ──
         // Customers open straight into the combined 271 + PH shop — no "pick a store" step.
