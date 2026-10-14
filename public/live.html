@@ -306,7 +306,7 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
     <summary>📘 First-time setup (VB-Cable, keys, Live Producer)</summary>
     <ol class="vh-ol">
       <li><b>VB-Cable:</b> download <b>VB-CABLE Driver</b> from <code>vb-audio.com/Cable</code> (free) → unzip → right-click <b>VBCABLE_Setup_x64.exe</b> → <b>Run as administrator</b> → <b>Install Driver</b> → restart the laptop.</li>
-      <li><b>Khmer voice key:</b> <code>portal.azure.com</code> → search <b>Speech service</b> → <b>Create</b> (Region <b>Southeast Asia</b>, Pricing <b>Free F0</b>) → open it → <b>Keys and Endpoint</b> → copy <b>KEY 1</b> and the region into Voice settings below.</li>
+      <li><b>Khmer voice key (Google Gemini):</b> open <code>aistudio.google.com</code> and sign in with your Google account → <b>Get API key</b> → <b>Create API key</b> → copy it into <b>Gemini API key</b> in the settings below → press <b>Test voice</b>.</li>
       <li><b>Claude key:</b> <code>console.anthropic.com</code> → <b>API Keys</b> → <b>Create Key</b>, and add a small credit (e.g. $5). Paste it below.</li>
       <li><b>Sound into the live:</b> below, press <b>Allow devices</b> and set <b>Send voice to = CABLE Input</b>. In <b>Facebook Live Producer</b> (Chrome, same laptop) set <b>Microphone = CABLE Output</b>. Press <b>Test tone</b> — the Live Producer mic meter should move.</li>
       <li>Want to talk too? Tick <b>Mix my microphone</b> and pick your real mic (not CABLE).</li>
@@ -331,8 +331,22 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
       </div>
       <div>
         <label for="vhEngine">Voice engine</label>
-        <select id="vhEngine"><option value="azure">Microsoft Azure (Khmer + English)</option><option value="eleven">ElevenLabs (English only — no Khmer)</option></select>
-        <div id="vhAzureBox">
+        <select id="vhEngine"><option value="gemini">Google Gemini (Khmer + English)</option><option value="azure">Microsoft Azure (not available in Cambodia)</option><option value="eleven">ElevenLabs (English only — no Khmer)</option></select>
+        <div id="vhGemBox">
+          <label for="vhGemKey">Gemini API key</label><input type="password" id="vhGemKey" placeholder="from aistudio.google.com" autocomplete="off">
+          <label for="vhGemVoice">Voice</label>
+          <select id="vhGemVoice">
+            <option value="Kore">Kore — female, firm &amp; clear</option>
+            <option value="Aoede">Aoede — female, light</option>
+            <option value="Zephyr">Zephyr — female, bright</option>
+            <option value="Puck">Puck — male, upbeat</option>
+            <option value="Charon">Charon — male, calm</option>
+          </select>
+          <label for="vhGemStyle">How the voice should sound</label>
+          <input type="text" id="vhGemStyle" value="Speak natural Khmer like a warm, cheerful, energetic Cambodian live-selling host talking to parents">
+          <label for="vhGemModel">Gemini voice model</label><input type="text" id="vhGemModel" value="gemini-3.8-flash-tts">
+        </div>
+        <div id="vhAzureBox" style="display:none">
           <label for="vhAzKey">Azure Speech key</label><input type="password" id="vhAzKey" placeholder="KEY 1" autocomplete="off">
           <label for="vhAzRegion">Azure region</label><input type="text" id="vhAzRegion" value="southeastasia">
           <label for="vhAzVoice">Voice</label>
@@ -1337,25 +1351,26 @@ const vmsg = (el,type,text)=> text ? msg(el,type,text) : ($(el).innerHTML="");
 const lang = ()=> $("vhLang").value;
 
 /* ---------- settings ---------- */
-const SET = ["vhModel","vhLang","vhLength","vhStyle","vhEngine","vhAzRegion","vhAzVoice","vhAzRate","vhElModel","vhVol","vhMicVol"];
+const SET = ["vhModel","vhLang","vhLength","vhStyle","vhEngine","vhGemVoice","vhGemStyle","vhGemModel","vhAzRegion","vhAzVoice","vhAzRate","vhElModel","vhVol","vhMicVol"];
 const CHK = ["vhMonitor","vhMicOn","vhDuck","vhRemember","vhAutoRemind"];
-const KEYS = ["vhClaudeKey","vhAzKey","vhElKey"];
+const KEYS = ["vhClaudeKey","vhGemKey","vhAzKey","vhElKey"];
 function saveSet(){
   const s = {}; SET.forEach(id=>s[id]=$(id).value); CHK.forEach(id=>s[id]=$(id).checked);
-  s.vhOut=$("vhOut").value; s.vhMic=$("vhMic").value; s.vhElVoice=$("vhElVoice").value;
+  s.vhGemMigrated = true; s.vhOut=$("vhOut").value; s.vhMic=$("vhMic").value; s.vhElVoice=$("vhElVoice").value;
   LS.set("gkl_vh_set", s);
   if ($("vhRemember").checked){ const k={}; KEYS.forEach(id=>k[id]=$(id).value); LS.set("gkl_vh_keys", k); }
   else { try{ localStorage.removeItem("gkl_vh_keys"); }catch(e){} }
 }
 const saved = LS.get("gkl_vh_set", {});
+if (saved.vhEngine==="azure" && !saved.vhGemMigrated){ saved.vhEngine = "gemini"; saved.vhGemMigrated = true; }
 SET.forEach(id=>{ if (saved[id]!=null) $(id).value = saved[id]; });
 CHK.forEach(id=>{ if (saved[id]!=null) $(id).checked = saved[id]; });
 const savedKeys = LS.get("gkl_vh_keys", {}); KEYS.forEach(id=>{ if (savedKeys[id]) $(id).value = savedKeys[id]; });
 if (saved.vhElVoice){ $("vhElVoice").innerHTML = `<option value="${esc(saved.vhElVoice)}">(saved voice)</option>`; }
-if (!$("vhAzKey").value && !$("vhClaudeKey").value){ $("vhGuide").open = true; $("vhSettings").open = true; }
+if (!$("vhGemKey").value && !$("vhAzKey").value && !$("vhClaudeKey").value){ $("vhGuide").open = true; $("vhSettings").open = true; }
 function syncUI(){
-  const az = $("vhEngine").value==="azure";
-  $("vhAzureBox").style.display = az?"":"none"; $("vhElBox").style.display = az?"none":"";
+  const en = $("vhEngine").value;
+  $("vhGemBox").style.display = en==="gemini"?"":"none"; $("vhAzureBox").style.display = en==="azure"?"":"none"; $("vhElBox").style.display = en==="eleven"?"":"none";
   const r = Number($("vhAzRate").value); $("vhAzRateVal").textContent = (r>=0?"+":"")+r+"%";
   $("vhVolVal").textContent = $("vhVol").value+"%"; $("vhMicVolVal").textContent = $("vhMicVol").value+"%";
 }
@@ -1384,8 +1399,11 @@ function hash(str){ let h1=0xdeadbeef,h2=0x41c6ce57;
   h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
   return (4294967296*(2097151&h2)+(h1>>>0)).toString(36); }
 function clipKey(text){
-  const az = $("vhEngine").value==="azure";
-  return hash([az?"azure":"eleven", az?$("vhAzVoice").value:$("vhElVoice").value, az?$("vhAzRate").value:$("vhElModel").value, String(text).trim()].join("|"));
+  const en = $("vhEngine").value;
+  const v = en==="gemini" ? [$("vhGemVoice").value, $("vhGemModel").value, $("vhGemStyle").value]
+          : en==="azure"  ? [$("vhAzVoice").value, $("vhAzRate").value]
+          : [$("vhElVoice").value, $("vhElModel").value];
+  return hash([en, ...v, String(text).trim()].join("|"));
 }
 
 /* ---------- voice engines ---------- */
@@ -1404,6 +1422,42 @@ async function ttsAzure(text){
   if (!r.ok) throw new Error("Azure error "+r.status+": "+(await r.text()).slice(0,200));
   return r.blob();
 }
+function findAudio(o){ // the audio block can sit at different depths; find {type:"audio", data}
+  if (!o || typeof o!=="object") return null;
+  if ((o.type==="audio" || /audio/.test(o.mime_type||o.mimeType||"")) && typeof o.data==="string") return o;
+  if (o.inlineData && typeof o.inlineData.data==="string") return { data:o.inlineData.data, mime_type:o.inlineData.mimeType };
+  for (const k in o){ const r = findAudio(o[k]); if (r) return r; }
+  return null;
+}
+function pcmToWav(bytes, rate){
+  const h = new ArrayBuffer(44), v = new DataView(h), w = (o,s)=>{ for (let i=0;i<s.length;i++) v.setUint8(o+i,s.charCodeAt(i)); };
+  w(0,"RIFF"); v.setUint32(4,36+bytes.length,true); w(8,"WAVE"); w(12,"fmt "); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,rate,true); v.setUint32(28,rate*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true); w(36,"data"); v.setUint32(40,bytes.length,true);
+  return new Blob([h, bytes], { type:"audio/wav" });
+}
+async function ttsGemini(text){
+  const key = $("vhGemKey").value.trim(); if (!key) throw new Error("Add your Gemini API key in the settings (from aistudio.google.com).");
+  const style = $("vhGemStyle").value.trim();
+  const part = { type:"text", text }; if (style) part.annotations = [{ type:"speech_metadata", style }];
+  let r;
+  try{ r = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", { method:"POST",
+    headers:{ "x-goog-api-key":key, "Content-Type":"application/json" },
+    body:JSON.stringify({ model:$("vhGemModel").value.trim()||"gemini-3.8-flash-tts", input:[{ type:"user_input", content:[part] }],
+      response_format:{ type:"audio" }, generation_config:{ speech_config:[{ voice:$("vhGemVoice").value }] } }) }); }
+  catch(e){ throw new Error("Couldn't reach Google Gemini. Check the internet connection."); }
+  const d = await r.json().catch(()=>({}));
+  const em = (d.error && d.error.message) || "";
+  if (r.status===400 && /api key/i.test(em)) throw new Error("Google refused the Gemini API key. Copy it again from aistudio.google.com.");
+  if (r.status===403) throw new Error("Google refused the Gemini key (403). Make sure the key is from aistudio.google.com and is still active. "+em.slice(0,150));
+  if (r.status===404) throw new Error("Google doesn't know the voice model \""+$("vhGemModel").value+"\". Check the model name. "+em.slice(0,150));
+  if (r.status===429) throw new Error("Gemini limit reached for now. Wait a minute and try again, or add billing in aistudio.google.com.");
+  if (!r.ok) throw new Error("Gemini error "+r.status+": "+em.slice(0,200));
+  const a = findAudio(d); if (!a) throw new Error("Gemini answered but sent no audio. Try again, or shorten the script.");
+  const bin = atob(a.data), bytes = new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+  const mt = String(a.mime_type||a.mimeType||"audio/wav");
+  if (/l16|pcm/i.test(mt)){ const m = mt.match(/rate=(\d+)/); return pcmToWav(bytes, m?Number(m[1]):24000); }
+  return new Blob([bytes], { type: /wav/.test(mt) ? "audio/wav" : mt });
+}
 async function ttsEleven(text){
   const key = $("vhElKey").value.trim(), voice = $("vhElVoice").value;
   if (!key) throw new Error("Add your ElevenLabs key in the settings.");
@@ -1417,7 +1471,8 @@ async function voiceBlob(text){
   text = String(text||"").trim(); if (!text) throw new Error("The script is empty.");
   const k = clipKey(text), hit = await cacheGet(k);
   if (hit) return { blob:hit, cached:true };
-  const blob = $("vhEngine").value==="azure" ? await ttsAzure(text) : await ttsEleven(text);
+  const en = $("vhEngine").value;
+  const blob = en==="gemini" ? await ttsGemini(text) : en==="azure" ? await ttsAzure(text) : await ttsEleven(text);
   await cachePut(k, blob);
   return { blob, cached:false };
 }
