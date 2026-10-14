@@ -2634,8 +2634,71 @@ function sendToTelegram(order, callback) {
         return '';
     }
 
+    // ═══════════ CUSTOMER SHOP (271 + PH combined) ═══════════
+    // A customer's device shows the products of every store below merged into one
+    // list (stock per size added together). Every customer order goes to 271; 271
+    // staff can only confirm it once 271 really has the stock (transfer from PH first).
+    var SHOP_STORES = ['GOAT-GOAT-KIDS-271-0889', 'GOAT-GOAT-KIDS-PH-6012'];   // first one = order store
+    var SHOP_ORDER_STORE = SHOP_STORES[0];
+    function isCustomerShop() {
+        return localStorage.getItem('goatCustomerShop') === '1' && !STATE.isAdmin;
+    }
+    function productsCacheKey() {
+        return isCustomerShop() ? 'goatProducts_SHOP' : 'goatProducts_' + STATE.storeId;
+    }
+    async function loadShopProducts() {
+        var bySlug = {}, order = [];
+        for (var si = 0; si < SHOP_STORES.length; si++) {
+            var snap = await db.collection('stores').doc(SHOP_STORES[si]).collection('products').get();
+            snap.forEach(function(d) {
+                var dt = d.data();
+                if (isDeletedProductDoc(dt) || !String(dt.name || '').trim()) return;
+                var slug = dt.slug || makeSlug(dt.name);
+                var cur = bySlug[slug];
+                if (!cur) {
+                    cur = bySlug[slug] = Object.assign({}, dt, {
+                        id: d.id, name: dt.name || '', slug: slug, price: dt.price || 0, stock: 0,
+                        category: dt.category || '', images: dt.images || [], sizes: [],
+                        addedAt: dt.addedAt || 0, lastRestockDate: dt.lastRestockDate || dt.addedAt || 0,
+                        active: dt.active !== false
+                    });
+                    order.push(slug);
+                }
+                if ((!cur.images || !cur.images.length) && dt.images && dt.images.length) cur.images = dt.images;
+                var sizes = Array.isArray(dt.sizes) ? dt.sizes : [];
+                if (sizes.length) {
+                    sizes.forEach(function(sz) {
+                        if (!sz || !sz.name) return;
+                        var k = String(normalizeSizeName(sz.name)).toLowerCase();
+                        var ex = cur.sizes.find(function(x) { return String(normalizeSizeName(x.name)).toLowerCase() === k; });
+                        if (ex) ex.qty += Number(sz.qty) || 0;
+                        else cur.sizes.push(Object.assign({}, sz, { qty: Number(sz.qty) || 0 }));
+                    });
+                    cur.stock += sizes.reduce(function(a, x) { return a + (Number(x && x.qty) || 0); }, 0);
+                } else {
+                    cur.stock += Number(dt.stock) || 0;
+                }
+            });
+        }
+        return order.map(function(k) { return bySlug[k]; });
+    }
+    // The store product an order line refers to. Customer orders carry the id of the
+    // combined listing, which may be PH's — so fall back to the same product by slug / name.
+    function findProductForOrderItem(it) {
+        var p = findProduct(it.productId);
+        if (p) return p;
+        var slug = makeSlug(it.name || ''), nm = String(it.name || '').trim().toLowerCase();
+        for (var i = 0; i < STATE.products.length; i++) { if ((STATE.products[i].slug || makeSlug(STATE.products[i].name)) === slug) return STATE.products[i]; }
+        for (var j = 0; j < STATE.products.length; j++) { if (String(STATE.products[j].name || '').trim().toLowerCase() === nm) return STATE.products[j]; }
+        return null;
+    }
+    // Same size, allowing "90" vs "90cm" style differences between stores.
+    function sameSize(a, b) {
+        return a === b || String(normalizeSizeName(a)).toLowerCase() === String(normalizeSizeName(b)).toLowerCase();
+    }
+
     function saveProducts() {
-        localStorage.setItem('goatProducts_' + STATE.storeId, JSON.stringify(STATE.products));
+        localStorage.setItem(productsCacheKey(), JSON.stringify(STATE.products));
     }
     // Adds addedAt / lastRestockDate to a product write — only when they have
     // a real value, so a missing local date never wipes a good one in Firestore.
@@ -3888,6 +3951,7 @@ function sendToTelegram(order, callback) {
         STATE.loginAttempts['attempts_' + role] = { count: 0, lastAttempt: now, lockedUntil: 0 };
         localStorage.setItem('goatLoginAttempts', JSON.stringify(STATE.loginAttempts));
         STATE.isAdmin = true; STATE.adminRole = role;
+        if (localStorage.getItem('goatCustomerShop') === '1') loadProductsLocal();   // staff work on the real store list, not the combined shop
         localStorage.setItem('goatAdmin', 'true'); localStorage.setItem('goatAdminRole', role);
         if (authOk) {
             // Refresh this device's password cache from Firestore now that we're signed in.
@@ -3941,6 +4005,7 @@ function sendToTelegram(order, callback) {
         var re = document.getElementById('reportLockError'); if (re) re.textContent = '';
         showTab('store');
         showToast('Logged out', 'info');
+        if (localStorage.getItem('goatCustomerShop') === '1') { loadProductsLocal(); renderProducts(); loadData(); }
     }
 
     function addLoginRecord(n, r, s) {
@@ -4147,8 +4212,10 @@ function sendToTelegram(order, callback) {
             return;
         }
         try {
-            var s = await db.collection('stores').doc(STATE.storeId).collection('products').get();
             var p = [];
+            if (isCustomerShop()) { p = await loadShopProducts(); }
+            else {
+            var s = await db.collection('stores').doc(STATE.storeId).collection('products').get();
             s.forEach(function(d) {
                 var dt = d.data();
                 // Deleted products leave a record behind (active:false). Never load
@@ -4169,6 +4236,7 @@ function sendToTelegram(order, callback) {
                     active: dt.active !== false
                 }));
             });
+            }
             if (p.length) { STATE.products = p; saveProducts(); }
             localStorage.setItem('goatDeletedProducts', '[]');
             loadInventoryRules(); // non-blocking; re-renders inventory once rules arrive
@@ -4299,7 +4367,7 @@ function sendToTelegram(order, callback) {
         loadRefunds();
     }
     function loadProductsLocal() {
-        var s = localStorage.getItem('goatProducts_' + STATE.storeId);
+        var s = localStorage.getItem(productsCacheKey());
         STATE.products = s ? JSON.parse(s) : [];
         // Only load sample data for Main Store — Branch starts empty
         if (!STATE.products.length && STATE.storeId === 'GOAT-1979') loadSamples();
@@ -5985,16 +6053,17 @@ function sendToTelegram(order, callback) {
         var demandByKey = {}; // "productId|size" -> total quantity requested
         for (var j = 0; j < order.cart.length; j++) {
             var it = order.cart[j];
-            var key = it.productId + '|' + (it.size || '');
+            var itP = findProductForOrderItem(it);
+            var key = (itP ? itP.id : it.productId) + '|' + String(normalizeSizeName(it.size || '')).toLowerCase();
             demandByKey[key] = (demandByKey[key] || 0) + it.quantity;
         }
         for (var j2 = 0; j2 < order.cart.length; j2++) {
-            var it2 = order.cart[j2], p = findProduct(it2.productId);
-            if (!p) { showToast('Product not found: ' + it2.name, 'error'); return; }
-            var neededTotal = demandByKey[it2.productId + '|' + (it2.size || '')];
+            var it2 = order.cart[j2], p = findProductForOrderItem(it2);
+            if (!p) { showToast('Not in this store yet: ' + it2.name + ' — transfer it here first', 'error'); return; }
+            var neededTotal = demandByKey[p.id + '|' + String(normalizeSizeName(it2.size || '')).toLowerCase()];
             if (p.sizes && p.sizes.length) {
                 var so = null;
-                for (var l = 0; l < p.sizes.length; l++) { if (p.sizes[l].name === it2.size) { so = p.sizes[l]; break; } }
+                for (var l = 0; l < p.sizes.length; l++) { if (sameSize(p.sizes[l].name, it2.size)) { so = p.sizes[l]; break; } }
                 if (!so || so.qty < neededTotal) { showToast('Not enough stock: ' + it2.name + ' (' + it2.size + ')', 'error'); return; }
             } else if ((p.stock || 0) < neededTotal) { showToast('Not enough stock: ' + it2.name, 'error'); return; }
         }
@@ -6010,20 +6079,20 @@ function sendToTelegram(order, callback) {
         // fixes that.
         var stockUpdatesByProduct = {}; // productId -> { product, newSizes, newStock }
         for (var m = 0; m < order.cart.length; m++) {
-            var item = order.cart[m], pr = findProduct(item.productId);
+            var item = order.cart[m], pr = findProductForOrderItem(item);
             if (!pr) continue;
-            var su2 = stockUpdatesByProduct[item.productId];
+            var su2 = stockUpdatesByProduct[pr.id];
             if (!su2) {
                 su2 = {
                     product: pr,
                     newSizes: (pr.sizes && pr.sizes.length) ? JSON.parse(JSON.stringify(pr.sizes)) : null,
                     newStock: pr.stock
                 };
-                stockUpdatesByProduct[item.productId] = su2;
+                stockUpdatesByProduct[pr.id] = su2;
             }
             if (su2.newSizes) {
                 for (var s = 0; s < su2.newSizes.length; s++) {
-                    if (su2.newSizes[s].name === item.size) { su2.newSizes[s].qty = Math.max(0, su2.newSizes[s].qty - item.quantity); break; }
+                    if (sameSize(su2.newSizes[s].name, item.size)) { su2.newSizes[s].qty = Math.max(0, su2.newSizes[s].qty - item.quantity); break; }
                 }
                 su2.newStock = su2.newSizes.reduce(function(t,s){return t+s.qty;}, 0);
             } else {
@@ -6400,12 +6469,23 @@ function sendToTelegram(order, callback) {
                 }
             }
             var discBadge = (o.discount > 0) ? ' <span style="font-size:0.72rem;background:#d4edda;color:#276749;border-radius:4px;padding:1px 5px;margin-left:4px">-$' + o.discount.toFixed(2) + '</span>' : '';
+            // Items this store can't cover yet (e.g. a combined-shop order for stock that sits at PH)
+            var shortItems = [];
+            (o.cart || []).forEach(function(ci) {
+                var sp = findProductForOrderItem(ci), have = 0;
+                if (sp) {
+                    if (sp.sizes && sp.sizes.length) { sp.sizes.forEach(function(z) { if (sameSize(z.name, ci.size)) have += Number(z.qty) || 0; }); }
+                    else have = Number(sp.stock) || 0;
+                }
+                if (have < (ci.quantity || 0)) shortItems.push(ci.name + ' (' + sizeLabel(ci.size || '') + ') — have ' + have + ', need ' + ci.quantity);
+            });
+            var shortHtml = shortItems.length ? '<div style="background:#fff5e6;color:#9c4221;border-radius:6px;padding:0.4rem 0.6rem;margin:0.3rem 0;font-size:0.8rem">🚚 <b>Transfer needed before confirming:</b><br>' + shortItems.map(escHtml).join('<br>') + '</div>' : '';
             if (o.paymentMethod !== 'cash' && o.paymentMethod !== 'qr') o.paymentMethod = 'qr'; // default to QR Code until staff picks otherwise
             var pmVal = o.paymentMethod;
             h += '<div class="order-card-mini">' +
                 '<div class="oc-head"><div class="oc-id">⏳ ' + escHtml(o.orderId) + '<br><span style="font-weight:400;color:var(--gray)">' + escHtml(o.orderDate||'') + '</span></div><div class="oc-total">$' + (o.total||0).toFixed(2) + discBadge + '</div></div>' +
                 '<div class="oc-info">👤 ' + escHtml(o.customerName||'N/A') + ' · 📞 ' + escHtml(o.customerPhone||'') + '<br>📍 ' + escHtml((o.customerAddress||'') + (o.customerCity ? ', '+o.customerCity : '')) + '<br>🚚 ' + escHtml(o.shippingMethod||'N/A') + (o.customerNotes ? ' · 📝 ' + escHtml(o.customerNotes) : '') + '</div>' +
-                '<div class="oc-items">' + escHtml(itemsSummary) + '</div>' +
+                '<div class="oc-items">' + escHtml(itemsSummary) + '</div>' + shortHtml +
                 '<div class="oc-payment" style="display:flex;align-items:center;gap:0.4rem;margin:0.4rem 0;font-size:0.85rem">' +
                     '<span style="font-weight:600;color:var(--gray-dark)"><i class="fas fa-money-bill-wave"></i> ' + t('payment') + ':</span>' +
                     '<select class="form-control" style="width:auto;padding:0.3rem 0.5rem;font-size:0.85rem" onchange="setOrderPaymentMethod(\'' + o.orderId + '\', this.value)">' +
@@ -10694,6 +10774,7 @@ function sendToTelegram(order, callback) {
     function resetStoreSelection() {
         if (!confirm('This will re-show the Store Selector screen on next reload. Continue?')) return;
         localStorage.removeItem('goatStoreChosen');
+        localStorage.setItem('goatShowStorePicker', '1');   // show the picker on this device after reload
         showToast('Store selection reset. Reloading...', 'info');
         setTimeout(function() { location.reload(); }, 800);
     }
@@ -10770,6 +10851,8 @@ function sendToTelegram(order, callback) {
         localStorage.setItem('goatStoreId', s.id);
         localStorage.setItem('goatStoreName', s.name);
         localStorage.setItem('goatStoreChosen', '1');
+        localStorage.removeItem('goatShowStorePicker');
+        localStorage.removeItem('goatCustomerShop');
         if (!s.isMain) {
             localStorage.setItem('goatPartnerStoreId', 'GOAT-1979');
             localStorage.setItem('goatPartnerStoreName', 'Main Store');
@@ -13346,6 +13429,16 @@ function sendToTelegram(order, callback) {
             });
         });
 
+        // First visit (no store chosen yet) → customer shop: 271 + PH products combined,
+        // orders go to 271. Staff choose a store with Settings → Reset Store Selection.
+        if (!localStorage.getItem('goatStoreChosen') && localStorage.getItem('goatShowStorePicker') !== '1') {
+            localStorage.setItem('goatStoreChosen', '1');
+            localStorage.setItem('goatCustomerShop', '1');
+            localStorage.setItem('goatStoreId', SHOP_ORDER_STORE);
+            localStorage.setItem('goatStoreName', 'Goat Kids');
+            STATE.storeName = 'Goat Kids';
+        }
+
         // Store ID — configurable per device, defaults to GOAT-1979
         var sid = localStorage.getItem('goatStoreId') || 'GOAT-1979';
         localStorage.setItem('goatStoreId', sid);
@@ -13353,10 +13446,12 @@ function sendToTelegram(order, callback) {
         document.getElementById('storeIdDisplay').textContent = sid;
         updateBranchDisplay();
 
-        // ── STORE SELECTOR — show on first launch if store not yet chosen ──
+        // ── STORE SELECTOR ──
+        // Customers open straight into the combined 271 + PH shop — no "pick a store" step.
+        // The selector only appears when staff ask for it (Settings → Reset Store Selection).
         var storeChosen = localStorage.getItem('goatStoreChosen');
         var hasFbConfig = localStorage.getItem('goatFirebaseConfig');
-        if (!storeChosen && hasFbConfig) {
+        if (localStorage.getItem('goatShowStorePicker') === '1' && hasFbConfig) {
             document.getElementById('storeSelectorScreen').style.display = 'flex';
             loadStoreSelectorList();
             return;
