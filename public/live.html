@@ -138,6 +138,7 @@ tr:last-child td{border-bottom:0}
   <button role="tab" aria-selected="true" data-view="connect">Connect</button>
   <button role="tab" aria-selected="false" data-view="products">Products &amp; codes</button>
   <button role="tab" aria-selected="false" data-view="script">Live script</button>
+  <button role="tab" aria-selected="false" data-view="voice">🎙️ Voice host</button>
   <button role="tab" aria-selected="false" data-view="comments">Comment replies</button>
   <button role="tab" aria-selected="false" data-view="export">Virbo export</button>
 </nav>
@@ -293,6 +294,114 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
     <div id="exportMsg"></div>
   </div>
   <textarea class="out" id="rulesOut" readonly></textarea>
+</section>
+
+<!-- VOICE HOST -->
+<section class="view" id="view-voice">
+  <h2>🎙️ Voice host</h2>
+  <p class="lead">Claude writes a natural selling script for each product you ticked on the Products tab, an AI voice reads it, and you press ▶ to play it straight into the live. Each voice is made once and saved, so playing it again costs nothing.</p>
+  <div class="disclosure"><strong>AI host label:</strong> the <b>Opening</b> line always starts with the AI host disclosure, and the AI reminder plays automatically every few products (same setting as the Live script tab).</div>
+
+  <details class="box vh-det" id="vhGuide">
+    <summary>📘 First-time setup (VB-Cable, keys, Live Producer)</summary>
+    <ol class="vh-ol">
+      <li><b>VB-Cable:</b> download <b>VB-CABLE Driver</b> from <code>vb-audio.com/Cable</code> (free) → unzip → right-click <b>VBCABLE_Setup_x64.exe</b> → <b>Run as administrator</b> → <b>Install Driver</b> → restart the laptop.</li>
+      <li><b>Khmer voice key:</b> <code>portal.azure.com</code> → search <b>Speech service</b> → <b>Create</b> (Region <b>Southeast Asia</b>, Pricing <b>Free F0</b>) → open it → <b>Keys and Endpoint</b> → copy <b>KEY 1</b> and the region into Voice settings below.</li>
+      <li><b>Claude key:</b> <code>console.anthropic.com</code> → <b>API Keys</b> → <b>Create Key</b>, and add a small credit (e.g. $5). Paste it below.</li>
+      <li><b>Sound into the live:</b> below, press <b>Allow devices</b> and set <b>Send voice to = CABLE Input</b>. In <b>Facebook Live Producer</b> (Chrome, same laptop) set <b>Microphone = CABLE Output</b>. Press <b>Test tone</b> — the Live Producer mic meter should move.</li>
+      <li>Want to talk too? Tick <b>Mix my microphone</b> and pick your real mic (not CABLE).</li>
+    </ol>
+    <p class="hint">Keys stay only in this browser on this laptop.</p>
+  </details>
+
+  <details class="box vh-det" id="vhSettings">
+    <summary>⚙️ Script writer &amp; voice settings</summary>
+    <div class="grid2">
+      <div>
+        <label for="vhClaudeKey">Claude API key</label><input type="password" id="vhClaudeKey" placeholder="sk-ant-..." autocomplete="off">
+        <label for="vhModel">Claude model</label><input type="text" id="vhModel" value="claude-sonnet-5-5">
+        <label for="vhLang">Script language</label>
+        <select id="vhLang"><option value="km">Khmer</option><option value="en">English</option></select>
+        <label for="vhLength">Script length</label>
+        <select id="vhLength"><option value="short">Short (~15 sec)</option><option value="medium" selected>Medium (~30 sec)</option><option value="long">Long (~45 sec)</option></select>
+        <label for="vhStyle">Host style notes (optional)</label>
+        <textarea id="vhStyle" style="min-height:70px" placeholder="e.g. Friendly big-sister tone. Call viewers បងៗ. Mention free delivery in Phnom Penh over $20."></textarea>
+        <div class="row"><button class="btn ghost" id="vhTestClaude">Test script writer</button></div>
+        <div id="vhClaudeMsg"></div>
+      </div>
+      <div>
+        <label for="vhEngine">Voice engine</label>
+        <select id="vhEngine"><option value="azure">Microsoft Azure (Khmer + English)</option><option value="eleven">ElevenLabs (English only — no Khmer)</option></select>
+        <div id="vhAzureBox">
+          <label for="vhAzKey">Azure Speech key</label><input type="password" id="vhAzKey" placeholder="KEY 1" autocomplete="off">
+          <label for="vhAzRegion">Azure region</label><input type="text" id="vhAzRegion" value="southeastasia">
+          <label for="vhAzVoice">Voice</label>
+          <select id="vhAzVoice">
+            <option value="km-KH-SreymomNeural">Sreymom — Khmer, female</option>
+            <option value="km-KH-PisethNeural">Piseth — Khmer, male</option>
+            <option value="en-US-AvaMultilingualNeural">Ava — English, female</option>
+            <option value="en-US-AndrewMultilingualNeural">Andrew — English, male</option>
+          </select>
+          <label for="vhAzRate">Speed <span id="vhAzRateVal"></span></label><input type="range" id="vhAzRate" min="-20" max="30" step="5" value="5" style="width:100%">
+        </div>
+        <div id="vhElBox" style="display:none">
+          <label for="vhElKey">ElevenLabs API key</label><input type="password" id="vhElKey" autocomplete="off">
+          <label for="vhElVoice">Voice</label><select id="vhElVoice"><option value="">Press Load voices</option></select>
+          <label for="vhElModel">Model</label>
+          <select id="vhElModel"><option value="eleven_multilingual_v2">Multilingual v2</option><option value="eleven_v3">Eleven v3</option><option value="eleven_flash_v2_5">Flash v2.5</option></select>
+          <div class="row"><button class="btn ghost" id="vhElLoad">Load voices</button></div>
+        </div>
+        <label for="vhTestText">Test sentence</label>
+        <input type="text" id="vhTestText" value="សួស្តីបងៗ! សូមស្វាគមន៍មកកាន់ Live របស់ Goat Kids ថ្ងៃនេះ!">
+        <div class="row"><button class="btn" id="vhTestVoice">▶ Test voice</button>
+          <label class="check" style="margin:0"><input type="checkbox" id="vhRemember" checked> Remember keys on this laptop</label></div>
+        <div id="vhVoiceMsg"></div>
+      </div>
+    </div>
+  </details>
+
+  <div class="box">
+    <h3 style="margin:0 0 6px;font-size:1.05rem">🎚️ Sound into the live</h3>
+    <div class="row" style="margin-top:0"><button class="btn" id="vhAllow">Allow devices</button><span class="hint">Needed once so the tool can see CABLE Input and your mic.</span></div>
+    <div class="grid2">
+      <div>
+        <label for="vhOut">Send voice to (choose CABLE Input)</label><select id="vhOut"><option value="">Default speakers</option></select>
+        <label for="vhVol">Voice volume <span id="vhVolVal"></span></label><input type="range" id="vhVol" min="0" max="150" value="100" style="width:100%">
+        <label class="check"><input type="checkbox" id="vhMonitor"> Let me hear the voice (headphones)</label>
+      </div>
+      <div>
+        <label class="check" style="margin-top:10px"><input type="checkbox" id="vhMicOn"> Mix my microphone into the live</label>
+        <label class="check"><input type="checkbox" id="vhDuck" checked> Lower my mic while the voice plays</label>
+        <label for="vhMic">My microphone</label><select id="vhMic"><option value="">Default mic</option></select>
+        <label for="vhMicVol">Mic volume <span id="vhMicVolVal"></span></label><input type="range" id="vhMicVol" min="0" max="200" value="100" style="width:100%">
+      </div>
+    </div>
+    <div class="row"><button class="btn ghost" id="vhTone">Test tone</button>
+      <span class="hint">Output: <b id="vhRoute">not set</b></span>
+      <span class="vh-meter" title="Level going into the live"><i id="vhMeter"></i></span>
+      <span class="hint" id="vhNow">Ready</span>
+      <button class="btn vh-stop" id="vhStop">■ Stop</button></div>
+    <div id="vhRouteMsg"></div>
+  </div>
+
+  <div class="box">
+    <h3 style="margin:0 0 6px;font-size:1.05rem">⚡ Quick lines</h3>
+    <p class="hint" style="margin:0">Keys <b>Q W E R</b> play them while this tab is open. The Opening always keeps the AI host disclosure.</p>
+    <div id="vhLines" class="vh-lines"></div>
+  </div>
+
+  <div class="box">
+    <h3 style="margin:0 0 6px;font-size:1.05rem">👕 Products for this live</h3>
+    <p class="hint" style="margin:0">These are the products ticked on the <b>Products &amp; codes</b> tab. Before the live: <b>Write all scripts</b> → read and fix them → <b>Make all voices</b>. During the live: ▶ or keys <b>1–9</b>, <b>Space</b> stops.</p>
+    <div class="row">
+      <button class="btn" id="vhWriteAll">✍️ Write all scripts</button>
+      <button class="btn" id="vhVoiceAll">🗣️ Make all voices</button>
+      <button class="btn ghost" id="vhRefresh">↻ Refresh list</button>
+      <label class="check" style="margin:0"><input type="checkbox" id="vhAutoRemind" checked> Auto-play the AI reminder every few products</label>
+    </div>
+    <div id="vhMsg"></div>
+  </div>
+  <div id="vhProducts" class="vh-grid"></div>
 </section>
 
 </main>
@@ -1180,6 +1289,422 @@ $("discPreview").textContent = disclosureFor($("lang").value);
     firebase.auth().onAuthStateChanged(function(u){ if (isStaff(u)) { unblock(); if (!started) { started = true; connect(); } } else block(); });
   } catch (e) { console.warn('Auth not available:', e); }
 })();
+})();
+</script>
+<style>
+#view-voice .grid2>div{min-width:0}
+.vh-det{padding:0}
+.vh-det>summary{cursor:pointer;padding:14px 18px;font-weight:600;list-style:none}
+.vh-det>summary::-webkit-details-marker{display:none}
+.vh-det>summary::before{content:"▸ ";color:var(--muted)}
+.vh-det[open]>summary::before{content:"▾ "}
+.vh-det>*:not(summary){margin-left:18px;margin-right:18px}
+.vh-det>*:last-child{margin-bottom:18px}
+.vh-ol{padding-left:20px;margin:0 0 8px}.vh-ol li{margin:6px 0}
+#view-voice input[type=password]{width:100%;border:1px solid var(--line);border-radius:6px;padding:9px 10px;background:#fff}
+#view-voice code{background:#F1F5F3;padding:1px 5px;border-radius:4px;font-size:.85rem}
+.vh-meter{display:inline-block;width:110px;height:8px;background:#D4DDD8;border-radius:4px;overflow:hidden;vertical-align:middle}
+.vh-meter i{display:block;height:100%;width:0;background:var(--teal);transition:width .05s}
+.btn.vh-stop{background:var(--live);border-color:var(--live)}
+.btn.vh-play{background:var(--teal);border-color:var(--teal);padding:10px 20px;font-size:1.02rem}
+.btn.vh-sm{padding:5px 10px;font-size:.88rem}
+.vh-lines{display:grid;gap:10px;margin-top:10px}
+.vh-line{display:grid;grid-template-columns:150px 1fr auto;gap:8px;align-items:start}
+.vh-line textarea{min-height:58px}
+.vh-line .lbl{font-weight:600;padding-top:8px}
+.vh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+.vh-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.vh-card.playing{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
+.vh-top{display:flex;gap:10px;align-items:center}
+.vh-top .num{font-size:.75rem;background:var(--ink);color:#fff;border-radius:5px;padding:1px 7px}
+.vh-top .nm{font-weight:600;line-height:1.25}
+.vh-card textarea{min-height:120px;font-size:.95rem}
+.vh-st{font-size:.8rem;padding:2px 9px;border-radius:999px;background:#EEF1EF;color:var(--muted)}
+.vh-st.ok{background:var(--teal-soft);color:var(--teal)}
+.vh-st.busy{background:#FFF3DC;color:var(--amber)}
+.vh-st.err{background:var(--live-soft);color:var(--live)}
+@media (max-width:640px){.vh-line{grid-template-columns:1fr}}
+</style>
+<script>
+/* ============ VOICE HOST ============
+   Writes scripts with Claude, turns them into voice (Azure for Khmer), saves each
+   clip in this browser (IndexedDB) so it is paid for once, and plays it into the
+   live through a chosen output (VB-Cable "CABLE Input"). Reads S.products /
+   S.codes / S.selected from the Live Desk; never writes to Firebase. */
+(function(){
+const VH = { scripts: LS.get("gkl_vh_scripts", {}), played:0 };
+const vmsg = (el,type,text)=> text ? msg(el,type,text) : ($(el).innerHTML="");
+const lang = ()=> $("vhLang").value;
+
+/* ---------- settings ---------- */
+const SET = ["vhModel","vhLang","vhLength","vhStyle","vhEngine","vhAzRegion","vhAzVoice","vhAzRate","vhElModel","vhVol","vhMicVol"];
+const CHK = ["vhMonitor","vhMicOn","vhDuck","vhRemember","vhAutoRemind"];
+const KEYS = ["vhClaudeKey","vhAzKey","vhElKey"];
+function saveSet(){
+  const s = {}; SET.forEach(id=>s[id]=$(id).value); CHK.forEach(id=>s[id]=$(id).checked);
+  s.vhOut=$("vhOut").value; s.vhMic=$("vhMic").value; s.vhElVoice=$("vhElVoice").value;
+  LS.set("gkl_vh_set", s);
+  if ($("vhRemember").checked){ const k={}; KEYS.forEach(id=>k[id]=$(id).value); LS.set("gkl_vh_keys", k); }
+  else { try{ localStorage.removeItem("gkl_vh_keys"); }catch(e){} }
+}
+const saved = LS.get("gkl_vh_set", {});
+SET.forEach(id=>{ if (saved[id]!=null) $(id).value = saved[id]; });
+CHK.forEach(id=>{ if (saved[id]!=null) $(id).checked = saved[id]; });
+const savedKeys = LS.get("gkl_vh_keys", {}); KEYS.forEach(id=>{ if (savedKeys[id]) $(id).value = savedKeys[id]; });
+if (saved.vhElVoice){ $("vhElVoice").innerHTML = `<option value="${esc(saved.vhElVoice)}">(saved voice)</option>`; }
+if (!$("vhAzKey").value && !$("vhClaudeKey").value){ $("vhGuide").open = true; $("vhSettings").open = true; }
+function syncUI(){
+  const az = $("vhEngine").value==="azure";
+  $("vhAzureBox").style.display = az?"":"none"; $("vhElBox").style.display = az?"none":"";
+  const r = Number($("vhAzRate").value); $("vhAzRateVal").textContent = (r>=0?"+":"")+r+"%";
+  $("vhVolVal").textContent = $("vhVol").value+"%"; $("vhMicVolVal").textContent = $("vhMicVol").value+"%";
+}
+syncUI();
+document.querySelectorAll("#view-voice details input, #view-voice details select, #view-voice details textarea, #vhVol, #vhMicVol, #vhMonitor, #vhMicOn, #vhDuck, #vhAutoRemind")
+  .forEach(el=>{ if (el.id!=="vhTestText") el.addEventListener("change", ()=>{ syncUI(); saveSet(); }); });
+["vhAzRate","vhVol","vhMicVol"].forEach(id=>$(id).addEventListener("input", syncUI));
+$("vhVol").addEventListener("input", ()=>{ if (A.voiceGain) A.voiceGain.gain.value = $("vhVol").value/100; });
+$("vhMicVol").addEventListener("input", ()=>{ if (A.micGain && !A.ducked) A.micGain.gain.value = $("vhMicVol").value/100; });
+$("vhLang").addEventListener("change", ()=>{ loadLines(); renderLines(); renderVoice(); });
+
+/* ---------- saved clips (IndexedDB) ---------- */
+let dbP = null;
+function db(){
+  if (!dbP) dbP = new Promise(res=>{ try{ const r = indexedDB.open("gkl-voice",1);
+    r.onupgradeneeded = ()=>r.result.createObjectStore("clips"); r.onsuccess = ()=>res(r.result); r.onerror = ()=>res(null); }catch(e){ res(null); } });
+  return dbP;
+}
+async function cacheGet(k){ const d = await db(); if (!d) return null;
+  return new Promise(res=>{ try{ const q = d.transaction("clips").objectStore("clips").get(k); q.onsuccess=()=>res(q.result||null); q.onerror=()=>res(null); }catch(e){ res(null); } }); }
+async function cachePut(k,b){ const d = await db(); if (!d) return;
+  return new Promise(res=>{ try{ const t = d.transaction("clips","readwrite"); t.objectStore("clips").put(b,k); t.oncomplete=()=>res(); t.onerror=()=>res(); }catch(e){ res(); } }); }
+function hash(str){ let h1=0xdeadbeef,h2=0x41c6ce57;
+  for (let i=0;i<str.length;i++){ const c=str.charCodeAt(i); h1=Math.imul(h1^c,2654435761); h2=Math.imul(h2^c,1597334677); }
+  h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);
+  h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
+  return (4294967296*(2097151&h2)+(h1>>>0)).toString(36); }
+function clipKey(text){
+  const az = $("vhEngine").value==="azure";
+  return hash([az?"azure":"eleven", az?$("vhAzVoice").value:$("vhElVoice").value, az?$("vhAzRate").value:$("vhElModel").value, String(text).trim()].join("|"));
+}
+
+/* ---------- voice engines ---------- */
+const xmlEsc = s => String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
+async function ttsAzure(text){
+  const key = $("vhAzKey").value.trim(), region = $("vhAzRegion").value.trim(), voice = $("vhAzVoice").value;
+  if (!key) throw new Error("Add your Azure Speech key in the settings.");
+  const r0 = Number($("vhAzRate").value), rate = (r0>=0?"+":"")+r0+"%";
+  const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${voice.slice(0,5)}"><voice name="${voice}"><prosody rate="${rate}">${xmlEsc(text)}</prosody></voice></speak>`;
+  let r;
+  try{ r = await fetch(`https://${encodeURIComponent(region)}.tts.speech.microsoft.com/cognitiveservices/v1`, { method:"POST",
+    headers:{ "Ocp-Apim-Subscription-Key":key, "Content-Type":"application/ssml+xml", "X-Microsoft-OutputFormat":"audio-24khz-96kbitrate-mono-mp3" }, body:ssml }); }
+  catch(e){ throw new Error("Couldn't reach Azure. Check the internet and the region (e.g. southeastasia)."); }
+  if (r.status===401) throw new Error("Azure refused the key. Copy KEY 1 again and check the region matches.");
+  if (r.status===429) throw new Error("Azure free limit reached for now. Wait a minute, or switch the resource to the paid S0 tier.");
+  if (!r.ok) throw new Error("Azure error "+r.status+": "+(await r.text()).slice(0,200));
+  return r.blob();
+}
+async function ttsEleven(text){
+  const key = $("vhElKey").value.trim(), voice = $("vhElVoice").value;
+  if (!key) throw new Error("Add your ElevenLabs key in the settings.");
+  if (!voice) throw new Error("Press Load voices and pick an ElevenLabs voice.");
+  const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}?output_format=mp3_44100_128`, { method:"POST",
+    headers:{ "xi-api-key":key, "Content-Type":"application/json", "Accept":"audio/mpeg" }, body:JSON.stringify({ text, model_id:$("vhElModel").value }) });
+  if (!r.ok) throw new Error("ElevenLabs error "+r.status+": "+(await r.text()).slice(0,200));
+  return r.blob();
+}
+async function voiceBlob(text){
+  text = String(text||"").trim(); if (!text) throw new Error("The script is empty.");
+  const k = clipKey(text), hit = await cacheGet(k);
+  if (hit) return { blob:hit, cached:true };
+  const blob = $("vhEngine").value==="azure" ? await ttsAzure(text) : await ttsEleven(text);
+  await cachePut(k, blob);
+  return { blob, cached:false };
+}
+$("vhElLoad").onclick = async ()=>{
+  const key = $("vhElKey").value.trim(); if (!key) return vmsg("vhVoiceMsg","err","Add your ElevenLabs key first.");
+  try{ const r = await fetch("https://api.elevenlabs.io/v1/voices",{ headers:{ "xi-api-key":key } });
+    if (!r.ok) throw new Error("ElevenLabs error "+r.status);
+    const d = await r.json();
+    $("vhElVoice").innerHTML = (d.voices||[]).map(v=>`<option value="${esc(v.voice_id)}">${esc(v.name)}</option>`).join("");
+    saveSet(); vmsg("vhVoiceMsg","ok",`Loaded ${(d.voices||[]).length} voices.`);
+  }catch(e){ vmsg("vhVoiceMsg","err",e.message); }
+};
+
+/* ---------- audio routing ---------- */
+const A = { ctx:null };
+function audio(){
+  if (A.ctx){ if (A.ctx.state==="suspended") A.ctx.resume(); return; }
+  const ctx = A.ctx = new (window.AudioContext||window.webkitAudioContext)();
+  A.dest = ctx.createMediaStreamDestination();
+  A.voiceGain = ctx.createGain(); A.voiceGain.gain.value = $("vhVol").value/100;
+  A.monitorGain = ctx.createGain(); A.monitorGain.gain.value = $("vhMonitor").checked?1:0;
+  A.analyser = ctx.createAnalyser(); A.analyser.fftSize = 512;
+  A.voiceGain.connect(A.dest); A.voiceGain.connect(A.analyser); A.voiceGain.connect(A.monitorGain);
+  A.monitorGain.connect(ctx.destination);
+  A.outEl = new Audio(); A.outEl.srcObject = A.dest.stream; A.outEl.autoplay = true;
+  applySink(); A.outEl.play().catch(()=>{});
+  const buf = new Uint8Array(A.analyser.fftSize), bar = $("vhMeter");
+  (function tick(){ A.analyser.getByteTimeDomainData(buf); let pk=0; for (let i=0;i<buf.length;i++){ const v=Math.abs(buf[i]-128); if (v>pk) pk=v; }
+    bar.style.width = Math.min(100, pk/128*140)+"%"; bar.style.background = pk>118 ? "var(--live)" : "var(--teal)"; requestAnimationFrame(tick); })();
+}
+async function applySink(){
+  const id = $("vhOut").value, name = $("vhOut").selectedOptions[0] ? $("vhOut").selectedOptions[0].textContent : "Default speakers";
+  $("vhRoute").textContent = id ? name : "default speakers";
+  if (!A.outEl) return;
+  if (typeof A.outEl.setSinkId!=="function"){ vmsg("vhRouteMsg","warn","This browser can't choose an output. Use Google Chrome or Edge."); return; }
+  try{ await A.outEl.setSinkId(id||""); }catch(e){ vmsg("vhRouteMsg","err","Couldn't switch output: "+e.message); }
+}
+async function listDevices(){
+  const devs = await navigator.mediaDevices.enumerateDevices();
+  const keepOut = $("vhOut").value || saved.vhOut || "", keepMic = $("vhMic").value || saved.vhMic || "";
+  const skip = d => d.deviceId==="default" || d.deviceId==="communications";
+  $("vhOut").innerHTML = `<option value="">Default speakers</option>` + devs.filter(d=>d.kind==="audiooutput" && !skip(d)).map(d=>`<option value="${esc(d.deviceId)}">${esc(d.label||"Speaker")}</option>`).join("");
+  $("vhMic").innerHTML = `<option value="">Default mic</option>` + devs.filter(d=>d.kind==="audioinput" && !skip(d) && !/cable output/i.test(d.label)).map(d=>`<option value="${esc(d.deviceId)}">${esc(d.label||"Microphone")}</option>`).join("");
+  const outs = [...$("vhOut").options];
+  if (outs.some(o=>o.value===keepOut)) $("vhOut").value = keepOut;
+  else { const cab = outs.find(o=>/cable input/i.test(o.textContent)); if (cab) $("vhOut").value = cab.value; }
+  if ([...$("vhMic").options].some(o=>o.value===keepMic)) $("vhMic").value = keepMic;
+  if (!outs.some(o=>/cable input/i.test(o.textContent))) vmsg("vhRouteMsg","warn","CABLE Input not found. Install VB-Cable (see First-time setup), restart, then press Allow devices again.");
+  else vmsg("vhRouteMsg","ok","Voice will go to: "+$("vhOut").selectedOptions[0].textContent+". In Live Producer choose Microphone = CABLE Output.");
+  saveSet();
+}
+$("vhAllow").onclick = async ()=>{
+  try{ const s = await navigator.mediaDevices.getUserMedia({ audio:true }); s.getTracks().forEach(t=>t.stop());
+    audio(); await listDevices(); await applySink(); if ($("vhMicOn").checked) await startMic(); }
+  catch(e){ vmsg("vhRouteMsg","err","The browser blocked device access. Click the lock icon in the address bar → allow Microphone, then try again."); }
+};
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener("devicechange", ()=>{ if (A.ctx) listDevices(); });
+$("vhOut").addEventListener("change", ()=>{ audio(); applySink(); });
+$("vhMonitor").addEventListener("change", ()=>{ if (A.monitorGain) A.monitorGain.gain.value = $("vhMonitor").checked?1:0; });
+async function startMic(){
+  audio(); stopMic();
+  const id = $("vhMic").value;
+  try{
+    A.micStream = await navigator.mediaDevices.getUserMedia({ audio:{ deviceId:id?{exact:id}:undefined, echoCancellation:true, noiseSuppression:true, autoGainControl:true } });
+    A.micSrc = A.ctx.createMediaStreamSource(A.micStream);
+    A.micGain = A.ctx.createGain(); A.micGain.gain.value = $("vhMicVol").value/100;
+    A.micSrc.connect(A.micGain); A.micGain.connect(A.dest); A.micGain.connect(A.analyser);
+    vmsg("vhRouteMsg","ok","Your microphone is mixed into the live.");
+  }catch(e){ $("vhMicOn").checked = false; vmsg("vhRouteMsg","err","Couldn't open the microphone: "+e.message); }
+}
+function stopMic(){ try{ A.micSrc && A.micSrc.disconnect(); A.micGain && A.micGain.disconnect(); }catch(e){}
+  if (A.micStream) A.micStream.getTracks().forEach(t=>t.stop()); A.micStream = A.micSrc = A.micGain = null; }
+$("vhMicOn").addEventListener("change", ()=>{ if ($("vhMicOn").checked) startMic(); else { stopMic(); vmsg("vhRouteMsg","warn","Microphone removed from the live."); } });
+$("vhMic").addEventListener("change", ()=>{ saveSet(); if ($("vhMicOn").checked) startMic(); });
+function duck(on){ A.ducked = on; if (!A.micGain || !$("vhDuck").checked) return;
+  const v = $("vhMicVol").value/100; A.micGain.gain.setTargetAtTime(on ? v*0.15 : v, A.ctx.currentTime, 0.08); }
+$("vhTone").onclick = ()=>{ audio(); stop();
+  const o = A.ctx.createOscillator(), g = A.ctx.createGain(); o.frequency.value = 660; g.gain.value = .25;
+  o.connect(g); g.connect(A.voiceGain); o.start(); o.stop(A.ctx.currentTime+1.2);
+  $("vhNow").textContent = "Test tone"; o.onended = ()=>{ $("vhNow").textContent = "Ready"; }; };
+
+/* ---------- playback (a queue, so the AI reminder can play before a product) ---------- */
+let playToken = 0;
+function stop(){
+  playToken++;
+  if (A.current){ try{ A.current.onended = null; A.current.stop(); }catch(e){} A.current = null; }
+  document.querySelectorAll(".vh-card.playing").forEach(c=>c.classList.remove("playing"));
+  if (A.ctx) duck(false); $("vhNow").textContent = "Ready";
+}
+async function playQueue(items, card){ // items: [{blob,label}]
+  audio(); stop(); const my = playToken;
+  card && card.classList.add("playing"); duck(true);
+  for (const it of items){
+    if (my!==playToken) return;
+    const buf = await A.ctx.decodeAudioData(await it.blob.arrayBuffer());
+    if (my!==playToken) return;
+    await new Promise(res=>{ const src = A.ctx.createBufferSource(); src.buffer = buf; src.connect(A.voiceGain);
+      A.current = src; $("vhNow").textContent = "▶ "+it.label; src.onended = res; src.start(); });
+  }
+  if (my===playToken){ A.current = null; card && card.classList.remove("playing"); duck(false); $("vhNow").textContent = "Ready"; }
+}
+function setSt(el, cls, text){ if (el){ el.className = "vh-st"+(cls?" "+cls:""); el.textContent = text; } }
+$("vhStop").onclick = stop;
+$("vhTestVoice").onclick = async ()=>{
+  vmsg("vhVoiceMsg","warn","Making voice…");
+  try{ const r = await voiceBlob($("vhTestText").value); await playQueue([{ blob:r.blob, label:"Test voice" }]);
+    vmsg("vhVoiceMsg","ok", r.cached ? "Played the saved copy (no cost)." : "Voice works."); }
+  catch(e){ vmsg("vhVoiceMsg","err",e.message); }
+};
+
+/* ---------- quick lines (Opening + AI reminder always keep the disclosure) ---------- */
+const DEF_LINES = {
+  km:[
+    {key:"open",  label:"Opening",      text:DISCLOSURE.km+" ថ្ងៃនេះយើងមានសម្លៀកបំពាក់កូនៗស្អាតៗ ថ្មីៗច្រើនណាស់ ចាំមើលដល់ចប់ណាបង!"},
+    {key:"order", label:"How to order", text:"បងចង់កុម្ម៉ង់ងាយស្រួលណាស់! គ្រាន់តែ comment លេខកូដ 4 ខ្ទង់ ទំហំ និងលេខទូរស័ព្ទ។ ក្រុមការងារយើងនឹងទាក់ទងទៅបងភ្លាមៗ។"},
+    {key:"remind",label:"AI reminder",  text:DISCLOSURE_REMIND.km},
+    {key:"thanks",label:"Thank you",    text:"អរគុណច្រើនបងៗដែលបានចូលមើល និងកុម្ម៉ង់ជាមួយ Goat Kids ថ្ងៃនេះ។ ជួបគ្នាលើក Live ក្រោយទៀតណាបង!"}
+  ],
+  en:[
+    {key:"open",  label:"Opening",      text:DISCLOSURE.en+" Today we have lots of lovely new kids' clothes, so stay to the end!"},
+    {key:"order", label:"How to order", text:"Ordering is easy! Just comment the 4-digit code, the size and your phone number, and our team will contact you right away."},
+    {key:"remind",label:"AI reminder",  text:DISCLOSURE_REMIND.en},
+    {key:"thanks",label:"Thank you",    text:"Thank you so much for watching and ordering with Goat Kids today. See you at the next live!"}
+  ]
+};
+let LINES = [];
+function loadLines(){ LINES = LS.get("gkl_vh_lines_"+lang(), null) || JSON.parse(JSON.stringify(DEF_LINES[lang()])); }
+function saveLines(){ LS.set("gkl_vh_lines_"+lang(), LINES); }
+function required(l){ return l.key==="open" ? DISCLOSURE[lang()] : l.key==="remind" ? DISCLOSURE_REMIND[lang()] : ""; }
+function lineText(l){ const need = required(l); return need && !l.text.includes(need) ? need+" "+l.text : l.text; }
+const LINE_KEYS = ["q","w","e","r"];
+function renderLines(){
+  $("vhLines").innerHTML = LINES.map((l,i)=>`<div class="vh-line" data-i="${i}">
+    <div class="lbl">${esc(l.label)}${required(l)?' <span class="hint">🔒 AI label</span>':""}</div>
+    <textarea data-line="${i}">${esc(l.text)}</textarea>
+    <div class="row" style="margin:0"><button class="btn vh-play vh-sm" data-lplay="${i}">▶ ${LINE_KEYS[i].toUpperCase()}</button><span class="vh-st" data-lst="${i}">—</span></div></div>`).join("");
+  LINES.forEach((l,i)=>lineStatus(i));
+}
+async function lineStatus(i){ const el = document.querySelector(`[data-lst="${i}"]`), t = lineText(LINES[i]);
+  setSt(el, t.trim() && await cacheGet(clipKey(t)) ? "ok" : "", t.trim() && await cacheGet(clipKey(t)) ? "voice ready" : "not made yet"); }
+$("vhLines").addEventListener("input", e=>{ const i = e.target.dataset.line; if (i===undefined) return; LINES[i].text = e.target.value; saveLines(); lineStatus(+i); });
+$("vhLines").addEventListener("change", e=>{ const i = e.target.dataset.line; if (i===undefined) return;
+  const t = lineText(LINES[i]); if (t!==LINES[i].text){ LINES[i].text = t; e.target.value = t; saveLines(); vmsg("vhMsg","warn","The AI host disclosure was put back into "+LINES[i].label+"."); } });
+async function playLine(i){ const l = LINES[i], st = document.querySelector(`[data-lst="${i}"]`);
+  try{ setSt(st,"busy","making voice…"); const r = await voiceBlob(lineText(l)); setSt(st,"ok","voice ready");
+    if (l.key==="open") VH.played = 0;
+    await playQueue([{ blob:r.blob, label:l.label }]); }
+  catch(e){ setSt(st,"err","error"); vmsg("vhMsg","err",e.message); } }
+$("vhLines").addEventListener("click", e=>{ const i = e.target.dataset.lplay; if (i!==undefined) playLine(+i); });
+
+/* ---------- Claude script writer ---------- */
+const LEN = { short:"about 35-50 words (around 15 seconds spoken)", medium:"about 70-90 words (around 30 seconds spoken)", long:"about 110-130 words (around 45 seconds spoken)" };
+function systemPrompt(){
+  const km = lang()==="km", notes = $("vhStyle").value.trim();
+  return `You write spoken scripts for a Facebook Live selling show for "Goat Kids", a children's clothing shop in Phnom Penh, Cambodia. An AI voice reads your script out loud while the product is shown on camera. (The show already tells viewers the host is an AI; you don't need to repeat that.)
+
+Write the way a real, warm, energetic Cambodian live-selling host talks to parents watching on their phones: natural, friendly, a little playful, never stiff or like a printed advert. Speak directly to viewers.
+
+Rules:
+- Language: ${km ? "natural spoken Khmer as people in Phnom Penh really talk (polite but casual, e.g. calling viewers បងៗ). Brand words like Goat Kids or Live can stay in English." : "natural, friendly spoken English."}
+- Length: ${LEN[$("vhLength").value]}.
+- Say the 4-digit product code clearly near the start, and again at the end.
+- Mention the price and the sizes given. Only describe what is in the product details; never invent fabric, colours, discounts, stock counts or delivery promises.
+- End with how to order: comment the code, the size and a phone number.
+- Write numbers so a voice reads them correctly${km ? ' (a price like "$8.50" can be written as "8 ដុល្លារ 50 សេន"; sizes and codes as digits are fine)' : ""}.
+- Plain spoken text only: no emojis, hashtags, markdown, stage directions or quotation marks around the script.
+- Output only the script.${notes ? "\n\nHost style notes from the shop owner:\n"+notes : ""}`;
+}
+function brief(p){
+  const sz = availSizes(p);
+  return [`Code: ${S.codes[p.id]}`, `Name: ${p.name}`, `Price: ${money(p.price)}`, sz.length ? `Sizes available: ${sz.join(", ")}` : "", p.category ? `Category: ${p.category}` : ""].filter(Boolean).join("\n");
+}
+async function claude(userText){
+  const key = $("vhClaudeKey").value.trim(); if (!key) throw new Error("Add your Claude API key in the settings.");
+  let r;
+  try{ r = await fetch("https://api.anthropic.com/v1/messages", { method:"POST",
+    headers:{ "x-api-key":key, "anthropic-version":"2023-06-01", "content-type":"application/json", "anthropic-dangerous-direct-browser-access":"true" },
+    body:JSON.stringify({ model:$("vhModel").value.trim()||"claude-sonnet-5-5", max_tokens:900, system:systemPrompt(), messages:[{ role:"user", content:userText }] }) }); }
+  catch(e){ throw new Error("Couldn't reach Claude. Check the internet connection."); }
+  const d = await r.json().catch(()=>({}));
+  if (r.status===401) throw new Error("Claude refused the API key. Copy it again from console.anthropic.com.");
+  if (r.status===400 && /credit/i.test(JSON.stringify(d))) throw new Error("Your Claude account has no credit. Add some in console.anthropic.com → Billing.");
+  if (r.status===404 && /model/i.test(JSON.stringify(d))) throw new Error("Claude doesn't know the model name \""+$("vhModel").value+"\". Check the model name in the settings.");
+  if (!r.ok) throw new Error("Claude error "+r.status+": "+((d.error&&d.error.message)||"").slice(0,200));
+  return (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").trim();
+}
+$("vhTestClaude").onclick = async ()=>{
+  vmsg("vhClaudeMsg","warn","Writing a sample…");
+  try{ const t = await claude("Write the script for this product:\nCode: 1258\nName: Girls cotton dress\nPrice: $8.50\nSizes available: 90, 100, 110, 120"); msg("vhClaudeMsg","ok",t); }
+  catch(e){ vmsg("vhClaudeMsg","err",e.message); }
+};
+
+/* ---------- product cards ---------- */
+const items = ()=> S.products.filter(p=>S.selected.has(p.id) && S.codes[p.id]);
+const scriptOf = p => VH.scripts[p.id] || "";
+function setScript(p, t){ VH.scripts[p.id] = t; LS.set("gkl_vh_scripts", VH.scripts); }
+function renderVoice(){
+  const list = items();
+  if (!list.length){ $("vhProducts").innerHTML = `<div class="box hint">No products yet. On the <b>Products &amp; codes</b> tab, tick the products you will show in this live (they need a code), then come back here.</div>`; return; }
+  const pillTxt = {in:"In stock",low:"Few left",out:"Out of stock"};
+  $("vhProducts").innerHTML = list.map((p,i)=>{ const s = stockState(p); return `<div class="vh-card" data-pid="${esc(p.id)}">
+    <div class="vh-top">${thumbHtml(p,true)}<div style="min-width:0"><div><span class="num">${i<9?"key "+(i+1):"#"+(i+1)}</span> <span class="code">${esc(S.codes[p.id])}</span></div>
+      <div class="nm">${esc(p.name)}</div><div class="hint">${money(p.price)} · <span class="pill ${s}">${pillTxt[s]} (${p.total})</span></div></div></div>
+    <textarea data-script="${esc(p.id)}" placeholder="Press ✍️ Write, or type your own script">${esc(scriptOf(p))}</textarea>
+    <div class="row" style="margin:0">
+      <button class="btn vh-play" data-act="play">▶ Play</button>
+      <button class="btn ghost vh-sm" data-act="write">✍️ Write</button>
+      <button class="btn ghost vh-sm" data-act="voice">🗣️ Make voice</button>
+      <span class="vh-st" data-st>—</span><span class="hint" data-len>${scriptOf(p).length} chars</span>
+    </div></div>`; }).join("");
+  list.forEach(p=>cardStatus(p));
+}
+const cardOf = p => document.querySelector(`.vh-card[data-pid="${CSS.escape(p.id)}"]`);
+async function cardStatus(p){
+  const c = cardOf(p); if (!c) return; const st = c.querySelector("[data-st]"), t = scriptOf(p);
+  if (!t.trim()) return setSt(st,"","no script");
+  const hit = await cacheGet(clipKey(t)); setSt(st, hit?"ok":"", hit?"voice ready":"voice not made");
+}
+async function writeOne(p, ask){
+  const c = cardOf(p), st = c && c.querySelector("[data-st]");
+  if (ask && scriptOf(p).trim() && !confirm("Replace the current script for "+S.codes[p.id]+"?")) return false;
+  setSt(st,"busy","writing…");
+  const t = await claude("Write the script for this product:\n"+brief(p));
+  setScript(p, t);
+  if (c){ c.querySelector("textarea").value = t; c.querySelector("[data-len]").textContent = t.length+" chars"; }
+  cardStatus(p); return true;
+}
+async function playProduct(p){
+  const c = cardOf(p), st = c && c.querySelector("[data-st]");
+  try{
+    setSt(st,"busy","making voice…");
+    const r = await voiceBlob(scriptOf(p)); setSt(st,"ok","voice ready");
+    const q = [], every = Number($("repeatEvery").value)||5;
+    if ($("vhAutoRemind").checked && VH.played>0 && VH.played % every===0){
+      const rl = LINES.find(l=>l.key==="remind"); if (rl){ const rr = await voiceBlob(lineText(rl)); q.push({ blob:rr.blob, label:"AI reminder" }); }
+    }
+    VH.played++;
+    q.push({ blob:r.blob, label:S.codes[p.id]+" "+p.name });
+    await playQueue(q, c);
+  }catch(e){ setSt(st,"err","error"); vmsg("vhMsg","err",e.message); }
+}
+$("vhProducts").addEventListener("input", e=>{ const id = e.target.dataset.script; if (!id) return;
+  const p = S.products.find(x=>x.id===id); setScript(p, e.target.value);
+  e.target.closest(".vh-card").querySelector("[data-len]").textContent = e.target.value.length+" chars"; cardStatus(p); });
+$("vhProducts").addEventListener("click", async e=>{
+  const act = e.target.dataset.act; if (!act) return;
+  const p = S.products.find(x=>x.id===e.target.closest(".vh-card").dataset.pid); if (!p) return;
+  const st = cardOf(p).querySelector("[data-st]");
+  if (act==="play") return playProduct(p);
+  try{
+    if (act==="write"){ await writeOne(p, true); vmsg("vhMsg","",""); }
+    if (act==="voice"){ setSt(st,"busy","making voice…"); await voiceBlob(scriptOf(p)); setSt(st,"ok","voice ready"); }
+  }catch(err){ setSt(st,"err","error"); vmsg("vhMsg","err",err.message); }
+});
+$("vhWriteAll").onclick = async ()=>{
+  const todo = items().filter(p=>!scriptOf(p).trim());
+  if (!items().length) return vmsg("vhMsg","warn","Tick products on the Products & codes tab first.");
+  if (!todo.length) return vmsg("vhMsg","ok","Every product already has a script. Use ✍️ Write on a card to rewrite one.");
+  $("vhWriteAll").disabled = true; let done = 0;
+  try{ for (const p of todo){ vmsg("vhMsg","warn",`Writing scripts… ${done}/${todo.length}`); await writeOne(p,false); done++; }
+    vmsg("vhMsg","ok",`Wrote ${done} script(s). Read them, fix anything, then press Make all voices.`); }
+  catch(e){ vmsg("vhMsg","err",e.message); }
+  finally{ $("vhWriteAll").disabled = false; }
+};
+$("vhVoiceAll").onclick = async ()=>{
+  const texts = [...items().map(scriptOf), ...LINES.map(lineText)].filter(t=>t.trim());
+  if (!texts.length) return vmsg("vhMsg","warn","No scripts yet. Write them first.");
+  $("vhVoiceAll").disabled = true; let made = 0, reused = 0, chars = 0;
+  try{ for (let i=0;i<texts.length;i++){ vmsg("vhMsg","warn",`Making voices… ${i}/${texts.length}`);
+      const r = await voiceBlob(texts[i]); if (r.cached) reused++; else { made++; chars += texts[i].length; } }
+    vmsg("vhMsg","ok",`All voices ready. New: ${made} (${chars} characters). Reused free: ${reused}.`); }
+  catch(e){ vmsg("vhMsg","err",e.message); }
+  finally{ $("vhVoiceAll").disabled = false; items().forEach(cardStatus); LINES.forEach((l,i)=>lineStatus(i)); }
+};
+$("vhRefresh").onclick = renderVoice;
+
+/* ---------- tab + keys ---------- */
+document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click", ()=>{ if (b.dataset.view==="voice") renderVoice(); }));
+document.addEventListener("keydown", e=>{
+  if (!$("view-voice").classList.contains("active")) return;
+  const tag = (e.target.tagName||"").toLowerCase();
+  if (["input","textarea","select"].includes(tag) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector("dialog[open]")) return;
+  if (e.key===" "){ e.preventDefault(); stop(); return; }
+  if (/^[1-9]$/.test(e.key)){ const p = items()[Number(e.key)-1]; if (p) playProduct(p); return; }
+  const li = LINE_KEYS.indexOf(e.key.toLowerCase()); if (li>=0 && LINES[li]) playLine(li);
+});
+loadLines(); renderLines(); renderVoice();
 })();
 </script>
 <div id="zoom" role="dialog" aria-label="Product photo"><figure style="margin:0"><img alt=""><div></div></figure></div>
