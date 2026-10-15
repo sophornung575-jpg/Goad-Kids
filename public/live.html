@@ -306,8 +306,9 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
     <summary>📘 First-time setup (VB-Cable, keys, Live Producer)</summary>
     <ol class="vh-ol">
       <li><b>VB-Cable:</b> download <b>VB-CABLE Driver</b> from <code>vb-audio.com/Cable</code> (free) → unzip → right-click <b>VBCABLE_Setup_x64.exe</b> → <b>Run as administrator</b> → <b>Install Driver</b> → restart the laptop.</li>
-      <li><b>Khmer voice key (Google Gemini):</b> open <code>aistudio.google.com</code> and sign in with your Google account → <b>Get API key</b> → <b>Create API key</b> → copy it into <b>Gemini API key</b> in the settings below → press <b>Test voice</b>.</li>
-      <li><b>Claude key:</b> <code>platform.claude.com</code> → <b>API Keys</b> → <b>Create Key</b>, and add a small credit (e.g. $5). Paste it below.</li>
+      <li><b>Khmer voice (CAMB.AI):</b> in CAMB.AI Studio → <b>Settings → API Keys</b> → copy the key into <b>CAMB.AI API key</b> in the settings below → press <b>Load voices</b> → pick a voice → <b>Test voice</b>.</li>
+      <li><b>Script writer (Google Gemini, free):</b> <code>aistudio.google.com</code> → <b>Get API key</b> → <b>Create API key</b> → paste it into <b>Gemini API key</b> in the settings below.</li>
+      <li><b>Script writer:</b> nothing extra needed — it uses the same <b>Gemini key</b> (free tier). If you later want Claude to write instead, choose <b>Claude</b> in the settings and add a Claude API key from <code>platform.claude.com</code> (paid credit).</li>
       <li><b>Sound into the live:</b> below, press <b>Allow devices</b> and set <b>Send voice to = CABLE Input</b>. In <b>Facebook Live Producer</b> (Chrome, same laptop) set <b>Microphone = CABLE Output</b>. Press <b>Test tone</b> — the Live Producer mic meter should move.</li>
       <li>Want to talk too? Tick <b>Mix my microphone</b> and pick your real mic (not CABLE).</li>
     </ol>
@@ -318,8 +319,16 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
     <summary>⚙️ Script writer &amp; voice settings</summary>
     <div class="grid2">
       <div>
-        <label for="vhClaudeKey">Claude API key</label><input type="password" id="vhClaudeKey" placeholder="sk-ant-..." autocomplete="off">
-        <label for="vhModel">Claude model</label><input type="text" id="vhModel" value="claude-sonnet-5-5">
+        <label for="vhWriter">Script writer</label>
+        <select id="vhWriter"><option value="gemini">Google Gemini — free tier, uses the Gemini key</option><option value="claude">Claude — paid API credit</option></select>
+        <div id="vhGemKeyRow"><label for="vhGemKey">Gemini API key</label><input type="password" id="vhGemKey" placeholder="from aistudio.google.com" autocomplete="off"></div>
+        <div id="vhGemWriterBox">
+          <label for="vhGemTextModel">Gemini writer model</label><input type="text" id="vhGemTextModel" value="gemini-3.8-flash">
+        </div>
+        <div id="vhClaudeBox" style="display:none">
+          <label for="vhClaudeKey">Claude API key</label><input type="password" id="vhClaudeKey" placeholder="sk-ant-..." autocomplete="off">
+          <label for="vhModel">Claude model</label><input type="text" id="vhModel" value="claude-sonnet-5-5">
+        </div>
         <label for="vhLang">Script language</label>
         <select id="vhLang"><option value="km">Khmer</option><option value="en">English</option></select>
         <label for="vhLength">Script length</label>
@@ -331,9 +340,24 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
       </div>
       <div>
         <label for="vhEngine">Voice engine</label>
-        <select id="vhEngine"><option value="gemini">Google Gemini (Khmer + English)</option><option value="azure">Microsoft Azure (not available in Cambodia)</option><option value="eleven">ElevenLabs (English only — no Khmer)</option></select>
-        <div id="vhGemBox">
-          <label for="vhGemKey">Gemini API key</label><input type="password" id="vhGemKey" placeholder="from aistudio.google.com" autocomplete="off">
+        <select id="vhEngine"><option value="camb">CAMB.AI (Khmer + English)</option><option value="gemini">Google Gemini (Khmer + English)</option><option value="azure">Microsoft Azure (not available in Cambodia)</option><option value="eleven">ElevenLabs (English only — no Khmer)</option></select>
+        <div id="vhCambBox">
+          <label for="vhCambKey">CAMB.AI API key</label><input type="password" id="vhCambKey" placeholder="from studio.camb.ai → Settings → API Keys" autocomplete="off">
+          <label for="vhCambVoice">Voice</label>
+          <div class="row" style="margin-top:0;flex-wrap:nowrap"><select id="vhCambVoice" style="flex:1"><option value="">Press Load voices</option></select><button class="btn ghost" id="vhCambLoad" type="button">Load voices</button></div>
+          <label for="vhCambModel">Voice model</label>
+          <select id="vhCambModel">
+            <option value="mars-8.1-pro-beta">MARS 8.1 Pro — best quality</option>
+            <option value="mars-8.1-flash-beta">MARS 8.1 Flash — faster, cheaper</option>
+            <option value="mars-instruct">MARS Instruct — follows the style notes below</option>
+          </select>
+          <label for="vhCambLang">Language code</label><input type="text" id="vhCambLang" value="km-kh">
+          <label for="vhCambRate">Speed <span id="vhCambRateVal"></span></label><input type="range" id="vhCambRate" min="0.8" max="1.25" step="0.05" value="1" style="width:100%">
+          <label for="vhCambStyle">Style (MARS Instruct only)</label>
+          <input type="text" id="vhCambStyle" value="Warm, cheerful, energetic Cambodian live-selling host talking to parents">
+        </div>
+        <div id="vhGemBox" style="display:none">
+          <p class="hint" style="margin:8px 0 0">Uses the <b>Gemini API key</b> on the left.</p>
           <label for="vhGemVoice">Voice</label>
           <select id="vhGemVoice">
             <option value="Kore">Kore — female, firm &amp; clear</option>
@@ -1351,25 +1375,30 @@ const vmsg = (el,type,text)=> text ? msg(el,type,text) : ($(el).innerHTML="");
 const lang = ()=> $("vhLang").value;
 
 /* ---------- settings ---------- */
-const SET = ["vhModel","vhLang","vhLength","vhStyle","vhEngine","vhGemVoice","vhGemStyle","vhGemModel","vhAzRegion","vhAzVoice","vhAzRate","vhElModel","vhVol","vhMicVol"];
+const SET = ["vhCambModel","vhCambLang","vhCambRate","vhCambStyle","vhWriter","vhGemTextModel","vhModel","vhLang","vhLength","vhStyle","vhEngine","vhGemVoice","vhGemStyle","vhGemModel","vhAzRegion","vhAzVoice","vhAzRate","vhElModel","vhVol","vhMicVol"];
 const CHK = ["vhMonitor","vhMicOn","vhDuck","vhRemember","vhAutoRemind"];
-const KEYS = ["vhClaudeKey","vhGemKey","vhAzKey","vhElKey"];
+const KEYS = ["vhClaudeKey","vhCambKey","vhGemKey","vhAzKey","vhElKey"];
 function saveSet(){
   const s = {}; SET.forEach(id=>s[id]=$(id).value); CHK.forEach(id=>s[id]=$(id).checked);
-  s.vhGemMigrated = true; s.vhOut=$("vhOut").value; s.vhMic=$("vhMic").value; s.vhElVoice=$("vhElVoice").value;
+  s.vhGemMigrated = true; s.vhCambMigrated = true; s.vhCambVoice=$("vhCambVoice").value; s.vhCambVoiceName=$("vhCambVoice").selectedOptions[0]?$("vhCambVoice").selectedOptions[0].textContent:""; s.vhOut=$("vhOut").value; s.vhMic=$("vhMic").value; s.vhElVoice=$("vhElVoice").value;
   LS.set("gkl_vh_set", s);
   if ($("vhRemember").checked){ const k={}; KEYS.forEach(id=>k[id]=$(id).value); LS.set("gkl_vh_keys", k); }
   else { try{ localStorage.removeItem("gkl_vh_keys"); }catch(e){} }
 }
 const saved = LS.get("gkl_vh_set", {});
 if (saved.vhEngine==="azure" && !saved.vhGemMigrated){ saved.vhEngine = "gemini"; saved.vhGemMigrated = true; }
+if (saved.vhEngine && saved.vhEngine!=="camb" && !saved.vhCambMigrated){ saved.vhEngine = "camb"; }
 SET.forEach(id=>{ if (saved[id]!=null) $(id).value = saved[id]; });
 CHK.forEach(id=>{ if (saved[id]!=null) $(id).checked = saved[id]; });
 const savedKeys = LS.get("gkl_vh_keys", {}); KEYS.forEach(id=>{ if (savedKeys[id]) $(id).value = savedKeys[id]; });
+if (saved.vhCambVoice){ $("vhCambVoice").innerHTML = `<option value="${esc(saved.vhCambVoice)}">${esc(saved.vhCambVoiceName||"(saved voice)")}</option>`; }
 if (saved.vhElVoice){ $("vhElVoice").innerHTML = `<option value="${esc(saved.vhElVoice)}">(saved voice)</option>`; }
-if (!$("vhGemKey").value && !$("vhAzKey").value && !$("vhClaudeKey").value){ $("vhGuide").open = true; $("vhSettings").open = true; }
+if (!$("vhCambKey").value && !$("vhGemKey").value && !$("vhAzKey").value && !$("vhClaudeKey").value){ $("vhGuide").open = true; $("vhSettings").open = true; }
 function syncUI(){
+  const wr = $("vhWriter").value;
+  $("vhGemWriterBox").style.display = wr==="gemini"?"":"none"; $("vhGemKeyRow").style.display = (wr==="gemini" || $("vhEngine").value==="gemini")?"":"none"; $("vhClaudeBox").style.display = wr==="claude"?"":"none";
   const en = $("vhEngine").value;
+  $("vhCambBox").style.display = en==="camb"?"":"none"; $("vhCambRateVal").textContent = Number($("vhCambRate").value).toFixed(2)+"×";
   $("vhGemBox").style.display = en==="gemini"?"":"none"; $("vhAzureBox").style.display = en==="azure"?"":"none"; $("vhElBox").style.display = en==="eleven"?"":"none";
   const r = Number($("vhAzRate").value); $("vhAzRateVal").textContent = (r>=0?"+":"")+r+"%";
   $("vhVolVal").textContent = $("vhVol").value+"%"; $("vhMicVolVal").textContent = $("vhMicVol").value+"%";
@@ -1377,7 +1406,7 @@ function syncUI(){
 syncUI();
 document.querySelectorAll("#view-voice details input, #view-voice details select, #view-voice details textarea, #vhVol, #vhMicVol, #vhMonitor, #vhMicOn, #vhDuck, #vhAutoRemind")
   .forEach(el=>{ if (el.id!=="vhTestText") el.addEventListener("change", ()=>{ syncUI(); saveSet(); }); });
-["vhAzRate","vhVol","vhMicVol"].forEach(id=>$(id).addEventListener("input", syncUI));
+["vhCambRate","vhAzRate","vhVol","vhMicVol"].forEach(id=>$(id).addEventListener("input", syncUI));
 $("vhVol").addEventListener("input", ()=>{ if (A.voiceGain) A.voiceGain.gain.value = $("vhVol").value/100; });
 $("vhMicVol").addEventListener("input", ()=>{ if (A.micGain && !A.ducked) A.micGain.gain.value = $("vhMicVol").value/100; });
 $("vhLang").addEventListener("change", ()=>{ loadLines(); renderLines(); renderVoice(); });
@@ -1400,7 +1429,8 @@ function hash(str){ let h1=0xdeadbeef,h2=0x41c6ce57;
   return (4294967296*(2097151&h2)+(h1>>>0)).toString(36); }
 function clipKey(text){
   const en = $("vhEngine").value;
-  const v = en==="gemini" ? [$("vhGemVoice").value, $("vhGemModel").value, $("vhGemStyle").value]
+  const v = en==="camb" ? [$("vhCambVoice").value, $("vhCambModel").value, $("vhCambLang").value, $("vhCambRate").value, $("vhCambModel").value==="mars-instruct"?$("vhCambStyle").value:""]
+          : en==="gemini" ? [$("vhGemVoice").value, $("vhGemModel").value, $("vhGemStyle").value]
           : en==="azure"  ? [$("vhAzVoice").value, $("vhAzRate").value]
           : [$("vhElVoice").value, $("vhElModel").value];
   return hash([en, ...v, String(text).trim()].join("|"));
@@ -1435,6 +1465,51 @@ function pcmToWav(bytes, rate){
   v.setUint32(24,rate,true); v.setUint32(28,rate*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true); w(36,"data"); v.setUint32(40,bytes.length,true);
   return new Blob([h, bytes], { type:"audio/wav" });
 }
+const CAMB = "https://client.camb.ai/apis";
+function cambNet(e){ return new Error("Couldn't reach CAMB.AI. Check the internet. If the internet is fine, CAMB.AI may be blocking requests from a web page — tell Claude and it will add a small relay."); }
+async function ttsCamb(text){
+  const key = $("vhCambKey").value.trim(); if (!key) throw new Error("Add your CAMB.AI API key in the settings.");
+  const voice = Number($("vhCambVoice").value); if (!voice) throw new Error("Press Load voices and pick a CAMB.AI voice.");
+  if (text.length < 3) throw new Error("The script is too short for CAMB.AI (at least 3 characters).");
+  if (text.length > 3000) throw new Error("The script is longer than 3000 characters. Make it shorter.");
+  const model = $("vhCambModel").value;
+  const body = { text, voice_id:voice, language:$("vhCambLang").value.trim().toLowerCase()||"km-kh", speech_model:model,
+    output_configuration:{ format:"mp3" }, voice_settings:{ speaking_rate:Number($("vhCambRate").value)||1 } };
+  if (model==="mars-instruct"){ body.output_configuration.format = "wav"; const st = $("vhCambStyle").value.trim(); if (st) body.user_instructions = st; }
+  let r;
+  try{ r = await fetch(CAMB+"/tts-stream", { method:"POST", headers:{ "x-api-key":key, "Content-Type":"application/json" }, body:JSON.stringify(body) }); }
+  catch(e){ throw cambNet(e); }
+  if (!r.ok){
+    const t = await r.text().catch(()=>""); let m = t; try{ const j = JSON.parse(t); m = j.detail ? (typeof j.detail==="string" ? j.detail : JSON.stringify(j.detail)) : (j.message||t); }catch(e){}
+    if (r.status===401 || r.status===403) throw new Error("CAMB.AI refused the API key. Copy it again from CAMB.AI Studio → Settings → API Keys.");
+    if (r.status===402) throw new Error("CAMB.AI says there are no credits left on the account.");
+    if (r.status===422) throw new Error("CAMB.AI couldn't use these settings (often: this voice model doesn't support Khmer). Try another Voice model. Details: "+String(m).slice(0,200));
+    if (r.status===429) throw new Error("CAMB.AI limit reached for now. Wait a minute and try again.");
+    throw new Error("CAMB.AI error "+r.status+": "+String(m).slice(0,200));
+  }
+  const blob = await r.blob();
+  if (blob.size < 200) throw new Error("CAMB.AI sent back empty audio. Try again or pick another voice.");
+  return blob;
+}
+$("vhCambLoad").onclick = async ()=>{
+  const key = $("vhCambKey").value.trim(); if (!key) return vmsg("vhVoiceMsg","err","Add your CAMB.AI key first.");
+  vmsg("vhVoiceMsg","warn","Loading CAMB.AI voices…");
+  try{
+    let r; try{ r = await fetch(CAMB+"/list-voices", { headers:{ "x-api-key":key } }); }catch(e){ throw cambNet(e); }
+    if (r.status===401 || r.status===403) throw new Error("CAMB.AI refused the API key.");
+    if (!r.ok) throw new Error("CAMB.AI error "+r.status);
+    const d = await r.json(); const list = Array.isArray(d) ? d : (d.voices || d.data || []);
+    const g = v => v.gender===1 ? "male" : v.gender===2 ? "female" : "";
+    const isKm = v => /^km/i.test(String(v.language||""));
+    const km = list.filter(isKm), other = list.filter(v=>!isKm(v));
+    const opt = v => `<option value="${esc(v.id)}">${esc(v.voice_name||("Voice "+v.id))}${g(v)?" — "+g(v):""}${v.language?" · "+esc(v.language):""}</option>`;
+    const cur = $("vhCambVoice").value;
+    $("vhCambVoice").innerHTML = (km.length ? `<optgroup label="Khmer voices">${km.map(opt).join("")}</optgroup>` : "") + (other.length ? `<optgroup label="Other voices (can still speak Khmer)">${other.map(opt).join("")}</optgroup>` : "");
+    if (cur && list.some(v=>String(v.id)===cur)) $("vhCambVoice").value = cur;
+    saveSet();
+    vmsg("vhVoiceMsg","ok",`Loaded ${list.length} voices${km.length?` (${km.length} Khmer)`:""}. Pick one, then press Test voice.`);
+  }catch(e){ vmsg("vhVoiceMsg","err",e.message); }
+};
 async function ttsGemini(text){
   const key = $("vhGemKey").value.trim(); if (!key) throw new Error("Add your Gemini API key in the settings (from aistudio.google.com).");
   const style = $("vhGemStyle").value.trim();
@@ -1472,7 +1547,7 @@ async function voiceBlob(text){
   const k = clipKey(text), hit = await cacheGet(k);
   if (hit) return { blob:hit, cached:true };
   const en = $("vhEngine").value;
-  const blob = en==="gemini" ? await ttsGemini(text) : en==="azure" ? await ttsAzure(text) : await ttsEleven(text);
+  const blob = en==="camb" ? await ttsCamb(text) : en==="gemini" ? await ttsGemini(text) : en==="azure" ? await ttsAzure(text) : await ttsEleven(text);
   await cachePut(k, blob);
   return { blob, cached:false };
 }
@@ -1646,6 +1721,7 @@ function brief(p){
   return [`Code: ${S.codes[p.id]}`, `Name: ${p.name}`, `Price: ${money(p.price)}`, sz.length ? `Sizes available: ${sz.join(", ")}` : "", p.category ? `Category: ${p.category}` : ""].filter(Boolean).join("\n");
 }
 async function claude(userText){
+  if ($("vhWriter").value==="gemini") return geminiWrite(userText);
   const key = $("vhClaudeKey").value.trim(); if (!key) throw new Error("Add your Claude API key in the settings.");
   let r;
   try{ r = await fetch("https://api.anthropic.com/v1/messages", { method:"POST",
@@ -1658,6 +1734,25 @@ async function claude(userText){
   if (r.status===404 && /model/i.test(JSON.stringify(d))) throw new Error("Claude doesn't know the model name \""+$("vhModel").value+"\". Check the model name in the settings.");
   if (!r.ok) throw new Error("Claude error "+r.status+": "+((d.error&&d.error.message)||"").slice(0,200));
   return (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").trim();
+}
+async function geminiWrite(userText){
+  const key = $("vhGemKey").value.trim(); if (!key) throw new Error("Add your Gemini API key in the voice settings (from aistudio.google.com).");
+  const model = $("vhGemTextModel").value.trim() || "gemini-3.8-flash";
+  let r;
+  try{ r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method:"POST",
+    headers:{ "x-goog-api-key":key, "Content-Type":"application/json" },
+    body:JSON.stringify({ systemInstruction:{ parts:[{ text:systemPrompt() }] }, contents:[{ role:"user", parts:[{ text:userText }] }], generationConfig:{ temperature:0.9, maxOutputTokens:2048 } }) }); }
+  catch(e){ throw new Error("Couldn't reach Google Gemini. Check the internet connection."); }
+  const d = await r.json().catch(()=>({})), em = (d.error && d.error.message) || "";
+  if (r.status===400 && /api key/i.test(em)) throw new Error("Google refused the Gemini API key. Copy it again from aistudio.google.com.");
+  if (r.status===403) throw new Error("Google refused the Gemini key (403). "+em.slice(0,150));
+  if (r.status===404) throw new Error("Google doesn't know the writer model \""+model+"\". Check the model name. "+em.slice(0,150));
+  if (r.status===429) throw new Error("Gemini free limit reached for now. Wait a minute and try again.");
+  if (!r.ok) throw new Error("Gemini error "+r.status+": "+em.slice(0,200));
+  const parts = (((d.candidates||[])[0]||{}).content||{}).parts || [];
+  const t = parts.filter(p=>typeof p.text==="string" && !p.thought).map(p=>p.text).join("").trim();
+  if (!t) throw new Error("Gemini sent back an empty script. Press Write again.");
+  return t;
 }
 $("vhTestClaude").onclick = async ()=>{
   vmsg("vhClaudeMsg","warn","Writing a sample…");
