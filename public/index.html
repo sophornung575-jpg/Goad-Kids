@@ -6618,7 +6618,7 @@ function sendToTelegram(order, callback) {
             if (o.paymentMethod !== 'cash' && o.paymentMethod !== 'qr') o.paymentMethod = 'qr'; // default to QR Code until staff picks otherwise
             var pmVal = o.paymentMethod;
             h += '<div class="order-card-mini">' +
-                '<div class="oc-head"><div class="oc-id">⏳ ' + escHtml(o.orderId) + '<br><span style="font-weight:400;color:var(--gray)">' + escHtml(o.orderDate||'') + '</span></div><div class="oc-total">$' + (o.total||0).toFixed(2) + discBadge + '</div></div>' +
+                '<div class="oc-head"><div class="oc-id">⏳ ' + escHtml(o.orderId) + (o.editedAt ? ' <span style="font-size:0.7rem;background:#eef2ff;color:#3730a3;border-radius:4px;padding:1px 5px">✏️ ' + (STATE.language === 'kh' ? 'បានកែ' : 'edited') + '</span>' : '') + '<br><span style="font-weight:400;color:var(--gray)">' + escHtml(o.orderDate||'') + '</span></div><div class="oc-total">$' + (o.total||0).toFixed(2) + discBadge + '</div></div>' +
                 '<div class="oc-info">👤 ' + escHtml(o.customerName||'N/A') + ' · 📞 ' + escHtml(o.customerPhone||'') + '<br>📍 ' + escHtml((o.customerAddress||'') + (o.customerCity ? ', '+o.customerCity : '')) + '<br>🚚 ' + escHtml(o.shippingMethod||'N/A') + (o.customerNotes ? ' · 📝 ' + escHtml(o.customerNotes) : '') + '</div>' +
                 '<div class="oc-items">' + escHtml(itemsSummary) + '</div>' + shortHtml +
                 '<div class="oc-payment" style="display:flex;align-items:center;gap:0.4rem;margin:0.4rem 0;font-size:0.85rem">' +
@@ -6628,10 +6628,273 @@ function sendToTelegram(order, callback) {
                         '<option value="cash"' + (pmVal==='cash'?' selected':'') + '>💵 ' + t('cash') + '</option>' +
                     '</select>' +
                 '</div>' +
-                '<div class="oc-actions"><button class="btn btn-success" onclick="confirmOrder(\'' + o.orderId + '\')"><i class="fas fa-check"></i> ' + t('confirm') + '</button><button class="btn btn-receipt" onclick="printReceipt(\'' + o.orderId + '\')"><i class="fas fa-print"></i> ' + t('printBill') + '</button><button class="btn btn-danger" onclick="rejectOrder(\'' + o.orderId + '\')"><i class="fas fa-times"></i> ' + t('reject') + '</button></div>' +
+                '<div class="oc-actions"><button class="btn btn-success" onclick="confirmOrder(\'' + o.orderId + '\')"><i class="fas fa-check"></i> ' + t('confirm') + '</button><button class="btn btn-secondary" style="background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe" onclick="openEditPendingOrder(\'' + o.orderId + '\')"><i class="fas fa-pen"></i> ' + (STATE.language === 'kh' ? 'កែ' : 'Edit') + '</button><button class="btn btn-receipt" onclick="printReceipt(\'' + o.orderId + '\')"><i class="fas fa-print"></i> ' + t('printBill') + '</button><button class="btn btn-danger" onclick="rejectOrder(\'' + o.orderId + '\')"><i class="fas fa-times"></i> ' + t('reject') + '</button></div>' +
                 '</div>';
         }
         c.innerHTML = h;
+    }
+
+    // =============================================
+    // EDIT A PENDING ORDER (customer changed their mind before staff confirmed)
+    // Safe because pending orders have NOT taken any stock yet — stock is only
+    // deducted on Confirm, using whatever the order says at that moment.
+    // =============================================
+    var _eoState = null; // { oid, lines:[...], fee, ... }
+    var EO_FEES = { 'Pickup': 0, 'Phnom Penh': 1.5, 'Province': 2 };
+
+    function _eoKh() { return STATE.language === 'kh'; }
+    function _eoSizesOf(p) { return (p && p.sizes && p.sizes.length) ? p.sizes : null; }
+    function _eoStockFor(p, size) {
+        if (!p) return null;
+        var sz = _eoSizesOf(p);
+        if (!sz) return Number(p.stock) || 0;
+        var n = 0; sz.forEach(function(z){ if (sameSize(z.name, size)) n += Number(z.qty) || 0; }); return n;
+    }
+
+    function _eoEnsureModal() {
+        if (document.getElementById('eoModal')) return;
+        var st = document.createElement('style');
+        st.textContent =
+            '#eoModal{position:fixed;inset:0;z-index:10040;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;padding:10px}' +
+            '#eoModal.show{display:flex}' +
+            '#eoModal .eo-card{background:#fff;color:#1f2937;width:100%;max-width:560px;max-height:94vh;overflow:auto;border-radius:14px;padding:16px;box-shadow:0 20px 50px rgba(0,0,0,.3)}' +
+            '#eoModal h3{margin:0 0 2px;font-size:1.1rem}' +
+            '#eoModal .eo-sec{font-weight:700;font-size:.85rem;color:#475569;margin:14px 0 6px;text-transform:uppercase;letter-spacing:.03em}' +
+            '#eoModal .eo-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}' +
+            '#eoModal label{font-size:.78rem;color:#64748b;display:block;margin-bottom:2px}' +
+            '#eoModal input,#eoModal select,#eoModal textarea{width:100%;box-sizing:border-box;padding:8px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;font-size:.9rem;background:#fff}' +
+            '#eoModal .eo-line{display:grid;grid-template-columns:1fr 92px 64px 30px;gap:6px;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9}' +
+            '#eoModal .eo-line .nm{font-size:.88rem;font-weight:600;line-height:1.2}' +
+            '#eoModal .eo-line .sub{font-size:.75rem;color:#64748b;font-weight:400}' +
+            '#eoModal .eo-line .warn{color:#c2410c}' +
+            '#eoModal .eo-del{border:0;background:#fee2e2;color:#b91c1c;border-radius:8px;height:34px;cursor:pointer}' +
+            '#eoModal .eo-add{display:grid;grid-template-columns:1fr 92px 64px 30px;gap:6px;align-items:center;margin-top:8px}' +
+            '#eoModal .eo-addbtn{border:0;background:#dcfce7;color:#166534;border-radius:8px;height:34px;cursor:pointer;font-weight:700}' +
+            '#eoModal .eo-tot{background:#f8fafc;border-radius:10px;padding:10px 12px;margin-top:12px;font-size:.9rem}' +
+            '#eoModal .eo-tot div{display:flex;justify-content:space-between}' +
+            '#eoModal .eo-tot .big{font-weight:800;font-size:1.05rem;border-top:1px dashed #cbd5e1;margin-top:4px;padding-top:4px}' +
+            '#eoModal .eo-btns{display:flex;gap:8px;margin-top:12px}' +
+            '#eoModal .eo-btns button{flex:1;padding:11px;border-radius:10px;font-weight:700;cursor:pointer;font-size:.95rem}' +
+            '#eoModal .eo-save{background:#16a34a;color:#fff;border:0}' +
+            '#eoModal .eo-cancel{background:#fff;border:1px solid #cbd5e1;color:#334155}' +
+            '#eoModal .eo-msg{font-size:.82rem;margin-top:8px;color:#b91c1c;min-height:1em}' +
+            '@media(max-width:480px){#eoModal .eo-grid{grid-template-columns:1fr}#eoModal .eo-line,#eoModal .eo-add{grid-template-columns:1fr 80px 56px 30px}}';
+        document.head.appendChild(st);
+        var d = document.createElement('div');
+        d.id = 'eoModal'; d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true');
+        d.innerHTML = '<div class="eo-card">' +
+            '<h3 id="eoTitle"></h3><div id="eoSubtitle" style="font-size:.8rem;color:#64748b"></div>' +
+            '<div class="eo-sec" id="eoSecItems"></div><div id="eoLines"></div>' +
+            '<div class="eo-add"><input id="eoAddName" list="eoProdList" autocomplete="off"><select id="eoAddSize"></select><input id="eoAddQty" type="number" min="1" value="1"><button type="button" class="eo-addbtn" id="eoAddBtn" title="Add">+</button></div>' +
+            '<datalist id="eoProdList"></datalist>' +
+            '<div class="eo-sec" id="eoSecCust"></div>' +
+            '<div class="eo-grid">' +
+                '<div><label id="eoLName"></label><input id="eoName"></div>' +
+                '<div><label id="eoLPhone"></label><input id="eoPhone" inputmode="tel"></div>' +
+                '<div><label id="eoLAddr"></label><input id="eoAddr"></div>' +
+                '<div><label id="eoLCity"></label><input id="eoCity"></div>' +
+                '<div><label id="eoLShip"></label><select id="eoShip"><option>Phnom Penh</option><option>Province</option><option>Pickup</option></select></div>' +
+                '<div><label id="eoLFee"></label><input id="eoFee" type="number" min="0" step="0.25"></div>' +
+            '</div>' +
+            '<div style="margin-top:8px"><label id="eoLNotes"></label><textarea id="eoNotes" rows="2"></textarea></div>' +
+            '<div class="eo-tot" id="eoTot"></div>' +
+            '<div class="eo-msg" id="eoMsg"></div>' +
+            '<div class="eo-btns"><button type="button" class="eo-cancel" id="eoCancel"></button><button type="button" class="eo-save" id="eoSave"></button></div>' +
+            '</div>';
+        document.body.appendChild(d);
+        document.getElementById('eoCancel').onclick = function(){ d.classList.remove('show'); _eoState = null; };
+        document.getElementById('eoSave').onclick = saveEditPendingOrder;
+        document.getElementById('eoShip').onchange = function(){ var f = EO_FEES[this.value]; if (f != null) document.getElementById('eoFee').value = f; _eoTotals(); };
+        document.getElementById('eoFee').oninput = _eoTotals;
+        document.getElementById('eoAddName').oninput = _eoAddSizes;
+        document.getElementById('eoAddBtn').onclick = _eoAddLine;
+        document.getElementById('eoLines').addEventListener('input', function(e){
+            var i = e.target.dataset.qty; if (i === undefined || !_eoState) return;
+            _eoState.lines[+i].quantity = Math.max(1, Math.floor(Number(e.target.value) || 1)); _eoLineInfo(+i); _eoTotals();
+        });
+        document.getElementById('eoLines').addEventListener('change', function(e){
+            if (!_eoState) return;
+            var i = e.target.dataset.size; if (i !== undefined) { _eoState.lines[+i].size = e.target.value; _eoLineInfo(+i); }
+            var q = e.target.dataset.qty; if (q !== undefined) { e.target.value = _eoState.lines[+q].quantity; }
+        });
+        document.getElementById('eoLines').addEventListener('click', function(e){
+            var b = e.target.closest('[data-del]'); if (!b || !_eoState) return;
+            _eoState.lines.splice(+b.dataset.del, 1); _eoRenderLines();
+        });
+    }
+
+    function _eoRenderLines() {
+        var kh = _eoKh(), box = document.getElementById('eoLines');
+        if (!_eoState.lines.length) { box.innerHTML = '<div style="padding:10px 0;color:#b91c1c;font-size:.85rem">' + (kh ? 'មិនមានទំនិញ — បន្ថែមយ៉ាងហោចណាស់មួយ ឬបដិសេធការកុម្ម៉ង់' : 'No items — add at least one, or Reject the order instead') + '</div>'; _eoTotals(); return; }
+        box.innerHTML = _eoState.lines.map(function(l, i) {
+            var p = findProductForOrderItem(l), sz = _eoSizesOf(p);
+            var sizeCtl;
+            if (sz) {
+                var has = sz.some(function(z){ return sameSize(z.name, l.size); });
+                sizeCtl = '<select data-size="' + i + '">' + (has ? '' : '<option value="' + escHtml(l.size) + '" selected>' + escHtml(sizeLabel(l.size) || l.size) + '</option>') +
+                    sz.map(function(z){ return '<option value="' + escHtml(z.name) + '"' + (sameSize(z.name, l.size) ? ' selected' : '') + '>' + escHtml(sizeLabel(z.name) || z.name) + ' (' + (Number(z.qty)||0) + ')</option>'; }).join('') + '</select>';
+            } else {
+                sizeCtl = '<input data-sizetxt="' + i + '" value="' + escHtml(l.size || 'One Size') + '" disabled>';
+            }
+            return '<div class="eo-line"><div class="nm">' + escHtml(l.name) + '<div class="sub" id="eoInfo' + i + '"></div></div>' + sizeCtl +
+                '<input type="number" min="1" data-qty="' + i + '" value="' + l.quantity + '">' +
+                '<button type="button" class="eo-del" data-del="' + i + '" title="Remove">✕</button></div>';
+        }).join('');
+        _eoState.lines.forEach(function(l, i){ _eoLineInfo(i); });
+        _eoTotals();
+    }
+
+    function _eoLineInfo(i) {
+        var l = _eoState.lines[i], el = document.getElementById('eoInfo' + i); if (!el) return;
+        var kh = _eoKh(), p = findProductForOrderItem(l), have = _eoStockFor(p, l.size);
+        var txt = '$' + Number(l.price).toFixed(2) + ' × ' + l.quantity + ' = $' + (Number(l.price) * l.quantity).toFixed(2);
+        if (have == null) txt += ' · <span class="warn">' + (kh ? 'មិនមាននៅហាងនេះ' : 'not in this store') + '</span>';
+        else if (have < l.quantity) txt += ' · <span class="warn">' + (kh ? 'ស្តុក ' : 'stock ') + have + '</span>';
+        else txt += ' · ' + (kh ? 'ស្តុក ' : 'stock ') + have;
+        el.innerHTML = txt;
+    }
+
+    function _eoAddSizes() {
+        var nm = document.getElementById('eoAddName').value.trim().toLowerCase();
+        var p = STATE.products.find(function(x){ return String(x.name||'').trim().toLowerCase() === nm; });
+        var sel = document.getElementById('eoAddSize');
+        var sz = _eoSizesOf(p);
+        sel.innerHTML = sz ? sz.map(function(z){ return '<option value="' + escHtml(z.name) + '"' + ((Number(z.qty)||0) <= 0 ? ' disabled' : '') + '>' + escHtml(sizeLabel(z.name) || z.name) + ' (' + (Number(z.qty)||0) + ')</option>'; }).join('')
+                       : '<option value="One Size">' + (p ? 'One Size (' + (Number(p.stock)||0) + ')' : '—') + '</option>';
+    }
+
+    function _eoAddLine() {
+        var kh = _eoKh(), nm = document.getElementById('eoAddName').value.trim().toLowerCase();
+        var p = STATE.products.find(function(x){ return String(x.name||'').trim().toLowerCase() === nm; });
+        if (!p) { document.getElementById('eoMsg').textContent = kh ? 'សូមជ្រើសទំនិញពីបញ្ជី' : 'Pick a product from the list'; return; }
+        var size = document.getElementById('eoAddSize').value || 'One Size';
+        var qty = Math.max(1, Math.floor(Number(document.getElementById('eoAddQty').value) || 1));
+        var same = _eoState.lines.find(function(l){ return (l.productId === p.id || l.name === p.name) && sameSize(l.size, size); });
+        if (same) same.quantity += qty;
+        else _eoState.lines.push({ productId: p.id, name: p.name, size: size, quantity: qty, price: salePriceOf(p),
+            image: (p.images && p.images[0]) || '', discountAmt: 0, discountType: 'none', discountValue: 0, _unitDisc: 0, _added: true });
+        document.getElementById('eoAddName').value = ''; document.getElementById('eoAddQty').value = 1; _eoAddSizes();
+        document.getElementById('eoMsg').textContent = '';
+        _eoRenderLines();
+    }
+
+    function _eoCalc() {
+        var sub = 0, disc = 0;
+        _eoState.lines.forEach(function(l){ sub += Number(l.price) * l.quantity; disc += (l._unitDisc || 0) * l.quantity; });
+        disc = Math.round(disc * 100) / 100;
+        var fee = Math.max(0, Number(document.getElementById('eoFee').value) || 0);
+        return { sub: sub, disc: disc, fee: fee, total: Math.max(0, sub - disc + fee) };
+    }
+
+    function _eoTotals() {
+        if (!_eoState) return;
+        var kh = _eoKh(), c = _eoCalc(), old = _eoState.oldTotal;
+        document.getElementById('eoTot').innerHTML =
+            '<div><span>' + (kh ? 'តម្លៃទំនិញ' : 'Items') + '</span><span>$' + c.sub.toFixed(2) + '</span></div>' +
+            (c.disc ? '<div><span>' + (kh ? 'បញ្ចុះតម្លៃ' : 'Discount') + '</span><span>-$' + c.disc.toFixed(2) + '</span></div>' : '') +
+            '<div><span>' + (kh ? 'ដឹកជញ្ជូន' : 'Delivery') + '</span><span>$' + c.fee.toFixed(2) + '</span></div>' +
+            '<div class="big"><span>' + (kh ? 'សរុបថ្មី' : 'New total') + '</span><span>$' + c.total.toFixed(2) + '</span></div>' +
+            (Math.abs(c.total - old) > 0.001 ? '<div style="color:#64748b;font-size:.8rem"><span>' + (kh ? 'មុន' : 'Was') + '</span><span>$' + old.toFixed(2) + '</span></div>' : '');
+    }
+
+    function openEditPendingOrder(oid) {
+        if (STATE.adminRole !== 'full' && STATE.adminRole !== 'orders') { showToast('Only Admin or Order Manager can edit orders', 'error'); return; }
+        var o = STATE.pendingOrders.find(function(x){ return x.orderId === oid; });
+        if (!o) { showToast('Order not found (already confirmed?)', 'error'); return; }
+        _eoEnsureModal();
+        var kh = _eoKh();
+        _eoState = {
+            oid: oid, oldTotal: Number(o.total) || 0,
+            lines: (o.cart || []).map(function(it){
+                var q = Number(it.quantity) || 1;
+                return Object.assign({}, it, { quantity: q, _unitDisc: (Number(it.discountAmt) || 0) / q }); // keep the per-piece discount when qty changes
+            })
+        };
+        document.getElementById('eoTitle').textContent = (kh ? 'កែការកុម្ម៉ង់ ' : 'Edit order ') + oid;
+        document.getElementById('eoSubtitle').textContent = kh ? 'ស្តុកមិនទាន់កាត់ទេ — វានឹងកាត់នៅពេលចុច Confirm' : 'No stock has been taken yet — stock is taken when you press Confirm.';
+        document.getElementById('eoSecItems').textContent = kh ? 'ទំនិញ' : 'Items';
+        document.getElementById('eoSecCust').textContent = kh ? 'អតិថិជន និងការដឹក' : 'Customer & delivery';
+        document.getElementById('eoAddName').placeholder = kh ? '+ បន្ថែមទំនិញ (វាយឈ្មោះ)' : '+ Add item (type name)';
+        document.getElementById('eoLName').textContent = kh ? 'ឈ្មោះ' : 'Name';
+        document.getElementById('eoLPhone').textContent = kh ? 'លេខទូរស័ព្ទ' : 'Phone';
+        document.getElementById('eoLAddr').textContent = kh ? 'អាសយដ្ឋាន' : 'Address';
+        document.getElementById('eoLCity').textContent = kh ? 'ក្រុង/ខេត្ត' : 'City / province';
+        document.getElementById('eoLShip').textContent = kh ? 'ការដឹក' : 'Shipping';
+        document.getElementById('eoLFee').textContent = kh ? 'ថ្លៃដឹក $' : 'Delivery $';
+        document.getElementById('eoLNotes').textContent = kh ? 'កំណត់ចំណាំ' : 'Notes';
+        document.getElementById('eoCancel').textContent = kh ? 'បោះបង់' : 'Cancel';
+        document.getElementById('eoSave').textContent = kh ? 'រក្សាទុក' : 'Save changes';
+        document.getElementById('eoMsg').textContent = '';
+        document.getElementById('eoName').value = o.customerName || '';
+        document.getElementById('eoPhone').value = o.customerPhone || '';
+        document.getElementById('eoAddr').value = o.customerAddress || '';
+        document.getElementById('eoCity').value = o.customerCity || '';
+        document.getElementById('eoShip').value = EO_FEES[o.shippingMethod] != null ? o.shippingMethod : 'Phnom Penh';
+        document.getElementById('eoFee').value = Number(o.shipping) || 0;
+        document.getElementById('eoNotes').value = o.customerNotes || '';
+        document.getElementById('eoProdList').innerHTML = STATE.products.filter(function(p){ return p.active !== false && String(p.name||'').trim(); })
+            .map(function(p){ return '<option value="' + escHtml(p.name) + '">'; }).join('');
+        document.getElementById('eoAddName').value = ''; document.getElementById('eoAddQty').value = 1; _eoAddSizes();
+        _eoRenderLines();
+        document.getElementById('eoModal').classList.add('show');
+    }
+
+    async function saveEditPendingOrder() {
+        if (!_eoState) return;
+        var kh = _eoKh(), msgEl = document.getElementById('eoMsg');
+        var o = STATE.pendingOrders.find(function(x){ return x.orderId === _eoState.oid; });
+        if (!o) { msgEl.textContent = kh ? 'ការកុម្ម៉ង់នេះត្រូវបាន Confirm ឬលុបរួចហើយ' : 'This order was already confirmed or removed.'; return; }
+        if (!_eoState.lines.length) { msgEl.textContent = kh ? 'ត្រូវមានទំនិញយ៉ាងហោចណាស់មួយ' : 'Add at least one item (or Reject the order).'; return; }
+        var name = document.getElementById('eoName').value.trim(), phone = document.getElementById('eoPhone').value.trim();
+        if (!name || !phone) { msgEl.textContent = kh ? 'ត្រូវការឈ្មោះ និងលេខទូរស័ព្ទ' : 'Name and phone are required.'; return; }
+        var saveBtn = document.getElementById('eoSave'); saveBtn.disabled = true;
+        try {
+            // Never edit an order another device has already confirmed/rejected
+            if (db && STATE.firebaseOnline) {
+                try {
+                    var live = await Promise.race([
+                        db.collection('stores').doc(STATE.storeId).collection('orders').doc(o.orderId).get(),
+                        new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 8000); })
+                    ]);
+                    if (live && live.exists && live.data().status && live.data().status !== 'pending') {
+                        msgEl.textContent = (kh ? 'ការកុម្ម៉ង់នេះត្រូវបាន ' : 'This order is already ') + live.data().status + (kh ? ' នៅឧបករណ៍ផ្សេង — មិនបានកែទេ' : ' on another device — not changed. Refresh the page.');
+                        return;
+                    }
+                } catch (e) { /* slow/offline: continue and save locally, synced below */ }
+            }
+            var c = _eoCalc();
+            var before = (o.cart || []).map(function(it){ return it.quantity + '× ' + it.name + ' (' + (it.size||'') + ')'; }).join(', ') + ' = $' + (Number(o.total)||0).toFixed(2);
+            var cart = _eoState.lines.map(function(l){
+                var d = Math.round((l._unitDisc || 0) * l.quantity * 100) / 100;
+                var it = Object.assign({}, l, { quantity: l.quantity, subtotal: Number(l.price) * l.quantity, discountAmt: d });
+                delete it._unitDisc; delete it._added;
+                return it;
+            });
+            var after = cart.map(function(it){ return it.quantity + '× ' + it.name + ' (' + (it.size||'') + ')'; }).join(', ') + ' = $' + c.total.toFixed(2);
+            var changes = {
+                cart: cart, subtotal: c.sub, discount: c.disc, shipping: c.fee, total: c.total,
+                customerName: name, customerPhone: phone,
+                customerAddress: document.getElementById('eoAddr').value.trim(),
+                customerCity: document.getElementById('eoCity').value.trim(),
+                shippingMethod: document.getElementById('eoShip').value,
+                customerNotes: document.getElementById('eoNotes').value.trim(),
+                editedAt: new Date().toLocaleString(), editedTimestamp: Date.now(), editedBy: STATE.adminRole || 'admin',
+                editHistory: (o.editHistory || []).concat([{ at: Date.now(), by: STATE.adminRole || 'admin', before: before, after: after }]).slice(-10)
+            };
+            Object.assign(o, changes);
+            saveOrders();
+            if (db) {
+                db.collection('stores').doc(STATE.storeId).collection('orders').doc(o.orderId).set(changes, { merge: true })
+                    .catch(function(e){ console.warn('Edit order sync failed:', e); showToast('⚠️ Saved on this device, but not yet in the cloud: ' + e.message, 'warning'); });
+            }
+            logActivity('Edit Order', o.orderId + ': ' + before + ' → ' + after);
+            try {
+                _sendTelegramRaw('✏️ <b>ORDER EDITED</b> ' + o.orderId + '\n\nBefore: ' + escHtml(before) + '\nAfter: ' + escHtml(after) + '\n👤 ' + escHtml(name) + ' · 📞 ' + escHtml(phone) + '\nBy ' + escHtml(STATE.storeName || STATE.storeId), null);
+            } catch (e) {}
+            document.getElementById('eoModal').classList.remove('show'); _eoState = null;
+            renderPending(); updateAdminBadges();
+            showToast((kh ? '✅ បានកែការកុម្ម៉ង់ ' : '✅ Order updated ') + o.orderId, 'success');
+        } finally { saveBtn.disabled = false; }
     }
 
     // ── Set payment method (Cash / QR Code) on a pending order before confirming ──
