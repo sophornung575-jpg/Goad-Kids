@@ -3087,7 +3087,127 @@ function sendToTelegram(order, callback) {
             document.getElementById('cartMainContent').classList.add('hidden');
             document.getElementById('orderSuccessScreen').classList.remove('hidden');
             document.getElementById('successOrderId').textContent = '📦 ' + oid;
+            try { showMessengerPopup(order); } catch(e) { console.warn('Messenger popup failed:', e); }
         })(oid, order);
+    }
+
+    // =============================================
+    // AFTER-ORDER POPUP → "Chat with Goat Kids 271 on Messenger"
+    // Facebook does not allow a website to pre-type a Messenger message, so the
+    // button (1) copies the order text and (2) opens the page's chat; the
+    // customer then pastes and sends. ref= carries the order id for a future bot.
+    // To change the page, put its username (e.g. 'goatkids271') or page ID here.
+    // =============================================
+    var GK_MESSENGER_PAGE = '1178775641976170'; // Goat Kids 271
+    var _gkMsgrText = '';
+
+    function _gkOrderMessage(o) {
+        var kh = STATE.language === 'kh';
+        var lines = [];
+        lines.push(kh ? 'សួស្តី Goat Kids! ខ្ញុំទើបកុម្ម៉ង់តាមវេបសាយ៖' : 'Hi Goat Kids! I just ordered on your website:');
+        lines.push('🧾 ' + (kh ? 'លេខកុម្ម៉ង់' : 'Order') + ': ' + o.orderId);
+        (o.cart || []).forEach(function(it) {
+            var sz = (it.size && it.size !== 'One Size') ? ' (' + (kh ? 'ទំហំ ' : 'size ') + (typeof sizeLabel === 'function' ? sizeLabel(it.size) : it.size) + ')' : '';
+            lines.push('• ' + it.name + sz + ' ×' + it.quantity + ' — $' + (Number(it.price) * Number(it.quantity)).toFixed(2));
+        });
+        if (o.discount) lines.push((kh ? 'បញ្ចុះតម្លៃ' : 'Discount') + ': -$' + Number(o.discount).toFixed(2));
+        lines.push((kh ? 'ដឹកជញ្ជូន' : 'Delivery') + ': $' + Number(o.shipping || 0).toFixed(2) + ' (' + (o.shippingMethod || '') + ')');
+        lines.push((kh ? 'សរុប' : 'Total') + ': $' + Number(o.total || 0).toFixed(2));
+        lines.push('👤 ' + (o.customerName || '') + ' · 📞 ' + (o.customerPhone || ''));
+        var addr = [o.customerAddress, o.customerCity].filter(Boolean).join(', ');
+        if (addr) lines.push('📍 ' + addr);
+        if (o.customerNotes) lines.push('📝 ' + o.customerNotes);
+        return lines.join('\n');
+    }
+
+    function _gkCopy(text) {
+        // Synchronous copy first, so it is done before the browser leaves for Messenger
+        var ok = false;
+        try {
+            var ta = document.createElement('textarea');
+            ta.value = text; ta.setAttribute('readonly', '');
+            ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
+            document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+            ok = document.execCommand('copy'); ta.remove();
+        } catch (e) {}
+        try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).catch(function(){}); ok = true; } } catch (e) {}
+        return ok;
+    }
+
+    function _gkEnsureMessengerPopup() {
+        if (document.getElementById('gkMsgrPop')) return;
+        var st = document.createElement('style');
+        st.textContent =
+            '#gkMsgrPop{position:fixed;inset:0;z-index:10050;background:rgba(15,23,42,.55);display:none;align-items:flex-end;justify-content:center;padding:12px}' +
+            '#gkMsgrPop.show{display:flex}' +
+            '@media(min-width:600px){#gkMsgrPop{align-items:center}}' +
+            '#gkMsgrPop .gkm-card{background:#fff;color:#1f2937;width:100%;max-width:420px;max-height:92vh;overflow:auto;border-radius:18px;padding:18px 18px 14px;box-shadow:0 20px 50px rgba(0,0,0,.3);font-family:inherit}' +
+            '#gkMsgrPop .gkm-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}' +
+            '#gkMsgrPop .gkm-ok{width:40px;height:40px;border-radius:50%;background:#dcfce7;color:#16a34a;display:flex;align-items:center;justify-content:center;font-size:22px;flex:none}' +
+            '#gkMsgrPop h3{margin:0;font-size:1.15rem}' +
+            '#gkMsgrPop .gkm-id{font-size:.85rem;color:#6b7280}' +
+            '#gkMsgrPop .gkm-items{background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;font-size:.9rem;margin:8px 0 12px}' +
+            '#gkMsgrPop .gkm-row{display:flex;justify-content:space-between;gap:10px;padding:2px 0}' +
+            '#gkMsgrPop .gkm-total{border-top:1px dashed #cbd5e1;margin-top:6px;padding-top:6px;font-weight:700}' +
+            '#gkMsgrPop .gkm-steps{list-style:none;padding:0;margin:0 0 12px;font-size:.88rem}' +
+            '#gkMsgrPop .gkm-steps li{display:flex;gap:8px;align-items:flex-start;margin:6px 0}' +
+            '#gkMsgrPop .gkm-n{flex:none;width:22px;height:22px;border-radius:50%;background:#0084ff;color:#fff;font-size:.75rem;font-weight:700;display:flex;align-items:center;justify-content:center}' +
+            '#gkMsgrPop .gkm-n.done{background:#16a34a}' +
+            '#gkMsgrPop .gkm-logo{font-size:1.9rem;line-height:1}' +
+            '#gkMsgrPop .gkm-btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;border:0;border-radius:12px;padding:14px;font-size:1rem;font-weight:700;cursor:pointer;text-decoration:none;background:linear-gradient(135deg,#00b2ff,#006aff);color:#fff}' +
+            '#gkMsgrPop .gkm-sub{display:flex;gap:8px;margin-top:8px}' +
+            '#gkMsgrPop .gkm-sub button{flex:1;border:1px solid #e5e7eb;background:#fff;border-radius:10px;padding:10px;font-size:.88rem;cursor:pointer;color:#374151}' +
+            '#gkMsgrPop .gkm-note{font-size:.8rem;color:#16a34a;text-align:center;min-height:1.1em;margin-top:6px}';
+        document.head.appendChild(st);
+        var d = document.createElement('div');
+        d.id = 'gkMsgrPop'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true');
+        d.innerHTML = '<div class="gkm-card">' +
+            '<div class="gkm-head"><div class="gkm-ok"><i class="fas fa-check"></i></div><div><h3 id="gkmTitle"></h3><div class="gkm-id" id="gkmId"></div></div></div>' +
+            '<div class="gkm-items" id="gkmItems"></div>' +
+            '<a class="gkm-btn" id="gkmGo" target="_blank" rel="noopener"><i class="fab fa-facebook-messenger gkm-logo" aria-hidden="true"></i><span id="gkmGoTxt"></span></a>' +
+            '<div class="gkm-note" id="gkmNote"></div>' +
+            '<div class="gkm-sub"><button type="button" id="gkmCopy"></button><button type="button" id="gkmClose"></button></div>' +
+            '</div>';
+        document.body.appendChild(d);
+        d.addEventListener('click', function(e){ if (e.target === d) closeMessengerPopup(); });
+        document.getElementById('gkmClose').onclick = closeMessengerPopup;
+        document.getElementById('gkmCopy').onclick = function() {
+            var kh = STATE.language === 'kh';
+            _gkCopy(_gkMsgrText);
+            document.getElementById('gkmNote').textContent = kh ? '✅ បានចម្លងម្តងទៀត' : '✅ Copied again';
+        };
+        document.getElementById('gkmGo').addEventListener('click', function() {
+            var kh = STATE.language === 'kh';
+            _gkCopy(_gkMsgrText); // step 1 happens right here, before Messenger opens
+            document.getElementById('gkmNote').textContent = kh ? '✅ បានចម្លងរួច — Paste ហើយ Send' : '✅ Copied — just Paste & Send';
+            try { if (typeof fbq !== 'undefined') fbq('track', 'Contact'); } catch (e) {}
+        });
+    }
+
+    function showMessengerPopup(o) {
+        _gkEnsureMessengerPopup();
+        var kh = STATE.language === 'kh';
+        _gkMsgrText = _gkOrderMessage(o);
+        document.getElementById('gkmTitle').textContent = kh ? 'បានទទួលការកុម្ម៉ង់ហើយ!' : 'Order received!';
+        document.getElementById('gkmId').textContent = (kh ? 'លេខកុម្ម៉ង់ ' : 'Order ') + o.orderId;
+        var rows = (o.cart || []).map(function(it) {
+            var sz = (it.size && it.size !== 'One Size') ? ' · ' + escHtml(typeof sizeLabel === 'function' ? sizeLabel(it.size) : it.size) : '';
+            return '<div class="gkm-row"><span>' + escHtml(it.name) + sz + ' ×' + it.quantity + '</span><span>$' + (Number(it.price) * Number(it.quantity)).toFixed(2) + '</span></div>';
+        }).join('');
+        if (o.discount) rows += '<div class="gkm-row"><span>' + (kh ? 'បញ្ចុះតម្លៃ' : 'Discount') + '</span><span>-$' + Number(o.discount).toFixed(2) + '</span></div>';
+        rows += '<div class="gkm-row"><span>' + (kh ? 'ដឹកជញ្ជូន' : 'Delivery') + '</span><span>$' + Number(o.shipping || 0).toFixed(2) + '</span></div>';
+        rows += '<div class="gkm-row gkm-total"><span>' + (kh ? 'សរុប' : 'Total') + '</span><span>$' + Number(o.total || 0).toFixed(2) + '</span></div>';
+        document.getElementById('gkmItems').innerHTML = rows;
+        document.getElementById('gkmGoTxt').textContent = kh ? 'ផ្ញើតាម Messenger' : 'Send on Messenger';
+        document.getElementById('gkmCopy').textContent = kh ? 'ចម្លងម្តងទៀត' : 'Copy again';
+        document.getElementById('gkmClose').textContent = kh ? 'បិទ' : 'Close';
+        document.getElementById('gkmNote').textContent = '';
+        document.getElementById('gkmGo').href = 'https://m.me/' + encodeURIComponent(GK_MESSENGER_PAGE) + '?ref=' + encodeURIComponent('order_' + o.orderId);
+        document.getElementById('gkMsgrPop').classList.add('show');
+    }
+
+    function closeMessengerPopup() {
+        var d = document.getElementById('gkMsgrPop'); if (d) d.classList.remove('show');
     }
 
     // Safety net: if anything inside placeOrder throws, never leave the button stuck on "Sending..."
@@ -3142,9 +3262,10 @@ function sendToTelegram(order, callback) {
                     if (badge) { if (snap.size > 0) { badge.style.display = 'inline'; badge.textContent = snap.size; } else { badge.style.display = 'none'; } }
                 }).catch(function(){});
         }
-        // Show Branch Stock tab for any full admin (Main Store or Branch) — lets every store view stock across all branches
+        // Show Branch Stock tab for full admins AND the Inventory role — it is a read-only
+        // view of stock across all stores, so stock staff can check other branches too
         var bsBtn = document.getElementById('branchStockTabBtn');
-        if (bsBtn) bsBtn.style.display = (STATE.adminRole === 'full') ? 'inline-block' : 'none';
+        if (bsBtn) bsBtn.style.display = (STATE.adminRole === 'full' || STATE.adminRole === 'inventory') ? 'inline-block' : 'none';
     }
 
     // =============================================
