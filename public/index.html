@@ -7273,9 +7273,28 @@ function sendToTelegram(order, callback) {
         } catch(e) { console.warn('Opening snapshot capture failed:', e.message); }
     }
 
+    // Reads this store's products straight from the server. The local copy
+    // (STATE.products) can be stale — e.g. a transfer was received, a sale was
+    // made or the restock tool changed stock on ANOTHER device since this page
+    // loaded — and a stale baseline/actual makes reconciliation report false
+    // mismatches (most visibly right after stock transfers are received).
+    async function _serverProductsForReconcile() {
+        var list = [];
+        var snap = await db.collection('stores').doc(STATE.storeId).collection('products').get();
+        snap.forEach(function(d) {
+            var dt = d.data();
+            if (typeof isDeletedProductDoc === 'function' && isDeletedProductDoc(dt)) return;
+            list.push(Object.assign({}, dt, { id: d.id, name: dt.name || '', sizes: dt.sizes || [], stock: dt.stock || 0 }));
+        });
+        return list;
+    }
+
     async function saveSnapshotNow(dateStr) {
         var productsMap = {};
-        STATE.products.forEach(function(p) {
+        var source = STATE.products;
+        try { var fresh = await _serverProductsForReconcile(); if (fresh.length) source = fresh; }
+        catch(e) { console.warn('Snapshot: server read failed, using local copy:', e.message); }
+        source.forEach(function(p) {
             var sizesMap = {};
             if (p.sizes && p.sizes.length) p.sizes.forEach(function(s){ sizesMap[s.name] = s.qty || 0; });
             productsMap[p.id] = { name: p.name, sizes: sizesMap, stock: getTotalStock(p) };
@@ -7602,6 +7621,9 @@ function sendToTelegram(order, callback) {
         // Aggregate sold / refunded / transfer-out by our own productId+size
         var sold = {}, refunded = {}, transferOut = {}, transferIn = {}, adjustments = {};
         function addQty(map, key, qty) { map[key] = (map[key]||0) + qty; }
+        // Transfers of items without sizes are stored as size "One Size", but
+        // those items' rows use an empty size key — treat them as the same.
+        function xferSize(sz) { return (!sz || sz === 'One Size') ? '' : sz; }
 
         var soldOrders = [];
         var liveSnap = await db.collection('stores').doc(STATE.storeId).collection('orders').get();
@@ -7652,21 +7674,32 @@ function sendToTelegram(order, callback) {
             });
         });
 
+        // Live stock comes from the SERVER (not this device's local copy) so a
+        // receipt confirmed on another device is already included.
+        var liveProducts = null;
+        if (isToday) {
+            try { liveProducts = await _serverProductsForReconcile(); } catch(e) { console.warn('Reconcile: server read failed, using local copy:', e.message); }
+            if (!liveProducts || !liveProducts.length) liveProducts = STATE.products;
+        }
+
         var xferOutSnap = await db.collection('transfers').where('fromStoreId', '==', STATE.storeId).where('status', '==', 'approved').get();
         xferOutSnap.forEach(function(d) {
             var t = d.data();
             var ts = t.approvedAt || t.requestedAt || 0;
             if (ts < effectiveFromTs || ts > effectiveToTs) return;
-            addQty(transferOut, t.productId + '|' + (t.size||''), t.qty);
+            // sourceProductId = the item that was really deducted (it can differ
+            // from productId when the sender's item was found by name)
+            addQty(transferOut, (t.sourceProductId || t.productId) + '|' + xferSize(t.size), t.qty);
         });
 
         var xferInSnap = await db.collection('transfers').where('toStoreId', '==', STATE.storeId).where('status', '==', 'approved').get();
-        var transferInByName = {}; // productName|size -> qty (source productId doesn't match our local ids)
+        var transferInByName = {}; // older transfers (no destProductId): productName|size -> qty
         xferInSnap.forEach(function(d) {
             var t = d.data();
             var ts = t.approvedAt || t.requestedAt || 0;
             if (ts < effectiveFromTs || ts > effectiveToTs) return;
-            addQty(transferInByName, (t.productName||'') + '|' + (t.size||''), t.qty);
+            if (t.destProductId) addQty(transferIn, t.destProductId + '|' + xferSize(t.size), t.qty); // exact item that received it
+            else addQty(transferInByName, (t.productName||'') + '|' + xferSize(t.size), t.qty);
         });
 
         var adjSnap = await db.collection('stores').doc(STATE.storeId).collection('stockAdjustments').get();
@@ -7692,12 +7725,25 @@ function sendToTelegram(order, callback) {
         }
         registerFromMap(opening);
         var currentMap = {};
-        STATE.products.forEach(function(p) {
+        (liveProducts || STATE.products).forEach(function(p) {
             var sizesMap = {};
             if (p.sizes && p.sizes.length) p.sizes.forEach(function(s){ sizesMap[s.name] = s.qty||0; });
-            currentMap[p.id] = { name: p.name, sizes: sizesMap };
+            currentMap[p.id] = { name: p.name, sizes: sizesMap, stock: getTotalStock(p) };
         });
         registerFromMap(currentMap);
+
+        // Older transfers only carry the product NAME. Give each name's quantity
+        // to ONE item (the live one with that name, else the snapshot one) —
+        // previously every row sharing the name got the full quantity, so a
+        // duplicate/old item with the same name showed a false mismatch.
+        var nameOwner = {}; // name -> productId
+        Object.keys(currentMap).forEach(function(pid){ var n = currentMap[pid].name; if (n && !nameOwner[n]) nameOwner[n] = pid; });
+        Object.keys(opening).forEach(function(pid){ var n = opening[pid].name; if (n && !nameOwner[n]) nameOwner[n] = pid; });
+        Object.keys(transferInByName).forEach(function(k) {
+            var i = k.lastIndexOf('|'), nm = k.slice(0, i), sz = k.slice(i + 1);
+            var owner = nameOwner[nm];
+            if (owner) addQty(transferIn, owner + '|' + sz, transferInByName[k]);
+        });
 
         var rows = [];
         Object.keys(allKeys).forEach(function(key) {
@@ -7709,14 +7755,17 @@ function sendToTelegram(order, callback) {
             var refQty = refunded[key] || 0;
             var outQty = transferOut[key] || 0;
             var adjQty = (adjustments[key] !== undefined ? adjustments[key] : (adjustments[info.productId+'|']||0));
-            var inQty = transferInByName[info.name + '|' + info.size] || 0;
+            var inQty = transferIn[key] || 0;
 
             var actualQty;
             if (isToday) {
                 var live = currentMap[info.productId];
-                actualQty = live ? (live.sizes[info.size] !== undefined ? live.sizes[info.size] : 0) : 0;
+                actualQty = live ? (live.sizes[info.size] !== undefined ? live.sizes[info.size]
+                                   : (!info.size && !Object.keys(live.sizes).length ? (live.stock||0) : 0)) : 0; // item without sizes: use its total stock
             } else {
-                actualQty = (closing[info.productId] && closing[info.productId].sizes && closing[info.productId].sizes[info.size] !== undefined) ? closing[info.productId].sizes[info.size] : 0;
+                var cl = closing[info.productId];
+                actualQty = (cl && cl.sizes && cl.sizes[info.size] !== undefined) ? cl.sizes[info.size]
+                          : (cl && !info.size && !(cl.sizes && Object.keys(cl.sizes).length) ? (cl.stock||0) : 0);
             }
 
             var expectedQty = openQty - soldQty + refQty + inQty - outQty + adjQty;
@@ -12160,7 +12209,8 @@ function sendToTelegram(order, callback) {
             batch.update(db.collection('transfers').doc(transferId), {
                 status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
                 approvedAtStr: new Date().toLocaleString(),
-                restockType: isGenuineRestockT ? 'new' : 'correction'
+                restockType: isGenuineRestockT ? 'new' : 'correction',
+                sourceProductId: sourceRef.id, destProductId: destProductRef.id // exact items, for reconciliation
             });
             await batch.commit();
 
@@ -12245,24 +12295,31 @@ function sendToTelegram(order, callback) {
 
         // ── Step 2: Load each unique source product ONCE from Firebase ──
         // Source = fromStoreId (the store sending the stock, e.g. Main Store)
+        // Keyed by SENDING STORE + product id: a batch can mix transfers from
+        // different sending stores (e.g. PH and 271), and each must be deducted
+        // from its own store — never from the first transfer's store.
         var sourceProductCache = {};
-        var uniqueSourceIds = [...new Set(transfers.map(function(t){ return t.productId; }))];
-        var fromStoreId = transfers[0] ? transfers[0].fromStoreId : STATE.storeId;
-        for (var j = 0; j < uniqueSourceIds.length; j++) {
-            var pid = uniqueSourceIds[j];
+        var srcKeyOf = function(t){ return t.fromStoreId + '|' + t.productId; };
+        var fromStoreId = transfers[0] ? transfers[0].fromStoreId : STATE.storeId; // used only in the log text
+        var uniqueSrc = {};
+        transfers.forEach(function(t){ uniqueSrc[srcKeyOf(t)] = t; });
+        var srcByPath = {}; // one cache entry per real document
+        for (var srcK in uniqueSrc) {
+            var t0 = uniqueSrc[srcK];
             try {
-                var pSnap = await db.collection('stores').doc(fromStoreId).collection('products').doc(pid).get();
-                if (pSnap.exists) sourceProductCache[pid] = Object.assign({ id: pid }, JSON.parse(JSON.stringify(pSnap.data())));
-                else {
-                    // Try by name
-                    var t0 = transfers.find(function(t){ return t.productId === pid; });
-                    if (t0) {
-                        var byName = await db.collection('stores').doc(fromStoreId).collection('products')
-                            .where('name', '==', t0.productName).limit(1).get();
-                        if (!byName.empty) sourceProductCache[pid] = Object.assign({ id: byName.docs[0].id }, JSON.parse(JSON.stringify(byName.docs[0].data())));
-                    }
+                var pSnap = await db.collection('stores').doc(t0.fromStoreId).collection('products').doc(t0.productId).get();
+                var srcDoc = pSnap.exists ? pSnap : null;
+                if (!srcDoc) {
+                    var byName = await db.collection('stores').doc(t0.fromStoreId).collection('products')
+                        .where('name', '==', t0.productName).limit(1).get();
+                    if (!byName.empty) srcDoc = byName.docs[0];
                 }
-            } catch(e) { console.warn('Failed to load product:', pid, e); }
+                if (srcDoc) {
+                    var srcPath = srcDoc.ref.path;
+                    if (!srcByPath[srcPath]) srcByPath[srcPath] = Object.assign({ id: srcDoc.id, _storeId: t0.fromStoreId }, JSON.parse(JSON.stringify(srcDoc.data())));
+                    sourceProductCache[srcK] = srcByPath[srcPath];
+                }
+            } catch(e) { console.warn('Failed to load product:', t0.productId, e); }
         }
 
         // ── Step 3: Load each unique destination product ONCE from Firebase (by name) ──
@@ -12272,7 +12329,7 @@ function sendToTelegram(order, callback) {
             var destKey = t.toStoreId + '|' + t.productName;
             if (destProductCache[destKey]) continue;
 
-            var srcP2 = sourceProductCache[t.productId];
+            var srcP2 = sourceProductCache[srcKeyOf(t)];
             var productSlug2 = (srcP2 && srcP2.slug) ? srcP2.slug : makeSlug(t.productName);
 
             // 1. Slug match (primary — stable cross-store key)
@@ -12324,6 +12381,16 @@ function sendToTelegram(order, callback) {
                 }
             }
 
+            // Two names can lead to the SAME destination document (e.g. slug
+            // match). Share one cache entry so the second write can't overwrite
+            // the first one's added stock.
+            if (destProductCache[destKey]) {
+                var dPath = destProductCache[destKey].ref.path;
+                for (var dk in destProductCache) {
+                    if (dk !== destKey && destProductCache[dk].ref.path === dPath) { destProductCache[destKey] = destProductCache[dk]; break; }
+                }
+            }
+
             // Ensure slug is set on destination product for future transfers
             if (destProductCache[destKey] && !destProductCache[destKey].data.slug) {
                 destProductCache[destKey].data.slug = productSlug2;
@@ -12335,7 +12402,7 @@ function sendToTelegram(order, callback) {
         var failed = [];
 
         transfers.forEach(function(t) {
-            var srcP = sourceProductCache[t.productId];
+            var srcP = sourceProductCache[srcKeyOf(t)];
             if (!srcP) { failed.push({ name: t.productName, reason: 'Source product not found' }); return; }
 
             var destKey = t.toStoreId + '|' + t.productName;
@@ -12373,6 +12440,7 @@ function sendToTelegram(order, callback) {
             // as genuine restock, not a correction/mistake batch.
             if (isGenuineRestockBulk) dest.data.lastRestockDate = Date.now();
 
+            t._srcId = srcP.id; t._destId = dest.ref.id;
             succeeded.push(t);
         });
 
@@ -12381,17 +12449,18 @@ function sendToTelegram(order, callback) {
             try {
                 var batch = db.batch();
 
-                // Write updated source products back to fromStoreId
-                Object.keys(sourceProductCache).forEach(function(pid) {
-                    var p = sourceProductCache[pid];
-                    var realId = p.id || pid; // found by name -> its own id, never create a duplicate doc under pid
-                    var pW = Object.assign({}, p); delete pW.id;
-                    batch.set(db.collection('stores').doc(fromStoreId).collection('products').doc(realId), pW, { merge: true });
+                // Write updated source products back to THEIR OWN sending store (one write per document)
+                Object.keys(srcByPath).forEach(function(path) {
+                    var p = srcByPath[path];
+                    var pW = Object.assign({}, p); delete pW.id; delete pW._storeId;
+                    batch.set(db.collection('stores').doc(p._storeId).collection('products').doc(p.id), pW, { merge: true });
                 });
 
-                // Write updated destination products (deduplicated)
+                // Write updated destination products (one write per document)
+                var destWritten = {};
                 Object.keys(destProductCache).forEach(function(key) {
                     var dest = destProductCache[key];
+                    if (destWritten[dest.ref.path]) return; destWritten[dest.ref.path] = true;
                     delete dest.data.id;
                     batch.set(dest.ref, dest.data, { merge: true });
                 });
@@ -12401,7 +12470,8 @@ function sendToTelegram(order, callback) {
                     batch.update(db.collection('transfers').doc(t.transferId), {
                         status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
                         approvedAtStr: new Date().toLocaleString(),
-                        restockType: isGenuineRestockBulk ? 'new' : 'correction'
+                        restockType: isGenuineRestockBulk ? 'new' : 'correction',
+                        sourceProductId: t._srcId, destProductId: t._destId // exact items, for reconciliation
                     });
                 });
 
