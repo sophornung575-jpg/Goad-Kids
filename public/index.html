@@ -754,6 +754,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                     <!-- Order toolbar -->
                     <div class="orders-toolbar">
                         <div style="position:relative;flex:1;min-width:180px"><i class="fas fa-search" style="position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);color:var(--gray)"></i><input type="text" id="orderSearch" class="form-control" data-translate="searchOrdersPlaceholder" placeholder="Search name, phone, order ID..." style="padding-left:2.5rem" oninput="filterOrders()"></div>
+                        <button class="btn btn-primary btn-small" id="refreshOrdersBtn" onclick="refreshOrders()" title="Load the newest orders"><i class="fas fa-sync-alt"></i> <span class="hide-xs">Refresh</span></button>
                         <button class="btn btn-info btn-small" onclick="sendDailySummary()" title="Daily Summary to Telegram"><i class="fab fa-telegram-plane"></i> <span class="hide-xs" data-translate="dailySummary">Summary</span></button>
                         <button class="btn btn-outline btn-small" onclick="exportPendingCSV()" title="Export Pending"><i class="fas fa-download"></i> <span class="hide-xs" data-translate="exportBtn">Export</span></button>
                     </div>
@@ -1044,7 +1045,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         <div class="admin-card" style="margin-bottom:1rem">
                             <div class="admin-card-header" style="display:flex;justify-content:space-between;align-items:center">
                                 <div class="admin-card-title"><i class="fas fa-warehouse" style="color:var(--primary)"></i> Branch Stock Overview</div>
-                                <button class="btn btn-outline btn-small" onclick="loadBranchStockTab()"><i class="fas fa-sync"></i> Refresh</button>
+                                <button class="btn btn-outline btn-small" onclick="branchStockRefresh()"><i class="fas fa-sync"></i> Refresh</button>
                             </div>
                             <div class="admin-card-body">
                                 <p style="font-size:0.83rem;color:var(--gray);margin-bottom:1rem">View stock at any branch in real-time. Click a quantity to adjust it directly (bypasses transfer approval).</p>
@@ -4439,6 +4440,54 @@ function sendToTelegram(order, callback) {
         }
     }
 
+    // Orders page "Refresh" button: reload pending + recent orders from Firebase
+    // without reloading the whole page (same two bounded queries as loadData).
+    var _refreshingOrders = false;
+    async function refreshOrders() {
+        if (_refreshingOrders) return;
+        var btn = document.getElementById('refreshOrdersBtn');
+        var icon = btn ? btn.querySelector('i') : null;
+        if (!db || !STATE.firebaseOnline) { showToast('Offline — cannot refresh orders', 'error'); return; }
+        _refreshingOrders = true;
+        if (btn) btn.disabled = true;
+        if (icon) icon.classList.add('fa-spin');
+        try {
+            var ordersRef = db.collection('stores').doc(STATE.storeId).collection('orders');
+            var pendingSnap = await ordersRef.where('status', '==', 'pending').get();
+            var recentSnap = await ordersRef.orderBy('timestamp', 'desc').limit(150).get();
+            var byId = {};
+            pendingSnap.forEach(function(d) { byId[d.id] = d; });
+            recentSnap.forEach(function(d) { byId[d.id] = d; });
+            var fbPending = [], fbConfirmed = [];
+            Object.keys(byId).forEach(function(id) {
+                var dt = byId[id].data();
+                var o = Object.assign({}, dt, { orderId: id });
+                if (dt.status === 'confirmed' || dt.status === 'refunded' || dt.status === 'partial_refund' || dt.status === 'rejected') fbConfirmed.push(o);
+                else { o.status = 'pending'; fbPending.push(o); }
+            });
+            // Keep pending orders made on this device that haven't reached Firebase yet
+            var have = {};
+            fbPending.concat(fbConfirmed).forEach(function(o) { have[o.orderId] = 1; });
+            (STATE.pendingOrders || []).forEach(function(o) { if (!have[o.orderId] && o.status === 'pending') fbPending.push(o); });
+            var before = (STATE.pendingOrders || []).length;
+            STATE.pendingOrders = fbPending;
+            STATE.confirmedOrders = fbConfirmed;
+            saveOrders();
+            try { loadOrderIssues(); } catch (e) {}
+            filterOrders();
+            updateAdminBadges();
+            var diff = fbPending.length - before;
+            showToast(diff > 0 ? diff + ' new pending order' + (diff === 1 ? '' : 's') : 'Orders up to date', 'success');
+        } catch (e) {
+            console.warn('Order refresh failed:', e);
+            showToast('Refresh failed: ' + (e.code === 'permission-denied' ? 'not allowed — log in again' : e.message), 'error');
+        } finally {
+            _refreshingOrders = false;
+            if (btn) btn.disabled = false;
+            if (icon) icon.classList.remove('fa-spin');
+        }
+    }
+
     async function loadData() {
         // ── STEP 1: Load localStorage IMMEDIATELY so shop shows at once ──
         loadLocal();
@@ -4563,6 +4612,8 @@ function sendToTelegram(order, callback) {
             renderPending();
             renderHistory();
             updateAdminBadges();
+            try { var bsTab = document.getElementById('invBranchstockTab'), bsSel = document.getElementById('branchStockSelect');
+                  if (bsTab && bsTab.classList.contains('active') && bsSel && bsSel.options.length <= 1) initBranchStockTab(); } catch (bse) {}
             if (staffSession) checkAndPushRestockAlerts(); // auto-adds fast-selling, low-stock items to the restock.html list
             if (staffSession) repairProductDatesV4(); // one-time: rebuild promotion dates from logs + transfer receipts (fixes dates lost before the save fix)
             // backfillRestockDatesFromLogs(); // replaced by repairProductDatesV4 above — v3 would undo branch dates set from transfers
@@ -8988,8 +9039,7 @@ function sendToTelegram(order, callback) {
             if (allBranchesMode) {
                 // Build store list: Main Store + every branch (All), or just the one branch picked
                 var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
-                var bSnap = await db.collection('_admin_').doc('branches').get();
-                if (bSnap.exists) { (bSnap.data().list || []).forEach(function(b) { stores.push({ id: b.id, name: b.name }); }); }
+                (await fetchBranchList()).forEach(function(b) { stores.push({ id: b.id, name: b.name }); });
                 if (selectedStore !== 'ALL') {
                     stores = stores.filter(function(s){ return s.id === selectedStore; });
                     if (!stores.length) stores = [{ id: selectedStore, name: selectedStore }];
@@ -9757,12 +9807,36 @@ function sendToTelegram(order, callback) {
     function cashCanPickStore() { return STATE.storeId === 'GOAT-1979' && STATE.adminRole === 'full'; }
     function cashIsAllMode() { return cashActiveStoreId() === 'ALL'; }
 
+    // ── Shared branch list loader ──
+    // Reads _admin_/branches from Firebase. If the read fails, it shows WHY (toast,
+    // once per session) and falls back to the last list this device saw, instead of
+    // silently showing no branches.
+    var _branchListLastError = '';
+    async function fetchBranchList() {
+        var CACHE = 'goatBranchListCache';
+        try {
+            if (!db) throw new Error('Firebase not connected');
+            var snap = await db.collection('_admin_').doc('branches').get();
+            var list = snap.exists ? (snap.data().list || []) : [];
+            try { localStorage.setItem(CACHE, JSON.stringify(list)); } catch (e) {}
+            _branchListLastError = snap.exists ? '' : 'Branch list not found in Firebase (_admin_/branches)';
+            if (!snap.exists) console.warn(_branchListLastError);
+            return list;
+        } catch (e) {
+            var why = (e && e.code === 'permission-denied') ? 'Firebase blocked reading the branch list (permission denied) — check the Firestore rules for _admin_/branches' : ('Branch list could not load: ' + ((e && e.message) || e));
+            console.warn(why, e);
+            if (_branchListLastError !== why) { _branchListLastError = why; try { showToast(why, 'error'); } catch (te) {} }
+            var cached = [];
+            try { cached = JSON.parse(localStorage.getItem(CACHE) || '[]') || []; } catch (ce) {}
+            return cached;
+        }
+    }
+
     async function cashLoadStoreList() {
         if (_cashStoreList) return _cashStoreList;
         var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
-        try { var bSnap = await db.collection('_admin_').doc('branches').get(); if (bSnap.exists) { (bSnap.data().list || []).forEach(function(b) { stores.push({ id: b.id, name: b.name }); }); } }
-        catch(e) { console.warn('Branch list fetch failed:', e.message); }
-        _cashStoreList = stores;
+        (await fetchBranchList()).forEach(function(b) { stores.push({ id: b.id, name: b.name }); });
+        if (!_branchListLastError) _cashStoreList = stores; // only remember a good list, so a failed load retries next time
         return stores;
     }
 
@@ -11475,13 +11549,28 @@ function sendToTelegram(order, callback) {
     var _branchStockCurrentId = '';
     var _branchStockCurrentName = '';
 
-    async function initBranchStockTab() {
+    // If the tab is opened before Firebase has connected, wait and retry instead of
+    // leaving the store dropdown empty (the "sometimes missing" All Branches option).
+    var _branchStockInitTimer = null;
+    async function initBranchStockTab(attempt) {
+        attempt = attempt || 0;
         var sel = document.getElementById('branchStockSelect');
-        if (!sel || !db) return;
+        if (!sel) return;
+        clearTimeout(_branchStockInitTimer);
+        if (!db || !STATE.firebaseOnline) {
+            var box = document.getElementById('branchStockListContainer');
+            if (attempt < 15) {
+                if (box) box.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem"><i class="fas fa-spinner fa-spin"></i> Connecting to Firebase...</div>';
+                _branchStockInitTimer = setTimeout(function() { initBranchStockTab(attempt + 1); }, 1000);
+            } else if (box) {
+                box.innerHTML = '<div style="color:var(--danger);padding:1rem">Could not connect to Firebase. Check the internet, then press Refresh.</div>';
+            }
+            if (!db || attempt < 15) return; // still connecting — the retry fills the list
+        }
+        var keep = sel.value;
         sel.innerHTML = '<option value="">— Select a store —</option>';
         try {
-            var snap = await db.collection('_admin_').doc('branches').get();
-            var branches = snap.exists ? (snap.data().list || []) : [];
+            var branches = await fetchBranchList();
 
             // "All Branches" combined option at the top
             var allOpt = document.createElement('option');
@@ -11496,7 +11585,9 @@ function sendToTelegram(order, callback) {
             sel.appendChild(mainOpt);
 
             if (!branches.length) {
-                document.getElementById('branchStockListContainer').innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">No branches created yet. Go to Settings → Manage Branches to add one.</div>';
+                document.getElementById('branchStockListContainer').innerHTML = _branchListLastError
+                    ? '<div style="color:var(--danger);padding:1rem">' + escHtml(_branchListLastError) + '</div>'
+                    : '<div style="text-align:center;color:var(--gray);padding:2rem">No branches created yet. Go to Settings → Manage Branches to add one.</div>';
                 return;
             }
 
@@ -11506,9 +11597,17 @@ function sendToTelegram(order, callback) {
                 opt.textContent = b.name + ' (' + b.id + ')';
                 sel.appendChild(opt);
             });
+            if (keep) { sel.value = keep; if (sel.value === keep) loadBranchStockTab(); }
+            else if (attempt > 0) { var bx = document.getElementById('branchStockListContainer'); if (bx) bx.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem">Select a branch to view its stock</div>'; }
         } catch(e) {
             document.getElementById('branchStockListContainer').innerHTML = '<div style="color:var(--danger);padding:1rem">Failed to load branches: ' + e.message + '</div>';
         }
+    }
+
+    function branchStockRefresh() {
+        var sel = document.getElementById('branchStockSelect');
+        if (!sel || sel.options.length <= 1 || !sel.value) initBranchStockTab();
+        else loadBranchStockTab();
     }
 
     var _branchStockIsAllMode = false;
@@ -11526,10 +11625,7 @@ function sendToTelegram(order, callback) {
             try {
                 // Build full store list: Main Store + every branch
                 var stores = [{ id: 'GOAT-1979', name: 'Main Store' }];
-                var bSnap = await db.collection('_admin_').doc('branches').get();
-                if (bSnap.exists) {
-                    (bSnap.data().list || []).forEach(function(b) { stores.push({ id: b.id, name: b.name }); });
-                }
+                (await fetchBranchList()).forEach(function(b) { stores.push({ id: b.id, name: b.name }); });
 
                 // Fetch products from every store in parallel
                 var perStoreResults = await Promise.all(stores.map(async function(s) {
