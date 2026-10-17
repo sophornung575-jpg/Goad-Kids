@@ -2008,7 +2008,9 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
             if (cfg.orderChatId) localStorage.setItem('goatTgChatId', cfg.orderChatId);
             if (cfg.invToken) localStorage.setItem('goatTgInvToken', cfg.invToken);
             if (cfg.invChatId) localStorage.setItem('goatTgInvChatId', cfg.invChatId);
-            console.log('✅ Telegram config synced from Firebase');
+            localStorage.setItem('goatTgServerSend', cfg.serverSend === true ? '1' : '0');
+            console.log('✅ Telegram config synced from Firebase' + (cfg.serverSend === true ? ' (alerts sent by the server)' : ''));
+            if (cfg.serverSend === true) setTimeout(_tgOutboxResend, 1500);
         } catch(e) { console.warn('Telegram config load failed:', e.message); }
     }
 
@@ -2090,31 +2092,64 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
     // ── Telegram pending queue: stores messages that failed (e.g. WiFi blocking api.telegram.org) ──
     var _tgFlushInProgress = false;
 
-    function _queueTelegramMessage(message) {
-        var queue = JSON.parse(localStorage.getItem('goatTelegramQueue') || '[]');
-        queue.push({ message: message, queuedAt: Date.now() });
-        // Keep only last 50 messages to avoid unbounded growth
-        if (queue.length > 50) queue = queue.slice(-50);
-        localStorage.setItem('goatTelegramQueue', JSON.stringify(queue));
+    // Queued messages are stored ALREADY tagged with the store name, together with
+    // which bot they belong to. Before this fix, a retry (a) added the store tag again
+    // ("🏬 [Goat Kids PH]" ×3), (b) pushed a NEW copy every time it failed again, and
+    // (c) sent inventory messages to the orders bot — and a phone with blocked
+    // Telegram could deliver a weeks-old refund alert as if it had just happened.
+    var TG_QUEUE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // older than this = dropped, not sent
+
+    function _tgStripTags(m) { return String(m || '').replace(/^(?:🏬 <b>\[[^\]]*\]<\/b>\n)+/, ''); }
+
+    function _readTelegramQueue() {
+        var q = [];
+        try { q = JSON.parse(localStorage.getItem('goatTelegramQueue') || '[]'); } catch (e) { q = []; }
+        // Clean up queues saved by the old code: one store tag, no duplicates, no stale alerts
+        var seen = {}, out = [], now = Date.now();
+        q.forEach(function(it) {
+            if (!it || !it.message) return;
+            if (it.queuedAt && now - it.queuedAt > TG_QUEUE_MAX_AGE_MS) return;
+            var body = _tgStripTags(it.message);
+            var tagM = String(it.message).match(/^🏬 <b>\[[^\]]*\]<\/b>\n/);
+            var key = (it.botType || '') + '|' + body;
+            if (seen[key]) return; seen[key] = true;
+            out.push({ message: (tagM ? tagM[0] : '') + body, queuedAt: it.queuedAt || now, botType: it.botType || '', tagged: true });
+        });
+        return out;
+    }
+    function _writeTelegramQueue(q) { try { localStorage.setItem('goatTelegramQueue', JSON.stringify(q.slice(-50))); } catch (e) {} }
+
+    function _queueTelegramMessage(message, botType) {
+        var queue = _readTelegramQueue();
+        var key = (botType || '') + '|' + _tgStripTags(message);
+        if (queue.some(function(it){ return ((it.botType || '') + '|' + _tgStripTags(it.message)) === key; })) return; // already waiting
+        queue.push({ message: message, queuedAt: Date.now(), botType: botType || '', tagged: true });
+        _writeTelegramQueue(queue);
     }
 
     function _flushTelegramQueue() {
+        if (_tgUseServer()) { _tgOutboxResend(); return; }
         if (_tgFlushInProgress) return;
-        var queue = JSON.parse(localStorage.getItem('goatTelegramQueue') || '[]');
+        var queue = _readTelegramQueue();
+        _writeTelegramQueue(queue); // saves the cleaned-up queue (drops stale/duplicate items)
         if (!queue.length) return;
         _tgFlushInProgress = true;
         var item = queue[0];
-        _sendTelegramRaw(item.message, function(ok) {
+        var cfg = (item.botType === 'inventory') ? getInventoryTelegramConfig() : getTelegramConfig();
+        if (!cfg.botToken || !cfg.chatId) { _tgFlushInProgress = false; return; }
+        // Say clearly that this is a late delivery, with the original time
+        var late = (Date.now() - item.queuedAt > 10 * 60 * 1000) ? '⏰ <i>Delayed — this happened at ' + new Date(item.queuedAt).toLocaleString() + '</i>\n' : '';
+        var body = JSON.stringify({ chat_id: cfg.chatId, text: late + item.message, parse_mode: 'HTML' });
+        _trySendWithFallback(cfg.botToken, body, item.message, 0, function(ok) {
             _tgFlushInProgress = false;
             if (ok) {
-                var q = JSON.parse(localStorage.getItem('goatTelegramQueue') || '[]');
-                q.shift();
-                localStorage.setItem('goatTelegramQueue', JSON.stringify(q));
+                var q = _readTelegramQueue();
+                q = q.filter(function(it){ return !(it.queuedAt === item.queuedAt && it.message === item.message); });
+                _writeTelegramQueue(q);
                 console.log('✅ Flushed 1 queued Telegram message, ' + q.length + ' remaining');
-                // Keep flushing if more remain
                 if (q.length > 0) setTimeout(_flushTelegramQueue, 2000);
             }
-        });
+        }, null, { fromQueue: true });
     }
 
     // Flush queue automatically whenever network comes back online
@@ -2135,30 +2170,99 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
         return '🏬 <b>[' + label + ']</b>\n' + message;
     }
 
-    function _sendTelegramRaw(message, callback, botType) {
+    // =============================================
+    // SERVER-SENT TELEGRAM ALERTS (telegramOutbox)
+    // When _admin_/telegramConfig.serverSend is true, alerts are NOT sent from
+    // this device. Each alert is saved to Firestore (telegramOutbox/{id}) and the
+    // telegramOutbox Cloud Function sends it with the bot tokens kept on the
+    // server — so shop Wi-Fi blocking Telegram can't lose or delay alerts.
+    // Every alert is first kept on this device (goatTgOutboxPending) and only
+    // removed once Firebase has stored it; a fixed id per alert means a resend
+    // never creates a second message.
+    // =============================================
+    function _tgUseServer() { return !!db && localStorage.getItem('goatTgServerSend') === '1'; }
+    function _tgPendingRead() { try { return JSON.parse(localStorage.getItem('goatTgOutboxPending') || '[]'); } catch (e) { return []; } }
+    function _tgPendingWrite(list) { try { localStorage.setItem('goatTgOutboxPending', JSON.stringify(list.slice(-200))); } catch (e) {} }
+    function _tgDropPending(id) { _tgPendingWrite(_tgPendingRead().filter(function(x){ return x.id !== id; })); }
+    function _tgOutboxWrite(item) {
+        var ref = db.collection('telegramOutbox').doc(item.id);
+        return ref.set(item).then(function() { _tgDropPending(item.id); return true; })
+            .catch(function(e) {
+                // Already on the server (sent or being sent) → rules refuse a re-write; that's fine, clear it here
+                if (e && e.code === 'permission-denied') {
+                    return ref.get().then(function(d) { if (d.exists) { _tgDropPending(item.id); return true; } throw e; });
+                }
+                throw e;
+            });
+    }
+    function _tgOutbox(kind, botType, text, images, callback) {
+        var cfg = (botType === 'inventory') ? getInventoryTelegramConfig() : getTelegramConfig();
+        var item = {
+            id: 'tg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+            kind: kind, botType: botType === 'inventory' ? 'inventory' : 'orders',
+            text: _withStoreTag(_tgStripTags(text)),
+            images: (images || []).filter(Boolean).slice(0, 10),
+            chatId: cfg.chatId || '',            // the server uses its own chat id first; this is only a fallback
+            storeId: STATE.storeId || '', storeName: STATE.storeName || '',
+            createdAt: Date.now(), by: STATE.adminRole || '', status: 'pending'
+        };
+        var list = _tgPendingRead(); list.push(item); _tgPendingWrite(list);
+        var done = false, finish = function(ok){ if (!done) { done = true; if (callback) callback(ok); } };
+        _tgOutboxWrite(item).then(function(){ finish(true); }).catch(function(e) {
+            console.warn('Alert saved on this device, will be sent to the server later:', e && e.message);
+            finish(true); // it is safely queued — the action itself must not fail because of Telegram
+        });
+        // Firestore holds writes while offline; don't keep the caller waiting
+        setTimeout(function(){ finish(true); }, 4000);
+    }
+    var _tgResending = false;
+    function _tgOutboxResend() {
+        if (!_tgUseServer() || _tgResending) return;
+        var list = _tgPendingRead();
+        // Also move anything left in the OLD device queue to the server
+        var oldQ = _readTelegramQueue();
+        if (oldQ.length) {
+            oldQ.forEach(function(it) {
+                list.push({ id: 'tgq_' + it.queuedAt + '_' + Math.random().toString(36).slice(2, 6), kind: 'text', botType: it.botType === 'inventory' ? 'inventory' : 'orders',
+                    text: it.message, images: [], chatId: ((it.botType === 'inventory') ? getInventoryTelegramConfig() : getTelegramConfig()).chatId || '',
+                    storeId: STATE.storeId || '', storeName: STATE.storeName || '', createdAt: it.queuedAt || Date.now(), by: STATE.adminRole || '', status: 'pending' });
+            });
+            _tgPendingWrite(list); _writeTelegramQueue([]);
+        }
+        if (!list.length) return;
+        _tgResending = true;
+        Promise.all(list.map(function(it){ return _tgOutboxWrite(it).catch(function(){}); }))
+            .then(function(){ _tgResending = false; var left = _tgPendingRead().length; if (left) console.log('📨 ' + left + ' alert(s) still waiting for the server'); });
+    }
+    window.addEventListener('online', function() { setTimeout(_tgOutboxResend, 3000); });
+    setInterval(function(){ if (_tgPendingRead().length) _tgOutboxResend(); }, 60000);
+
+    function _sendTelegramRaw(message, callback, botType, _direct) {
+        if (!_direct && _tgUseServer()) return _tgOutbox('text', botType, message, [], callback);
         var cfg = (botType === 'inventory') ? getInventoryTelegramConfig() : getTelegramConfig();
         if (!cfg.botToken || !cfg.chatId) {
             console.warn('Telegram not configured. Go to Admin > Inventory > Telegram Settings.');
             if (callback) callback(false);
             return;
         }
-        message = _withStoreTag(message);
+        message = _withStoreTag(_tgStripTags(message)); // never double-tag
         var body = JSON.stringify({ chat_id: cfg.chatId, text: message, parse_mode: 'HTML' });
-        _trySendWithFallback(cfg.botToken, body, message, 0, callback);
+        _trySendWithFallback(cfg.botToken, body, message, 0, callback, null, { botType: botType || '' });
     }
 
     // _sent: shared object passed through the whole proxy chain.
     // Once any proxy confirms delivery, _sent.ok=true stops all further attempts.
-    function _trySendWithFallback(token, body, originalMessage, proxyIndex, callback, _sent) {
+    function _trySendWithFallback(token, body, originalMessage, proxyIndex, callback, _sent, opts) {
         if (!_sent) _sent = { ok: false, done: false };
+        opts = opts || {};
 
         if (_sent.ok) return; // already delivered — ignore late responses from slow proxies
 
         if (proxyIndex >= _TELEGRAM_PROXIES.length) {
             if (!_sent.done) {
                 _sent.done = true;
-                console.warn('All Telegram routes failed — message queued for retry');
-                _queueTelegramMessage(originalMessage);
+                if (!opts.fromQueue) { console.warn('All Telegram routes failed — message queued for retry'); _queueTelegramMessage(originalMessage, opts.botType); }
+                else console.warn('Queued Telegram message still could not be sent — will retry later');
                 if (callback) callback(false);
             }
             return;
@@ -2194,7 +2298,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
             if (_sent.ok) return; // already delivered by another proxy — ignore
             var reason = (err && err.name === 'AbortError') ? 'timeout' : err.message;
             console.warn('Telegram route ' + (proxyIndex + 1) + ' failed (' + reason + ') — trying next...');
-            _trySendWithFallback(token, body, originalMessage, proxyIndex + 1, callback, _sent);
+            _trySendWithFallback(token, body, originalMessage, proxyIndex + 1, callback, _sent, opts);
         });
     }
 
@@ -2207,7 +2311,8 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
 
     // Send up to 10 photos as an album. Caption goes on the FIRST photo only (Telegram requirement).
     // Falls back to text-only message if the album send fails entirely.
-    function _sendTelegramMediaGroup(imageUrls, caption, fallbackMessage, callback, botType) {
+    function _sendTelegramMediaGroup(imageUrls, caption, fallbackMessage, callback, botType, _direct) {
+        if (!_direct && _tgUseServer()) return _tgOutbox('album', botType, caption || fallbackMessage, imageUrls, callback);
         var cfg = (botType === 'inventory') ? getInventoryTelegramConfig() : getTelegramConfig();
         if (!cfg.botToken || !cfg.chatId) {
             console.warn('Telegram not configured.');
@@ -2221,12 +2326,12 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
 
         if (!urls.length) {
             // No images at all — just send as text
-            _sendTelegramRaw(fallbackMessage, callback, botType);
+            _sendTelegramRaw(fallbackMessage, callback, botType, true);
             return;
         }
         if (urls.length === 1) {
             // Single image — use sendPhoto instead
-            _sendTelegramPhoto(urls[0], caption, callback, botType);
+            _sendTelegramPhoto(urls[0], caption, callback, botType, true);
             return;
         }
 
@@ -2246,7 +2351,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
         if (proxyIndex >= _TELEGRAM_GROUP_PROXIES.length) {
             if (!_sent.done) { _sent.done = true;
                 console.warn('All Telegram media group routes failed — sending as text instead');
-                _sendTelegramRaw(fallbackMessage, callback, botType);
+                _sendTelegramRaw(fallbackMessage, callback, botType, true);
             }
             return;
         }
@@ -2323,7 +2428,8 @@ function sendToTelegram(order, callback) {
     ];
 
     // Send a photo with caption. Falls back to text-only message if the photo send fails entirely.
-    function _sendTelegramPhoto(imageUrl, caption, callback, botType) {
+    function _sendTelegramPhoto(imageUrl, caption, callback, botType, _direct) {
+        if (!_direct && _tgUseServer()) return _tgOutbox(imageUrl ? 'photo' : 'text', botType, caption, imageUrl ? [imageUrl] : [], callback);
         var cfg = (botType === 'inventory') ? getInventoryTelegramConfig() : getTelegramConfig();
         if (!cfg.botToken || !cfg.chatId) {
             console.warn('Telegram not configured.');
@@ -2331,7 +2437,7 @@ function sendToTelegram(order, callback) {
             return;
         }
         if (!imageUrl) {
-            _sendTelegramRaw(caption, callback, botType);
+            _sendTelegramRaw(caption, callback, botType, true);
             return;
         }
         var taggedCaption = _withStoreTag(caption);
@@ -2346,7 +2452,7 @@ function sendToTelegram(order, callback) {
         if (proxyIndex >= _TELEGRAM_PHOTO_PROXIES.length) {
             if (!_sent.done) { _sent.done = true;
                 console.warn('All Telegram photo routes failed — sending as text instead');
-                _sendTelegramRaw(fallbackCaption, callback, botType);
+                _sendTelegramRaw(fallbackCaption, callback, botType, true);
             }
             return;
         }
