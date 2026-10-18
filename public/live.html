@@ -423,6 +423,34 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
   </div>
 
   <div class="box">
+    <h3 style="margin:0 0 6px;font-size:1.05rem">📺 Live screen &amp; auto show</h3>
+    <p class="hint" style="margin:0">The <b>live screen</b> is a vertical page for Facebook Live Producer → <b>Share screen</b>. <b>Auto show</b> runs the live by itself: it shows each ticked product on the screen, plays its voice, pauses, then goes to the next. Make all voices first — products without a voice are skipped, so nothing is generated during the live.</p>
+    <div class="row">
+      <button class="btn" id="shOpen">📺 Open live screen</button>
+      <button class="btn vh-play" id="shStart">▶ Start auto show</button>
+      <button class="btn vh-stop" id="shStop">■ Stop show</button>
+      <span class="hint" id="shNow">Not running</span>
+    </div>
+    <div class="grid2">
+      <div>
+        <label for="shGap">Pause between products</label>
+        <select id="shGap"><option value="2">2 seconds</option><option value="4" selected>4 seconds</option><option value="6">6 seconds</option><option value="10">10 seconds</option></select>
+        <label class="check"><input type="checkbox" id="shOpening" checked> Play the Opening line first</label>
+        <label class="check"><input type="checkbox" id="shLoop" checked> When the list ends, start again (otherwise play Thank you and stop)</label>
+      </div>
+      <div>
+        <label for="shBgFile">Shop background photo</label>
+        <div class="row" style="margin:0"><input type="file" id="shBgFile" accept="image/*" style="max-width:220px"><button class="btn ghost vh-sm" id="shBgClear">Remove</button></div>
+        <label for="shMusicFile">Background music (mp3) — use music you have the rights to</label>
+        <div class="row" style="margin:0"><input type="file" id="shMusicFile" accept="audio/*" style="max-width:220px"><button class="btn ghost vh-sm" id="shMusicClear">Remove</button></div>
+        <label for="shMusicVol">Music volume <span class="hint" id="shMusicName">no music</span></label>
+        <input type="range" id="shMusicVol" min="0" max="60" value="15" style="width:100%">
+      </div>
+    </div>
+    <div id="shMsg"></div>
+  </div>
+
+  <div class="box">
     <h3 style="margin:0 0 6px;font-size:1.05rem">⚡ Quick lines</h3>
     <p class="hint" style="margin:0">Keys <b>Q W E R</b> play them while this tab is open. The Opening always keeps the AI host disclosure.</p>
     <div id="vhLines" class="vh-lines"></div>
@@ -562,8 +590,11 @@ function mergeStores(perStore){ // perStore: [{label, docs:[{path, data}]}]
     const key = String(data.id || path.split("/").pop());
     const n = normalize(key, data);
     let p = map.get(key);
-    if (!p){ p = { id:key, name:n.name, price:n.price, category:data.category||"", image:firstImage(data), stores:{}, refs:{} }; map.set(key,p); }
+    if (!p){ p = { id:key, name:n.name, price:n.price, category:data.category||"", image:firstImage(data), images:[], stores:{}, refs:{} }; map.set(key,p); }
     if (!p.image) p.image = firstImage(data);
+    // extra fields for the show screen: every photo, and a real promo price if one is set
+    (Array.isArray(data.images) ? data.images : []).forEach(u=>{ const x = typeof u==="string" ? u : (u && (u.url||u.src)); if (x && !p.images.includes(x)) p.images.push(x); });
+    const promo = Number(data.promoPrice); if (promo>0 && promo<n.price) p.promoPrice = promo;
     p.stores[label] = { total:n.total, bySize:n.bySize || Object.fromEntries(n.sizes.map(z=>[z,0])) };
     p.refs[label] = path;
   }));
@@ -1632,25 +1663,25 @@ $("vhTone").onclick = ()=>{ audio(); stop();
 /* ---------- playback (a queue, so the AI reminder can play before a product) ---------- */
 let playToken = 0;
 function stop(){
-  playToken++;
+  playToken++; musicDuck(false); sendScreen({ type:"voiceEnd" });
   if (A.current){ try{ A.current.onended = null; A.current.stop(); }catch(e){} A.current = null; }
   document.querySelectorAll(".vh-card.playing").forEach(c=>c.classList.remove("playing"));
   if (A.ctx) duck(false); $("vhNow").textContent = "Ready";
 }
 async function playQueue(items, card){ // items: [{blob,label}]
   audio(); stop(); const my = playToken;
-  card && card.classList.add("playing"); duck(true);
+  card && card.classList.add("playing"); duck(true); musicDuck(true);
   for (const it of items){
     if (my!==playToken) return;
     const buf = await A.ctx.decodeAudioData(await it.blob.arrayBuffer());
     if (my!==playToken) return;
     await new Promise(res=>{ const src = A.ctx.createBufferSource(); src.buffer = buf; src.connect(A.voiceGain);
-      A.current = src; $("vhNow").textContent = "▶ "+it.label; src.onended = res; src.start(); });
+      A.current = src; $("vhNow").textContent = "▶ "+it.label; src.onended = res; src.start(); sendScreen({ type:"voice", dur:buf.duration }); });
   }
-  if (my===playToken){ A.current = null; card && card.classList.remove("playing"); duck(false); $("vhNow").textContent = "Ready"; }
+  if (my===playToken){ A.current = null; card && card.classList.remove("playing"); duck(false); musicDuck(false); sendScreen({ type:"voiceEnd" }); $("vhNow").textContent = "Ready"; }
 }
 function setSt(el, cls, text){ if (el){ el.className = "vh-st"+(cls?" "+cls:""); el.textContent = text; } }
-$("vhStop").onclick = stop;
+$("vhStop").onclick = ()=>stopShow();
 $("vhTestVoice").onclick = async ()=>{
   vmsg("vhVoiceMsg","warn","Making voice…");
   try{ const r = await voiceBlob($("vhTestText").value); await playQueue([{ blob:r.blob, label:"Test voice" }]);
@@ -1692,6 +1723,7 @@ $("vhLines").addEventListener("input", e=>{ const i = e.target.dataset.line; if 
 $("vhLines").addEventListener("change", e=>{ const i = e.target.dataset.line; if (i===undefined) return;
   const t = lineText(LINES[i]); if (t!==LINES[i].text){ LINES[i].text = t; e.target.value = t; saveLines(); vmsg("vhMsg","warn","The AI host disclosure was put back into "+LINES[i].label+"."); } });
 async function playLine(i){ const l = LINES[i], st = document.querySelector(`[data-lst="${i}"]`);
+  showLineOnScreen(l);
   try{ setSt(st,"busy","making voice…"); const r = await voiceBlob(lineText(l)); setSt(st,"ok","voice ready");
     if (l.key==="open") VH.played = 0;
     await playQueue([{ blob:r.blob, label:l.label }]); }
@@ -1797,6 +1829,7 @@ async function writeOne(p, ask){
 }
 async function playProduct(p){
   const c = cardOf(p), st = c && c.querySelector("[data-st]");
+  showOnScreen(p);
   try{
     setSt(st,"busy","making voice…");
     const r = await voiceBlob(scriptOf(p)); setSt(st,"ok","voice ready");
@@ -1844,13 +1877,130 @@ $("vhVoiceAll").onclick = async ()=>{
 };
 $("vhRefresh").onclick = renderVoice;
 
+/* ---------- live screen (live-show.html) + auto show ---------- */
+let SHOW_BC = null, lastScreen = null;
+try{ SHOW_BC = new BroadcastChannel("gk-live-show"); }catch(e){}
+function sendScreen(m){
+  if (m.type==="product" || m.type==="line") lastScreen = m;
+  try{ SHOW_BC && SHOW_BC.postMessage(m); }catch(e){}
+}
+if (SHOW_BC) SHOW_BC.onmessage = e=>{ if (e.data && e.data.type==="hello" && lastScreen) sendScreen(lastScreen); };
+function screenProduct(p){
+  if (!p) return null;
+  const imgs = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
+  return { code:S.codes[p.id]||"", name:p.name, price:p.price, promo:p.promoPrice||0, sizes:availSizes(p), images:imgs, image:imgs[0]||"", total:p.total };
+}
+function showOnScreen(p){
+  const list = SHOW.list.length ? SHOW.list : items();
+  const i = list.findIndex(x=>x.id===p.id);
+  const nx = i>=0 && list.length>1 ? list[(i+1) % list.length] : null;
+  const n = screenProduct(nx);
+  sendScreen({ type:"product", p:screenProduct(p), next: n ? { name:n.code+" · "+n.name, image:n.image } : null });
+}
+function showLineOnScreen(l){ sendScreen({ type:"line", key:l.key, label:l.label, text:lineText(l) }); }
+
+$("shOpen").onclick = ()=>{
+  const w = window.open("live-show.html", "gkLiveScreen", "popup,width=540,height=960");
+  if (!w) return vmsg("shMsg","err","The browser blocked the new window. Allow pop-ups for this site, then press Open live screen again.");
+  vmsg("shMsg","ok","Live screen opened. In Live Producer choose Share screen → Window → \"Goat Kids Live Screen\". Make the window tall (portrait); press F on it for full screen.");
+};
+
+/* shop background photo: shrunk to 1080 px and kept in this browser */
+$("shBgFile").onchange = async e=>{
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  try{
+    const img = await createImageBitmap(f), sc = Math.min(1, 1080/img.width, 1920/img.height);
+    const cv = document.createElement("canvas"); cv.width = Math.round(img.width*sc); cv.height = Math.round(img.height*sc);
+    cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+    const url = cv.toDataURL("image/jpeg", 0.82);
+    localStorage.setItem("gkl_show_bg", url);
+    sendScreen({ type:"bg", url }); vmsg("shMsg","ok","Shop background saved.");
+  }catch(err){ vmsg("shMsg","err","Couldn't use that photo: "+(err.message||err)); }
+  e.target.value = "";
+};
+$("shBgClear").onclick = ()=>{ try{ localStorage.removeItem("gkl_show_bg"); }catch(e){} sendScreen({ type:"bg", url:"" }); vmsg("shMsg","ok","Background removed — the screen uses the Goat Kids colours."); };
+
+/* background music: saved in this browser, loops softly and dips while the voice talks */
+const MUSIC_KEY = "show-music";
+function musicVol(){ return Number($("shMusicVol").value)/100; }
+function musicDuck(on){ if (A.musicGain && A.ctx) A.musicGain.gain.setTargetAtTime(on ? musicVol()*0.35 : musicVol(), A.ctx.currentTime, 0.25); }
+async function startMusic(){
+  stopMusic(); const blob = await cacheGet(MUSIC_KEY); if (!blob) return;
+  audio();
+  try{
+    const buf = await A.ctx.decodeAudioData(await blob.arrayBuffer());
+    const src = A.ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    A.musicGain = A.ctx.createGain(); A.musicGain.gain.value = musicVol();
+    src.connect(A.musicGain); A.musicGain.connect(A.dest); A.musicGain.connect(A.monitorGain);
+    src.start(); A.music = src;
+  }catch(e){ vmsg("shMsg","err","Couldn't play the music file: "+e.message); }
+}
+function stopMusic(){ try{ A.music && A.music.stop(); A.musicGain && A.musicGain.disconnect(); }catch(e){} A.music = A.musicGain = null; }
+$("shMusicFile").onchange = async e=>{
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  await cachePut(MUSIC_KEY, f); localStorage.setItem("gkl_show_music_name", f.name);
+  $("shMusicName").textContent = f.name; vmsg("shMsg","ok","Music saved. It plays when the auto show starts.");
+  if (SHOW.on) startMusic(); e.target.value = "";
+};
+$("shMusicClear").onclick = async ()=>{ await cachePut(MUSIC_KEY, null); try{ localStorage.removeItem("gkl_show_music_name"); }catch(e){}
+  stopMusic(); $("shMusicName").textContent = "no music"; vmsg("shMsg","ok","Music removed."); };
+$("shMusicVol").addEventListener("input", ()=>{ if (A.musicGain && !A.current) A.musicGain.gain.value = musicVol(); try{ localStorage.setItem("gkl_show_music_vol", $("shMusicVol").value); }catch(e){} });
+try{ const v = localStorage.getItem("gkl_show_music_vol"); if (v) $("shMusicVol").value = v; const n = localStorage.getItem("gkl_show_music_name"); if (n) $("shMusicName").textContent = n; }catch(e){}
+["shGap","shOpening","shLoop"].forEach(id=>{ const k = "gkl_"+id, el = $(id);
+  try{ const v = localStorage.getItem(k); if (v!==null){ if (el.type==="checkbox") el.checked = v==="1"; else el.value = v; } }catch(e){}
+  el.addEventListener("change", ()=>{ try{ localStorage.setItem(k, el.type==="checkbox" ? (el.checked?"1":"0") : el.value); }catch(e){} }); });
+
+/* the auto show loop */
+const SHOW = { on:false, run:0, list:[] };
+function showAlive(run){ return SHOW.on && run===SHOW.run; }
+async function wait(sec, run){ const end = Date.now()+sec*1000; while (Date.now()<end){ if (!showAlive(run)) return; await new Promise(r=>setTimeout(r,200)); } }
+async function ready(text){ return !!(text && text.trim() && await cacheGet(clipKey(text))); }
+function showUi(text){ $("shNow").textContent = text; $("shStart").disabled = SHOW.on; }
+async function startShow(){
+  if (SHOW.on) return;
+  const all = items();
+  if (!all.length) return vmsg("shMsg","warn","Tick products on the Products & codes tab first (they need a code).");
+  const okList = []; for (const p of all) if (await ready(scriptOf(p))) okList.push(p);
+  if (!okList.length) return vmsg("shMsg","err","No product has a voice yet. Press ✍️ Write all scripts, then 🗣️ Make all voices, then start again.");
+  const skipped = all.length - okList.length;
+  vmsg("shMsg", skipped ? "warn" : "ok", skipped ? `Starting with ${okList.length} products. ${skipped} skipped because their voice isn't made yet.` : `Auto show running with ${okList.length} products. Press ■ Stop show (or Space) to stop.`);
+  SHOW.on = true; const run = ++SHOW.run; SHOW.list = okList; VH.played = 0;
+  audio(); showUi("Starting…"); await startMusic();
+  try{
+    const oi = LINES.findIndex(l=>l.key==="open");
+    if ($("shOpening").checked && oi>=0 && await ready(lineText(LINES[oi]))){ showUi("▶ Opening"); await playLine(oi); await wait(1.5, run); }
+    let round = 0;
+    do{
+      round++;
+      for (let i=0; i<SHOW.list.length; i++){
+        if (!showAlive(run)) return;
+        const p = SHOW.list[i];
+        showUi(`▶ ${i+1}/${SHOW.list.length} · ${S.codes[p.id]} ${p.name}${round>1?" (round "+round+")":""}`);
+        await playProduct(p);
+        if (!showAlive(run)) return;
+        await wait(Number($("shGap").value)||4, run);
+      }
+    } while (showAlive(run) && $("shLoop").checked);
+    const ti = LINES.findIndex(l=>l.key==="thanks");
+    if (showAlive(run) && ti>=0 && await ready(lineText(LINES[ti]))){ showUi("▶ Thank you"); await playLine(ti); }
+  } finally {
+    if (run===SHOW.run){ SHOW.on = false; SHOW.list = []; stopMusic(); showUi("Finished"); }
+  }
+}
+function stopShow(){
+  const was = SHOW.on; SHOW.on = false; SHOW.run++; SHOW.list = [];
+  stop(); stopMusic(); showUi(was ? "Stopped" : "Not running");
+}
+$("shStart").onclick = startShow;
+$("shStop").onclick = stopShow;
+
 /* ---------- tab + keys ---------- */
 document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click", ()=>{ if (b.dataset.view==="voice") renderVoice(); }));
 document.addEventListener("keydown", e=>{
   if (!$("view-voice").classList.contains("active")) return;
   const tag = (e.target.tagName||"").toLowerCase();
   if (["input","textarea","select"].includes(tag) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector("dialog[open]")) return;
-  if (e.key===" "){ e.preventDefault(); stop(); return; }
+  if (e.key===" "){ e.preventDefault(); stopShow(); return; }
   if (/^[1-9]$/.test(e.key)){ const p = items()[Number(e.key)-1]; if (p) playProduct(p); return; }
   const li = LINE_KEYS.indexOf(e.key.toLowerCase()); if (li>=0 && LINES[li]) playLine(li);
 });
