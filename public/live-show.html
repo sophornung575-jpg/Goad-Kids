@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="km">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goat Kids Live Screen</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* Goat Kids — vertical (9:16) screen for Facebook Live screen-share.
+   It is driven by the Live Desk (live.html → Voice host) in the same browser. */
+:root{
+  --orange:#F07A2B; --orange-dk:#C9551A; --ink:#2B1B12; --cream:#FFF6EE;
+  --live:#E5303B; --ok:#1F9D63; --card:rgba(255,255,255,.94);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#000;overflow:hidden}
+body{font-family:"Kantumruy Pro","Noto Sans Khmer",system-ui,sans-serif;color:var(--ink);display:flex;align-items:center;justify-content:center}
+body.hide-cursor{cursor:none}
+
+/* The stage is always 9:16 and as big as the window allows. Everything inside
+   is sized in cqw (1cqw = 1% of the stage width) so it scales with the window. */
+.stage{position:relative;width:min(100vw, calc(100vh * 9 / 16));aspect-ratio:9/16;overflow:hidden;container-type:inline-size;background:var(--ink)}
+
+/* background: shop photo if set, otherwise the product photo blurred over brand colours */
+.bg{position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 0%, #FFB27A 0%, var(--orange) 45%, var(--orange-dk) 100%)}
+.bg img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .8s}
+.bg img.on{opacity:1}
+.bg .blur{filter:blur(4cqw) saturate(1.2);transform:scale(1.2)}
+.bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(43,27,18,.35) 0%,rgba(43,27,18,.05) 30%,rgba(43,27,18,.15) 60%,rgba(43,27,18,.65) 100%)}
+
+/* top bar */
+.top{position:absolute;left:4cqw;right:4cqw;top:3.5cqw;display:flex;align-items:center;gap:2.5cqw;z-index:3}
+.logo{width:13cqw;height:13cqw;border-radius:50%;background:#fff center/cover no-repeat;box-shadow:0 1cqw 3cqw rgba(0,0,0,.25);border:.6cqw solid #fff}
+.brand{color:#fff;font-weight:700;font-size:5.6cqw;letter-spacing:.05em;text-shadow:0 .4cqw 1.5cqw rgba(0,0,0,.35);line-height:1}
+.brand small{display:block;font-weight:400;font-size:3cqw;letter-spacing:0;opacity:.95;margin-top:1cqw}
+.live{margin-left:auto;display:flex;align-items:center;gap:1.4cqw;background:var(--live);color:#fff;font-weight:700;font-size:3.4cqw;padding:1.2cqw 2.6cqw;border-radius:99cqw}
+.live i{width:2cqw;height:2cqw;border-radius:50%;background:#fff;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.25}}
+.ai{position:absolute;right:4cqw;top:17.5cqw;z-index:3;background:rgba(43,27,18,.55);color:#fff;font-size:2.7cqw;padding:.9cqw 2.2cqw;border-radius:99cqw;backdrop-filter:blur(2cqw)}
+
+/* product photo */
+.photo{position:absolute;left:7cqw;right:7cqw;top:24cqw;height:72cqw;border-radius:5cqw;background:#fff;box-shadow:0 3cqw 8cqw rgba(0,0,0,.35);overflow:hidden;z-index:2}
+.photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff;opacity:0;transition:opacity .7s}
+.photo img.on{opacity:1}
+.code{position:absolute;left:4cqw;top:20cqw;z-index:4;background:var(--ink);color:#fff;border-radius:3.5cqw;padding:1.6cqw 3.6cqw;box-shadow:0 1.5cqw 4cqw rgba(0,0,0,.35);transform:rotate(-3deg)}
+.code small{display:block;font-size:2.8cqw;opacity:.85;line-height:1.2}
+.code b{display:block;font-size:10cqw;line-height:1;letter-spacing:.06em;color:#FFC59A}
+.promo{position:absolute;right:4cqw;top:26.5cqw;z-index:4;background:var(--live);color:#fff;font-weight:700;font-size:5cqw;padding:1.4cqw 3cqw;border-radius:3cqw;transform:rotate(4deg);display:none}
+.progress{position:absolute;left:0;bottom:0;height:1.4cqw;width:0;background:var(--orange);z-index:3}
+
+/* info card */
+.info{position:absolute;left:5cqw;right:5cqw;top:99cqw;background:var(--card);border-radius:5cqw;padding:3.6cqw 5cqw 4cqw;z-index:2;box-shadow:0 2cqw 6cqw rgba(0,0,0,.25)}
+.name{font-weight:700;font-size:5.4cqw;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.priceRow{display:flex;align-items:baseline;gap:3cqw;margin-top:1.4cqw}
+.price{font-weight:700;font-size:11cqw;line-height:1.05;color:var(--orange-dk)}
+.was{font-size:5cqw;color:#8a7a70;text-decoration:line-through}
+.few{margin-left:auto;font-size:3.4cqw;font-weight:600;color:var(--live);background:#FDE8EA;padding:.8cqw 2.4cqw;border-radius:99cqw;display:none}
+.sizes{display:flex;flex-wrap:wrap;gap:1.8cqw;margin-top:2.4cqw;align-items:center}
+.sizes .lbl{font-size:3.6cqw;font-weight:600;margin-right:.6cqw}
+.sizes span.s{font-size:4cqw;font-weight:600;border:.45cqw solid var(--orange);color:var(--orange-dk);border-radius:2cqw;padding:.5cqw 2.4cqw;background:#fff}
+
+/* how to order */
+.order{position:absolute;left:5cqw;right:5cqw;bottom:4cqw;display:flex;align-items:center;gap:3.5cqw;background:var(--ink);color:#fff;border-radius:5cqw;padding:3cqw 3.6cqw;z-index:2}
+.order .qr{width:19cqw;height:19cqw;border-radius:2.4cqw;background:#fff center/cover no-repeat;flex:none}
+.order .t1{font-weight:700;font-size:4cqw;line-height:1.35}
+.order .t1 em{font-style:normal;color:#FFC59A}
+.order .t2{font-size:3cqw;opacity:.85;margin-top:.6cqw;line-height:1.4;white-space:nowrap}
+.order .url{font-size:3.1cqw;color:#FFC59A;margin-top:.6cqw;font-weight:600}
+.next{position:absolute;right:9cqw;top:88cqw;z-index:2;display:none;align-items:center;gap:1.6cqw;background:rgba(255,255,255,.88);border-radius:99cqw;padding:.8cqw 2.4cqw .8cqw .8cqw;font-size:2.9cqw;font-weight:600;max-width:60cqw}
+.next img{width:7cqw;height:7cqw;border-radius:50%;object-fit:cover;background:#eee;flex:none}
+.next span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* opening / thank-you screen */
+.lineView{position:absolute;inset:0;z-index:5;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 9cqw;color:#fff}
+.lineView .big{width:42cqw;height:42cqw;border-radius:50%;background:#fff center/cover no-repeat;border:1.2cqw solid #fff;box-shadow:0 3cqw 9cqw rgba(0,0,0,.35)}
+.lineView h1{font-size:8cqw;margin-top:6cqw;line-height:1.3;text-shadow:0 .5cqw 2cqw rgba(0,0,0,.35)}
+.lineView p{font-size:4.6cqw;margin-top:3.5cqw;line-height:1.55;text-shadow:0 .4cqw 1.5cqw rgba(0,0,0,.4);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+body.mode-line .lineView{display:flex}
+body.mode-line .photo, body.mode-line .info, body.mode-line .code, body.mode-line .promo, body.mode-line .next{visibility:hidden}
+
+/* swap animation between products */
+.swap{animation:swapIn .6s ease both}
+@keyframes swapIn{from{opacity:0;transform:translateY(3cqw)}to{opacity:1;transform:none}}
+
+/* help shown until the Live Desk connects */
+.help{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:20;background:rgba(0,0,0,.8);color:#fff;font:14px/1.5 system-ui,sans-serif;padding:10px 16px;border-radius:10px;max-width:92vw;text-align:center}
+.help b{color:#FFC59A}
+body.connected .help{display:none}
+</style>
+</head>
+<body class="mode-line">
+<div class="stage" id="stage">
+  <div class="bg"><img class="blur" id="bgProduct" alt=""><img id="bgShop" alt=""></div>
+
+  <div class="top">
+    <div class="logo" style="background-image:url('Goat_Kids_Logo.jpg')"></div>
+    <div class="brand">GOAT KIDS<small>សម្លៀកបំពាក់កូនៗ · Kids clothing</small></div>
+    <div class="live"><i></i>LIVE</div>
+  </div>
+  <div class="ai">🤖 ពិធីករ AI · AI host</div>
+
+  <div class="code" id="code"><small>កូដ · Code</small><b id="codeNum">0000</b></div>
+  <div class="promo" id="promo">-20%</div>
+  <div class="photo" id="photo"><div class="progress" id="progress"></div></div>
+
+  <div class="info" id="info">
+    <div class="name" id="name">—</div>
+    <div class="priceRow"><div class="price" id="price">$0</div><div class="was" id="was"></div><div class="few" id="few">នៅសល់តិច!</div></div>
+    <div class="sizes" id="sizes"></div>
+  </div>
+
+  <div class="next" id="next"><img alt="" id="nextImg"><span id="nextTxt"></span></div>
+
+  <div class="order">
+    <div class="qr" style="background-image:url('Goat%20Kids%20QR.jpg')"></div>
+    <div>
+      <div class="t1">Comment៖ <em>កូដ</em> + <em>ទំហំ</em> + <em>លេខទូរស័ព្ទ</em></div>
+      <div class="t2">Comment code · size · phone — we'll call you</div>
+      <div class="url">goat-kids-store.web.app</div>
+    </div>
+  </div>
+
+  <div class="lineView" id="lineView">
+    <div class="big" style="background-image:url('Goat_Kids_Logo.jpg')"></div>
+    <h1 id="lineTitle">សូមស្វាគមន៍មកកាន់ Goat Kids Live!</h1>
+    <p id="lineText">ចាំមើលទំនិញស្អាតៗ ជាមួយយើងណាបង</p>
+  </div>
+</div>
+
+<div class="help" id="help">Waiting for the <b>Live Desk</b> → Voice host → <b>Start auto show</b>. Press <b>F</b> (or double-click) for full screen.</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const money = n => { n = Number(n)||0; return "$" + (Number.isInteger(n) ? n : n.toFixed(2)); };
+  const LS = { get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } } };
+
+  /* ---------- background: shop photo chosen in the Live Desk ---------- */
+  function setShopBg(url){
+    const im = $("bgShop");
+    if (url){ im.src = url; im.classList.add("on"); }
+    else { im.removeAttribute("src"); im.classList.remove("on"); }
+  }
+  setShopBg(LS.get("gkl_show_bg"));
+
+  /* ---------- product photos: crossfade through every photo of the product ---------- */
+  let slideTimer = null;
+  function setPhotos(urls){
+    clearInterval(slideTimer);
+    const box = $("photo");
+    box.querySelectorAll("img").forEach(i=>i.remove());
+    const list = (urls||[]).filter(Boolean).slice(0, 6);
+    const imgs = list.map((u,i)=>{ const im = new Image(); im.referrerPolicy = "no-referrer"; im.alt = ""; im.src = u; if (!i) im.className = "on";
+      im.onerror = ()=>{ im.remove(); }; box.insertBefore(im, $("progress")); return im; });
+    const bp = $("bgProduct"); if (list[0]){ bp.referrerPolicy = "no-referrer"; bp.src = list[0]; bp.classList.add("on"); } else bp.classList.remove("on");
+    if (imgs.length > 1){ let k = 0;
+      slideTimer = setInterval(()=>{ const live = [...box.querySelectorAll("img")]; if (live.length < 2) return;
+        live.forEach(i=>i.classList.remove("on")); k = (k+1) % live.length; live[k].classList.add("on"); }, 4000); }
+  }
+
+  /* ---------- voice progress bar ---------- */
+  let progAnim = null;
+  function progress(sec){
+    const bar = $("progress"); if (progAnim) progAnim.cancel();
+    if (!sec){ bar.style.width = "0"; return; }
+    progAnim = bar.animate([{ width:"0%" },{ width:"100%" }], { duration: sec*1000, easing:"linear", fill:"forwards" });
+  }
+
+  function replay(el){ el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap"); }
+
+  /* ---------- show one product ---------- */
+  function showProduct(p, next){
+    document.body.classList.remove("mode-line");
+    $("codeNum").textContent = p.code || "—";
+    $("name").textContent = p.name || "";
+    const promo = Number(p.promo) > 0 && Number(p.promo) < Number(p.price);
+    $("price").textContent = money(promo ? p.promo : p.price);
+    $("was").textContent = promo ? money(p.price) : "";
+    $("promo").style.display = promo ? "block" : "none";
+    if (promo) $("promo").textContent = "-" + Math.round((1 - p.promo / p.price) * 100) + "%";
+    $("few").style.display = (p.total > 0 && p.total <= 3) ? "block" : "none";
+    const sz = (p.sizes||[]).slice(0, 10);
+    $("sizes").innerHTML = sz.length ? `<span class="lbl">ទំហំ៖</span>` + sz.map(s=>`<span class="s">${esc(s)}</span>`).join("") : "";
+    setPhotos(p.images && p.images.length ? p.images : (p.image ? [p.image] : []));
+    if (next && next.name){
+      $("nextImg").src = next.image || ""; $("nextTxt").textContent = "បន្ទាប់ · Next: " + next.name;
+      $("next").style.display = "flex";
+    } else $("next").style.display = "none";
+    progress(0);
+    ["photo","info","code"].forEach(id=>replay($(id)));
+  }
+
+  /* ---------- opening / reminder / thank-you ---------- */
+  const LINE_TITLES = {
+    open:   "សូមស្វាគមន៍មកកាន់ Goat Kids Live!",
+    order:  "ងាយៗ! Comment កូដ + ទំហំ + លេខទូរស័ព្ទ",
+    remind: "🤖 ពិធីករ AI · Comment កូដ 4 ខ្ទង់",
+    thanks: "អរគុណច្រើនបងៗ! ជួបគ្នា Live ក្រោយ"
+  };
+  function showLine(m){
+    document.body.classList.add("mode-line");
+    $("lineTitle").textContent = LINE_TITLES[m.key] || m.label || "Goat Kids Live";
+    $("lineText").textContent = m.text || "";
+    $("bgProduct").classList.remove("on");
+    progress(0); replay($("lineView"));
+  }
+
+  /* ---------- messages from the Live Desk ---------- */
+  let bc = null;
+  try{ bc = new BroadcastChannel("gk-live-show"); }catch(e){}
+  function onMsg(m){
+    if (!m || !m.type) return;
+    document.body.classList.add("connected");
+    if (m.type==="product") showProduct(m.p || {}, m.next);
+    else if (m.type==="line") showLine(m);
+    else if (m.type==="voice") progress(m.dur);
+    else if (m.type==="voiceEnd") progress(0);
+    else if (m.type==="bg") setShopBg(m.url || LS.get("gkl_show_bg"));
+    else if (m.type==="idle") showLine({ key:"open", text:"" });
+  }
+  if (bc){ bc.onmessage = e => onMsg(e.data); bc.postMessage({ type:"hello" }); }
+  else $("help").innerHTML = "This browser can't talk to the Live Desk. Use <b>Google Chrome</b> or <b>Edge</b>.";
+  // the shop photo can also change from another tab without a message
+  window.addEventListener("storage", e=>{ if (e.key==="gkl_show_bg") setShopBg(e.newValue); });
+
+  /* ---------- full screen + hide the mouse ---------- */
+  function fs(){ if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{}); else document.exitFullscreen(); }
+  document.addEventListener("keydown", e=>{ if (e.key==="f" || e.key==="F") fs(); });
+  document.addEventListener("dblclick", fs);
+  let ct = null;
+  document.addEventListener("mousemove", ()=>{ document.body.classList.remove("hide-cursor"); clearTimeout(ct); ct = setTimeout(()=>document.body.classList.add("hide-cursor"), 2000); });
+})();
+</script>
+</body>
+</html>
