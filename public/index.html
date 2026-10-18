@@ -2713,6 +2713,55 @@ function sendToTelegram(order, callback) {
     }
 
     function hasStock(p) { return getTotalStock(p) > 0; }
+
+    // ═══ HIDE LONG-SOLD-OUT ITEMS FROM CUSTOMERS ═══
+    // Each product carries soldOutAt (ms) while its stock is 0. Staff devices set it
+    // the first time they see a product at 0 and remove it as soon as it is restocked
+    // (updateSoldOutMarks). Customers don't see a product once it has been sold out for
+    // SOLD_OUT_HIDE_DAYS; staff always see everything, and nothing is deleted.
+    var SOLD_OUT_HIDE_DAYS = 7;
+    function isHiddenSoldOut(p) {
+        if (STATE.isAdmin || !p || hasStock(p)) return false;
+        var t = Number(p.soldOutAt) || 0;
+        return t > 0 && (Date.now() - t) > SOLD_OUT_HIDE_DAYS * 86400000;
+    }
+    // When did this product most likely sell out? Latest sale in the orders this device
+    // has, else the product's last update, else now (so it hides 7 days from today).
+    function guessSoldOutAt(p) {
+        var best = 0, slug = p.slug || makeSlug(p.name || ''), nm = String(p.name || '').trim().toLowerCase();
+        (STATE.confirmedOrders || []).forEach(function(o) {
+            if (o.status === 'rejected') return;
+            var ts = Number(o.timestamp) || 0;
+            if (ts <= best) return;
+            var hit = (o.items || []).some(function(it) {
+                return it.productId === p.id || makeSlug(it.name || '') === slug || String(it.name || '').trim().toLowerCase() === nm;
+            });
+            if (hit) best = ts;
+        });
+        if (best) return best;
+        var up = Date.parse(p.updatedAt || '') || 0;
+        return up > 0 && up < Date.now() ? up : Date.now();
+    }
+    async function updateSoldOutMarks() {
+        if (!db || !STATE.firebaseOnline || isCustomerShop()) return;
+        var ref = db.collection('stores').doc(STATE.storeId).collection('products');
+        var ops = [];
+        STATE.products.forEach(function(p) {
+            if (!p || !p.id) return;
+            var out = !hasStock(p), marked = Number(p.soldOutAt) > 0;
+            if (out && !marked) { p.soldOutAt = guessSoldOutAt(p); ops.push([p.id, { soldOutAt: p.soldOutAt }]); }
+            else if (!out && marked) { delete p.soldOutAt; ops.push([p.id, { soldOutAt: firebase.firestore.FieldValue.delete() }]); }
+        });
+        if (!ops.length) return;
+        try {
+            for (var i = 0; i < ops.length; i += 400) {
+                var b = db.batch();
+                ops.slice(i, i + 400).forEach(function(op) { b.set(ref.doc(op[0]), op[1], { merge: true }); });
+                await b.commit();
+            }
+            saveProducts();
+        } catch (e) { console.warn('Sold-out marks not saved:', e.message); }
+    }
     function isLowStock(p) { var t = getTotalStock(p); return t > 0 && t <= 3; }
 
     // FIX #5: Returns the available qty for a specific size minus what's already in cart
@@ -2784,6 +2833,10 @@ function sendToTelegram(order, callback) {
                     order.push(slug);
                 }
                 if ((!cur.images || !cur.images.length) && dt.images && dt.images.length) cur.images = dt.images;
+                // Hide-after-sold-out: keep the LATEST sell-out time of all stores; if any store
+                // has no mark yet (still in stock, or not checked yet) the listing never hides.
+                if (!cur._soChecked) { cur._soChecked = true; cur.soldOutAt = Number(dt.soldOutAt) || 0; }
+                else cur.soldOutAt = (cur.soldOutAt && Number(dt.soldOutAt)) ? Math.max(cur.soldOutAt, Number(dt.soldOutAt)) : 0;
                 var sizes = Array.isArray(dt.sizes) ? dt.sizes : [];
                 if (sizes.length) {
                     sizes.forEach(function(sz) {
@@ -4614,6 +4667,7 @@ function sendToTelegram(order, callback) {
             updateAdminBadges();
             try { var bsTab = document.getElementById('invBranchstockTab'), bsSel = document.getElementById('branchStockSelect');
                   if (bsTab && bsTab.classList.contains('active') && bsSel && bsSel.options.length <= 1) initBranchStockTab(); } catch (bse) {}
+            if (staffSession) updateSoldOutMarks(); // mark / unmark sold-out items so customers stop seeing week-old sold-outs
             if (staffSession) checkAndPushRestockAlerts(); // auto-adds fast-selling, low-stock items to the restock.html list
             if (staffSession) repairProductDatesV4(); // one-time: rebuild promotion dates from logs + transfer receipts (fixes dates lost before the save fix)
             // backfillRestockDatesFromLogs(); // replaced by repairProductDatesV4 above — v3 would undo branch dates set from transfers
@@ -5913,6 +5967,7 @@ function sendToTelegram(order, callback) {
         var f = [];
         for (var i = 0; i < STATE.products.length; i++) {
             var p = STATE.products[i];
+            if (isHiddenSoldOut(p)) continue; // sold out for over a week — hidden from customers
             if (STATE.filter.search && (p.name||'').toLowerCase().indexOf(STATE.filter.search) === -1 && (p.category||'').toLowerCase().indexOf(STATE.filter.search) === -1) continue;
             if (STATE.filter.category !== 'all' && p.category !== STATE.filter.category) continue;
             if (STATE.filter.stock === 'in-stock' && !hasStock(p)) continue;
