@@ -484,6 +484,10 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
     <h3 style="margin:0 0 6px;font-size:1.05rem">📺 Live screen &amp; auto show</h3>
     <p class="hint" style="margin:0">The <b>live screen</b> is a vertical page for Facebook Live Producer → <b>Share screen</b>. <b>Auto show</b> runs the live by itself: it shows each ticked product on the screen, plays its voice, pauses, then goes to the next. Make all voices first — products without a voice are skipped, so nothing is generated during the live.</p>
     <div class="row">
+      <select id="shShape" style="max-width:250px" aria-label="Screen shape">
+        <option value="wide">Wide 16:9 — Facebook Live from a computer</option>
+        <option value="tall">Tall 9:16 — vertical / phone</option>
+      </select>
       <button class="btn" id="shOpen">📺 Open live screen</button>
       <button class="btn vh-play" id="shStart">▶ Start auto show</button>
       <button class="btn vh-stop" id="shStop">■ Stop show</button>
@@ -2237,9 +2241,12 @@ function showOnScreen(p){
 function showLineOnScreen(l){ sendScreen({ type:"line", key:l.key, label:l.label, text:lineText(l) }); }
 
 $("shOpen").onclick = ()=>{
-  const w = window.open("live-show.html", "gkLiveScreen", "popup,width=540,height=960");
+  const wide = $("shShape").value !== "tall";
+  // a new address each time, so the screen always loads the newest version
+  const w = window.open("live-show.html?v=" + Date.now(), "gkLiveScreen", wide ? "popup,width=1280,height=720" : "popup,width=540,height=960");
+  if (w){ try{ w.resizeTo(wide ? 1280 : 540, wide ? 760 : 1000); }catch(e){} }
   if (!w) return vmsg("shMsg","err","The browser blocked the new window. Allow pop-ups for this site, then press Open live screen again.");
-  vmsg("shMsg","ok","Live screen opened. In Live Producer choose Share screen → Window → \"Goat Kids Live Screen\". Make the window tall (portrait); press F on it for full screen.");
+  vmsg("shMsg","ok","Live screen opened. In Live Producer choose Share screen → Window → \"Goat Kids Live Screen\". " + (wide ? "The screen fills the wide Facebook frame — press F on it for full screen." : "Keep the window tall (portrait); press F on it for full screen."));
 };
 
 /* shop background photo: shrunk to 1080 px and kept in this browser */
@@ -2283,7 +2290,7 @@ $("shMusicClear").onclick = async ()=>{ await cachePut(MUSIC_KEY, null); try{ lo
   stopMusic(); $("shMusicName").textContent = "no music"; vmsg("shMsg","ok","Music removed."); };
 $("shMusicVol").addEventListener("input", ()=>{ if (A.musicGain && !A.current) A.musicGain.gain.value = musicVol(); try{ localStorage.setItem("gkl_show_music_vol", $("shMusicVol").value); }catch(e){} });
 try{ const v = localStorage.getItem("gkl_show_music_vol"); if (v) $("shMusicVol").value = v; const n = localStorage.getItem("gkl_show_music_name"); if (n) $("shMusicName").textContent = n; }catch(e){}
-["shGap","shOpening","shLoop"].forEach(id=>{ const k = "gkl_"+id, el = $(id);
+["shShape","shGap","shOpening","shLoop"].forEach(id=>{ const k = "gkl_"+id, el = $(id);
   try{ const v = localStorage.getItem(k); if (v!==null){ if (el.type==="checkbox") el.checked = v==="1"; else el.value = v; } }catch(e){}
   el.addEventListener("change", ()=>{ try{ localStorage.setItem(k, el.type==="checkbox" ? (el.checked?"1":"0") : el.value); }catch(e){} }); });
 
