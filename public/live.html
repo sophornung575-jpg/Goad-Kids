@@ -68,6 +68,7 @@ th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);verti
 th{background:#F6F9F7;font-weight:600}
 tr:last-child td{border-bottom:0}
 .code{font-weight:800;font-size:1.15rem;letter-spacing:.06em;color:var(--teal)}
+.catPill{display:inline-block;font-size:.72rem;font-weight:600;padding:1px 8px;border-radius:99px;background:#eef3f1;color:var(--teal);vertical-align:middle;white-space:nowrap}
 .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.8rem;font-weight:600}
 .pill.in{background:var(--teal-soft);color:var(--teal)}
 .pill.low{background:#FFF3DC;color:var(--amber)}
@@ -183,6 +184,9 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
   <div class="row" style="margin:0 0 14px">
     <button class="btn" id="btnAssign">Assign codes to new products</button>
     <input type="text" id="search" placeholder="Search name or code" style="max-width:260px">
+    <select id="catFilter" style="max-width:200px" aria-label="Category"><option value="">All categories</option></select>
+    <button class="btn ghost" id="btnTickShown" title="Tick every product with a code in the list below">☑ Tick all shown</button>
+    <button class="btn ghost" id="btnUntickShown">☐ Untick shown</button>
     <span class="hint" id="countInfo"></span>
   </div>
   <div class="box" style="margin:0 0 14px">
@@ -768,7 +772,8 @@ async function setFbCodes(on){
 /* ============ PRODUCTS TABLE ============ */
 function renderProducts(){
   const q = $("search").value.trim().toLowerCase();
-  const rows = S.products.filter(p=>!q || p.name.toLowerCase().includes(q) || (S.codes[p.id]||"").includes(q));
+  fillCats();
+  const rows = shownProducts();
   const pillTxt = {in:"In stock",low:"Few left",out:"Out of stock"};
   $("prodBody").innerHTML = rows.length ? rows.map(p=>{
     const s = stockState(p), code = S.codes[p.id];
@@ -776,13 +781,32 @@ function renderProducts(){
     return `<tr>
       <td>${code?`<span class="code">${code}</span>`:'<span class="hint">none yet</span>'}</td>
       <td>${thumbHtml(p)}</td>
-      <td>${esc(p.name)}<div class="hint">${esc(p.id)}</div></td>
+      <td>${esc(p.name)}${p.category?` <span class="catPill">${esc(catLabel(p.category))}</span>`:""}<div class="hint">${esc(p.id)}</div></td>
       <td>${money(p.price)}</td><td>${sizeTxt||"—"}</td>
       <td><span class="pill ${s}">${pillTxt[s]} (${p.total})</span></td>
       <td><input type="checkbox" aria-label="Use ${esc(p.name)} in script" data-sel="${esc(p.id)}" ${S.selected.has(p.id)?"checked":""} ${code?"":"disabled"}></td>
     </tr>`; }).join("") : `<tr><td colspan="7" class="hint">No products match.</td></tr>`;
   if (!q) $("countInfo").textContent ||= `${S.products.length} products, ${Object.keys(S.codes).length} with codes.`;
   updateSelInfo();
+}
+/* categories: filter the list and tick a whole category at once */
+const catLabel = c => String(c||"").replace(/[-_]+/g," ").replace(/\b\w/g, m=>m.toUpperCase());
+function fillCats(){
+  const sel = $("catFilter"), cur = sel.value || LS.get("gkl_cat","");
+  const cats = [...new Set(S.products.map(p=>p.category).filter(Boolean))].sort((a,b)=>catLabel(a).localeCompare(catLabel(b)));
+  const html = `<option value="">All categories</option>` + cats.map(c=>`<option value="${esc(c)}">${esc(catLabel(c))} (${S.products.filter(p=>p.category===c).length})</option>`).join("")
+    + (S.products.some(p=>!p.category) ? `<option value="__none">No category</option>` : "");
+  if (sel.dataset.html !== html){ sel.innerHTML = html; sel.dataset.html = html; }
+  sel.value = [...sel.options].some(o=>o.value===cur) ? cur : "";
+}
+function shownProducts(){
+  const q = $("search").value.trim().toLowerCase(), cat = $("catFilter").value;
+  return S.products.filter(p=>(!q || p.name.toLowerCase().includes(q) || (S.codes[p.id]||"").includes(q))
+    && (!cat || (cat==="__none" ? !p.category : p.category===cat)));
+}
+function tickShown(on){
+  shownProducts().forEach(p=>{ if (!S.codes[p.id]) return; on ? S.selected.add(p.id) : S.selected.delete(p.id); });
+  saveSelected(); renderProducts();
 }
 function updateSelInfo(){ $("selInfo").textContent = `${S.selected.size} product(s) ticked`; }
 
@@ -1183,6 +1207,9 @@ $("btnAssign").onclick = assignCodes;
 $("btnFbShow").onclick = ()=>setFbCodes(true);
 $("btnFbHide").onclick = ()=>setFbCodes(false);
 $("search").oninput = renderProducts;
+$("catFilter").onchange = ()=>{ LS.set("gkl_cat", $("catFilter").value); renderProducts(); };
+$("btnTickShown").onclick = ()=>tickShown(true);
+$("btnUntickShown").onclick = ()=>tickShown(false);
 $("prodBody").addEventListener("change",e=>{ const id=e.target.dataset.sel; if(!id) return; e.target.checked?S.selected.add(id):S.selected.delete(id); saveSelected(); updateSelInfo(); });
 $("btnScript").onclick = genScript;
 $("btnCopyScript").onclick = copyScript;
