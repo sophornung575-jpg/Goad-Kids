@@ -407,6 +407,7 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
           <p class="hint" style="margin:4px 0 0">After changing the voice, press <b>Make all voices</b> again — saved clips keep the old voice.</p>
           <label for="vhGemStyle">How the voice should sound</label>
           <input type="text" id="vhGemStyle" value="Speak natural Khmer like a warm, cheerful, energetic Cambodian live-selling host talking to parents">
+          <label class="check"><input type="checkbox" id="vhGemNatural" checked> Keep my cloned voice natural — don't send the style above when a 🎙️ cloned voice is chosen, so every clip sounds like the real recording</label>
           <label for="vhGemModel">Gemini voice model</label><input type="text" id="vhGemModel" value="gemini-3.8-flash-tts">
 
           <div class="cloneBox">
@@ -1537,7 +1538,7 @@ const lang = ()=> $("vhLang").value;
 
 /* ---------- settings ---------- */
 const SET = ["vhCambModel","vhCambLang","vhCambRate","vhCambStyle","vhWriter","vhGemTextModel","vhModel","vhLang","vhLength","vhStyle","vhEngine","vhGemVoice","vhGemStyle","vhGemModel","vhAzRegion","vhAzVoice","vhAzRate","vhElModel","vhVol","vhMicVol"];
-const CHK = ["vhPhoto","vhMonitor","vhMicOn","vhDuck","vhRemember","vhAutoRemind"];
+const CHK = ["vhGemNatural","vhPhoto","vhMonitor","vhMicOn","vhDuck","vhRemember","vhAutoRemind"];
 const KEYS = ["vhClaudeKey","vhCambKey","vhGemKey","vhAzKey","vhElKey"];
 function saveSet(){
   const s = {}; SET.forEach(id=>s[id]=$(id).value); CHK.forEach(id=>s[id]=$(id).checked);
@@ -1600,7 +1601,7 @@ function hash(str){ let h1=0xdeadbeef,h2=0x41c6ce57;
 function clipKey(text){
   const en = $("vhEngine").value;
   const v = en==="camb" ? [$("vhCambVoice").value, $("vhCambModel").value, $("vhCambLang").value, $("vhCambRate").value, $("vhCambModel").value==="mars-instruct"?$("vhCambStyle").value:""]
-          : en==="gemini" ? [$("vhGemVoice").value, $("vhGemModel").value, $("vhGemStyle").value]
+          : en==="gemini" ? [$("vhGemVoice").value, $("vhGemModel").value, gemStyle()]
           : en==="azure"  ? [$("vhAzVoice").value, $("vhAzRate").value]
           : [$("vhElVoice").value, $("vhElModel").value];
   return hash([en, ...v, String(text).trim()].join("|"));
@@ -1680,9 +1681,10 @@ $("vhCambLoad").onclick = async ()=>{
     vmsg("vhVoiceMsg","ok",`Loaded ${list.length} voices${km.length?` (${km.length} Khmer)`:""}. Pick one, then press Test voice.`);
   }catch(e){ vmsg("vhVoiceMsg","err",e.message); }
 };
+function gemStyle(){ return $("vhGemNatural").checked && /^voice_/.test($("vhGemVoice").value) ? "" : $("vhGemStyle").value.trim(); }
 async function ttsGemini(text){
   const key = $("vhGemKey").value.trim(); if (!key) throw new Error("Add your Gemini API key in the settings (from aistudio.google.com).");
-  const style = $("vhGemStyle").value.trim();
+  const style = gemStyle();
   const part = { type:"text", text }; if (style) part.annotations = [{ type:"speech_metadata", style }];
   let r;
   try{ r = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", { method:"POST",
