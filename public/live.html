@@ -480,6 +480,22 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
         <input type="range" id="shMusicVol" min="0" max="60" value="15" style="width:100%">
       </div>
     </div>
+    <div class="grid2">
+      <div>
+        <label for="shCamMode">📷 Live camera on the screen</label>
+        <select id="shCamMode">
+          <option value="off">Off</option>
+          <option value="small">Small — camera in the photo corner</option>
+          <option value="big">Big — camera large, product photo in the corner</option>
+        </select>
+        <label class="check"><input type="checkbox" id="shCamMirror"> Mirror the camera (like a selfie)</label>
+      </div>
+      <div>
+        <label for="shCamDev">Which camera</label>
+        <div class="row" style="margin:0"><select id="shCamDev" style="max-width:240px"><option value="">Default camera</option></select><button class="btn ghost vh-sm" id="shCamFind">Find cameras</button></div>
+        <p class="hint" style="margin:4px 0 0">Camera picture only — no sound, so it won't pick up the shop.</p>
+      </div>
+    </div>
     <div id="shMsg"></div>
   </div>
 
@@ -1951,7 +1967,10 @@ function sendScreen(m){
   if (m.type==="product" || m.type==="line") lastScreen = m;
   try{ SHOW_BC && SHOW_BC.postMessage(m); }catch(e){}
 }
-if (SHOW_BC) SHOW_BC.onmessage = e=>{ if (e.data && e.data.type==="hello" && lastScreen) sendScreen(lastScreen); };
+if (SHOW_BC) SHOW_BC.onmessage = e=>{
+  if (e.data && e.data.type==="hello" && lastScreen) sendScreen(lastScreen);
+  if (e.data && e.data.type==="camError") vmsg("shMsg","err","Live camera: "+e.data.msg);
+};
 function screenProduct(p){
   if (!p) return null;
   const imgs = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
@@ -2016,6 +2035,30 @@ try{ const v = localStorage.getItem("gkl_show_music_vol"); if (v) $("shMusicVol"
 ["shGap","shOpening","shLoop"].forEach(id=>{ const k = "gkl_"+id, el = $(id);
   try{ const v = localStorage.getItem(k); if (v!==null){ if (el.type==="checkbox") el.checked = v==="1"; else el.value = v; } }catch(e){}
   el.addEventListener("change", ()=>{ try{ localStorage.setItem(k, el.type==="checkbox" ? (el.checked?"1":"0") : el.value); }catch(e){} }); });
+
+/* live camera: the live screen opens the camera itself; these settings tell it how */
+async function listCams(ask){
+  const sel = $("shCamDev"), saved = localStorage.getItem("gkl_cam_dev") || "";
+  try{
+    if (ask){ const st = await navigator.mediaDevices.getUserMedia({ video:true, audio:false }); st.getTracks().forEach(t=>t.stop()); }
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==="videoinput");
+    sel.innerHTML = `<option value="">Default camera</option>` + cams.map((d,i)=>`<option value="${d.deviceId}">${(d.label||("Camera "+(i+1))).replace(/[<>&"]/g,"")}</option>`).join("");
+    if (saved && cams.some(d=>d.deviceId===saved)) sel.value = saved;
+    if (ask) vmsg("shMsg","ok", cams.length ? `Found ${cams.length} camera${cams.length>1?"s":""}.` : "No camera found. Plug it in, then press Find cameras again.");
+  }catch(err){ if (ask) vmsg("shMsg","err","Couldn't open the camera: "+(err.name==="NotAllowedError" ? "allow the camera for this site (lock icon next to the address)." : (err.message||err.name))); }
+}
+function saveCam(){
+  try{
+    localStorage.setItem("gkl_cam_mode", $("shCamMode").value);
+    localStorage.setItem("gkl_cam_dev", $("shCamDev").value);
+    localStorage.setItem("gkl_cam_mirror", $("shCamMirror").checked ? "1" : "0");
+  }catch(e){}
+  sendScreen({ type:"cam" });
+}
+try{ $("shCamMode").value = localStorage.getItem("gkl_cam_mode") || "off"; $("shCamMirror").checked = localStorage.getItem("gkl_cam_mirror")==="1"; }catch(e){}
+["shCamMode","shCamDev","shCamMirror"].forEach(id=>$(id).addEventListener("change", saveCam));
+$("shCamFind").onclick = ()=>listCams(true);
+if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) listCams(false);
 
 /* the auto show loop */
 const SHOW = { on:false, run:0, list:[] };
