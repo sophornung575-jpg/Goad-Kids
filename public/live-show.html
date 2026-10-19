@@ -24,6 +24,36 @@ body.hide-cursor{cursor:none}
    is sized in cqw (1cqw = 1% of the stage width) so it scales with the window. */
 .stage{position:relative;width:min(100vw, calc(100vh * 9 / 16));aspect-ratio:9/16;overflow:hidden;container-type:inline-size;background:var(--ink)}
 
+/* WIDE (16:9) — used automatically when the window is wider than tall, e.g. for
+   Facebook Live Producer on a computer, which sends a landscape video. The big product
+   photo (and camera) go on the left; the tall info column stays on the right. */
+.frame{display:flex;align-items:stretch;justify-content:center}
+.left{display:none}
+body.wide .frame{width:min(100vw, calc(100vh * 16 / 9));aspect-ratio:16/9;overflow:hidden}
+body.wide .left{display:block;position:relative;flex:1;min-width:0;container-type:inline-size;overflow:hidden}
+body.wide .left .bg{position:absolute;inset:0;background:radial-gradient(120% 90% at 30% 0%, #FFB27A 0%, var(--orange) 45%, var(--orange-dk) 100%)}
+body.wide .stage{width:auto;height:100%;flex:none}
+body.wide .left .photoWrap{position:absolute;left:3cqw;right:2cqw;top:3cqw;bottom:3cqw}
+body.wide .left .code{left:1.2cqw;top:1.2cqw;padding:.8cqw 2cqw;border-radius:2cqw}
+body.wide .left .code small{font-size:1.4cqw}
+body.wide .left .code b{font-size:5.5cqw}
+body.wide .left .promo{right:1cqw;top:2cqw;font-size:3cqw;padding:.8cqw 1.8cqw;border-radius:1.8cqw}
+body.wide .left .photo{border-radius:3cqw}
+body.wide .left .next{font-size:1.6cqw;padding:.5cqw 1.4cqw .5cqw .5cqw;right:1.4cqw;bottom:1.4cqw;max-width:40cqw}
+body.wide .left .next img{width:4cqw;height:4cqw}
+body.wide.cam-small .left .cam{left:1.4cqw;bottom:1.4cqw;width:24cqw;height:30cqw;border-radius:2.4cqw}
+body.wide.cam-big .left .photo{right:1.4cqw;bottom:1.4cqw;width:24cqw;height:30cqw;border-radius:2.4cqw}
+body.wide.cam-small .left .next, body.wide.cam-big .left .next{max-width:30cqw}
+body.wide .main{justify-content:center}
+body.wide .info{padding:4cqw 5cqw}
+body.wide .name{font-size:6cqw;-webkit-line-clamp:3}
+body.wide .price{font-size:13cqw}
+body.wide .was{font-size:6cqw}
+body.wide .few{font-size:3.4cqw;white-space:nowrap}
+body.wide .sizes .lbl{font-size:4.6cqw}
+body.wide .sizes span.s{font-size:5cqw;padding:.6cqw 2.6cqw}
+body.wide.mode-line .left .photoWrap, body.wide.mode-line .left .code, body.wide.mode-line .left .promo{visibility:hidden}
+
 /* background: shop photo if set, otherwise the product photo blurred over brand colours */
 .bg{position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 0%, #FFB27A 0%, var(--orange) 45%, var(--orange-dk) 100%)}
 .bg img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .8s}
@@ -106,6 +136,8 @@ body.connected .help{display:none}
 </style>
 </head>
 <body class="mode-line">
+<div class="frame" id="frame">
+<div class="left" id="left"><div class="bg"></div></div>
 <div class="stage" id="stage">
   <div class="bg"><img class="blur" id="bgProduct" alt=""><img id="bgShop" alt=""></div>
 
@@ -146,6 +178,8 @@ body.connected .help{display:none}
     <p id="lineText">ចាំមើលទំនិញស្អាតៗ ជាមួយយើងណាបង</p>
   </div>
 </div>
+
+</div><!-- frame -->
 
 <div class="help" id="help">Waiting for the <b>Live Desk</b> → Voice host → <b>Start auto show</b>. Press <b>F</b> (or double-click) for full screen.</div>
 
@@ -266,6 +300,18 @@ body.connected .help{display:none}
   // the shop photo can also change from another tab without a message
   window.addEventListener("storage", e=>{ if (e.key==="gkl_show_bg") setShopBg(e.newValue); if (e.key && e.key.startsWith("gkl_cam_")) applyCam(); });
   applyCam();
+
+  /* ---------- wide or tall: follows the window shape ---------- */
+  const homes = ["code","promo"].map(id=>[$(id), $(id).parentNode, $(id).nextSibling]);
+  const pw = document.querySelector(".photoWrap"), pwHome = pw.parentNode;
+  function layout(){
+    const wide = innerWidth > innerHeight * 1.05;
+    if (wide === document.body.classList.contains("wide")) return;
+    document.body.classList.toggle("wide", wide);
+    if (wide){ const L = $("left"); L.appendChild(pw); homes.forEach(([el])=>L.appendChild(el)); }
+    else { pwHome.insertBefore(pw, pwHome.firstChild); [...homes].reverse().forEach(([el, par, nx])=>par.insertBefore(el, nx)); }
+  }
+  addEventListener("resize", layout); layout();
 
   /* ---------- full screen + hide the mouse ---------- */
   function fs(){ if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{}); else document.exitFullscreen(); }
