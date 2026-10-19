@@ -1510,8 +1510,11 @@ $("discPreview").textContent = disclosureFor($("lang").value);
 .vh-top .num{font-size:.75rem;background:var(--ink);color:#fff;border-radius:5px;padding:1px 7px}
 .vh-top .nm{font-weight:600;line-height:1.25}
 .vh-card textarea{min-height:120px;font-size:.95rem}
-.vh-cardbtns{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.vh-cardbtns .btn{width:100%;padding:8px 6px;white-space:nowrap;text-align:center}
+.vh-cardbtns{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.vh-cardbtns .btn{width:100%;padding:8px 2px;white-space:nowrap;text-align:center;font-size:.84rem}
+.vh-cardbtns .btn.rec-on{background:var(--live,#E5303B);color:#fff;border-color:transparent}
+.vh-own{display:none;font-size:.82rem;margin-top:4px;color:var(--teal)}
+.vh-card.has-own .vh-own{display:block}
 .vh-undo{display:none;font-size:.82rem;margin-top:4px}
 .vh-card.has-prev .vh-undo{display:block}
 .vh-cardst{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px}
@@ -1700,6 +1703,34 @@ async function ttsGemini(text){
   if (/l16|pcm/i.test(mt)){ const m = mt.match(/rate=(\d+)/); return pcmToWav(bytes, m?Number(m[1]):24000); }
   return new Blob([bytes], { type: /wav/.test(mt) ? "audio/wav" : mt });
 }
+/* own recordings: a person records the product pitch; it is used instead of the AI voice */
+const ownKey = p => "own|" + p.id;
+const ownGet = p => cacheGet(ownKey(p));
+const REC = { mr:null, p:null };
+async function recProduct(p){
+  const c = cardOf(p), btn = c.querySelector('[data-act="rec"]'), st = c.querySelector("[data-st]");
+  if (REC.mr){ const same = REC.p===p; REC.mr.stop(); if (same) return; }
+  const dev = $("vhMic").value;
+  let stream; try{ stream = await navigator.mediaDevices.getUserMedia({ audio: dev ? { deviceId:{ exact:dev } } : true }); }
+  catch(e){ return vmsg("vhMsg","err","Couldn't open the microphone. Allow the microphone for this site (lock icon next to the address)."); }
+  const chunks = [], mr = new MediaRecorder(stream); REC.mr = mr; REC.p = p;
+  mr.ondataavailable = e=>{ if (e.data.size) chunks.push(e.data); };
+  mr.onstop = async ()=>{
+    stream.getTracks().forEach(t=>t.stop()); REC.mr = REC.p = null;
+    btn.textContent = "🎙️ Rec"; btn.classList.remove("rec-on");
+    const blob = new Blob(chunks, { type: mr.mimeType });
+    if (blob.size < 2000){ setSt(st,"err","recording too short"); return; }
+    await cachePut(ownKey(p), blob); cardStatus(p);
+    vmsg("vhMsg","ok",`Saved your recording for ${S.codes[p.id]}. Press ▶ Play to hear it. The auto show will use it.`);
+  };
+  mr.start(); btn.textContent = "■ Stop"; btn.classList.add("rec-on"); setSt(st,"busy","recording… press ■ Stop when done");
+}
+async function unrecProduct(p){
+  if (!confirm("Remove your recording for "+S.codes[p.id]+"? The AI voice will be used again.")) return;
+  const d = await db(); if (d) await new Promise(res=>{ try{ const t = d.transaction("clips","readwrite"); t.objectStore("clips").delete(ownKey(p)); t.oncomplete = t.onerror = ()=>res(); }catch(e){ res(); } });
+  cardStatus(p);
+}
+
 /* redo one voice: make a new take of the same script; Undo swaps back to the previous take */
 async function redoVoice(text, st){
   setSt(st,"busy","making a new take…"); await voiceBlob(text, true); setSt(st,"ok","new take ready — ▶ to hear it");
@@ -2080,7 +2111,9 @@ function renderVoice(){
       <button class="btn ghost vh-sm" data-act="write">✍️ Write</button>
       <button class="btn ghost vh-sm" data-act="voice">🗣️ Voice</button>
       <button class="btn ghost vh-sm" data-act="redo" title="Voice sounds wrong? Make a new take of the same script">🔁 Redo</button>
+      <button class="btn ghost vh-sm" data-act="rec" title="Record your own voice for this product — it is used instead of the AI voice">🎙️ Rec</button>
     </div>
+    <div class="vh-own">🎙️ Your own recording is used for this product (instead of the AI voice). <a href="#" data-act="unrec">Remove it</a></div>
     <div class="vh-undo"><a href="#" data-act="undo">↩ bring back the previous take</a></div>
     <div class="vh-cardst"><span class="vh-st" data-st>—</span><span class="hint" data-len>${scriptOf(p).length} chars</span></div></div>`; }).join("");
   list.forEach(p=>cardStatus(p));
@@ -2088,6 +2121,8 @@ function renderVoice(){
 const cardOf = p => document.querySelector(`.vh-card[data-pid="${CSS.escape(p.id)}"]`);
 async function cardStatus(p){
   const c = cardOf(p); if (!c) return; const st = c.querySelector("[data-st]"), t = scriptOf(p);
+  const own = await ownGet(p); c.classList.toggle("has-own", !!own);
+  if (own) return setSt(st,"ok","your recording ready");
   if (!t.trim()) return setSt(st,"","no script");
   const hit = await cacheGet(clipKey(t)); setSt(st, hit?"ok":"", hit?"voice ready":"voice not made");
   c.classList.toggle("has-prev", !!(hit && await cacheGet(clipKey(t)+"|prev")));
@@ -2110,8 +2145,9 @@ async function playProduct(p){
   const c = cardOf(p), st = c && c.querySelector("[data-st]");
   showOnScreen(p);
   try{
-    setSt(st,"busy","making voice…");
-    const r = await voiceBlob(scriptOf(p)); setSt(st,"ok","voice ready");
+    const own = await ownGet(p);
+    if (!own) setSt(st,"busy","making voice…");
+    const r = own ? { blob:own } : await voiceBlob(scriptOf(p)); setSt(st,"ok", own ? "your recording ready" : "voice ready");
     const q = [], every = Number($("repeatEvery").value)||5;
     if ($("vhAutoRemind").checked && VH.played>0 && VH.played % every===0){
       const rl = LINES.find(l=>l.key==="remind"); if (rl){ const rr = await voiceBlob(lineText(rl)); q.push({ blob:rr.blob, label:"AI reminder" }); }
@@ -2125,7 +2161,7 @@ $("vhProducts").addEventListener("input", e=>{ const id = e.target.dataset.scrip
   const p = S.products.find(x=>x.id===id); setScript(p, e.target.value);
   e.target.closest(".vh-card").querySelector("[data-len]").textContent = e.target.value.length+" chars"; cardStatus(p); });
 $("vhProducts").addEventListener("click", async e=>{
-  const act = e.target.dataset.act; if (!act) return; if (act==="undo") e.preventDefault();
+  const act = e.target.dataset.act; if (!act) return; if (act==="undo" || act==="unrec") e.preventDefault();
   const p = S.products.find(x=>x.id===e.target.closest(".vh-card").dataset.pid); if (!p) return;
   const st = cardOf(p).querySelector("[data-st]");
   if (act==="play") return playProduct(p);
@@ -2134,6 +2170,8 @@ $("vhProducts").addEventListener("click", async e=>{
     if (act==="voice"){ setSt(st,"busy","making voice…"); await voiceBlob(scriptOf(p)); setSt(st,"ok","voice ready"); }
     if (act==="redo"){ await redoVoice(scriptOf(p), st); cardOf(p).classList.add("has-prev"); }
     if (act==="undo"){ e.preventDefault(); await undoVoice(scriptOf(p), st); }
+    if (act==="rec") await recProduct(p);
+    if (act==="unrec") await unrecProduct(p);
   }catch(err){ setSt(st,"err","error"); vmsg("vhMsg","err",err.message); }
 });
 $("vhWriteAll").onclick = async ()=>{
@@ -2151,7 +2189,8 @@ $("vhWriteAll").onclick = async ()=>{
   finally{ $("vhWriteAll").disabled = false; }
 };
 $("vhVoiceAll").onclick = async ()=>{
-  const texts = [...items().map(scriptOf), ...LINES.map(lineText)].filter(t=>t.trim());
+  const mine = []; for (const p of items()) if (!(await ownGet(p))) mine.push(p);
+  const texts = [...mine.map(scriptOf), ...LINES.map(lineText)].filter(t=>t.trim());
   if (!texts.length) return vmsg("vhMsg","warn","No scripts yet. Write them first.");
   $("vhVoiceAll").disabled = true; let made = 0, reused = 0, chars = 0;
   try{ for (let i=0;i<texts.length;i++){ vmsg("vhMsg","warn",`Making voices… ${i}/${texts.length}`);
@@ -2272,7 +2311,7 @@ async function startShow(){
   if (SHOW.on) return;
   const all = items();
   if (!all.length) return vmsg("shMsg","warn","Tick products on the Products & codes tab first (they need a code).");
-  const okList = []; for (const p of all) if (await ready(scriptOf(p))) okList.push(p);
+  const okList = []; for (const p of all) if ((await ownGet(p)) || await ready(scriptOf(p))) okList.push(p);
   if (!okList.length) return vmsg("shMsg","err","No product has a voice yet. Press ✍️ Write all scripts, then 🗣️ Make all voices, then start again.");
   const skipped = all.length - okList.length;
   vmsg("shMsg", skipped ? "warn" : "ok", skipped ? `Starting with ${okList.length} products. ${skipped} skipped because their voice isn't made yet.` : `Auto show running with ${okList.length} products. Press ■ Stop show (or Space) to stop.`);
