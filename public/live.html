@@ -639,10 +639,15 @@ function mergeStores(perStore){ // perStore: [{label, docs:[{path, data}]}]
   const inc = $("incInactive").checked, map = new Map();
   perStore.forEach(({label, docs})=>docs.forEach(({path,data})=>{
     if (!inc && data.active===false) return;
-    const key = String(data.id || path.split("/").pop());
-    const n = normalize(key, data);
+    // Each store keeps its own copy of a product with its own ID, so match the
+    // copies the same way the store app's transfers do: by slug, i.e. the name.
+    const docId = String(data.id || path.split("/").pop());
+    const n = normalize(docId, data);
+    let key = "s:" + String(data.slug || String(n.name||"").trim().toLowerCase().replace(/\s+/g,"_"));
+    if (map.has(key) && map.get(key).refs[label]) key = "id:" + docId;   // two products with the same name in one store: keep apart
     let p = map.get(key);
-    if (!p){ p = { id:key, name:n.name, price:n.price, category:data.category||"", image:firstImage(data), images:[], stores:{}, refs:{} }; map.set(key,p); }
+    if (!p){ p = { id:docId, ids:[], name:n.name, price:n.price, category:data.category||"", image:firstImage(data), images:[], stores:{}, refs:{} }; map.set(key,p); }
+    p.ids.push(docId);
     if (!p.image) p.image = firstImage(data);
     // extra fields for the show screen: every photo, and a real promo price if one is set
     (Array.isArray(data.images) ? data.images : []).forEach(u=>{ const x = typeof u==="string" ? u : (u && (u.url||u.src)); if (x && !p.images.includes(x)) p.images.push(x); });
@@ -670,6 +675,12 @@ async function loadProducts(){
   S.products = mergeStores(perStore);
   const cs = await S.db.collection("live_codes").get();
   S.codes = {}; cs.docs.forEach(d=>{ const x=d.data(); if(x.code) S.codes[d.id]=String(x.code); });
+  // a merged product uses whichever store copy's ID already has a code (so codes, scripts and voices still match)
+  S.products.forEach(p=>{
+    const had = (p.ids||[]).find(id=>S.codes[id]);
+    if (had && !S.codes[p.id]) p.id = had;
+    if ((p.ids||[]).some(id=>S.selected.has(id))){ (p.ids||[]).forEach(id=>S.selected.delete(id)); S.selected.add(p.id); }
+  });
   // forget ticks for products that were deleted
   const ids = new Set(S.products.map(p=>p.id)); let gone = false;
   [...S.selected].forEach(id=>{ if (!ids.has(id)){ S.selected.delete(id); gone = true; } }); if (gone) saveSelected();
