@@ -1958,7 +1958,7 @@ function stop(){
   if (A.ctx) duck(false); $("vhNow").textContent = "Ready";
 }
 async function playQueue(items, card){ // items: [{blob,label}]
-  audio(); stop(); const my = playToken;
+  audio(); stop(); claimVoice(); const my = playToken;
   card && card.classList.add("playing"); duck(true); musicDuck(true);
   for (const it of items){
     if (my!==playToken) return;
@@ -2210,7 +2210,15 @@ function sendScreen(m){
   if (m.type==="product" || m.type==="line") lastScreen = m;
   try{ SHOW_BC && SHOW_BC.postMessage(m); }catch(e){}
 }
+/* only one Live Desk may talk at a time: when this window starts playing, any other
+   open Live Desk window (an old tab still running its show) stops itself */
+const DESK_ID = Math.random().toString(36).slice(2);
+function claimVoice(){ try{ SHOW_BC && SHOW_BC.postMessage({ type:"deskPlay", from:DESK_ID }); }catch(e){} }
 if (SHOW_BC) SHOW_BC.onmessage = e=>{
+  if (e.data && e.data.type==="deskPlay" && e.data.from!==DESK_ID && (SHOW.on || A.current)){
+    stopShow(); vmsg("shMsg","warn","Stopped here because another Live Desk window started playing. Use only one Live Desk window — close the others.");
+    vmsg("vhMsg","warn","Stopped here because another Live Desk window started playing. Close the other Live Desk tabs.");
+  }
   if (e.data && e.data.type==="hello" && lastScreen) sendScreen(lastScreen);
   if (e.data && e.data.type==="camError") vmsg("shMsg","err","Live camera: "+e.data.msg);
 };
