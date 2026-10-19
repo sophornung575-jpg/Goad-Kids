@@ -1510,8 +1510,10 @@ $("discPreview").textContent = disclosureFor($("lang").value);
 .vh-top .num{font-size:.75rem;background:var(--ink);color:#fff;border-radius:5px;padding:1px 7px}
 .vh-top .nm{font-weight:600;line-height:1.25}
 .vh-card textarea{min-height:120px;font-size:.95rem}
-.vh-cardbtns{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.vh-cardbtns{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .vh-cardbtns .btn{width:100%;padding:8px 6px;white-space:nowrap;text-align:center}
+.vh-undo{display:none;font-size:.82rem;margin-top:4px}
+.vh-card.has-prev .vh-undo{display:block}
 .vh-cardst{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px}
 .vh-st{font-size:.8rem;padding:2px 9px;border-radius:999px;background:#EEF1EF;color:var(--muted)}
 .vh-st.ok{background:var(--teal-soft);color:var(--teal)}
@@ -1698,6 +1700,17 @@ async function ttsGemini(text){
   if (/l16|pcm/i.test(mt)){ const m = mt.match(/rate=(\d+)/); return pcmToWav(bytes, m?Number(m[1]):24000); }
   return new Blob([bytes], { type: /wav/.test(mt) ? "audio/wav" : mt });
 }
+/* redo one voice: make a new take of the same script; Undo swaps back to the previous take */
+async function redoVoice(text, st){
+  setSt(st,"busy","making a new take…"); await voiceBlob(text, true); setSt(st,"ok","new take ready — ▶ to hear it");
+}
+async function undoVoice(text, st){
+  const k = clipKey(String(text||"").trim()), old = await cacheGet(k+"|prev");
+  if (!old){ vmsg("vhMsg","warn","There is no earlier take to go back to."); return; }
+  const cur = await cacheGet(k); await cachePut(k, old); if (cur) await cachePut(k+"|prev", cur);
+  setSt(st,"ok","previous take back");
+}
+
 /* ---------- voice cloning (Gemini voice replication) ---------- */
 const GV = "https://generativelanguage.googleapis.com/v1beta/";
 const CL = { sample:null, consent:null, rec:null };
@@ -1815,10 +1828,11 @@ async function ttsEleven(text){
   if (!r.ok) throw new Error("ElevenLabs error "+r.status+": "+(await r.text()).slice(0,200));
   return r.blob();
 }
-async function voiceBlob(text){
+async function voiceBlob(text, fresh){
   text = String(text||"").trim(); if (!text) throw new Error("The script is empty.");
   const k = clipKey(text), hit = await cacheGet(k);
-  if (hit) return { blob:hit, cached:true };
+  if (hit && !fresh) return { blob:hit, cached:true };
+  if (hit) await cachePut(k+"|prev", hit);   // keep the old take for "Undo"
   const en = $("vhEngine").value;
   const blob = en==="camb" ? await ttsCamb(text) : en==="gemini" ? await ttsGemini(text) : en==="azure" ? await ttsAzure(text) : await ttsEleven(text);
   await cachePut(k, blob);
@@ -1956,7 +1970,7 @@ function renderLines(){
   $("vhLines").innerHTML = LINES.map((l,i)=>`<div class="vh-line" data-i="${i}">
     <div class="lbl">${esc(l.label)}${required(l)?' <span class="hint">🔒 AI label</span>':""}</div>
     <textarea data-line="${i}">${esc(l.text)}</textarea>
-    <div class="row" style="margin:0"><button class="btn vh-play vh-sm" data-lplay="${i}">▶ ${LINE_KEYS[i].toUpperCase()}</button><span class="vh-st" data-lst="${i}">—</span></div></div>`).join("");
+    <div class="row" style="margin:0"><button class="btn vh-play vh-sm" data-lplay="${i}">▶ ${LINE_KEYS[i].toUpperCase()}</button><button class="btn ghost vh-sm" data-lredo="${i}" title="Make a new take of this line">🔁 Redo</button><span class="vh-st" data-lst="${i}">—</span></div></div>`).join("");
   LINES.forEach((l,i)=>lineStatus(i));
 }
 async function lineStatus(i){ const el = document.querySelector(`[data-lst="${i}"]`), t = lineText(LINES[i]);
@@ -1970,7 +1984,9 @@ async function playLine(i){ const l = LINES[i], st = document.querySelector(`[da
     if (l.key==="open") VH.played = 0;
     await playQueue([{ blob:r.blob, label:l.label }]); }
   catch(e){ setSt(st,"err","error"); vmsg("vhMsg","err",e.message); } }
-$("vhLines").addEventListener("click", e=>{ const i = e.target.dataset.lplay; if (i!==undefined) playLine(+i); });
+$("vhLines").addEventListener("click", async e=>{ const i = e.target.dataset.lplay; if (i!==undefined) playLine(+i);
+  const j = e.target.dataset.lredo; if (j!==undefined){ const st = document.querySelector(`[data-lst="${j}"]`);
+    try{ await redoVoice(lineText(LINES[+j]), st); }catch(err){ setSt(st,"err","error"); vmsg("vhMsg","err",err.message); } } });
 
 /* ---------- Claude script writer ---------- */
 const LEN = { short:"about 35-50 words (around 15 seconds spoken)", medium:"about 70-90 words (around 30 seconds spoken)", long:"about 110-130 words (around 45 seconds spoken)" };
@@ -2063,7 +2079,9 @@ function renderVoice(){
       <button class="btn vh-play vh-sm" data-act="play">▶ Play</button>
       <button class="btn ghost vh-sm" data-act="write">✍️ Write</button>
       <button class="btn ghost vh-sm" data-act="voice">🗣️ Voice</button>
+      <button class="btn ghost vh-sm" data-act="redo" title="Voice sounds wrong? Make a new take of the same script">🔁 Redo</button>
     </div>
+    <div class="vh-undo"><a href="#" data-act="undo">↩ bring back the previous take</a></div>
     <div class="vh-cardst"><span class="vh-st" data-st>—</span><span class="hint" data-len>${scriptOf(p).length} chars</span></div></div>`; }).join("");
   list.forEach(p=>cardStatus(p));
 }
@@ -2072,6 +2090,7 @@ async function cardStatus(p){
   const c = cardOf(p); if (!c) return; const st = c.querySelector("[data-st]"), t = scriptOf(p);
   if (!t.trim()) return setSt(st,"","no script");
   const hit = await cacheGet(clipKey(t)); setSt(st, hit?"ok":"", hit?"voice ready":"voice not made");
+  c.classList.toggle("has-prev", !!(hit && await cacheGet(clipKey(t)+"|prev")));
 }
 async function writeOne(p, ask){
   const c = cardOf(p), st = c && c.querySelector("[data-st]");
@@ -2106,13 +2125,15 @@ $("vhProducts").addEventListener("input", e=>{ const id = e.target.dataset.scrip
   const p = S.products.find(x=>x.id===id); setScript(p, e.target.value);
   e.target.closest(".vh-card").querySelector("[data-len]").textContent = e.target.value.length+" chars"; cardStatus(p); });
 $("vhProducts").addEventListener("click", async e=>{
-  const act = e.target.dataset.act; if (!act) return;
+  const act = e.target.dataset.act; if (!act) return; if (act==="undo") e.preventDefault();
   const p = S.products.find(x=>x.id===e.target.closest(".vh-card").dataset.pid); if (!p) return;
   const st = cardOf(p).querySelector("[data-st]");
   if (act==="play") return playProduct(p);
   try{
     if (act==="write"){ await writeOne(p, true); vmsg("vhMsg","",""); }
     if (act==="voice"){ setSt(st,"busy","making voice…"); await voiceBlob(scriptOf(p)); setSt(st,"ok","voice ready"); }
+    if (act==="redo"){ await redoVoice(scriptOf(p), st); cardOf(p).classList.add("has-prev"); }
+    if (act==="undo"){ e.preventDefault(); await undoVoice(scriptOf(p), st); }
   }catch(err){ setSt(st,"err","error"); vmsg("vhMsg","err",err.message); }
 });
 $("vhWriteAll").onclick = async ()=>{
