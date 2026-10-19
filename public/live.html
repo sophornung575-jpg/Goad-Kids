@@ -527,6 +527,9 @@ const S = { db:null, mode:null, products:[], codes:{}, selected:new Set(), rot:{
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const LS = { get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}} };
+/* ticked products are remembered in this browser, so they come back after a reload */
+{ const t = LS.get("gkl_selected", []); if (Array.isArray(t)) t.forEach(id=>S.selected.add(String(id))); }
+function saveSelected(){ LS.set("gkl_selected", [...S.selected]); }
 
 /* ============ PERMANENT AI DISCLOSURE ============
    These lines are added by code, not by the user.
@@ -667,6 +670,9 @@ async function loadProducts(){
   S.products = mergeStores(perStore);
   const cs = await S.db.collection("live_codes").get();
   S.codes = {}; cs.docs.forEach(d=>{ const x=d.data(); if(x.code) S.codes[d.id]=String(x.code); });
+  // forget ticks for products that were deleted
+  const ids = new Set(S.products.map(p=>p.id)); let gone = false;
+  [...S.selected].forEach(id=>{ if (!ids.has(id)){ S.selected.delete(id); gone = true; } }); if (gone) saveSelected();
   const st = cs.docs.find(d=>d.id==="_settings"); showFbState(st ? st.data() : null);
   setStatus(`Connected: <b>${esc(stores.map(x=>x.label).join(" + "))}</b> · ${S.products.length} products`);
   renderProducts();
@@ -1166,7 +1172,7 @@ $("btnAssign").onclick = assignCodes;
 $("btnFbShow").onclick = ()=>setFbCodes(true);
 $("btnFbHide").onclick = ()=>setFbCodes(false);
 $("search").oninput = renderProducts;
-$("prodBody").addEventListener("change",e=>{ const id=e.target.dataset.sel; if(!id) return; e.target.checked?S.selected.add(id):S.selected.delete(id); updateSelInfo(); });
+$("prodBody").addEventListener("change",e=>{ const id=e.target.dataset.sel; if(!id) return; e.target.checked?S.selected.add(id):S.selected.delete(id); saveSelected(); updateSelInfo(); });
 $("btnScript").onclick = genScript;
 $("btnCopyScript").onclick = copyScript;
 $("btnPaste").onclick = pasteComments;
