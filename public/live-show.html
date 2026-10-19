@@ -1,279 +1,2373 @@
-<!doctype html>
-<html lang="km">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Goat Kids Live Screen</title>
-<meta name="robots" content="noindex">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Goat Kids Live Desk</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Noto+Sans+Khmer:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
-/* Goat Kids — vertical (9:16) screen for Facebook Live screen-share.
-   It is driven by the Live Desk (live.html → Voice host) in the same browser. */
 :root{
-  --orange:#F07A2B; --orange-dk:#C9551A; --ink:#2B1B12; --cream:#FFF6EE;
-  --live:#E5303B; --ok:#1F9D63; --card:rgba(255,255,255,.94);
+  --paper:#EEF3F0; --panel:#FFFFFF; --ink:#1D2833; --muted:#5E6B76; --line:#D4DDD8;
+  --teal:#0F6E6A; --teal-soft:#DCEFEC; --live:#D9223A; --live-soft:#FDE7EA; --amber:#B86E00;
+  --font:"Bricolage Grotesque","Noto Sans Khmer",system-ui,-apple-system,"Segoe UI",sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:#000;overflow:hidden}
-body{font-family:"Kantumruy Pro","Noto Sans Khmer",system-ui,sans-serif;color:var(--ink);display:flex;align-items:center;justify-content:center}
-body.hide-cursor{cursor:none}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
 
-/* The stage is always 9:16 and as big as the window allows. Everything inside
-   is sized in cqw (1cqw = 1% of the stage width) so it scales with the window. */
-.stage{position:relative;width:min(100vw, calc(100vh * 9 / 16));aspect-ratio:9/16;overflow:hidden;container-type:inline-size;background:var(--ink)}
-
-/* background: shop photo if set, otherwise the product photo blurred over brand colours */
-.bg{position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 0%, #FFB27A 0%, var(--orange) 45%, var(--orange-dk) 100%)}
-.bg img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .8s}
-.bg img.on{opacity:1}
-.bg .blur{filter:blur(4cqw) saturate(1.2);transform:scale(1.2)}
-.bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(43,27,18,.35) 0%,rgba(43,27,18,.05) 30%,rgba(43,27,18,.15) 60%,rgba(43,27,18,.65) 100%)}
-
-/* top bar */
-.top{position:absolute;left:4cqw;right:4cqw;top:3.5cqw;display:flex;align-items:center;gap:2.5cqw;z-index:3}
-.logo{width:13cqw;height:13cqw;border-radius:50%;background:#fff center/cover no-repeat;box-shadow:0 1cqw 3cqw rgba(0,0,0,.25);border:.6cqw solid #fff}
-.brand{color:#fff;font-weight:700;font-size:5.2cqw;white-space:nowrap;letter-spacing:.05em;text-shadow:0 .4cqw 1.5cqw rgba(0,0,0,.35);line-height:1}
-.brand small{display:block;font-weight:400;font-size:2.8cqw;letter-spacing:0;opacity:.95;margin-top:1cqw}
-.live{margin-left:auto;display:flex;align-items:center;gap:1.4cqw;background:var(--live);color:#fff;font-weight:700;font-size:3.4cqw;padding:1.2cqw 2.6cqw;border-radius:99cqw}
-.live i{width:2cqw;height:2cqw;border-radius:50%;background:#fff;animation:pulse 1.2s infinite}
+header.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding:18px 24px;border-bottom:1px solid var(--line);background:var(--panel)}
+.brand{font-size:1.5rem;font-weight:800;letter-spacing:-.02em;margin:0}
+.onair{display:inline-flex;align-items:center;gap:8px;background:var(--live);color:#fff;font-weight:600;font-size:.85rem;padding:5px 12px 5px 10px;border-radius:999px}
+.onair::before{content:"";width:9px;height:9px;border-radius:50%;background:#fff;animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.25}}
-.ai{background:rgba(43,27,18,.55);white-space:nowrap;color:#fff;font-size:2.7cqw;padding:.9cqw 2.2cqw;border-radius:99cqw;backdrop-filter:blur(2cqw)}
+@media (prefers-reduced-motion:reduce){.onair::before{animation:none}}
+.status{margin-left:auto;font-size:.9rem;color:var(--muted)}
+.status b{color:var(--ink)}
 
-/* product photo + info: one column between the top bar and the order bar.
-   The photo takes all the height the info card doesn't need. */
-.main{position:absolute;left:3cqw;right:3cqw;top:18.5cqw;bottom:21cqw;display:flex;flex-direction:column;gap:2cqw;z-index:2}
-.photoWrap{position:relative;flex:1;min-height:0}
-.photo{position:absolute;inset:0;border-radius:5cqw;background:#fff;box-shadow:0 3cqw 8cqw rgba(0,0,0,.35);overflow:hidden;z-index:2}
-.photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff;opacity:0;transition:opacity .7s}
-.photo img.on{opacity:1}
-.code{position:absolute;left:2cqw;top:16cqw;z-index:4;background:var(--ink);color:#fff;border-radius:3.5cqw;padding:1.2cqw 3cqw;box-shadow:0 1.5cqw 4cqw rgba(0,0,0,.35);transform:rotate(-3deg)}
-.code small{display:block;font-size:2.4cqw;opacity:.85;line-height:1.2}
-.code b{display:block;font-size:8.5cqw;line-height:1;letter-spacing:.06em;color:#FFC59A}
-.promo{position:absolute;right:2cqw;top:21cqw;z-index:4;background:var(--live);color:#fff;font-weight:700;font-size:5cqw;padding:1.4cqw 3cqw;border-radius:3cqw;transform:rotate(4deg);display:none}
-.progress{position:absolute;left:0;bottom:0;height:1.4cqw;width:0;background:var(--orange);z-index:3}
+nav.tabs{display:flex;gap:4px;padding:0 24px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto}
+nav.tabs button{border:0;background:none;padding:12px 14px;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap;font-weight:600}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--teal)}
 
-/* live camera (webcam). Small = box in the photo corner. Big = camera fills the photo area, product photo goes to the corner. */
-.cam{position:absolute;z-index:3;overflow:hidden;background:#111;display:none;box-shadow:0 2cqw 6cqw rgba(0,0,0,.4)}
-.cam video{width:100%;height:100%;object-fit:cover;display:block}
-.cam.mirror video{transform:scaleX(-1)}
-body.cam-small .cam{display:block;left:2.4cqw;bottom:2.4cqw;width:36cqw;height:48cqw;border-radius:4cqw;border:.8cqw solid #fff}
-body.cam-big .cam{display:block;inset:0;border-radius:5cqw}
-body.cam-big .photo{inset:auto;right:2.4cqw;bottom:2.4cqw;width:34cqw;height:42cqw;z-index:4;border:.8cqw solid #fff;border-radius:4cqw}
-body.cam-big .next{right:auto;left:2.4cqw;max-width:50cqw}
-body.cam-small .next{max-width:50cqw}
-body.mode-line .cam{visibility:hidden}
+main{max-width:1100px;margin:0 auto;padding:24px}
+section.view{display:none}
+section.view.active{display:block}
+h2{font-size:1.35rem;margin:0 0 4px;letter-spacing:-.01em}
+.lead{color:var(--muted);margin:0 0 20px;max-width:70ch}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:18px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.grid2{grid-template-columns:1fr}}
+label{display:block;font-size:.88rem;font-weight:600;margin:10px 0 4px}
+input[type=text],input[type=number],select,textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:9px 10px;background:#fff}
+textarea{min-height:120px;resize:vertical}
+textarea.out{min-height:340px;font-size:.95rem}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+.btn{border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:6px;padding:9px 16px;cursor:pointer;font-weight:600}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.hint{font-size:.85rem;color:var(--muted)}
+.msg{padding:10px 12px;border-radius:6px;margin-top:12px;font-size:.92rem}
+.msg.ok{background:var(--teal-soft);color:var(--teal)}
+.msg.err{background:var(--live-soft);color:var(--live)}
+.msg.warn{background:#FFF3DC;color:var(--amber)}
 
-/* info card */
-.info{flex:none;background:var(--card);border-radius:4cqw;padding:2.2cqw 4cqw 2.4cqw;box-shadow:0 2cqw 6cqw rgba(0,0,0,.25)}
-.name{font-weight:700;font-size:4cqw;line-height:1.35;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
-.priceRow{display:flex;align-items:baseline;gap:2.4cqw;margin-top:.6cqw}
-.price{font-weight:700;font-size:7.5cqw;line-height:1.05;color:var(--orange-dk)}
-.was{font-size:4cqw;color:#8a7a70;text-decoration:line-through}
-.few{margin-left:auto;font-size:3cqw;font-weight:600;color:var(--live);background:#FDE8EA;padding:.8cqw 2.4cqw;border-radius:99cqw;display:none}
-.sizes{display:flex;flex-wrap:wrap;gap:1.4cqw;margin-top:1.2cqw;align-items:center}
-.sizes .lbl{font-size:3.2cqw;font-weight:600;margin-right:.6cqw}
-.sizes span.s{font-size:3.3cqw;font-weight:600;border:.4cqw solid var(--orange);color:var(--orange-dk);border-radius:1.6cqw;padding:.3cqw 2cqw;background:#fff}
+.disclosure{border:2px solid var(--live);background:var(--live-soft);border-radius:10px;padding:14px 16px;margin-bottom:18px}
+.disclosure strong{color:var(--live)}
 
-/* how to order */
-.order{position:absolute;left:3cqw;right:3cqw;bottom:3cqw;display:flex;align-items:center;gap:3cqw;background:var(--ink);color:#fff;border-radius:4cqw;padding:2cqw 3cqw;z-index:2}
-.order .qr{width:13cqw;height:13cqw;border-radius:2.4cqw;background:#fff center/cover no-repeat;flex:none}
-.order .t1{font-weight:700;font-size:3.6cqw;line-height:1.35}
-.order .t1 em{font-style:normal;color:#FFC59A}
-.order .t2{font-size:3cqw;opacity:.85;margin-top:.6cqw;line-height:1.4;white-space:nowrap}
-.order .url{font-size:2.9cqw;color:#FFC59A;margin-top:.6cqw;font-weight:600}
-.next{position:absolute;right:2.4cqw;bottom:2.4cqw;z-index:3;display:none;align-items:center;gap:1.6cqw;background:rgba(255,255,255,.88);border-radius:99cqw;padding:.8cqw 2.4cqw .8cqw .8cqw;font-size:2.9cqw;font-weight:600;max-width:60cqw}
-.next img{width:7cqw;height:7cqw;border-radius:50%;object-fit:cover;background:#eee;flex:none}
-.next span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:#F6F9F7;font-weight:600}
+tr:last-child td{border-bottom:0}
+.code{font-weight:800;font-size:1.15rem;letter-spacing:.06em;color:var(--teal)}
+.cloneBox{margin-top:14px;padding:12px;border:1px dashed var(--teal);border-radius:10px;background:#f6faf8}
+.consentTxt{font-size:.92rem;font-weight:600;background:#fff;border-left:3px solid var(--teal);padding:6px 10px;margin:2px 0 6px;border-radius:4px}
+.catPill{display:inline-block;font-size:.72rem;font-weight:600;padding:1px 8px;border-radius:99px;background:#eef3f1;color:var(--teal);vertical-align:middle;white-space:nowrap}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.8rem;font-weight:600}
+.pill.in{background:var(--teal-soft);color:var(--teal)}
+.pill.low{background:#FFF3DC;color:var(--amber)}
+.pill.out{background:var(--live-soft);color:var(--live)}
 
-/* opening / thank-you screen */
-.lineView{position:absolute;inset:0;z-index:5;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 9cqw;color:#fff}
-.lineView .big{width:42cqw;height:42cqw;border-radius:50%;background:#fff center/cover no-repeat;border:1.2cqw solid #fff;box-shadow:0 3cqw 9cqw rgba(0,0,0,.35)}
-.lineView h1{font-size:8cqw;margin-top:6cqw;line-height:1.3;text-shadow:0 .5cqw 2cqw rgba(0,0,0,.35)}
-.lineView p{font-size:4.6cqw;margin-top:3.5cqw;line-height:1.55;text-shadow:0 .4cqw 1.5cqw rgba(0,0,0,.4);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
-body.mode-line .lineView{display:flex}
-body.mode-line .photo, body.mode-line .info, body.mode-line .code, body.mode-line .promo, body.mode-line .next{visibility:hidden}
-
-/* swap animation between products */
-.swap{animation:swapIn .6s ease both}
-@keyframes swapIn{from{opacity:0;transform:translateY(3cqw)}to{opacity:1;transform:none}}
-
-/* help shown until the Live Desk connects */
-.help{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:20;background:rgba(0,0,0,.8);color:#fff;font:14px/1.5 system-ui,sans-serif;padding:10px 16px;border-radius:10px;max-width:92vw;text-align:center}
-.help b{color:#FFC59A}
-body.connected .help{display:none}
+.replies{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.reply{border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff}
+.reply .c{color:var(--muted);font-size:.88rem;margin-bottom:6px}
+.reply .r{white-space:pre-wrap}
+.reply .meta{font-size:.8rem;color:var(--muted);margin-top:6px}
+.check{display:flex;align-items:center;gap:8px;font-weight:400}
+.check input{width:auto}
+.thumb{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #e5e0d6;background:#f4f1ea;cursor:zoom-in;display:block}
+.thumb.sm{width:44px;height:44px}
+.nothumb{width:56px;height:56px;border-radius:8px;background:#f4f1ea;display:flex;align-items:center;justify-content:center;font-size:11px;color:#999}
+#zoom{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:999;cursor:zoom-out;padding:20px}
+#zoom img{max-width:100%;max-height:90vh;border-radius:12px}
+#zoom div{color:#fff;text-align:center;margin-top:10px;font-size:18px}
 </style>
 </head>
-<body class="mode-line">
-<div class="stage" id="stage">
-  <div class="bg"><img class="blur" id="bgProduct" alt=""><img id="bgShop" alt=""></div>
-
-  <div class="top">
-    <div class="logo" style="background-image:url('Goat_Kids_Logo.jpg')"></div>
-    <div class="brand">GOAT KIDS<small>សម្លៀកបំពាក់កូនៗ</small></div>
-    <div class="live"><i></i>LIVE</div>
-    <div class="ai">AI host</div>
+<body>
+<dialog id="receiptDlg" style="border:0;border-radius:14px;padding:18px;max-width:380px;width:92vw;box-shadow:0 12px 40px rgba(0,0,0,.25)">
+  <h3 style="margin:0 0 4px">🧾 Print receipt</h3>
+  <div id="rcItem" class="hint" style="margin-bottom:10px"></div>
+  <label for="rcName">Customer name</label><input type="text" id="rcName" placeholder="Name from the live comment">
+  <label for="rcPhone">Phone</label><input type="text" id="rcPhone" inputmode="tel">
+  <label for="rcLoc">Location / address</label><input type="text" id="rcLoc">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+    <div><label for="rcSize">Size</label><input type="text" id="rcSize"></div>
+    <div><label for="rcQty">Qty</label><input type="number" id="rcQty" min="1" value="1"></div>
+    <div><label for="rcFee">Delivery $</label><input type="number" id="rcFee" min="0" step="0.25"></div>
   </div>
+  <p id="rcTotal" style="font-weight:600;margin:10px 0"></p>
+  <div class="row"><button class="btn" id="rcPrint">Print</button><button class="btn ghost" id="rcCancel">Cancel</button></div>
+</dialog>
+<dialog id="sendDlg" style="border:0;border-radius:14px;padding:18px;max-width:420px;width:94vw;box-shadow:0 12px 40px rgba(0,0,0,.25)">
+  <h3 style="margin:0 0 4px">📤 Send to Store (Pending order)</h3>
+  <div id="sdItem" class="hint" style="margin-bottom:6px"></div>
+  <label for="sdStore">Store / branch the order goes to</label><select id="sdStore" style="width:100%"></select>
+  <div id="sdStock" class="hint" style="margin-top:4px"></div>
+  <label for="sdName">Customer name *</label><input type="text" id="sdName">
+  <label for="sdPhone">Phone *</label><input type="text" id="sdPhone" inputmode="tel">
+  <label for="sdAddr">Address *</label><input type="text" id="sdAddr">
+  <label for="sdCity">City / province</label><input type="text" id="sdCity">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+    <div><label for="sdSize">Size</label><select id="sdSize" style="width:100%"></select></div>
+    <div><label for="sdQty">Qty</label><input type="number" id="sdQty" min="1" value="1"></div>
+    <div><label for="sdFee">Delivery $</label><input type="number" id="sdFee" min="0" step="0.25"></div>
+  </div>
+  <label for="sdShip">Shipping</label><select id="sdShip" style="width:100%"><option>Phnom Penh</option><option>Province</option><option>Pickup</option></select>
+  <p id="sdTotal" style="font-weight:600;margin:10px 0 4px"></p>
+  <p class="hint" style="margin:0 0 8px">Creates a <b>Pending</b> order in the Store App. Stock is NOT taken now — only when Order Manager presses Confirm.</p>
+  <div id="sdMsg"></div>
+  <div class="row"><button class="btn" id="sdSend">Send to Store</button><button class="btn ghost" id="sdCancel">Cancel</button></div>
+</dialog>
+<style>#sendDlg label{display:block;font-size:.85rem;margin:8px 0 3px}#sendDlg input,#sendDlg select{width:100%}#sendDlg::backdrop{background:rgba(15,23,42,.45)}</style>
+<style>.cell-in{width:100%;min-width:110px;font:inherit;padding:4px 6px;border:1px solid transparent;border-radius:6px;background:transparent}.cell-in.wide{min-width:150px}.cell-in:hover,.cell-in:focus{border-color:#cbd5e1;background:#fff;outline:none}#receiptDlg label{display:block;font-size:.85rem;margin:8px 0 3px}#receiptDlg input{width:100%}#receiptDlg::backdrop{background:rgba(15,23,42,.45)}</style>
 
-  <div class="code" id="code"><small>កូដ · Code</small><b id="codeNum">0000</b></div>
-  <div class="promo" id="promo">-20%</div>
-  <div class="main">
-    <div class="photoWrap">
-      <div class="photo" id="photo"><div class="progress" id="progress"></div></div>
-      <div class="cam" id="cam"><video id="camVideo" autoplay muted playsinline></video></div>
-      <div class="next" id="next"><img alt="" id="nextImg"><span id="nextTxt"></span></div>
+
+<header class="top">
+  <a href="index.html" style="color:inherit;text-decoration:none;font-weight:600;margin-right:6px" title="Back to the store admin">&larr; Store</a>
+  <h1 class="brand">Goat Kids Live Desk</h1>
+  <span class="onair">AI host label always on</span>
+  <div class="status" id="status">Not connected</div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-view="connect">Connect</button>
+  <button role="tab" aria-selected="false" data-view="products">Products &amp; codes</button>
+  <button role="tab" aria-selected="false" data-view="script">Live script</button>
+  <button role="tab" aria-selected="false" data-view="voice">🎙️ Voice host</button>
+  <button role="tab" aria-selected="false" data-view="comments">Comment replies</button>
+  <button role="tab" aria-selected="false" data-view="export">Virbo export</button>
+</nav>
+
+<main>
+
+<!-- CONNECT -->
+<section class="view active" id="view-connect">
+  <h2>Connect to your product data</h2>
+  <p class="lead">This tool only reads your products. It writes only to its own collections, <b>live_codes</b> and <b>live_report</b>. Your store data is never changed.</p>
+  <div class="grid2">
+    <div class="box">
+      <label for="cfg">Firebase config (paste the object from your store file)</label>
+      <textarea id="cfg" placeholder='{ "apiKey": "...", "authDomain": "goat-kids-store.firebaseapp.com", "projectId": "goat-kids-store", ... }'></textarea>
+      <label for="stores">Stores to load (one per line: store ID = short name)</label>
+      <textarea id="stores" style="min-height:70px">GOAT-GOAT-KIDS-271-0889 = 271
+GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
+      <p class="hint" style="margin:4px 0 0">Products are read from stores / store ID / products. The same product in both stores is matched by its <b>id</b> field.</p>
+      <label class="check"><input type="checkbox" id="incInactive"> Include inactive products</label>
+      <div class="row">
+        <button class="btn" id="btnConnect">Connect and load products</button>
+        <button class="btn ghost" id="btnSample">Try with sample products</button>
+      </div>
+      <div id="connectMsg"></div>
     </div>
-
-    <div class="info" id="info">
-      <div class="name" id="name">—</div>
-      <div class="priceRow"><div class="price" id="price">$0</div><div class="was" id="was"></div><div class="few" id="few">នៅសល់តិច!</div></div>
-      <div class="sizes" id="sizes"></div>
+    <div class="box">
+      <h3 style="margin:0 0 6px;font-size:1.05rem">Field names</h3>
+      <p class="hint" style="margin:0 0 6px">Leave on Auto and the tool guesses common names. Set them if the guess is wrong.</p>
+      <label for="fName">Product name field</label><input type="text" id="fName" value="auto">
+      <label for="fPrice">Price field</label><input type="text" id="fPrice" value="auto">
+      <label for="fStock">Stock field (number, or per-size object)</label><input type="text" id="fStock" value="auto">
+      <label for="fSizes">Sizes field</label><input type="text" id="fSizes" value="auto">
+      <label for="lowStock">Show "only a few left" at or below</label><input type="number" id="lowStock" value="3" min="0">
     </div>
   </div>
+</section>
 
-  <div class="order">
-    <div class="qr" style="background-image:url('Goat%20Kids%20QR.jpg')"></div>
-    <div>
-      <div class="t1">Comment៖ <em>កូដ</em> + <em>ទំហំ</em> + <em>លេខទូរស័ព្ទ</em></div>
-      <div class="url">👈 ស្កេនទីនេះ ដើម្បីកុម្ម៉ង់</div>
+<!-- PRODUCTS -->
+<section class="view" id="view-products">
+  <h2>Products and 4-digit live codes</h2>
+  <p class="lead">Each product gets a short code customers can type in a comment. Codes are saved and never change, so a code you showed on yesterday's live still works today.</p>
+  <div class="row" style="margin:0 0 14px">
+    <button class="btn" id="btnAssign">Assign codes to new products</button>
+    <input type="text" id="search" placeholder="Search name or code" style="max-width:260px">
+    <select id="catFilter" style="max-width:200px" aria-label="Category"><option value="">All categories</option></select>
+    <button class="btn ghost" id="btnTickShown" title="Tick every product with a code in the list below">☑ Tick all shown</button>
+    <button class="btn ghost" id="btnUntickShown">☐ Untick shown</button>
+    <span class="hint" id="countInfo"></span>
+  </div>
+  <div class="box" style="margin:0 0 14px">
+    <h3 style="margin:0 0 6px;font-size:1.05rem">Codes on the Facebook catalog</h3>
+    <p class="hint" style="margin:0 0 8px">Show the codes in front of product titles in Facebook (live product tags and ads) only while you sell live. The catalog updates within about an hour, so press Show 1–2 hours before the live.</p>
+    <div class="row">
+      <button class="btn" id="btnFbShow">Show codes on Facebook</button>
+      <button class="btn ghost" id="btnFbHide">Hide codes on Facebook</button>
+      <span class="hint" id="fbCodeState">Status unknown — connect first.</span>
     </div>
   </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Live code</th><th>Photo</th><th>Product</th><th>Price</th><th>Size : qty by store</th><th>Total stock</th><th>Script</th></tr></thead>
+    <tbody id="prodBody"><tr><td colspan="6" class="hint">Connect first, or try the sample products.</td></tr></tbody>
+  </table></div>
+</section>
 
-  <div class="lineView" id="lineView">
-    <div class="big" style="background-image:url('Goat_Kids_Logo.jpg')"></div>
-    <h1 id="lineTitle">សូមស្វាគមន៍ Goat Kids Live</h1>
-    <p id="lineText">ចាំមើលទំនិញស្អាតៗ ជាមួយយើងណាបង</p>
+<!-- SCRIPT -->
+<section class="view" id="view-script">
+  <h2>Live presenter script</h2>
+  <p class="lead">Tick products on the Products tab, then generate. The AI host disclosure is built into every script and is put back automatically if it gets deleted.</p>
+  <div class="disclosure"><strong>Always included:</strong> <span id="discPreview"></span></div>
+  <div class="box">
+    <div class="grid2">
+      <div>
+        <label for="lang">Language</label>
+        <select id="lang"><option value="km">Khmer</option><option value="en">English</option><option value="both">Khmer + English</option></select>
+      </div>
+      <div>
+        <label for="repeatEvery">Repeat the AI disclosure every</label>
+        <select id="repeatEvery"><option value="3">3 products</option><option value="5" selected>5 products</option><option value="8">8 products</option></select>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn" id="btnScript">Generate script</button>
+      <button class="btn ghost" id="btnCopyScript">Copy script</button>
+      <span class="hint" id="selInfo"></span>
+    </div>
   </div>
-</div>
+  <label for="scriptOut">Live title</label>
+  <input type="text" id="titleOut" readonly>
+  <label for="scriptOut">Script (you can edit it)</label>
+  <textarea class="out" id="scriptOut"></textarea>
+  <div id="scriptMsg"></div>
+</section>
 
-<div class="help" id="help">Waiting for the <b>Live Desk</b> → Voice host → <b>Start auto show</b>. Press <b>F</b> (or double-click) for full screen.</div>
+<!-- COMMENTS -->
+<section class="view" id="view-comments">
+  <h2>Live comment report</h2>
+  <p class="lead">The tool reads the comments on your Facebook live, finds the 4-digit code and phone number, and builds one report. Each row has a ready answer you copy and paste into the live yourself.</p>
+  <div class="grid2">
+    <div class="box">
+      <h3 style="margin:0 0 6px;font-size:1.05rem">Read from Facebook</h3>
+      <label for="fbToken">Page access token</label>
+      <input type="text" id="fbToken" placeholder="Paste the Goat Kids page token" autocomplete="off">
+      <label for="fbVideo">Live video link (optional — leave empty and the tool finds the live running now)</label>
+      <input type="text" id="fbVideo" placeholder="https://www.facebook.com/.../videos/1234567890">
+      <label for="fbEvery">Check for new comments every</label>
+      <select id="fbEvery"><option value="5">5 seconds</option><option value="10" selected>10 seconds</option><option value="20">20 seconds</option></select>
+      <div class="row">
+        <button class="btn" id="btnFbStart">Start reading</button>
+        <button class="btn ghost" id="btnFbStop" disabled>Stop</button>
+      </div>
+      <div id="fbMsg"></div>
+      <p class="hint">The token is kept only in this browser. Never put it inside the file you upload to GitHub.</p>
+    </div>
+    <div class="box">
+      <h3 style="margin:0 0 6px;font-size:1.05rem">Or paste comments</h3>
+      <label for="comments">One comment per line, as Name: comment</label>
+      <textarea id="comments" placeholder="Dara: 1003 price?&#10;Srey Pov: 1001 size 110 មានទេ?&#10;Sokha: CF 1002 012 345 678"></textarea>
+      <div class="row"><button class="btn" id="btnPaste">Add to report</button></div>
+    </div>
+  </div>
+  <div class="box">
+    <div class="grid2">
+      <div><label for="rLang">Answer language</label>
+        <select id="rLang"><option value="km">Khmer</option><option value="en">English</option><option value="both">Khmer + English</option></select></div>
+      <div><label class="check" style="margin-top:34px"><input type="checkbox" id="refresh" checked> Re-check stock from Firebase for each new comment</label></div>
+    </div>
+    <div class="row">
+      <button class="btn" id="btnCsvReport">Download report (CSV)</button>
+      <button class="btn ghost" id="btnSaveReport">Save report to Firebase</button>
+      <button class="btn ghost" id="btnClearReport">Clear report</button>
+      <label class="check"><input type="checkbox" id="hideNoCode"> Hide comments without a code</label>
+      <span class="hint" id="reportInfo"></span>
+    </div>
+    <div id="reportMsg"></div>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Time</th><th>Customer</th><th>Comment</th><th>Photo</th><th>Code / product</th><th>Size</th><th>Phone</th><th>Location</th><th>Stock</th><th>Answer to copy</th><th>Replied</th></tr></thead>
+    <tbody id="reportBody"><tr><td colspan="9" class="hint">No comments yet. Start reading the live or paste comments.</td></tr></tbody>
+  </table></div>
+</section>
+
+<!-- EXPORT -->
+<section class="view" id="view-export">
+  <h2>Export Q&amp;A rules for Virbo</h2>
+  <p class="lead">One rule per product: the keyword is the live code, the reply shows price, sizes and stock. Stock in these rules is a snapshot, so export again right before each live.</p>
+  <div class="box">
+    <div class="grid2">
+      <div><label for="eLang">Reply language</label>
+        <select id="eLang"><option value="km">Khmer</option><option value="en">English</option><option value="both">Khmer + English</option></select></div>
+      <div><label class="check" style="margin-top:34px"><input type="checkbox" id="eSelected"> Only products ticked for the script</label></div>
+    </div>
+    <div class="row">
+      <button class="btn" id="btnCsv">Download rules (CSV)</button>
+      <button class="btn ghost" id="btnPreviewRules">Preview</button>
+    </div>
+    <div id="exportMsg"></div>
+  </div>
+  <textarea class="out" id="rulesOut" readonly></textarea>
+</section>
+
+<!-- VOICE HOST -->
+<section class="view" id="view-voice">
+  <h2>🎙️ Voice host</h2>
+  <p class="lead">Claude writes a natural selling script for each product you ticked on the Products tab, an AI voice reads it, and you press ▶ to play it straight into the live. Each voice is made once and saved, so playing it again costs nothing.</p>
+  <div class="disclosure"><strong>AI host label:</strong> the <b>Opening</b> line always starts with the AI host disclosure, and the AI reminder plays automatically every few products (same setting as the Live script tab).</div>
+
+  <details class="box vh-det" id="vhGuide">
+    <summary>📘 First-time setup (VB-Cable, keys, Live Producer)</summary>
+    <ol class="vh-ol">
+      <li><b>VB-Cable:</b> download <b>VB-CABLE Driver</b> from <code>vb-audio.com/Cable</code> (free) → unzip → right-click <b>VBCABLE_Setup_x64.exe</b> → <b>Run as administrator</b> → <b>Install Driver</b> → restart the laptop.</li>
+      <li><b>Khmer voice (CAMB.AI):</b> in CAMB.AI Studio → <b>Settings → API Keys</b> → copy the key into <b>CAMB.AI API key</b> in the settings below → press <b>Load voices</b> → pick a voice → <b>Test voice</b>.</li>
+      <li><b>Script writer (Google Gemini, free):</b> <code>aistudio.google.com</code> → <b>Get API key</b> → <b>Create API key</b> → paste it into <b>Gemini API key</b> in the settings below.</li>
+      <li><b>Script writer:</b> nothing extra needed — it uses the same <b>Gemini key</b> (free tier). If you later want Claude to write instead, choose <b>Claude</b> in the settings and add a Claude API key from <code>platform.claude.com</code> (paid credit).</li>
+      <li><b>Sound into the live:</b> below, press <b>Allow devices</b> and set <b>Send voice to = CABLE Input</b>. In <b>Facebook Live Producer</b> (Chrome, same laptop) set <b>Microphone = CABLE Output</b>. Press <b>Test tone</b> — the Live Producer mic meter should move.</li>
+      <li>Want to talk too? Tick <b>Mix my microphone</b> and pick your real mic (not CABLE).</li>
+    </ol>
+    <p class="hint">Keys stay only in this browser on this laptop.</p>
+  </details>
+
+  <details class="box vh-det" id="vhSettings">
+    <summary>⚙️ Script writer &amp; voice settings</summary>
+    <div class="grid2">
+      <div>
+        <div class="vh-sec">✍️ Script writer</div>
+        <label for="vhWriter">Script writer</label>
+        <select id="vhWriter"><option value="gemini">Google Gemini — free tier, uses the Gemini key</option><option value="claude">Claude — paid API credit</option></select>
+        <div id="vhGemKeyRow"><label for="vhGemKey">Gemini API key</label><input type="password" id="vhGemKey" placeholder="from aistudio.google.com" autocomplete="off"></div>
+        <div id="vhGemWriterBox">
+          <label for="vhGemTextModel">Gemini writer model</label><input type="text" id="vhGemTextModel" value="gemini-3.8-flash">
+        </div>
+        <div id="vhClaudeBox" style="display:none">
+          <label for="vhClaudeKey">Claude API key</label><input type="password" id="vhClaudeKey" placeholder="sk-ant-..." autocomplete="off">
+          <label for="vhModel">Claude model</label><input type="text" id="vhModel" value="claude-sonnet-5-5">
+        </div>
+        <label for="vhLang">Script language</label>
+        <select id="vhLang"><option value="km">Khmer</option><option value="en">English</option></select>
+        <label for="vhLength">Script length</label>
+        <select id="vhLength"><option value="short">Short (~15 sec)</option><option value="medium" selected>Medium (~30 sec)</option><option value="long">Long (~45 sec)</option></select>
+        <label for="vhStyle">Host style notes (optional)</label>
+        <textarea id="vhStyle" style="min-height:70px" placeholder="e.g. Friendly big-sister tone. Call viewers បងៗ. Mention free delivery in Phnom Penh over $20."></textarea>
+        <label class="check"><input type="checkbox" id="vhPhoto" checked> Look at the product photo and describe it (colours, style details) — Gemini only</label>
+        <div class="vh-actions"><button class="btn ghost" id="vhTestClaude">Test script writer</button></div>
+        <div id="vhClaudeMsg"></div>
+      </div>
+      <div>
+        <div class="vh-sec">🗣️ Voice</div>
+        <label for="vhEngine">Voice engine</label>
+        <select id="vhEngine"><option value="camb">CAMB.AI (Khmer + English)</option><option value="gemini">Google Gemini (Khmer + English)</option><option value="azure">Microsoft Azure (not available in Cambodia)</option><option value="eleven">ElevenLabs (English only — no Khmer)</option></select>
+        <div id="vhCambBox">
+          <label for="vhCambKey">CAMB.AI API key</label><input type="password" id="vhCambKey" placeholder="from studio.camb.ai → Settings → API Keys" autocomplete="off">
+          <label for="vhCambVoice">Voice</label>
+          <div class="vh-pair"><select id="vhCambVoice"><option value="">Press Load voices</option></select><button class="btn ghost" id="vhCambLoad" type="button">Load voices</button></div>
+          <label for="vhCambModel">Voice model</label>
+          <select id="vhCambModel">
+            <option value="mars-8.1-pro-beta">MARS 8.1 Pro — best quality</option>
+            <option value="mars-8.1-flash-beta">MARS 8.1 Flash — faster, cheaper</option>
+            <option value="mars-instruct">MARS Instruct — follows the style notes below</option>
+          </select>
+          <label for="vhCambLang">Language code</label><input type="text" id="vhCambLang" value="km-kh">
+          <label for="vhCambRate">Speed <span id="vhCambRateVal"></span></label><input type="range" id="vhCambRate" min="0.8" max="1.25" step="0.05" value="1" style="width:100%">
+          <label for="vhCambStyle">Style (MARS Instruct only)</label>
+          <input type="text" id="vhCambStyle" value="Warm, cheerful, energetic Cambodian live-selling host talking to parents">
+        </div>
+        <div id="vhGemBox" style="display:none">
+          <p class="hint" style="margin:8px 0 0">Uses the <b>Gemini API key</b> on the left.</p>
+          <label for="vhGemVoice">Voice</label>
+          <select id="vhGemVoice">
+            <optgroup label="Female voices">
+            <option value="Kore">Kore — firm &amp; clear</option>
+            <option value="Zephyr">Zephyr — bright</option>
+            <option value="Aoede">Aoede — breezy, light</option>
+            <option value="Leda">Leda — youthful</option>
+            <option value="Callirrhoe">Callirrhoe — easy-going</option>
+            <option value="Autonoe">Autonoe — bright</option>
+            <option value="Despina">Despina — smooth</option>
+            <option value="Erinome">Erinome — clear</option>
+            <option value="Laomedeia">Laomedeia — upbeat</option>
+            <option value="Achernar">Achernar — soft</option>
+            <option value="Gacrux">Gacrux — mature</option>
+            <option value="Pulcherrima">Pulcherrima — forward, confident</option>
+            <option value="Vindemiatrix">Vindemiatrix — gentle</option>
+            <option value="Sulafat">Sulafat — warm</option>
+            </optgroup>
+            <optgroup label="Male voices">
+            <option value="Puck">Puck — upbeat</option>
+            <option value="Charon">Charon — informative, calm</option>
+            <option value="Fenrir">Fenrir — excitable</option>
+            <option value="Orus">Orus — firm</option>
+            <option value="Enceladus">Enceladus — breathy</option>
+            <option value="Iapetus">Iapetus — clear</option>
+            <option value="Umbriel">Umbriel — easy-going</option>
+            <option value="Algieba">Algieba — smooth</option>
+            <option value="Algenib">Algenib — gravelly</option>
+            <option value="Rasalgethi">Rasalgethi — informative</option>
+            <option value="Alnilam">Alnilam — firm</option>
+            <option value="Schedar">Schedar — even</option>
+            <option value="Achird">Achird — friendly</option>
+            <option value="Zubenelgenubi">Zubenelgenubi — casual</option>
+            <option value="Sadachbia">Sadachbia — lively</option>
+            <option value="Sadaltager">Sadaltager — knowledgeable</option>
+            </optgroup>
+          </select>
+          <p class="hint" style="margin:4px 0 0">After changing the voice, press <b>Make all voices</b> again — saved clips keep the old voice.</p>
+          <label for="vhGemStyle">How the voice should sound</label>
+          <input type="text" id="vhGemStyle" value="Speak natural Khmer like a warm, cheerful, energetic Cambodian live-selling host talking to parents">
+          <label class="check"><input type="checkbox" id="vhGemNatural" checked> Keep my cloned voice natural — don't send the style above when a 🎙️ cloned voice is chosen, so every clip sounds like the real recording</label>
+          <label for="vhGemModel">Gemini voice model</label><input type="text" id="vhGemModel" value="gemini-3.8-flash-tts">
+
+          <div class="cloneBox">
+            <h4 style="margin:0 0 4px">🎙️ Clone a voice</h4>
+            <p class="hint" style="margin:0">Make the AI host speak with a real person's voice. Only clone a voice with that person's permission — Google needs them to read a consent sentence. Both recordings: the <b>same person</b>, the <b>same microphone</b>, a <b>quiet room</b>. Use a real recording, not an AI voice.</p>
+            <label for="clName">Name for this voice</label>
+            <input type="text" id="clName" placeholder="e.g. Sophorn" maxlength="40">
+            <label>1 · Voice sample — 10 to 30 seconds of natural talking</label>
+            <div class="row" style="margin:0"><input type="file" id="clSampleFile" accept="audio/*" style="max-width:220px"><button class="btn ghost vh-sm" id="clSampleRec">⏺ Record</button><span class="hint" id="clSampleInfo">none yet</span></div>
+            <label>2 · Consent — the same person reads this sentence out loud</label>
+            <div class="consentTxt">I am the owner of this voice and I consent to Google using this voice to create a synthetic voice model.</div>
+            <div class="row" style="margin:0"><input type="file" id="clConsentFile" accept="audio/*" style="max-width:220px"><button class="btn ghost vh-sm" id="clConsentRec">⏺ Record</button><span class="hint" id="clConsentInfo">none yet</span></div>
+            <div class="row" style="margin:8px 0 0">
+              <button class="btn" id="clCreate">Create cloned voice</button>
+              <button class="btn ghost vh-sm" id="clLoad" title="Get the cloned voices saved in your Google project">Load my cloned voices</button>
+              <button class="btn ghost vh-sm" id="clDelete">Delete selected cloned voice</button>
+            </div>
+            <div id="clMsg"></div>
+          </div>
+        </div>
+        <div id="vhAzureBox" style="display:none">
+          <label for="vhAzKey">Azure Speech key</label><input type="password" id="vhAzKey" placeholder="KEY 1" autocomplete="off">
+          <label for="vhAzRegion">Azure region</label><input type="text" id="vhAzRegion" value="southeastasia">
+          <label for="vhAzVoice">Voice</label>
+          <select id="vhAzVoice">
+            <option value="km-KH-SreymomNeural">Sreymom — Khmer, female</option>
+            <option value="km-KH-PisethNeural">Piseth — Khmer, male</option>
+            <option value="en-US-AvaMultilingualNeural">Ava — English, female</option>
+            <option value="en-US-AndrewMultilingualNeural">Andrew — English, male</option>
+          </select>
+          <label for="vhAzRate">Speed <span id="vhAzRateVal"></span></label><input type="range" id="vhAzRate" min="-20" max="30" step="5" value="5" style="width:100%">
+        </div>
+        <div id="vhElBox" style="display:none">
+          <label for="vhElKey">ElevenLabs API key</label><input type="password" id="vhElKey" autocomplete="off">
+          <label for="vhElVoice">Voice</label><select id="vhElVoice"><option value="">Press Load voices</option></select>
+          <label for="vhElModel">Model</label>
+          <select id="vhElModel"><option value="eleven_multilingual_v2">Multilingual v2</option><option value="eleven_v3">Eleven v3</option><option value="eleven_flash_v2_5">Flash v2.5</option></select>
+          <div class="row"><button class="btn ghost" id="vhElLoad">Load voices</button></div>
+        </div>
+        <label for="vhTestText">Test sentence</label>
+        <input type="text" id="vhTestText" value="សួស្តីបងៗ! សូមស្វាគមន៍មកកាន់ Live របស់ Goat Kids ថ្ងៃនេះ!">
+        <div class="vh-actions"><button class="btn" id="vhTestVoice">▶ Test voice</button>
+          <label class="check" style="margin:0"><input type="checkbox" id="vhRemember" checked> Remember keys on this laptop</label></div>
+        <div id="vhVoiceMsg"></div>
+      </div>
+    </div>
+  </details>
+
+  <div class="box">
+    <h3 style="margin:0 0 6px;font-size:1.05rem">🎚️ Sound into the live</h3>
+    <div class="row" style="margin-top:0"><button class="btn" id="vhAllow">Allow devices</button><span class="hint">Needed once so the tool can see CABLE Input and your mic.</span></div>
+    <div class="grid2">
+      <div>
+        <label for="vhOut">Send voice to (choose CABLE Input)</label><select id="vhOut"><option value="">Default speakers</option></select>
+        <label for="vhVol">Voice volume <span id="vhVolVal"></span></label><input type="range" id="vhVol" min="0" max="150" value="100" style="width:100%">
+        <label class="check"><input type="checkbox" id="vhMonitor"> Let me hear the voice (headphones)</label>
+      </div>
+      <div>
+        <label class="check" style="margin-top:10px"><input type="checkbox" id="vhMicOn"> Mix my microphone into the live</label>
+        <label class="check"><input type="checkbox" id="vhDuck" checked> Lower my mic while the voice plays</label>
+        <label for="vhMic">My microphone</label><select id="vhMic"><option value="">Default mic</option></select>
+        <label for="vhMicVol">Mic volume <span id="vhMicVolVal"></span></label><input type="range" id="vhMicVol" min="0" max="200" value="100" style="width:100%">
+      </div>
+    </div>
+    <div class="row"><button class="btn ghost" id="vhTone">Test tone</button>
+      <span class="hint">Output: <b id="vhRoute">not set</b></span>
+      <span class="vh-meter" title="Level going into the live"><i id="vhMeter"></i></span>
+      <span class="hint" id="vhNow">Ready</span>
+      <button class="btn vh-stop" id="vhStop">■ Stop</button></div>
+    <div id="vhRouteMsg"></div>
+  </div>
+
+  <div class="box">
+    <h3 style="margin:0 0 6px;font-size:1.05rem">📺 Live screen &amp; auto show</h3>
+    <p class="hint" style="margin:0">The <b>live screen</b> is a vertical page for Facebook Live Producer → <b>Share screen</b>. <b>Auto show</b> runs the live by itself: it shows each ticked product on the screen, plays its voice, pauses, then goes to the next. Make all voices first — products without a voice are skipped, so nothing is generated during the live.</p>
+    <div class="row">
+      <button class="btn" id="shOpen">📺 Open live screen</button>
+      <button class="btn vh-play" id="shStart">▶ Start auto show</button>
+      <button class="btn vh-stop" id="shStop">■ Stop show</button>
+      <span class="hint" id="shNow">Not running</span>
+    </div>
+    <div class="grid2">
+      <div>
+        <label for="shGap">Pause between products</label>
+        <select id="shGap"><option value="2">2 seconds</option><option value="4" selected>4 seconds</option><option value="6">6 seconds</option><option value="10">10 seconds</option></select>
+        <label class="check"><input type="checkbox" id="shOpening" checked> Play the Opening line first</label>
+        <label class="check"><input type="checkbox" id="shLoop" checked> When the list ends, start again (otherwise play Thank you and stop)</label>
+      </div>
+      <div>
+        <label for="shBgFile">Shop background photo</label>
+        <div class="row" style="margin:0"><input type="file" id="shBgFile" accept="image/*" style="max-width:220px"><button class="btn ghost vh-sm" id="shBgClear">Remove</button></div>
+        <label for="shMusicFile">Background music (mp3) — use music you have the rights to</label>
+        <div class="row" style="margin:0"><input type="file" id="shMusicFile" accept="audio/*" style="max-width:220px"><button class="btn ghost vh-sm" id="shMusicClear">Remove</button></div>
+        <label for="shMusicVol">Music volume <span class="hint" id="shMusicName">no music</span></label>
+        <input type="range" id="shMusicVol" min="0" max="60" value="15" style="width:100%">
+      </div>
+    </div>
+    <div class="grid2">
+      <div>
+        <label for="shCamMode">📷 Live camera on the screen</label>
+        <select id="shCamMode">
+          <option value="off">Off</option>
+          <option value="small">Small — camera in the photo corner</option>
+          <option value="big">Big — camera large, product photo in the corner</option>
+        </select>
+        <label class="check"><input type="checkbox" id="shCamMirror"> Mirror the camera (like a selfie)</label>
+      </div>
+      <div>
+        <label for="shCamDev">Which camera</label>
+        <div class="row" style="margin:0"><select id="shCamDev" style="max-width:240px"><option value="">Default camera</option></select><button class="btn ghost vh-sm" id="shCamFind">Find cameras</button></div>
+        <p class="hint" style="margin:4px 0 0">Camera picture only — no sound, so it won't pick up the shop.</p>
+      </div>
+    </div>
+    <div id="shMsg"></div>
+  </div>
+
+  <div class="box">
+    <h3 style="margin:0 0 6px;font-size:1.05rem">⚡ Quick lines</h3>
+    <p class="hint" style="margin:0">Keys <b>Q W E R</b> play them while this tab is open. The Opening always keeps the AI host disclosure.</p>
+    <div id="vhLines" class="vh-lines"></div>
+  </div>
+
+  <div class="box">
+    <h3 style="margin:0 0 6px;font-size:1.05rem">👕 Products for this live</h3>
+    <p class="hint" style="margin:0">These are the products ticked on the <b>Products &amp; codes</b> tab. Before the live: <b>Write all scripts</b> → read and fix them → <b>Make all voices</b>. During the live: ▶ or keys <b>1–9</b>, <b>Space</b> stops.</p>
+    <div class="row">
+      <button class="btn" id="vhWriteAll">✍️ Write all scripts</button>
+      <button class="btn" id="vhVoiceAll">🗣️ Make all voices</button>
+      <button class="btn ghost" id="vhRefresh">↻ Refresh list</button>
+      <label class="check" style="margin:0"><input type="checkbox" id="vhAutoRemind" checked> Auto-play the AI reminder every few products</label>
+    </div>
+    <div id="vhMsg"></div>
+  </div>
+  <div id="vhProducts" class="vh-grid"></div>
+</section>
+
+</main>
 
 <script>
-(function(){
-  const $ = id => document.getElementById(id);
-  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  const money = n => { n = Number(n)||0; return "$" + (Number.isInteger(n) ? n : n.toFixed(2)); };
-  const LS = { get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } } };
+/* ============ STATE ============ */
+const S = { db:null, mode:null, products:[], codes:{}, selected:new Set(), rot:{} };
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const LS = { get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}} };
+/* ticked products are remembered in this browser, so they come back after a reload */
+{ const t = LS.get("gkl_selected", []); if (Array.isArray(t)) t.forEach(id=>S.selected.add(String(id))); }
+function saveSelected(){ LS.set("gkl_selected", [...S.selected]); }
 
-  /* ---------- background: shop photo chosen in the Live Desk ---------- */
-  function setShopBg(url){
-    const im = $("bgShop");
-    if (url){ im.src = url; im.classList.add("on"); }
-    else { im.removeAttribute("src"); im.classList.remove("on"); }
+/* ============ PERMANENT AI DISCLOSURE ============
+   These lines are added by code, not by the user.
+   ensureDisclosure() is run on generate AND on copy. */
+const DISCLOSURE = {
+  km: "សួស្តីបងប្អូនទាំងអស់គ្នា! ខ្ញុំជាពិធីករនិម្មិត (AI) របស់ Goat Kids។ វីដេអូនេះបង្កើតដោយ AI។",
+  en: "Hi everyone! I'm the Goat Kids virtual host — an AI presenter. This video is AI-generated."
+};
+const DISCLOSURE_REMIND = {
+  km: "រំលឹក៖ ខ្ញុំជាពិធីករ AI។ ខមិនលេខកូដ 4 ខ្ទង់ ដើម្បីដឹងតម្លៃ និងស្តុកភ្លាមៗ។",
+  en: "Reminder: I'm an AI host. Comment the 4-digit code to get price and stock right away."
+};
+const TITLE_TAG = "[AI virtual host]";
+function disclosureFor(lang){ return lang==="both" ? DISCLOSURE.km+"\n"+DISCLOSURE.en : DISCLOSURE[lang]; }
+function ensureDisclosure(text, lang){
+  const d = disclosureFor(lang);
+  const hasKm = text.includes(DISCLOSURE.km), hasEn = text.includes(DISCLOSURE.en);
+  const ok = lang==="km" ? hasKm : lang==="en" ? hasEn : (hasKm && hasEn);
+  return { text: ok ? text : d + "\n\n" + text, restored: !ok };
+}
+
+/* ============ FIELD HELPERS ============ */
+const GUESS = {
+  name:["name","productName","title","nameEn","nameKh"],
+  price:["price","salePrice","sellPrice","retailPrice","unitPrice"],
+  stock:["stock","qty","quantity","stockQty","inventory","sizeStock","stocks"],
+  sizes:["sizes","size","sizeList","variants"]
+};
+function pick(doc, key){
+  const v = $( {name:"fName",price:"fPrice",stock:"fStock",sizes:"fSizes"}[key] ).value.trim();
+  if (v && v.toLowerCase()!=="auto") return doc[v];
+  for (const k of GUESS[key]) if (doc[k]!==undefined && doc[k]!==null && doc[k]!=="") return doc[k];
+  return undefined;
+}
+/* Returns {total, bySize:{size:qty}|null, sizes:[]} from many possible shapes */
+function readStock(doc){
+  const raw = pick(doc,"stock"), sizesRaw = pick(doc,"sizes");
+  let bySize = null, total = 0, sizes = [];
+  if (Array.isArray(sizesRaw) && sizesRaw.length && typeof sizesRaw[0]==="object"){
+    bySize = {}; sizesRaw.forEach(x=>{ const s=x.size??x.name??x.label; bySize[s]=(bySize[s]||0)+(Number(x.qty??x.stock??x.quantity)||0); });
+  } else if (raw && typeof raw==="object" && !Array.isArray(raw)){
+    bySize = {}; for (const [k,v] of Object.entries(raw)){ bySize[k]=Number(v)||0; }
+  } else if (Array.isArray(raw)){
+    bySize = {}; raw.forEach(x=>{ if(x&&typeof x==="object"){ const s=x.size??x.name??x.label; bySize[s]=Number(x.stock??x.qty??x.quantity)||0; } });
+  } else if (Array.isArray(sizesRaw) && sizesRaw.length && typeof sizesRaw[0]==="object"){
+    bySize = {}; sizesRaw.forEach(x=>{ const s=x.size??x.name??x.label; bySize[s]=Number(x.stock??x.qty??x.quantity)||0; });
   }
-  setShopBg(LS.get("gkl_show_bg"));
-
-  /* ---------- product photos: crossfade through every photo of the product ---------- */
-  let slideTimer = null;
-  function setPhotos(urls){
-    clearInterval(slideTimer);
-    const box = $("photo");
-    box.querySelectorAll("img").forEach(i=>i.remove());
-    const list = (urls||[]).filter(Boolean).slice(0, 6);
-    const imgs = list.map((u,i)=>{ const im = new Image(); im.referrerPolicy = "no-referrer"; im.alt = ""; im.src = u; if (!i) im.className = "on";
-      im.onerror = ()=>{ im.remove(); }; box.insertBefore(im, $("progress")); return im; });
-    const bp = $("bgProduct"); if (list[0]){ bp.referrerPolicy = "no-referrer"; bp.src = list[0]; bp.classList.add("on"); } else bp.classList.remove("on");
-    if (imgs.length > 1){ let k = 0;
-      slideTimer = setInterval(()=>{ const live = [...box.querySelectorAll("img")]; if (live.length < 2) return;
-        live.forEach(i=>i.classList.remove("on")); k = (k+1) % live.length; live[k].classList.add("on"); }, 4000); }
+  if (bySize){ total = Object.values(bySize).reduce((a,b)=>a+b,0); sizes = Object.keys(bySize); }
+  else { total = Number(raw)||0;
+    if (Array.isArray(sizesRaw)) sizes = sizesRaw.map(String);
+    else if (typeof sizesRaw==="string") sizes = sizesRaw.split(/[,/|]/).map(s=>s.trim()).filter(Boolean);
   }
+  return { total, bySize, sizes };
+}
+function normalize(id, doc){
+  const st = readStock(doc);
+  const price = Number(String(pick(doc,"price")??"").replace(/[^0-9.]/g,""));
+  return { id, name: String(pick(doc,"name") ?? id), price: isFinite(price)?price:0, ...st };
+}
+function firstImage(doc){
+  const im = doc && (doc.images ?? doc.image ?? doc.imageUrl ?? doc.photo);
+  const one = Array.isArray(im) ? im[0] : im;
+  if (!one) return "";
+  return typeof one==="string" ? one : (one.url || one.src || "");
+}
+function thumbHtml(p, small){
+  if (!p || !p.image) return `<div class="nothumb">no photo</div>`;
+  return `<img class="thumb${small?" sm":""}" loading="lazy" src="${esc(p.image)}" alt="${esc(p.name)}" data-zoom="${esc(p.id)}" onerror="this.outerHTML='<div class=&quot;nothumb&quot;>no photo</div>'">`;
+}
+const money = n => "$" + (Number(n)||0).toFixed(2);
+function stockState(p){ const low = Number($("lowStock").value)||0;
+  if (p.total<=0) return "out"; if (p.total<=low) return "low"; return "in"; }
+function availSizes(p){ return p.bySize ? Object.entries(p.bySize).filter(([,q])=>q>0).map(([s])=>s) : p.sizes; }
 
-  /* ---------- voice progress bar ---------- */
-  let progAnim = null;
-  function progress(sec){
-    const bar = $("progress"); if (progAnim) progAnim.cancel();
-    if (!sec){ bar.style.width = "0"; return; }
-    progAnim = bar.animate([{ width:"0%" },{ width:"100%" }], { duration: sec*1000, easing:"linear", fill:"forwards" });
+/* ============ CONNECT ============ */
+function setStatus(html){ $("status").innerHTML = html; }
+function msg(el, type, text){ $(el).innerHTML = `<div class="msg ${type}">${esc(text)}</div>`; }
+
+function parseConfig(txt){
+  let t = txt.trim().replace(/^[^{]*/,"").replace(/[^}]*$/,"");
+  try { return JSON.parse(t); } catch(e){}
+  // allow JS object style: apiKey: "x"
+  try { return JSON.parse(t.replace(/([{,]\s*)([A-Za-z_]\w*)\s*:/g,'$1"$2":').replace(/'/g,'"').replace(/,\s*}/g,"}")); } catch(e){ return null; }
+}
+
+async function connect(){
+  const cfg = parseConfig($("cfg").value);
+  if (!cfg || !cfg.projectId){ msg("connectMsg","err","The config could not be read. Paste the firebaseConfig object including projectId."); return; }
+  LS.set("gkl_cfg",$("cfg").value); LS.set("gkl_stores",$("stores").value); LS.set("gkl_inactive",$("incInactive").checked);
+  saveFields();
+  try{
+    const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(cfg);
+    S.db = app.firestore(); S.mode = "firebase";
+    await loadProducts();
+    msg("connectMsg","ok",`Loaded ${S.products.length} products from ${storeList().map(x=>x.label).join(" and ")}.`);
+  }catch(e){
+    msg("connectMsg","err","Could not load products: "+(e.message||e)+". Check the store IDs and Firestore rules.");
   }
+}
+function storeList(){
+  return $("stores").value.split("\n").map(l=>l.trim()).filter(Boolean).map(l=>{
+    const [id,label] = l.split("=").map(x=>x.trim()); return { id, label: label || id };
+  });
+}
+/* Merge the same product (matched by its "id" field) across stores, keeping each store's stock separate */
+function mergeStores(perStore){ // perStore: [{label, docs:[{path, data}]}]
+  const inc = $("incInactive").checked, map = new Map();
+  perStore.forEach(({label, docs})=>docs.forEach(({path,data})=>{
+    if (!inc && data.active===false) return;
+    // Each store keeps its own copy of a product with its own ID, so match the
+    // copies the same way the store app's transfers do: by slug, i.e. the name.
+    const docId = String(data.id || path.split("/").pop());
+    const n = normalize(docId, data);
+    let key = "s:" + String(data.slug || String(n.name||"").trim().toLowerCase().replace(/\s+/g,"_"));
+    if (map.has(key) && map.get(key).refs[label]) key = "id:" + docId;   // two products with the same name in one store: keep apart
+    let p = map.get(key);
+    if (!p){ p = { id:docId, ids:[], name:n.name, price:n.price, category:data.category||"", image:firstImage(data), images:[], stores:{}, refs:{} }; map.set(key,p); }
+    p.ids.push(docId);
+    if (!p.image) p.image = firstImage(data);
+    // extra fields for the show screen: every photo, and a real promo price if one is set
+    (Array.isArray(data.images) ? data.images : []).forEach(u=>{ const x = typeof u==="string" ? u : (u && (u.url||u.src)); if (x && !p.images.includes(x)) p.images.push(x); });
+    const promo = Number(data.promoPrice); if (promo>0 && promo<n.price) p.promoPrice = promo;
+    p.stores[label] = { total:n.total, bySize:n.bySize || Object.fromEntries(n.sizes.map(z=>[z,0])) };
+    p.refs[label] = path;
+  }));
+  map.forEach(p=>combine(p));
+  return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name));
+}
+function combine(p){
+  const by = {};
+  Object.values(p.stores).forEach(st=>Object.entries(st.bySize||{}).forEach(([z,q])=>{ by[z]=(by[z]||0)+q; }));
+  p.bySize = by; p.sizes = Object.keys(by);
+  p.total = Object.values(p.stores).reduce((a,st)=>a+st.total,0);
+  return p;
+}
+async function loadProducts(){
+  const stores = storeList();
+  if (!stores.length) throw new Error("Add at least one store ID.");
+  const perStore = await Promise.all(stores.map(async st=>{
+    const snap = await S.db.collection("stores").doc(st.id).collection("products").get();
+    return { label:st.label, docs: snap.docs.map(d=>({ path:d.ref.path, data:d.data() })) };
+  }));
+  S.products = mergeStores(perStore);
+  const cs = await S.db.collection("live_codes").get();
+  S.codes = {}; cs.docs.forEach(d=>{ const x=d.data(); if(x.code) S.codes[d.id]=String(x.code); });
+  // a merged product uses whichever store copy's ID already has a code (so codes, scripts and voices still match)
+  S.products.forEach(p=>{
+    const had = (p.ids||[]).find(id=>S.codes[id]);
+    if (had && !S.codes[p.id]) p.id = had;
+    if ((p.ids||[]).some(id=>S.selected.has(id))){ (p.ids||[]).forEach(id=>S.selected.delete(id)); S.selected.add(p.id); }
+  });
+  // forget ticks for products that were deleted
+  const ids = new Set(S.products.map(p=>p.id)); let gone = false;
+  [...S.selected].forEach(id=>{ if (!ids.has(id)){ S.selected.delete(id); gone = true; } }); if (gone) saveSelected();
+  const st = cs.docs.find(d=>d.id==="_settings"); showFbState(st ? st.data() : null);
+  setStatus(`Connected: <b>${esc(stores.map(x=>x.label).join(" + "))}</b> · ${S.products.length} products`);
+  renderProducts();
+}
+async function refreshOne(p){
+  if (S.mode!=="firebase" || !p.refs) return p;
+  try{
+    await Promise.all(Object.entries(p.refs).map(async([label,path])=>{
+      const d = await S.db.doc(path).get();
+      if (d.exists){ const n = normalize(p.id,d.data()); p.stores[label] = { total:n.total, bySize:n.bySize || {} }; p.price = n.price; }
+      else p.stores[label] = { total:0, bySize:{} };
+    }));
+    combine(p);
+  }catch(e){}
+  return p;
+}
+/* "271: 2 (23, 24) · PH: 0" — shown in every answer */
+function storeLine(p, lang, size){
+  const parts = Object.entries(p.stores||{}).map(([label,st])=>{
+    if (size){ const q = (st.bySize||{})[size]||0; return `${label}: ${q}`; }
+    const z = Object.entries(st.bySize||{}).filter(([,q])=>q>0).map(([k])=>k);
+    return `${label}: ${st.total}${z.length?` (${z.join(", ")})`:""}`;
+  });
+  if (!parts.length) return "";
+  const head = lang==="km" ? (size?`ស្តុកទំហំ ${size} តាមសាខា`:"ស្តុកតាមសាខា") : (size?`Size ${size} stock by store`:"Stock by store");
+  return `${head}: ${parts.join(" · ")}`;
+}
+function withStores(text, p, lang, size){ const l = storeLine(p, lang, size); return l ? text + "\n" + l : text; }
 
-  function replay(el){ el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap"); }
+function loadSample(){
+  S.mode = "sample"; S.db = null;
+  S.products = [
+    {id:"p1784008000581",name:"Girl Shoes_031",price:11,stores:{"271":{total:3,bySize:{"23":1,"24":1,"25":1}},"PH":{total:2,bySize:{"23":1,"24":1,"25":0}}}},
+    {id:"p1784008000600",name:"Dino cotton set",price:12.5,stores:{"271":{total:6,bySize:{"90":2,"100":2,"110":2}},"PH":{total:0,bySize:{"90":0,"100":0,"110":0}}}},
+    {id:"p1784008000777",name:"Floral summer dress",price:15,stores:{"271":{total:0,bySize:{"100":0,"110":0}},"PH":{total:2,bySize:{"100":2,"110":0}}}},
+    {id:"p1784008000888",name:"Grey zip hoodie",price:18,stores:{"271":{total:0,bySize:{"110":0}},"PH":{total:0,bySize:{"110":0}}}}
+  ].map(combine);
+  S.codes = {};
+  setStatus("Sample products (not saved)");
+  msg("connectMsg","warn","Sample mode: codes are not saved. Connect Firebase for real use.");
+  renderProducts();
+}
 
-  /* ---------- show one product ---------- */
-  function showProduct(p, next){
-    document.body.classList.remove("mode-line");
-    $("codeNum").textContent = p.code || "—";
-    $("name").textContent = p.name || "";
-    const promo = Number(p.promo) > 0 && Number(p.promo) < Number(p.price);
-    $("price").textContent = money(promo ? p.promo : p.price);
-    $("was").textContent = promo ? money(p.price) : "";
-    $("promo").style.display = promo ? "block" : "none";
-    if (promo) $("promo").textContent = "-" + Math.round((1 - p.promo / p.price) * 100) + "%";
-    $("few").style.display = (p.total > 0 && p.total <= 3) ? "block" : "none";
-    const sz = (p.sizes||[]).slice(0, 10);
-    $("sizes").innerHTML = sz.length ? `<span class="lbl">ទំហំ៖</span>` + sz.map(s=>`<span class="s">${esc(s)}</span>`).join("") : "";
-    setPhotos(p.images && p.images.length ? p.images : (p.image ? [p.image] : []));
-    if (next && next.name){
-      $("nextImg").src = next.image || ""; $("nextTxt").textContent = "បន្ទាប់ · Next: " + next.name;
-      $("next").style.display = "flex";
-    } else $("next").style.display = "none";
-    progress(0);
-    ["photo","info","code"].forEach(id=>replay($(id)));
+/* ============ CODES ============ */
+async function assignCodes(){
+  if (!S.products.length) return;
+  const used = new Set(Object.values(S.codes));
+  let next = 1001, added = 0;
+  const nextFree = ()=>{ while(used.has(String(next)) && next<=9999) next++; return next<=9999 ? String(next++) : null; };
+  const batch = S.mode==="firebase" ? S.db.batch() : null;
+  for (const p of S.products){
+    if (S.codes[p.id]) continue;
+    const c = nextFree(); if (!c){ alert("All 4-digit codes are used."); break; }
+    S.codes[p.id] = c; used.add(c); added++;
+    if (batch) batch.set(S.db.collection("live_codes").doc(p.id), { code:c, productId:p.id, name:p.name, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
   }
+  try{ if (batch && added) await batch.commit(); }
+  catch(e){ alert("Codes could not be saved to Firebase: "+(e.message||e)+"\nCheck that Firestore rules allow writing to live_codes."); }
+  $("countInfo").textContent = added ? `${added} new codes assigned.` : "Every product already has a code.";
+  renderProducts();
+}
+const byCode = code => S.products.find(p=>S.codes[p.id]===code);
 
-  /* ---------- opening / reminder / thank-you ---------- */
-  const LINE_TITLES = {
-    open:   "សូមស្វាគមន៍មកកាន់ Goat Kids Live!",
-    order:  "ងាយៗ! Comment កូដ + ទំហំ + លេខទូរស័ព្ទ",
-    remind: "AI· Comment កូដ 4 ខ្ទង់",
-    thanks: "អរគុណច្រើនបងៗ! ជួបគ្នា Live ក្រោយ"
-  };
-  function showLine(m){
-    document.body.classList.add("mode-line");
-    $("lineTitle").textContent = LINE_TITLES[m.key] || m.label || "Goat Kids Live";
-    $("lineText").textContent = m.text || "";
-    $("bgProduct").classList.remove("on");
-    progress(0); replay($("lineView"));
+/* ============ CODES ON FACEBOOK CATALOG (read by generate-feed.js) ============ */
+function showFbState(x){
+  const on = !!(x && x.showOnFacebook);
+  const when = x && x.updatedAt && x.updatedAt.toDate ? " (changed " + x.updatedAt.toDate().toLocaleString() + ")" : "";
+  $("fbCodeState").innerHTML = on ? `<b>Showing</b> on Facebook${when}` : `<b>Hidden</b> on Facebook${when}`;
+}
+async function setFbCodes(on){
+  if (S.mode!=="firebase"){ alert("Connect Firebase first."); return; }
+  try{
+    if (on) await assignCodes();
+    await S.db.collection("live_codes").doc("_settings").set({ showOnFacebook:on, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+    const d = await S.db.collection("live_codes").doc("_settings").get();
+    showFbState(d.data());
+    alert(on ? "Codes will appear in the Facebook catalog after the next feed update (about an hour). In Commerce Manager you can press 'Update now' on the data source to speed it up."
+             : "Codes will be removed from the Facebook catalog after the next feed update (about an hour).");
+  }catch(e){ alert("Could not save: " + (e.message||e)); }
+}
+
+/* ============ PRODUCTS TABLE ============ */
+function renderProducts(){
+  const q = $("search").value.trim().toLowerCase();
+  fillCats();
+  const rows = shownProducts();
+  const pillTxt = {in:"In stock",low:"Few left",out:"Out of stock"};
+  $("prodBody").innerHTML = rows.length ? rows.map(p=>{
+    const s = stockState(p), code = S.codes[p.id];
+    const sizeTxt = p.stores ? Object.entries(p.stores).map(([lb,st])=>`<b>${esc(lb)}</b> ${Object.entries(st.bySize||{}).map(([k,v])=>`${esc(k)}:${v}`).join(", ")||"—"}`).join("<br>") : esc(p.sizes.join(", "));
+    return `<tr>
+      <td>${code?`<span class="code">${code}</span>`:'<span class="hint">none yet</span>'}</td>
+      <td>${thumbHtml(p)}</td>
+      <td>${esc(p.name)}${p.category?` <span class="catPill">${esc(catLabel(p.category))}</span>`:""}<div class="hint">${esc(p.id)}</div></td>
+      <td>${money(p.price)}</td><td>${sizeTxt||"—"}</td>
+      <td><span class="pill ${s}">${pillTxt[s]} (${p.total})</span></td>
+      <td><input type="checkbox" aria-label="Use ${esc(p.name)} in script" data-sel="${esc(p.id)}" ${S.selected.has(p.id)?"checked":""} ${code?"":"disabled"}></td>
+    </tr>`; }).join("") : `<tr><td colspan="7" class="hint">No products match.</td></tr>`;
+  if (!q) $("countInfo").textContent ||= `${S.products.length} products, ${Object.keys(S.codes).length} with codes.`;
+  updateSelInfo();
+}
+/* categories: filter the list and tick a whole category at once */
+const catLabel = c => String(c||"").replace(/[-_]+/g," ").replace(/\b\w/g, m=>m.toUpperCase());
+function fillCats(){
+  const sel = $("catFilter"), cur = sel.value || LS.get("gkl_cat","");
+  const cats = [...new Set(S.products.map(p=>p.category).filter(Boolean))].sort((a,b)=>catLabel(a).localeCompare(catLabel(b)));
+  const html = `<option value="">All categories</option>` + cats.map(c=>`<option value="${esc(c)}">${esc(catLabel(c))} (${S.products.filter(p=>p.category===c).length})</option>`).join("")
+    + (S.products.some(p=>!p.category) ? `<option value="__none">No category</option>` : "");
+  if (sel.dataset.html !== html){ sel.innerHTML = html; sel.dataset.html = html; }
+  sel.value = [...sel.options].some(o=>o.value===cur) ? cur : "";
+}
+function shownProducts(){
+  const q = $("search").value.trim().toLowerCase(), cat = $("catFilter").value;
+  return S.products.filter(p=>(!q || p.name.toLowerCase().includes(q) || (S.codes[p.id]||"").includes(q))
+    && (!cat || (cat==="__none" ? !p.category : p.category===cat)));
+}
+function tickShown(on){
+  shownProducts().forEach(p=>{ if (!S.codes[p.id]) return; on ? S.selected.add(p.id) : S.selected.delete(p.id); });
+  saveSelected(); renderProducts();
+}
+function updateSelInfo(){ $("selInfo").textContent = `${S.selected.size} product(s) ticked`; }
+
+/* ============ SCRIPT ============ */
+const T = {
+  km:{
+    open:"ថ្ងៃនេះ Goat Kids មានសម្លៀកបំពាក់កុមារស្អាតៗ មកបង្ហាញជូន។ សូមខមិនលេខកូដ 4 ខ្ទង់ ដើម្បីដឹងតម្លៃ ទំហំ និងស្តុក។",
+    item:(c,p,sz,st)=>`កូដ ${c} — ${p.name}\nតម្លៃ ${money(p.price)}${sz?` · ទំហំ ${sz}`:""}\n${st}\nចង់បាន សូមខមិន ${c} ឬ CF ${c}។`,
+    in:"មានស្តុកគ្រប់គ្រាន់។", low:n=>`នៅសល់តែ ${n} ប៉ុណ្ណោះ ប្រញាប់ឡើង!`, out:"អស់ពីស្តុកហើយ។",
+    close:"អរគុណដែលបានទស្សនា! សូមខមិនលេខកូដ ឬឆាតមកផេក ហើយយើងនឹងផ្ញើទំនិញជូន។"
+  },
+  en:{
+    open:"Today Goat Kids is showing new kids' clothes. Comment the 4-digit code to get the price, sizes and stock.",
+    item:(c,p,sz,st)=>`Code ${c} — ${p.name}\nPrice ${money(p.price)}${sz?` · Sizes ${sz}`:""}\n${st}\nWant it? Comment ${c} or CF ${c}.`,
+    in:"Plenty in stock.", low:n=>`Only ${n} left — be quick!`, out:"This one is sold out.",
+    close:"Thanks for watching! Comment the code or message our page and we will send you the product."
   }
+};
+function scriptFor(lang){
+  const L = lang==="both" ? ["km","en"] : [lang];
+  const every = Number($("repeatEvery").value);
+  const items = S.products.filter(p=>S.selected.has(p.id) && S.codes[p.id]);
+  const parts = [disclosureFor(lang), L.map(l=>T[l].open).join("\n")];
+  items.forEach((p,i)=>{
+    if (i>0 && i%every===0) parts.push(L.map(l=>DISCLOSURE_REMIND[l]).join("\n"));
+    const s = stockState(p), sz = availSizes(p).join(", ");
+    parts.push(L.map(l=>withStores(T[l].item(S.codes[p.id],p,sz, s==="out"?T[l].out : s==="low"?T[l].low(p.total):T[l].in),p,l)).join("\n\n"));
+  });
+  parts.push(L.map(l=>T[l].close).join("\n"));
+  return { text: parts.join("\n\n———\n\n"), count: items.length };
+}
+function genScript(){
+  const lang = $("lang").value;
+  if (!S.selected.size){ msg("scriptMsg","warn","Tick at least one product on the Products tab first."); return; }
+  const r = scriptFor(lang);
+  $("scriptOut").value = r.text;
+  $("titleOut").value = `${TITLE_TAG} Goat Kids Live · ${r.count} item${r.count>1?"s":""}`;
+  msg("scriptMsg","ok",`Script ready for ${r.count} product(s). Turn on Facebook's AI label when you go live.`);
+}
+async function copyScript(){
+  const lang = $("lang").value;
+  const r = ensureDisclosure($("scriptOut").value, lang);
+  $("scriptOut").value = r.text;
+  try{ await navigator.clipboard.writeText(r.text);
+    msg("scriptMsg", r.restored?"warn":"ok", r.restored ? "Copied. The AI host disclosure was missing, so it was added back at the top." : "Copied with the AI host disclosure.");
+  }catch(e){ $("scriptOut").select(); msg("scriptMsg","warn","Select all and copy manually."); }
+}
 
-  /* ---------- live camera: settings come from the Live Desk (saved in this browser) ---------- */
-  let camStream = null, camDev = null;
-  function stopCam(){ if (camStream) camStream.getTracks().forEach(t=>t.stop()); camStream = null; camDev = null; $("camVideo").srcObject = null; }
-  async function applyCam(){
-    const mode = LS.get("gkl_cam_mode") || "off", dev = LS.get("gkl_cam_dev") || "";
-    document.body.classList.toggle("cam-small", mode==="small");
-    document.body.classList.toggle("cam-big", mode==="big");
-    $("cam").classList.toggle("mirror", LS.get("gkl_cam_mirror")==="1");
-    if (mode==="off"){ stopCam(); return; }
-    if (camStream && camDev===dev) return;
-    stopCam();
-    try{
-      camStream = await navigator.mediaDevices.getUserMedia({ audio:false,
-        video: Object.assign({ width:{ideal:1280}, height:{ideal:720} }, dev ? { deviceId:{ exact:dev } } : {}) });
-      camDev = dev; $("camVideo").srcObject = camStream;
-    }catch(err){
-      document.body.classList.remove("cam-small","cam-big");
-      try{ bc && bc.postMessage({ type:"camError", msg: err.name==="NotReadableError" ? "The camera is being used by another app. Close it there, then try again." : (err.message||err.name) }); }catch(e){}
+/* ============ COMMENT REPLIES ============ */
+const INTENT = {
+  price:/price|how ?much|\$|តម្លៃ|ថ្លៃ|ប៉ុន្មាន/i,
+  size:/size|សាយ|ទំហំ|ខ្នាត/i,
+  stock:/stock|available|have|មាន|នៅ|អស់/i,
+  order:/\bcf\b|order|buy|want|ទិញ|កម្ម៉ង់|ចង់បាន|យក/i
+};
+const R = {
+  km:{
+    ask:["សូមខមិនលេខកូដ 4 ខ្ទង់ ដែលបង្ហាញលើអេក្រង់ ដើម្បីយើងពិនិត្យជូន 🙏","សូមប្រាប់លេខកូដទំនិញ 4 ខ្ទង់ យើងនឹងឆ្លើយតម្លៃ និងស្តុកភ្លាម 🙏"],
+    notfound:c=>[`រកមិនឃើញកូដ ${c} ទេ សូមពិនិត្យលេខកូដលើអេក្រង់ម្តងទៀត 🙏`],
+    out:(c,p)=>[`សុំទោស កូដ ${c} (${p.name}) អស់ពីស្តុកហើយ 🙏`,`កូដ ${c} លក់អស់ហើយ សូមមើលកូដផ្សេងទៀត 🙏`],
+    sizeOut:(c,s)=>[`សុំទោស កូដ ${c} ទំហំ ${s} អស់ហើយ 🙏`],
+    in:(c,p,sz,low)=>[
+      `កូដ ${c} — ${p.name}: ${money(p.price)} ✅ មានស្តុក${low?` (នៅសល់តែ ${p.total})`:""}${sz?`\nទំហំដែលមាន: ${sz}`:""}\nសូមខមិនទំហំ ឬឆាតមកផេក យើងនឹងផ្ញើទំនិញជូន!`,
+      `✅ ${p.name} (កូដ ${c}) តម្លៃ ${money(p.price)}${low?` · នៅតែ ${p.total}`:""}${sz?`\nទំហំ: ${sz}`:""}\nឆាតមកផេកដើម្បីកម្ម៉ង់ យើងនឹងផ្ញើជូនបង!`,
+      `កូដ ${c} នៅមាន ✅ ${money(p.price)}${low?` (សល់ ${p.total})`:""}${sz?` · ទំហំ ${sz}`:""}\nប្រាប់ទំហំ និងអាសយដ្ឋានក្នុងឆាត យើងផ្ញើជូនភ្លាម!`
+    ]
+  },
+  en:{
+    ask:["Please comment the 4-digit code shown on screen and we'll check it for you 🙏","Tell us the 4-digit product code and we'll reply with price and stock right away 🙏"],
+    notfound:c=>[`We couldn't find code ${c}. Please check the code on screen 🙏`],
+    out:(c,p)=>[`Sorry, code ${c} (${p.name}) is out of stock right now 🙏`,`Code ${c} is sold out — please check our other codes 🙏`],
+    sizeOut:(c,s)=>[`Sorry, code ${c} in size ${s} is out of stock 🙏`],
+    in:(c,p,sz,low)=>[
+      `Code ${c} — ${p.name}: ${money(p.price)} ✅ In stock${low?` (only ${p.total} left)`:""}${sz?`\nAvailable sizes: ${sz}`:""}\nComment your size or message our page and we'll send you the product!`,
+      `✅ ${p.name} (code ${c}) is ${money(p.price)}${low?` · only ${p.total} left`:""}${sz?`\nSizes: ${sz}`:""}\nMessage our page to order and we'll send it to you!`,
+      `Code ${c} is available ✅ ${money(p.price)}${low?` (${p.total} left)`:""}${sz?` · sizes ${sz}`:""}\nSend your size and address by message and we'll ship it!`
+    ]
+  }
+};
+function rotate(key, arr){ const i = (S.rot[key]||0) % arr.length; S.rot[key]=i+1; return arr[i]; }
+function mentionedSize(comment, p){
+  const list = p.bySize ? Object.keys(p.bySize) : p.sizes;
+  const rest = comment.replace(/\b\d{4}\b/, " ");
+  return list.find(s=>new RegExp(`(^|[^0-9A-Za-z])${String(s).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}([^0-9A-Za-z]|$)`,"i").test(rest));
+}
+async function replyFor(comment, lang){
+  const L = lang==="both" ? ["km","en"] : [lang];
+  const m = comment.match(/\b\d{4}\b/);
+  const intents = Object.keys(INTENT).filter(k=>INTENT[k].test(comment));
+  if (!m) return { text: L.map(l=>rotate("ask"+l,R[l].ask)).join("\n"), info:"No code found" + (intents.length?` · asked about ${intents.join(", ")}`:"") };
+  const code = m[0], p = byCode(code);
+  if (!p) return { text: L.map(l=>R[l].notfound(code)[0]).join("\n"), info:`Code ${code} not in the list` };
+  if ($("refresh").checked) await refreshOne(p);
+  const st = stockState(p), size = mentionedSize(comment, p);
+  if (st==="out") return { text: L.map(l=>rotate("out"+l+code,R[l].out(code,p))).join("\n"), info:`${p.name} · out of stock` };
+  if (size && p.bySize && (p.bySize[size]||0)<=0) return { text: L.map(l=>R[l].sizeOut(code,size)[0]).join("\n"), info:`${p.name} · size ${size} out` };
+  const sz = availSizes(p).join(", ");
+  return { text: L.map(l=>rotate("in"+l+code,R[l].in(code,p,sz,st==="low"))).join("\n\n"), info:`${p.name} · ${p.total} in stock${size?` · asked size ${size}`:""}` };
+}
+/* ============ PHONE + ORDER DETECTION ============ */
+/* Cambodian mobile: 0XX or +855/855 XX, then 6-7 digits, spaces/dots/dashes allowed */
+const PHONE_RE = /(?:\+?855[\s.\-]?|\b0)([1-9]\d)[\s.\-]?(\d{3})[\s.\-]?(\d{3,4})\b/;
+function findPhone(text){
+  const m = String(text).match(PHONE_RE); if (!m) return { phone:"", rest:text };
+  return { phone: `0${m[1]} ${m[2]} ${m[3]}`, rest: text.replace(m[0]," ") };
+}
+function findCode(text){
+  const all = String(text).match(/\b\d{4}\b/g) || [];
+  return all.find(c=>byCode(c)) || all[0] || "";
+}
+const ORDER_T = {
+  km:{
+    ok:(n,c,p,ph,sz)=>[`អរគុណ ${n}! បានទទួលការកម្ម៉ង់ កូដ ${c} (${p.name}${sz?` ទំហំ ${sz}`:""}) ${money(p.price)} ✅ យើងនឹងទាក់ទងលេខ ${ph} ដើម្បីបញ្ជាក់ ហើយផ្ញើទំនិញជូន។`,
+                      `✅ ${n} កូដ ${c}${sz?` ទំហំ ${sz}`:""} ${money(p.price)} កត់ទុករួចហើយ! យើងនឹងតេទៅ ${ph} ឆាប់ៗនេះ។`],
+    needPhone:(n,c)=>[`អរគុណ ${n}! សូមខមិនលេខទូរស័ព្ទ ដើម្បីបញ្ជាក់ការកម្ម៉ង់ កូដ ${c} 🙏`],
+    needSize:(n,c,sz)=>[`អរគុណ ${n}! កូដ ${c} មានទំហំ ${sz} សូមប្រាប់ទំហំដែលចង់បាន 🙏`]
+  },
+  en:{
+    ok:(n,c,p,ph,sz)=>[`Thank you ${n}! Order for code ${c} (${p.name}${sz?`, size ${sz}`:""}) ${money(p.price)} received ✅ We'll call ${ph} to confirm and send your product.`,
+                      `✅ ${n}, code ${c}${sz?` size ${sz}`:""} ${money(p.price)} is noted! We'll call ${ph} soon.`],
+    needPhone:(n,c)=>[`Thank you ${n}! Please comment your phone number to confirm code ${c} 🙏`],
+    needSize:(n,c,sz)=>[`Thank you ${n}! Code ${c} comes in ${sz}. Which size would you like? 🙏`]
+  }
+};
+
+/* ============ LOCATION DETECTION ============ */
+const PROVINCES = [
+  ["Phnom Penh","ភ្នំពេញ",/\bphnom ?penh\b|\bpp\b/i],["Banteay Meanchey","បន្ទាយមានជ័យ",/banteay/i],["Battambang","បាត់ដំបង",/battambang|batdambang/i],
+  ["Kampong Cham","កំពង់ចាម",/k(?:a|o)mpong ?cham/i],["Kampong Chhnang","កំពង់ឆ្នាំង",/k(?:a|o)mpong ?chhnang/i],["Kampong Speu","កំពង់ស្ពឺ",/k(?:a|o)mpong ?speu/i],
+  ["Kampong Thom","កំពង់ធំ",/k(?:a|o)mpong ?thom/i],["Kampot","កំពត",/kampot/i],["Kandal","កណ្ដាល",/kandal/i],["Kep","កែប",/\bkep\b/i],["Koh Kong","កោះកុង",/koh ?kong/i],
+  ["Kratie","ក្រចេះ",/kratie/i],["Mondulkiri","មណ្ឌលគិរី",/mondul?kiri/i],["Oddar Meanchey","ឧត្តរមានជ័យ",/oddar/i],["Pailin","ប៉ៃលិន",/pailin/i],
+  ["Sihanoukville","ព្រះសីហនុ",/sihanouk|kompong ?som/i],["Preah Vihear","ព្រះវិហារ",/preah ?vihear/i],["Prey Veng","ព្រៃវែង",/prey ?veng/i],["Pursat","ពោធិ៍សាត់",/pursat/i],
+  ["Ratanakiri","រតនគិរី",/ratanak?iri/i],["Siem Reap","សៀមរាប",/siem ?reap/i],["Stung Treng","ស្ទឹងត្រែង",/stung ?treng/i],["Svay Rieng","ស្វាយរៀង",/svay ?rieng/i],
+  ["Takeo","តាកែវ",/takeo/i],["Tbong Khmum","ត្បូងឃ្មុំ",/tbong ?khmum/i]
+];
+function findProvince(text){
+  const t = String(text||"");
+  const hit = PROVINCES.find(([en,km,re]) => re.test(t) || t.includes(km) || (km==="កណ្ដាល" && t.includes("កណ្តាល")));
+  return hit ? hit[0] : "";
+}
+/* Whatever is left after taking out the code, phone, size and order words is treated as the address. */
+function findLocation(rest, code, size){
+  let t = " " + String(rest||"") + " ";
+  if (code) t = t.split(code).join(" ");
+  if (size) t = t.replace(new RegExp(`(size|សាយ|ទំហំ|ខ្នាត)?\\s*${String(size).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}(?![0-9A-Za-z])`,"i")," ");
+  t = t.replace(/(?:^|\s)(?:x|×|qty)\s*\d{1,2}(?=\s|$)|\b\d{1,2}\s*(?:pcs|pc)\b/gi," ")
+       .replace(/[\u{1F000}-\u{1FAFF}☀-➿️]/gu," ")
+       .replace(/[#*_~|<>[\]{}()"'`]+/g," ");
+  // Drop whole words only — Khmer is written without spaces, so never cut inside a word.
+  const FILLER = /^(cf|order|buy|want|price|size|please|pls|plz|ok|yes|ទិញ|កម្ម៉ង់|ចង់បាន|យក|សាយ|ទំហំ|ខ្នាត|តម្លៃ|ប៉ុន្មាន|បង|អូន|សូម|ផង|ទេ|បាទ|ចាស|ចា|ណា)[,.!?]*$/i;
+  t = t.split(/\s+/).filter(w => w && !FILLER.test(w)).join(" ")
+       .replace(/^[\s,.;:!?-]+|[\s,.;:!?-]+$/g,"").trim();
+  return (t.match(/[A-Za-z\u1780-\u17FF]/g)||[]).length >= 2 ? t : "";
+}
+
+/* ============ REPORT ============ */
+const REPORT = { rows:[], seen:new Set(), timer:null, after:null };
+async function analyze(c){ // c = {id, name, text, time}
+  const lang = $("rLang").value, L = lang==="both" ? ["km","en"] : [lang];
+  const { phone, rest } = findPhone(c.text);
+  const code = findCode(rest), p = code ? byCode(code) : null;
+  const intents = Object.keys(INTENT).filter(k=>INTENT[k].test(rest));
+  const row = { ...c, phone, code, product:p?p.name:"", price:p?p.price:"", size:"", stock:"", type:"", answer:"", replied:false, location:"", province:"" };
+  if (row.name === "Customer") row.name = "";   // Facebook hides names — staff can type it in the report
+  if (!code){ row.type="No code"; row.answer = L.map(l=>rotate("ask"+l,R[l].ask)).join("\n"); return row; }
+  if (!p){ row.type="Unknown code"; row.answer = L.map(l=>R[l].notfound(code)[0]).join("\n"); return row; }
+  if ($("refresh").checked) await refreshOne(p);
+  const st = stockState(p), size = mentionedSize(rest,p) || "";
+  row.size = size;
+  row.location = findLocation(rest, code, size); row.province = findProvince(row.location || rest); row.stock = Object.entries(p.stores||{}).map(([lb,x])=>`${lb}: ${size?((x.bySize||{})[size]||0):x.total}`).join(" · ") || String(p.total);
+  const isOrder = !!phone || intents.includes("order");
+  row.type = isOrder ? "Order" : "Question";
+  const sizeOut = size && p.bySize && (p.bySize[size]||0)<=0;
+  const name = row.name || "";
+  if (st==="out"){ row.answer = L.map(l=>rotate("out"+l+code,R[l].out(code,p))).join("\n"); return row; }
+  if (sizeOut){ row.answer = L.map(l=>R[l].sizeOut(code,size)[0]).join("\n"); return row; }
+  const avail = availSizes(p);
+  if (isOrder){
+    if (!phone) row.answer = L.map(l=>ORDER_T[l].needPhone(name,code)[0]).join("\n");
+    else if (!size && avail.length>1) row.answer = L.map(l=>ORDER_T[l].needSize(name,code,avail.join(", "))[0]).join("\n");
+    else row.answer = L.map(l=>withStores(rotate("ord"+l+code,ORDER_T[l].ok(name,code,p,phone,size||avail[0]||"")),p,l,size||avail[0]||"")).join("\n\n");
+    return row;
+  }
+  row.answer = L.map(l=>withStores(rotate("in"+l+code,R[l].in(code,p,avail.join(", "),st==="low")),p,l,size)).join("\n\n");
+  return row;
+}
+function tidyAnswer(a){ return String(a||"").replace(/(អរគុណ|Thank you) !/g,"$1!").replace(/✅ , /g,"✅ "); }
+async function addComments(list){
+  if (!S.products.length){ msg("reportMsg","warn","Connect or load sample products first, so codes can be matched."); return 0; }
+  let added = 0;
+  for (const c of list){
+    if (!c.text || REPORT.seen.has(c.id)) continue;
+    REPORT.seen.add(c.id); const r = await analyze(c); r.answer = tidyAnswer(r.answer); REPORT.rows.push(r); added++;
+  }
+  if (added) renderReport();
+  return added;
+}
+function productByCode(c){ return S.products.find(p=>S.codes[p.id]===String(c)); }
+document.addEventListener("click",e=>{
+  const t = e.target.closest("[data-zoom]");
+  const z = document.getElementById("zoom");
+  if (t){ const p = S.products.find(x=>x.id===t.dataset.zoom); if(!p) return;
+    z.querySelector("img").src = p.image; z.querySelector("img").alt = p.name;
+    z.querySelector("div").textContent = `${S.codes[p.id]||""} — ${p.name} · ${money(p.price)}`;
+    z.style.display="flex"; return; }
+  if (e.target.closest("#zoom")) z.style.display="none";
+});
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") document.getElementById("zoom").style.display="none"; });
+function renderReport(){
+  const hide = $("hideNoCode").checked;
+  const rows = REPORT.rows.map((r,i)=>({r,i})).filter(({r})=>!hide || r.code);
+  const cls = t => t==="Order" ? "in" : t==="Question" ? "low" : "out";
+  $("reportBody").innerHTML = rows.length ? rows.map(({r,i})=>`<tr style="${r.replied?"opacity:.5":""}">
+    <td>${esc(new Date(r.time).toLocaleTimeString())}</td>
+    <td><input class="cell-in" data-edit="name" data-i="${i}" value="${esc(r.name)}" placeholder="Name (see live)"><div><span class="pill ${cls(r.type)}">${esc(r.type)}</span></div></td>
+    <td>${esc(r.text)}</td>
+    <td>${r.code?thumbHtml(productByCode(r.code),true):""}</td>
+    <td>${r.code?`<span class="code">${esc(r.code)}</span>`:"—"}<div class="hint">${esc(r.product)}${r.price!==""?" · "+money(r.price):""}</div></td>
+    <td>${esc(r.size||"—")}</td>
+    <td><input class="cell-in" data-edit="phone" data-i="${i}" value="${esc(r.phone)}" placeholder="—" inputmode="tel"></td>
+    <td><input class="cell-in wide" data-edit="location" data-i="${i}" value="${esc(r.location)}" placeholder="—">${r.province?`<div class="hint">📍 ${esc(r.province)}</div>`:""}</td>
+    <td>${esc(r.stock||"—")}</td>
+    <td style="min-width:240px"><div class="r" style="white-space:pre-wrap">${esc(r.answer)}</div>
+      <button class="btn ghost" style="margin-top:6px;padding:5px 10px" data-copyrow="${i}">Copy answer</button>
+      ${r.code && r.product ? (r.sentOrderId
+        ? `<div style="margin-top:6px"><span class="pill in">✅ Sent: ${esc(r.sentOrderId)}${r.sentStoreLabel?" · "+esc(r.sentStoreLabel):""}</span></div>`
+        : `<button class="btn" style="margin-top:6px;padding:5px 10px" data-send="${i}">📤 Send to Store</button>`) : ""}
+      ${r.code && r.product ? `<button class="btn ghost" style="margin-top:6px;padding:5px 10px" data-print="${i}">🧾 Packing slip</button>` : ""}</td>
+    <td><input type="checkbox" aria-label="Replied" data-done="${i}" ${r.replied?"checked":""}></td>
+  </tr>`).join("") : `<tr><td colspan="11" class="hint">No comments yet. Start reading the live or paste comments.</td></tr>`;
+  const orders = REPORT.rows.filter(r=>r.type==="Order").length;
+  $("reportInfo").textContent = `${REPORT.rows.length} comments · ${orders} orders`;
+}
+async function pasteComments(){
+  const now = Date.now();
+  const list = $("comments").value.split("\n").map(s=>s.trim()).filter(Boolean).map((line,i)=>{
+    const m = line.match(/^([^:：]{1,40})[:：]\s*(.+)$/);
+    return { id:"paste-"+now+"-"+i, name:m?m[1].trim():"", text:m?m[2]:line, time:now };
+  });
+  const n = await addComments(list);
+  $("comments").value = "";
+  msg("reportMsg","ok",`${n} comment(s) added.`);
+}
+
+/* ============ FACEBOOK READING (read only) ============ */
+function videoId(v){
+  const t = String(v||"");
+  const m = t.match(/\/videos\/(?:[^\/?#]*\/)?(\d{8,})/) || t.match(/\/producer\/(?:v\d+\/)?(\d{8,})/) || t.match(/[?&]v=(\d{8,})/) || t.match(/^\s*(\d{8,}(?:_\d{8,})?)\s*$/);
+  return m ? m[1] : "";
+}
+const GRAPH = "https://graph.facebook.com/v26.0/";
+async function gget(path, token){
+  const res = await fetch(GRAPH + path + (path.includes("?")?"&":"?") + "access_token=" + encodeURIComponent(token));
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  return data;
+}
+async function findCurrentLive(token){
+  const d = await gget(`me/live_videos?broadcast_status=${encodeURIComponent('["LIVE"]')}&fields=id,title,status,video{id}&limit=5`, token);
+  const live = (d.data||[])[0];
+  if (!live) return null;
+  return { id: (live.video && live.video.id) || live.id, title: live.title || "" };
+}
+async function resolveVideo(token){
+  const fromLink = videoId($("fbVideo").value);
+  if (fromLink){
+    let firstErr = null;
+    try { await gget(`${fromLink}/comments?limit=1&fields=id`, token); return { id: fromLink, how: "link" }; }
+    catch(e){ firstErr = e; }
+    // Video comments need extra permissions; the same comments are readable through the
+    // page's post, whose ID is PAGEID_VIDEOID.
+    if (!fromLink.includes("_")){
+      try {
+        const me = await gget("me?fields=id", token);
+        const postId = `${me.id}_${fromLink}`;
+        await gget(`${postId}/comments?limit=1&fields=id`, token);
+        return { id: postId, how: "link" };
+      } catch(e){ /* fall through */ }
+    }
+    if (!/nonexist|does not exist|unsupported get/i.test(firstErr.message)) throw firstErr;
+    /* not a video id (page or post id) — fall through to auto-find */
+  }
+  let live;
+  try { live = await findCurrentLive(token); }
+  catch(e){
+    if (/permission/i.test(e.message)) throw new Error("This token can't search for the live by itself. Paste the live video link (the one with /videos/ and a long number) into the link box, then press Start reading again.");
+    throw e;
+  }
+  if (!live) throw new Error(fromLink
+    ? "That link is not a live video, and no live is running on the page right now. Start the live first, then press Start reading again."
+    : "No live is running on the page right now. Start the live first, then press Start reading.");
+  return { id: live.id, how: "auto", title: live.title };
+}
+async function fbFetch(){
+  const token = $("fbToken").value.trim(), vid = REPORT.vid;
+  const base = `${vid}/comments?filter=stream&order=reverse_chronological&limit=100&fields=id,message,created_time`;
+  let data;
+  if (!REPORT.noFrom){
+    try { data = await gget(base + ",from{name,id}", token); }
+    catch(e){
+      if (!/permission/i.test(e.message)) throw e;
+      REPORT.noFrom = true;
+      msg("fbMsg","warn","Facebook hides customer names from this app, so names will show as \"Customer\". Orders, codes and phones still work.");
     }
   }
-
-  /* ---------- messages from the Live Desk ---------- */
-  let bc = null;
-  try{ bc = new BroadcastChannel("gk-live-show"); }catch(e){}
-  function onMsg(m){
-    if (!m || !m.type) return;
-    document.body.classList.add("connected");
-    if (m.type==="product") showProduct(m.p || {}, m.next);
-    else if (m.type==="line") showLine(m);
-    else if (m.type==="voice") progress(m.dur);
-    else if (m.type==="voiceEnd") progress(0);
-    else if (m.type==="bg") setShopBg(m.url || LS.get("gkl_show_bg"));
-    else if (m.type==="idle") showLine({ key:"open", text:"" });
-    else if (m.type==="cam") applyCam();
+  if (!data) data = await gget(base, token);
+  const list = (data.data||[]).reverse().map(c=>({ id:c.id, name:(c.from&&c.from.name)||"Customer", text:c.message||"", time:c.created_time }));
+  return addComments(list);
+}
+async function fbStart(){
+  const token = $("fbToken").value.trim();
+  if (!token){ msg("fbMsg","err","Paste the Goat Kids page token first."); return; }
+  if (!S.products.length){ msg("fbMsg","err","Connect or load products first, so codes can be matched."); return; }
+  LS.set("gkl_fbVideo",$("fbVideo").value); try{ sessionStorage.setItem("gkl_fbToken",token); }catch(e){}
+  msg("fbMsg","warn","Looking for the live…");
+  try{
+    const v = await resolveVideo(token); REPORT.vid = v.id;
+    const n = await fbFetch();
+    msg("fbMsg","ok",(v.how==="auto" ? `Found the live running now${v.title?` ("${v.title}")`:""}. ` : "") + `Reading live ${v.id}. ${n} comment(s) loaded.`);
   }
-  if (bc){ bc.onmessage = e => onMsg(e.data); bc.postMessage({ type:"hello" }); }
-  else $("help").innerHTML = "This browser can't talk to the Live Desk. Use <b>Google Chrome</b> or <b>Edge</b>.";
-  // the shop photo can also change from another tab without a message
-  window.addEventListener("storage", e=>{ if (e.key==="gkl_show_bg") setShopBg(e.newValue); if (e.key && e.key.startsWith("gkl_cam_")) applyCam(); });
-  applyCam();
+  catch(e){ msg("fbMsg","err","Facebook said: "+e.message); return; }
+  $("btnFbStart").disabled = true; $("btnFbStop").disabled = false;
+  REPORT.timer = setInterval(async()=>{ try{ const n = await fbFetch(); if(n) msg("fbMsg","ok",`${n} new comment(s) at ${new Date().toLocaleTimeString()}.`); }
+    catch(e){ msg("fbMsg","err","Facebook said: "+e.message); } }, Number($("fbEvery").value)*1000);
+}
+function fbStop(){ clearInterval(REPORT.timer); REPORT.timer=null; $("btnFbStart").disabled=false; $("btnFbStop").disabled=true; msg("fbMsg","warn","Stopped reading."); }
 
-  /* ---------- full screen + hide the mouse ---------- */
-  function fs(){ if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{}); else document.exitFullscreen(); }
-  document.addEventListener("keydown", e=>{ if (e.key==="f" || e.key==="F") fs(); });
-  document.addEventListener("dblclick", fs);
-  let ct = null;
-  document.addEventListener("mousemove", ()=>{ document.body.classList.remove("hide-cursor"); clearTimeout(ct); ct = setTimeout(()=>document.body.classList.add("hide-cursor"), 2000); });
+/* ============ REPORT EXPORT / SAVE ============ */
+function reportCsv(){
+  if (!REPORT.rows.length){ msg("reportMsg","warn","The report is empty."); return; }
+  const q = s => `"${String(s??"").replace(/"/g,'""')}"`;
+  const head = ["Time","Customer","Type","Comment","Code","Product","Price","Size","Phone","Location","Province","Stock","Answer","Replied"];
+  const body = REPORT.rows.map(r=>[new Date(r.time).toLocaleString(),r.name,r.type,r.text,r.code,r.product,r.price,r.size,r.phone,r.location,r.province,r.stock,r.answer,r.replied?"Yes":"No"].map(q).join(","));
+  const blob = new Blob(["\ufeff"+[head.join(",")].concat(body).join("\r\n")],{type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `goat_kids_live_report_${new Date().toISOString().slice(0,16).replace(/[:T]/g,"-")}.csv`; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+async function saveReport(){
+  if (S.mode!=="firebase"){ msg("reportMsg","warn","Connect Firebase first. Sample mode cannot save."); return; }
+  if (!REPORT.rows.length){ msg("reportMsg","warn","The report is empty."); return; }
+  const vid = REPORT.vid || videoId($("fbVideo").value) || "manual-"+new Date().toISOString().slice(0,10);
+  try{
+    for (let i=0;i<REPORT.rows.length;i+=400){
+      const b = S.db.batch();
+      REPORT.rows.slice(i,i+400).forEach(r=>{
+        b.set(S.db.collection("live_report").doc(String(r.id).replace(/\//g,"_")), {
+          liveId:vid, time:r.time, customer:r.name, type:r.type, comment:r.text, code:r.code, product:r.product, location:r.location||"", province:r.province||"",
+          price:r.price, size:r.size, phone:r.phone, stock:r.stock, answer:r.answer, replied:r.replied,
+          ...(r.sentOrderId ? { sentOrderId:r.sentOrderId, sentStoreId:r.sentStoreId||"", sentStoreLabel:r.sentStoreLabel||"" } : {}),
+          savedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      });
+      await b.commit();
+    }
+    msg("reportMsg","ok",`Saved ${REPORT.rows.length} row(s) to live_report.`);
+  }catch(e){ msg("reportMsg","err","Could not save: "+(e.message||e)+". Check Firestore rules for live_report."); }
+}
+
+/* ============ VIRBO EXPORT ============ */
+function rulesRows(){
+  const lang = $("eLang").value, L = lang==="both" ? ["km","en"] : [lang];
+  const onlySel = $("eSelected").checked;
+  return S.products.filter(p=>S.codes[p.id] && (!onlySel || S.selected.has(p.id))).map(p=>{
+    const c = S.codes[p.id], st = stockState(p), sz = availSizes(p).join(", ");
+    const r1 = L.map(l=> st==="out" ? R[l].out(c,p)[0] : withStores(R[l].in(c,p,sz,st==="low")[0],p,l)).join("\n");
+    const r2 = L.map(l=> st==="out" ? R[l].out(c,p)[1] : withStores(R[l].in(c,p,sz,st==="low")[1],p,l)).join("\n");
+    return { rule:`Code ${c} ${p.name}`, keywords:c, r1, r2 };
+  });
+}
+function rulesCsv(rows){
+  const q = s => `"${String(s).replace(/"/g,'""')}"`;
+  return "\ufeff" + ["Rule Name,Keywords,Reply 1,Reply 2"].concat(rows.map(r=>[r.rule,r.keywords,r.r1,r.r2].map(q).join(","))).join("\r\n");
+}
+function previewRules(){
+  const rows = rulesRows();
+  if (!rows.length){ msg("exportMsg","warn","No products with codes to export. Assign codes first."); return null; }
+  $("rulesOut").value = rows.map(r=>`${r.rule}\nKeyword: ${r.keywords}\nReply 1: ${r.r1}\nReply 2: ${r.r2}`).join("\n\n———\n\n");
+  msg("exportMsg","ok",`${rows.length} rule(s). Stock snapshot taken ${new Date().toLocaleString()}.`);
+  return rows;
+}
+function downloadCsv(){
+  const rows = previewRules(); if (!rows) return;
+  const blob = new Blob([rulesCsv(rows)],{type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `goat_kids_virbo_rules_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+/* ============ WIRING ============ */
+function saveFields(){ ["fName","fPrice","fStock","fSizes","lowStock"].forEach(id=>LS.set("gkl_"+id,$(id).value)); }
+document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("nav.tabs button").forEach(x=>x.setAttribute("aria-selected", x===b));
+  document.querySelectorAll("section.view").forEach(v=>v.classList.toggle("active", v.id==="view-"+b.dataset.view));
+}));
+$("btnConnect").onclick = connect;
+$("btnSample").onclick = loadSample;
+$("btnAssign").onclick = assignCodes;
+$("btnFbShow").onclick = ()=>setFbCodes(true);
+$("btnFbHide").onclick = ()=>setFbCodes(false);
+$("search").oninput = renderProducts;
+$("catFilter").onchange = ()=>{ LS.set("gkl_cat", $("catFilter").value); renderProducts(); };
+$("btnTickShown").onclick = ()=>tickShown(true);
+$("btnUntickShown").onclick = ()=>tickShown(false);
+$("prodBody").addEventListener("change",e=>{ const id=e.target.dataset.sel; if(!id) return; e.target.checked?S.selected.add(id):S.selected.delete(id); saveSelected(); updateSelInfo(); });
+$("btnScript").onclick = genScript;
+$("btnCopyScript").onclick = copyScript;
+$("btnPaste").onclick = pasteComments;
+$("btnFbStart").onclick = fbStart;
+$("btnFbStop").onclick = fbStop;
+$("btnCsvReport").onclick = reportCsv;
+$("btnSaveReport").onclick = saveReport;
+$("btnClearReport").onclick = ()=>{ if(!confirm("Clear the whole report?")) return; REPORT.rows=[]; REPORT.seen.clear(); renderReport(); };
+$("hideNoCode").onchange = renderReport;
+$("reportBody").addEventListener("click",async e=>{
+  const i = e.target.dataset.copyrow;
+  if (i!==undefined){ try{ await navigator.clipboard.writeText(REPORT.rows[i].answer); e.target.textContent="Copied"; setTimeout(()=>e.target.textContent="Copy answer",1500);}catch(err){} }
+});
+$("reportBody").addEventListener("change",e=>{ const i=e.target.dataset.done; if(i===undefined) return; REPORT.rows[i].replied=e.target.checked; renderReport(); });
+// Staff corrections (name, phone, location) are kept without re-drawing the table while typing.
+$("reportBody").addEventListener("input",e=>{ const k=e.target.dataset.edit, i=e.target.dataset.i; if(!k||i===undefined) return; REPORT.rows[i][k]=e.target.value; if(k==="location") REPORT.rows[i].province=findProvince(e.target.value); });
+$("reportBody").addEventListener("click",e=>{ const i=e.target.dataset.print; if(i!==undefined) openReceipt(Number(i)); const si=e.target.dataset.send; if(si!==undefined) openSend(Number(si)); });
+
+/* ============ SEND TO STORE ============
+   Turns one live comment row into a PENDING order in the Store App, using the
+   exact order shape the store's placeOrder() writes to
+   stores/{storeId}/orders/{orderId}. That write is what triggers the normal
+   new-order Telegram alert (notifyNewOrder). Stock is never touched here — the
+   Store App takes stock only when Order Manager presses Confirm.
+   Safety:
+   - The store comes from the product's own document path, so the order goes to
+     the branch the operator picks in the dialog, never a default store.
+   - One Firestore transaction both creates the order and marks the comment in
+     live_report as sent, so a comment can become at most ONE order, even with
+     two devices pressing Send at the same time.
+   - Order IDs keep the store's "ORD-<milliseconds>" format (the Store App reads
+     the time from it). Inside the transaction the ID is checked first; if it is
+     already taken the number is moved forward, so an existing order is never
+     overwritten. */
+let SD = null, sdBusy = false;
+function sdStoreOf(path){ const a = String(path||"").split("/"); return { storeId:a[1]||"", docId:a[3]||"" }; }
+function sdLiveDocId(r){ return String(r.id).replace(/\//g,"_"); }
+async function openSend(i){
+  const r = REPORT.rows[i]; if (!r) return;
+  if (S.mode!=="firebase"){ alert("Connect Firebase first. Sample mode cannot send orders."); return; }
+  if (r.sentOrderId){ alert("Already sent as " + r.sentOrderId); return; }
+  const p = productByCode(r.code);
+  if (!p || !p.refs || !Object.keys(p.refs).length){ alert("This code does not match a product in the connected stores."); return; }
+  SD = { i, r, p, branch:{} };
+  $("sdMsg").innerHTML = ""; $("sdSend").disabled = true;
+  $("sdItem").textContent = `[${r.code}] ${p.name}`;
+  // Fresh stock + price for every store that carries this product
+  const labels = storeList().reduce((m,x)=>{ m[x.label]=x.id; return m; },{});
+  await Promise.all(Object.entries(p.refs).map(async([label,path])=>{
+    try{
+      const d = await S.db.doc(path).get();
+      if (!d.exists) return;
+      const n = normalize(p.id, d.data()); const raw = d.data();
+      const hasSizes = Array.isArray(raw.sizes) && raw.sizes.length && typeof raw.sizes[0]==="object";
+      SD.branch[label] = { label, path, ...sdStoreOf(path), price:n.price, bySize:n.bySize||{}, total:n.total, hasSizes,
+        image: firstImage(raw) || p.image || "", name: String(raw.name || p.name) };
+    }catch(e){}
+  }));
+  const list = Object.values(SD.branch);
+  if (!list.length){ alert("Could not read this product from the stores. Check the connection."); SD = null; return; }
+  const want = r.size || "";
+  const best = list.find(b=>want ? (b.bySize[want]||0) >= 1 : b.total > 0) || list[0];
+  $("sdStore").innerHTML = list.map(b=>`<option value="${esc(b.label)}"${b===best?" selected":""}>${esc(b.label)} (${esc(b.storeId)}) — stock ${want?`size ${esc(want)}: ${b.bySize[want]||0}`:b.total}</option>`).join("");
+  $("sdName").value = r.name||""; $("sdPhone").value = r.phone||""; $("sdAddr").value = r.location||"";
+  $("sdCity").value = r.province||"";
+  $("sdQty").value = r.qty || 1;
+  $("sdFee").value = r.fee != null ? r.fee : (LS.get("gkl_rcFee","") ?? "");
+  $("sdShip").value = /phnom ?penh/i.test(r.province||"") ? "Phnom Penh" : (r.province ? "Province" : "Pickup");
+  sdFillSizes(); $("sendDlg").showModal();
+}
+function sdBranch(){ return SD && SD.branch[$("sdStore").value]; }
+function sdFillSizes(){
+  const b = sdBranch(); if (!b) return;
+  const cur = $("sdSize").value || SD.r.size || "";
+  if (b.hasSizes){
+    const sizes = Object.keys(b.bySize);
+    $("sdSize").innerHTML = `<option value="">— choose size —</option>` + sizes.map(z=>`<option value="${esc(z)}"${z===cur?" selected":""}>${esc(z)} (${b.bySize[z]||0} left)</option>`).join("");
+  } else {
+    $("sdSize").innerHTML = `<option value="One Size">One Size (${b.total} left)</option>`;
+  }
+  sdUpdate();
+}
+function sdUpdate(){
+  const b = sdBranch(); if (!b) return;
+  const size = $("sdSize").value, qty = Math.max(1, Math.floor(Number($("sdQty").value)||1)), fee = Number($("sdFee").value)||0;
+  const left = b.hasSizes ? (size ? (b.bySize[size]||0) : null) : b.total;
+  const sub = (Number(b.price)||0) * qty;
+  $("sdTotal").textContent = `${qty} × ${money(b.price)} = ${money(sub)} + delivery ${money(fee)} = ${money(sub+fee)}`;
+  $("sdStock").textContent = left===null ? `Store ${b.storeId}: choose a size.` : `Store ${b.storeId}: ${left} in stock for this ${b.hasSizes?"size":"item"}.`;
+  $("sdSend").disabled = sdBusy || left===null || left < qty;
+  if (left!==null && left < qty) $("sdStock").textContent += " Not enough here — pick another store or size.";
+}
+async function sendToStore(){
+  if (sdBusy || !SD) return;
+  const b = sdBranch(), r = SD.r;
+  const name = $("sdName").value.trim(), phone = $("sdPhone").value.trim(), addr = $("sdAddr").value.trim(), city = $("sdCity").value.trim();
+  const size = $("sdSize").value, qty = Math.max(1, Math.floor(Number($("sdQty").value)||1)), fee = Number($("sdFee").value)||0;
+  if (!name || !phone || !addr){ msg("sdMsg","err","Fill Name, Phone & Address."); return; }
+  if (b.hasSizes && !size){ msg("sdMsg","err","Choose a size."); return; }
+  if (!b.storeId || !b.docId){ msg("sdMsg","err","Could not tell which store this product belongs to."); return; }
+  sdBusy = true; $("sdSend").disabled = true; $("sdSend").textContent = "Sending...";
+  const price = Number(b.price)||0, sub = price*qty;
+  const cart = [{ productId:b.docId, name:b.name, size: b.hasSizes ? size : "One Size", quantity:qty, price, subtotal:sub,
+    image:b.image||"", discountAmt:0, discountType:"none", discountValue:0 }];
+  const liveRef = S.db.collection("live_report").doc(sdLiveDocId(r));
+  const ordersCol = S.db.collection("stores").doc(b.storeId).collection("orders");
+  const vid = REPORT.vid || videoId($("fbVideo").value) || "";
+  try{
+    const result = await S.db.runTransaction(async tx=>{
+      const lv = await tx.get(liveRef);
+      if (lv.exists && lv.data().sentOrderId) return { already: lv.data().sentOrderId, store: lv.data().sentStoreLabel||"" };
+      let ts = Date.now(), oid = "ORD-" + ts;
+      for (let k=0; k<20; k++){ const ex = await tx.get(ordersCol.doc(oid)); if (!ex.exists) break; ts++; oid = "ORD-" + ts; if (k===19) throw new Error("Could not get a free Order ID, try again."); }
+      const order = {
+        orderId:oid, timestamp:ts, orderDate:new Date(ts).toLocaleString(),
+        status:"pending", shippingMethod:$("sdShip").value, customerName:name,
+        customerPhone:phone, customerAddress:addr, customerCity:city,
+        customerNotes:`Live order · code ${r.code}${vid?" · live "+vid:""} · comment: ${String(r.text||"").slice(0,200)}`,
+        paymentMethod:"cod", storeId:b.storeId,
+        cart, subtotal:sub, shipping:fee, discount:0, discountType:"none", discountValue:0, total:sub+fee,
+        source:"live", liveCommentId:String(r.id), liveCode:String(r.code||"")
+      };
+      tx.set(ordersCol.doc(oid), order);
+      tx.set(liveRef, { liveId:vid, time:r.time, customer:name, code:r.code, product:r.product, phone, location:addr, size:cart[0].size,
+        sentOrderId:oid, sentStoreId:b.storeId, sentStoreLabel:b.label, sentAt:firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+      return { oid };
+    });
+    if (result.already){
+      r.sentOrderId = result.already; r.sentStoreLabel = result.store;
+      msg("reportMsg","warn",`This comment was already sent as ${result.already}. No new order was made.`);
+    } else {
+      r.sentOrderId = result.oid; r.sentStoreId = b.storeId; r.sentStoreLabel = b.label;
+      r.name = name; r.phone = phone; r.location = addr; r.size = cart[0].size; r.qty = qty; r.fee = fee;
+      LS.set("gkl_rcFee", $("sdFee").value);
+      msg("reportMsg","ok",`Sent to ${b.label} as ${result.oid} (Pending). Confirm and print the receipt in the Store App.`);
+    }
+    $("sendDlg").close(); renderReport();
+  }catch(e){
+    msg("sdMsg","err","Could not send: " + (e.message||e) + ". Nothing was saved — you can try again.");
+  }finally{
+    sdBusy = false; $("sdSend").textContent = "Send to Store"; if (SD) sdUpdate();
+  }
+}
+$("sdStore").addEventListener("change", sdFillSizes);
+["sdSize","sdQty","sdFee"].forEach(id=>$(id).addEventListener(id==="sdSize"?"change":"input", sdUpdate));
+$("sdSend").onclick = sendToStore;
+$("sdCancel").onclick = ()=>$("sendDlg").close();
+
+/* ============ RECEIPT ============ */
+let RC = null;
+function openReceipt(i){
+  const r = REPORT.rows[i]; if (!r) return; RC = i;
+  const q = m => /(?:x|×|qty|ចំនួន)\s*(\d{1,2})\b|\b(\d{1,2})\s*(?:pcs|pc|ឈុត|អាវ|ដុំ)/i.exec(m);
+  const qm = q(r.text||""); const qty = qm ? Number(qm[1]||qm[2]) : 1;
+  $("rcName").value = r.name||""; $("rcPhone").value = r.phone||""; $("rcLoc").value = r.location||"";
+  $("rcQty").value = r.qty || qty || 1; $("rcSize").value = r.size||"";
+  $("rcFee").value = r.fee != null ? r.fee : (LS.get("gkl_rcFee", "") ?? "");
+  $("rcItem").textContent = `[${r.code}] ${r.product} · ${money(r.price)}`;
+  rcTotals(); $("receiptDlg").showModal();
+}
+function rcTotals(){
+  const r = REPORT.rows[RC]; if(!r) return;
+  const qty = Math.max(1, Number($("rcQty").value)||1), fee = Number($("rcFee").value)||0, sub = (Number(r.price)||0)*qty;
+  $("rcTotal").textContent = `Subtotal ${money(sub)} + delivery ${money(fee)} = ${money(sub+fee)}`;
+}
+function receiptHtml(r){
+  const qty = Math.max(1, Number(r.qty)||1), fee = Number(r.fee)||0, price = Number(r.price)||0, sub = price*qty;
+  const no = "LIVE-" + String(r.id||"").split("_").pop().slice(-6).toUpperCase();
+  const row = (a,b,cls="") => `<div class="rw ${cls}"><span>${a}</span><span>${b}</span></div>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(no)}</title><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;700&display=swap" rel="stylesheet"><style>
+    @page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{font:13px/1.4 "Noto Sans Khmer",Arial,sans-serif;width:74mm;margin:0 auto;color:#000}
+    h1{font-size:20px;text-align:center;margin:2px 0 0;letter-spacing:1px}.c{text-align:center}.s{font-size:11px}.dash{border-top:1px dashed #000;margin:7px 0}
+    .rw{display:flex;justify-content:space-between;gap:8px}.b{font-weight:700}.big{font-size:16px}.lbl{color:#000;font-weight:700}
+  </style></head><body>
+    <h1>GOAT KIDS</h1><div class="c s">Live order · packing slip</div>
+    <div class="dash"></div>
+    ${r.sentOrderId ? row("Order ID", `<b>${esc(r.sentOrderId)}</b>`) + row("Store", esc(r.sentStoreLabel||"")) : `<div class="c b">NOT SENT TO STORE YET</div>`}${row("Slip", esc(no))}${row("Date", esc(new Date().toLocaleString()))}${row("Comment", esc(new Date(r.time).toLocaleTimeString()))}
+    <div class="dash"></div>
+    <div><span class="lbl">Customer:</span> ${esc(r.name||"—")}</div>
+    <div><span class="lbl">Phone:</span> <span class="big b">${esc(r.phone||"—")}</span></div>
+    <div><span class="lbl">Location:</span> ${esc(r.location||"—")}${r.province && !(r.location||"").toLowerCase().includes(r.province.toLowerCase())?` (${esc(r.province)})`:""}</div>
+    <div class="dash"></div>
+    <div class="b">[${esc(r.code)}] ${esc(r.product)}</div>
+    ${row(`${r.size?`Size ${esc(r.size)} · `:""}${qty} × ${money(price)}`, money(sub))}
+    <div class="dash"></div>
+    ${row("Subtotal", money(sub))}${row("Delivery", money(fee))}
+    ${row("TOTAL", money(sub+fee), "b big")}
+    <div class="c s" style="margin-top:4px">Official receipt &amp; payment: Store App</div>
+    <div class="dash"></div>
+    <div class="c s">អរគុណសម្រាប់ការគាំទ្រ! · Thank you!</div>
+  </body></html>`;
+}
+function printReceipt(){
+  const r = REPORT.rows[RC]; if(!r) return;
+  r.name = $("rcName").value.trim(); r.phone = $("rcPhone").value.trim(); r.location = $("rcLoc").value.trim();
+  r.province = findProvince(r.location); r.size = $("rcSize").value.trim() || r.size;
+  r.qty = Math.max(1, Number($("rcQty").value)||1); r.fee = Number($("rcFee").value)||0; LS.set("gkl_rcFee", $("rcFee").value);
+  r.printed = true;
+  const fr = document.createElement("iframe"); fr.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0"; document.body.appendChild(fr);
+  fr.contentDocument.open(); fr.contentDocument.write(receiptHtml(r)); fr.contentDocument.close();
+  const go = ()=>{ try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ alert("Could not open printing: " + e.message); } setTimeout(()=>fr.remove(), 60000); };
+  // wait for the Khmer font so the receipt prints correctly
+  const fonts = fr.contentDocument.fonts; (fonts && fonts.ready ? Promise.race([fonts.ready, new Promise(r=>setTimeout(r,1500))]) : Promise.resolve()).then(()=>setTimeout(go,150));
+  $("receiptDlg").close(); renderReport();
+}
+["rcQty","rcFee"].forEach(id=>$(id).addEventListener("input", rcTotals));
+$("rcPrint").onclick = printReceipt;
+$("rcCancel").onclick = ()=>$("receiptDlg").close();
+$("fbVideo").value = LS.get("gkl_fbVideo","");
+try{ $("fbToken").value = sessionStorage.getItem("gkl_fbToken")||""; }catch(e){}
+$("btnPreviewRules").onclick = previewRules;
+$("btnCsv").onclick = downloadCsv;
+$("lang").onchange = ()=>{ $("discPreview").textContent = disclosureFor($("lang").value); };
+["fName","fPrice","fStock","fSizes","lowStock"].forEach(id=>{ const v=LS.get("gkl_"+id,null); if(v!==null) $(id).value=v; $(id).onchange=()=>{saveFields(); if(S.mode==="firebase") loadProducts(); else renderProducts();}; });
+$("cfg").value = LS.get("gkl_cfg",""); $("stores").value = LS.get("gkl_stores",$("stores").value); $("incInactive").checked = LS.get("gkl_inactive",false);
+$("discPreview").textContent = disclosureFor($("lang").value);
+// Inside the store app: use the store's own Firebase project, and only for signed-in staff
+// (the same login as the store's Admin Panel).
+(function(){
+  let cfgTxt = ""; try{ cfgTxt = localStorage.getItem("goatFirebaseConfig") || ""; }catch(e){}
+  if (!$("cfg").value.trim() && cfgTxt) $("cfg").value = cfgTxt;
+  const cfg = parseConfig($("cfg").value);
+  if (!cfg || !cfg.projectId) return;
+  if (!firebase.apps.length) firebase.initializeApp(cfg);
+// ---------- staff login required (same login as the store's Admin Panel) ----------
+(function(){
+  var started=false; var DOMAIN = '@staff.goatkids.app';
+  function isStaff(u){ return !!(u && u.email && u.email.toLowerCase().slice(-DOMAIN.length) === DOMAIN); }
+  function block(){
+    if (document.getElementById('staffGate')) return;
+    var d = document.createElement('div'); d.id = 'staffGate';
+    d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.92);color:#fff;display:flex;align-items:center;justify-content:center;font:16px system-ui,sans-serif;padding:20px;text-align:center';
+    d.innerHTML = '<div style="max-width:420px"><h2 style="margin:0 0 10px">Staff login needed</h2><p>Log in to the store&#39;s <b>Admin Panel</b> on this device first, then open this page again.</p><p><a href="index.html" style="color:#93c5fd">Go to the store</a></p></div>';
+    (document.body || document.documentElement).appendChild(d);
+  }
+  function unblock(){ var d = document.getElementById('staffGate'); if (d) d.remove(); }
+  try {
+    firebase.auth().onAuthStateChanged(function(u){ if (isStaff(u)) { unblock(); if (!started) { started = true; connect(); } } else block(); });
+  } catch (e) { console.warn('Auth not available:', e); }
+})();
 })();
 </script>
+<style>
+#view-voice .grid2>div{min-width:0}
+/* tidy settings: fields never spill out of their column */
+#view-voice input,#view-voice select,#view-voice textarea{box-sizing:border-box;max-width:100%}
+#view-voice input[type=file]{width:100%}
+#view-voice .row{row-gap:8px}
+.vh-sec{font-size:.95rem;font-weight:700;margin:4px 0 2px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.vh-pair{display:flex;gap:8px;align-items:center}
+.vh-pair>select,.vh-pair>input{flex:1;min-width:0}
+.vh-pair>.btn{flex:none;white-space:nowrap}
+.vh-actions{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+.vh-det{padding:0}
+.vh-det>summary{cursor:pointer;padding:14px 18px;font-weight:600;list-style:none}
+.vh-det>summary::-webkit-details-marker{display:none}
+.vh-det>summary::before{content:"▸ ";color:var(--muted)}
+.vh-det[open]>summary::before{content:"▾ "}
+.vh-det>*:not(summary){margin-left:18px;margin-right:18px}
+.vh-det>*:last-child{margin-bottom:18px}
+.vh-ol{padding-left:20px;margin:0 0 8px}.vh-ol li{margin:6px 0}
+#view-voice input[type=password]{width:100%;border:1px solid var(--line);border-radius:6px;padding:9px 10px;background:#fff}
+#view-voice code{background:#F1F5F3;padding:1px 5px;border-radius:4px;font-size:.85rem}
+.vh-meter{display:inline-block;width:110px;height:8px;background:#D4DDD8;border-radius:4px;overflow:hidden;vertical-align:middle}
+.vh-meter i{display:block;height:100%;width:0;background:var(--teal);transition:width .05s}
+.btn.vh-stop{background:var(--live);border-color:var(--live)}
+.btn.vh-play{background:var(--teal);border-color:var(--teal);padding:10px 20px;font-size:1.02rem}
+.btn.vh-sm{padding:5px 10px;font-size:.88rem}
+.vh-lines{display:grid;gap:10px;margin-top:10px}
+.vh-line{display:grid;grid-template-columns:150px 1fr auto;gap:8px;align-items:start}
+.vh-line textarea{min-height:58px}
+.vh-line .lbl{font-weight:600;padding-top:8px}
+.vh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+.vh-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.vh-card.playing{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
+.vh-top{display:flex;gap:10px;align-items:center}
+.vh-top .num{font-size:.75rem;background:var(--ink);color:#fff;border-radius:5px;padding:1px 7px}
+.vh-top .nm{font-weight:600;line-height:1.25}
+.vh-card textarea{min-height:120px;font-size:.95rem}
+.vh-cardbtns{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.vh-cardbtns .btn{width:100%;padding:8px 2px;white-space:nowrap;text-align:center;font-size:.84rem}
+.vh-cardbtns .btn.rec-on{background:var(--live,#E5303B);color:#fff;border-color:transparent}
+.vh-own{display:none;font-size:.82rem;margin-top:4px;color:var(--teal)}
+.vh-card.has-own .vh-own{display:block}
+.vh-undo{display:none;font-size:.82rem;margin-top:4px}
+.vh-card.has-prev .vh-undo{display:block}
+.vh-cardst{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px}
+.vh-st{font-size:.8rem;padding:2px 9px;border-radius:999px;background:#EEF1EF;color:var(--muted)}
+.vh-st.ok{background:var(--teal-soft);color:var(--teal)}
+.vh-st.busy{background:#FFF3DC;color:var(--amber)}
+.vh-st.err{background:var(--live-soft);color:var(--live)}
+@media (max-width:640px){.vh-line{grid-template-columns:1fr}}
+</style>
+<script>
+/* ============ VOICE HOST ============
+   Writes scripts with Claude, turns them into voice (Azure for Khmer), saves each
+   clip in this browser (IndexedDB) so it is paid for once, and plays it into the
+   live through a chosen output (VB-Cable "CABLE Input"). Reads S.products /
+   S.codes / S.selected from the Live Desk; never writes to Firebase. */
+(function(){
+const VH = { scripts: LS.get("gkl_vh_scripts", {}), played:0 };
+const vmsg = (el,type,text)=> text ? msg(el,type,text) : ($(el).innerHTML="");
+const lang = ()=> $("vhLang").value;
+
+/* ---------- settings ---------- */
+const SET = ["vhCambModel","vhCambLang","vhCambRate","vhCambStyle","vhWriter","vhGemTextModel","vhModel","vhLang","vhLength","vhStyle","vhEngine","vhGemVoice","vhGemStyle","vhGemModel","vhAzRegion","vhAzVoice","vhAzRate","vhElModel","vhVol","vhMicVol"];
+const CHK = ["vhGemNatural","vhPhoto","vhMonitor","vhMicOn","vhDuck","vhRemember","vhAutoRemind"];
+const KEYS = ["vhClaudeKey","vhCambKey","vhGemKey","vhAzKey","vhElKey"];
+function saveSet(){
+  const s = {}; SET.forEach(id=>s[id]=$(id).value); CHK.forEach(id=>s[id]=$(id).checked);
+  s.vhGemMigrated = true; s.vhCambMigrated = true; s.vhCambVoice=$("vhCambVoice").value; s.vhCambVoiceName=$("vhCambVoice").selectedOptions[0]?$("vhCambVoice").selectedOptions[0].textContent:""; s.vhOut=$("vhOut").value; s.vhMic=$("vhMic").value; s.vhElVoice=$("vhElVoice").value;
+  LS.set("gkl_vh_set", s);
+  if ($("vhRemember").checked){ const k={}; KEYS.forEach(id=>k[id]=$(id).value); LS.set("gkl_vh_keys", k); }
+  else { try{ localStorage.removeItem("gkl_vh_keys"); }catch(e){} }
+}
+/* cloned voices (Gemini voice replication) live in their own group of the Voice list */
+function renderClones(){
+  const sel = $("vhGemVoice"), list = LS.get("gkl_clones", []);
+  let g = sel.querySelector("optgroup[data-clones]");
+  if (!list.length){ if (g) g.remove(); return; }
+  if (!g){ g = document.createElement("optgroup"); g.dataset.clones = "1"; g.label = "My cloned voices"; sel.insertBefore(g, sel.firstChild); }
+  g.innerHTML = list.map(v=>`<option value="${esc(v.id)}">🎙️ ${esc(v.name)} (cloned)</option>`).join("");
+}
+renderClones();
+const saved = LS.get("gkl_vh_set", {});
+if (saved.vhEngine==="azure" && !saved.vhGemMigrated){ saved.vhEngine = "gemini"; saved.vhGemMigrated = true; }
+if (saved.vhEngine && saved.vhEngine!=="camb" && !saved.vhCambMigrated){ saved.vhEngine = "camb"; }
+SET.forEach(id=>{ if (saved[id]!=null) $(id).value = saved[id]; });
+CHK.forEach(id=>{ if (saved[id]!=null) $(id).checked = saved[id]; });
+const savedKeys = LS.get("gkl_vh_keys", {}); KEYS.forEach(id=>{ if (savedKeys[id]) $(id).value = savedKeys[id]; });
+if (saved.vhCambVoice){ $("vhCambVoice").innerHTML = `<option value="${esc(saved.vhCambVoice)}">${esc(saved.vhCambVoiceName||"(saved voice)")}</option>`; }
+if (saved.vhElVoice){ $("vhElVoice").innerHTML = `<option value="${esc(saved.vhElVoice)}">(saved voice)</option>`; }
+if (!$("vhCambKey").value && !$("vhGemKey").value && !$("vhAzKey").value && !$("vhClaudeKey").value){ $("vhGuide").open = true; $("vhSettings").open = true; }
+function syncUI(){
+  const wr = $("vhWriter").value;
+  $("vhGemWriterBox").style.display = wr==="gemini"?"":"none"; $("vhGemKeyRow").style.display = (wr==="gemini" || $("vhEngine").value==="gemini")?"":"none"; $("vhClaudeBox").style.display = wr==="claude"?"":"none";
+  const en = $("vhEngine").value;
+  $("vhCambBox").style.display = en==="camb"?"":"none"; $("vhCambRateVal").textContent = Number($("vhCambRate").value).toFixed(2)+"×";
+  $("vhGemBox").style.display = en==="gemini"?"":"none"; $("vhAzureBox").style.display = en==="azure"?"":"none"; $("vhElBox").style.display = en==="eleven"?"":"none";
+  const r = Number($("vhAzRate").value); $("vhAzRateVal").textContent = (r>=0?"+":"")+r+"%";
+  $("vhVolVal").textContent = $("vhVol").value+"%"; $("vhMicVolVal").textContent = $("vhMicVol").value+"%";
+}
+syncUI();
+document.querySelectorAll("#view-voice details input, #view-voice details select, #view-voice details textarea, #vhVol, #vhMicVol, #vhMonitor, #vhMicOn, #vhDuck, #vhAutoRemind")
+  .forEach(el=>{ if (el.id!=="vhTestText") el.addEventListener("change", ()=>{ syncUI(); saveSet(); }); });
+["vhCambRate","vhAzRate","vhVol","vhMicVol"].forEach(id=>$(id).addEventListener("input", syncUI));
+$("vhVol").addEventListener("input", ()=>{ if (A.voiceGain) A.voiceGain.gain.value = $("vhVol").value/100; });
+$("vhMicVol").addEventListener("input", ()=>{ if (A.micGain && !A.ducked) A.micGain.gain.value = $("vhMicVol").value/100; });
+$("vhLang").addEventListener("change", ()=>{ loadLines(); renderLines(); renderVoice(); });
+
+/* ---------- saved clips (IndexedDB) ---------- */
+let dbP = null;
+function db(){
+  if (!dbP) dbP = new Promise(res=>{ try{ const r = indexedDB.open("gkl-voice",1);
+    r.onupgradeneeded = ()=>r.result.createObjectStore("clips"); r.onsuccess = ()=>res(r.result); r.onerror = ()=>res(null); }catch(e){ res(null); } });
+  return dbP;
+}
+async function cacheGet(k){ const d = await db(); if (!d) return null;
+  return new Promise(res=>{ try{ const q = d.transaction("clips").objectStore("clips").get(k); q.onsuccess=()=>res(q.result||null); q.onerror=()=>res(null); }catch(e){ res(null); } }); }
+async function cachePut(k,b){ const d = await db(); if (!d) return;
+  return new Promise(res=>{ try{ const t = d.transaction("clips","readwrite"); t.objectStore("clips").put(b,k); t.oncomplete=()=>res(); t.onerror=()=>res(); }catch(e){ res(); } }); }
+function hash(str){ let h1=0xdeadbeef,h2=0x41c6ce57;
+  for (let i=0;i<str.length;i++){ const c=str.charCodeAt(i); h1=Math.imul(h1^c,2654435761); h2=Math.imul(h2^c,1597334677); }
+  h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);
+  h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
+  return (4294967296*(2097151&h2)+(h1>>>0)).toString(36); }
+function clipKey(text){
+  const en = $("vhEngine").value;
+  const v = en==="camb" ? [$("vhCambVoice").value, $("vhCambModel").value, $("vhCambLang").value, $("vhCambRate").value, $("vhCambModel").value==="mars-instruct"?$("vhCambStyle").value:""]
+          : en==="gemini" ? [$("vhGemVoice").value, $("vhGemModel").value, gemStyle()]
+          : en==="azure"  ? [$("vhAzVoice").value, $("vhAzRate").value]
+          : [$("vhElVoice").value, $("vhElModel").value];
+  return hash([en, ...v, String(text).trim()].join("|"));
+}
+
+/* ---------- voice engines ---------- */
+const xmlEsc = s => String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));
+async function ttsAzure(text){
+  const key = $("vhAzKey").value.trim(), region = $("vhAzRegion").value.trim(), voice = $("vhAzVoice").value;
+  if (!key) throw new Error("Add your Azure Speech key in the settings.");
+  const r0 = Number($("vhAzRate").value), rate = (r0>=0?"+":"")+r0+"%";
+  const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${voice.slice(0,5)}"><voice name="${voice}"><prosody rate="${rate}">${xmlEsc(text)}</prosody></voice></speak>`;
+  let r;
+  try{ r = await fetch(`https://${encodeURIComponent(region)}.tts.speech.microsoft.com/cognitiveservices/v1`, { method:"POST",
+    headers:{ "Ocp-Apim-Subscription-Key":key, "Content-Type":"application/ssml+xml", "X-Microsoft-OutputFormat":"audio-24khz-96kbitrate-mono-mp3" }, body:ssml }); }
+  catch(e){ throw new Error("Couldn't reach Azure. Check the internet and the region (e.g. southeastasia)."); }
+  if (r.status===401) throw new Error("Azure refused the key. Copy KEY 1 again and check the region matches.");
+  if (r.status===429) throw new Error("Azure free limit reached for now. Wait a minute, or switch the resource to the paid S0 tier.");
+  if (!r.ok) throw new Error("Azure error "+r.status+": "+(await r.text()).slice(0,200));
+  return r.blob();
+}
+function findAudio(o){ // the audio block can sit at different depths; find {type:"audio", data}
+  if (!o || typeof o!=="object") return null;
+  if ((o.type==="audio" || /audio/.test(o.mime_type||o.mimeType||"")) && typeof o.data==="string") return o;
+  if (o.inlineData && typeof o.inlineData.data==="string") return { data:o.inlineData.data, mime_type:o.inlineData.mimeType };
+  for (const k in o){ const r = findAudio(o[k]); if (r) return r; }
+  return null;
+}
+function pcmToWav(bytes, rate){
+  const h = new ArrayBuffer(44), v = new DataView(h), w = (o,s)=>{ for (let i=0;i<s.length;i++) v.setUint8(o+i,s.charCodeAt(i)); };
+  w(0,"RIFF"); v.setUint32(4,36+bytes.length,true); w(8,"WAVE"); w(12,"fmt "); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,rate,true); v.setUint32(28,rate*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true); w(36,"data"); v.setUint32(40,bytes.length,true);
+  return new Blob([h, bytes], { type:"audio/wav" });
+}
+const CAMB = "https://client.camb.ai/apis";
+function cambNet(e){ return new Error("Couldn't reach CAMB.AI. Check the internet. If the internet is fine, CAMB.AI may be blocking requests from a web page — tell Claude and it will add a small relay."); }
+async function ttsCamb(text){
+  const key = $("vhCambKey").value.trim(); if (!key) throw new Error("Add your CAMB.AI API key in the settings.");
+  const voice = Number($("vhCambVoice").value); if (!voice) throw new Error("Press Load voices and pick a CAMB.AI voice.");
+  if (text.length < 3) throw new Error("The script is too short for CAMB.AI (at least 3 characters).");
+  if (text.length > 3000) throw new Error("The script is longer than 3000 characters. Make it shorter.");
+  const model = $("vhCambModel").value;
+  const body = { text, voice_id:voice, language:$("vhCambLang").value.trim().toLowerCase()||"km-kh", speech_model:model,
+    output_configuration:{ format:"mp3" }, voice_settings:{ speaking_rate:Number($("vhCambRate").value)||1 } };
+  if (model==="mars-instruct"){ body.output_configuration.format = "wav"; const st = $("vhCambStyle").value.trim(); if (st) body.user_instructions = st; }
+  let r;
+  try{ r = await fetch(CAMB+"/tts-stream", { method:"POST", headers:{ "x-api-key":key, "Content-Type":"application/json" }, body:JSON.stringify(body) }); }
+  catch(e){ throw cambNet(e); }
+  if (!r.ok){
+    const t = await r.text().catch(()=>""); let m = t; try{ const j = JSON.parse(t); m = j.detail ? (typeof j.detail==="string" ? j.detail : JSON.stringify(j.detail)) : (j.message||t); }catch(e){}
+    if (r.status===401 || r.status===403) throw new Error("CAMB.AI refused the API key. Copy it again from CAMB.AI Studio → Settings → API Keys.");
+    if (r.status===402) throw new Error("CAMB.AI says there are no credits left on the account.");
+    if (r.status===422) throw new Error("CAMB.AI couldn't use these settings (often: this voice model doesn't support Khmer). Try another Voice model. Details: "+String(m).slice(0,200));
+    if (r.status===429) throw new Error("CAMB.AI limit reached for now. Wait a minute and try again.");
+    throw new Error("CAMB.AI error "+r.status+": "+String(m).slice(0,200));
+  }
+  const blob = await r.blob();
+  if (blob.size < 200) throw new Error("CAMB.AI sent back empty audio. Try again or pick another voice.");
+  return blob;
+}
+$("vhCambLoad").onclick = async ()=>{
+  const key = $("vhCambKey").value.trim(); if (!key) return vmsg("vhVoiceMsg","err","Add your CAMB.AI key first.");
+  vmsg("vhVoiceMsg","warn","Loading CAMB.AI voices…");
+  try{
+    let r; try{ r = await fetch(CAMB+"/list-voices", { headers:{ "x-api-key":key } }); }catch(e){ throw cambNet(e); }
+    if (r.status===401 || r.status===403) throw new Error("CAMB.AI refused the API key.");
+    if (!r.ok) throw new Error("CAMB.AI error "+r.status);
+    const d = await r.json(); const list = Array.isArray(d) ? d : (d.voices || d.data || []);
+    const g = v => v.gender===1 ? "male" : v.gender===2 ? "female" : "";
+    const isKm = v => /^km/i.test(String(v.language||""));
+    const km = list.filter(isKm), other = list.filter(v=>!isKm(v));
+    const opt = v => `<option value="${esc(v.id)}">${esc(v.voice_name||("Voice "+v.id))}${g(v)?" — "+g(v):""}${v.language?" · "+esc(v.language):""}</option>`;
+    const cur = $("vhCambVoice").value;
+    $("vhCambVoice").innerHTML = (km.length ? `<optgroup label="Khmer voices">${km.map(opt).join("")}</optgroup>` : "") + (other.length ? `<optgroup label="Other voices (can still speak Khmer)">${other.map(opt).join("")}</optgroup>` : "");
+    if (cur && list.some(v=>String(v.id)===cur)) $("vhCambVoice").value = cur;
+    saveSet();
+    vmsg("vhVoiceMsg","ok",`Loaded ${list.length} voices${km.length?` (${km.length} Khmer)`:""}. Pick one, then press Test voice.`);
+  }catch(e){ vmsg("vhVoiceMsg","err",e.message); }
+};
+function gemStyle(){ return $("vhGemNatural").checked && /^voice_/.test($("vhGemVoice").value) ? "" : $("vhGemStyle").value.trim(); }
+async function ttsGemini(text){
+  const key = $("vhGemKey").value.trim(); if (!key) throw new Error("Add your Gemini API key in the settings (from aistudio.google.com).");
+  const style = gemStyle();
+  const part = { type:"text", text }; if (style) part.annotations = [{ type:"speech_metadata", style }];
+  let r;
+  try{ r = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", { method:"POST",
+    headers:{ "x-goog-api-key":key, "Content-Type":"application/json" },
+    body:JSON.stringify({ model:$("vhGemModel").value.trim()||"gemini-3.8-flash-tts", input:[{ type:"user_input", content:[part] }],
+      response_format:{ type:"audio" }, generation_config:{ speech_config:[{ voice:$("vhGemVoice").value }] } }) }); }
+  catch(e){ throw new Error("Couldn't reach Google Gemini. Check the internet connection."); }
+  const d = await r.json().catch(()=>({}));
+  const em = (d.error && d.error.message) || "";
+  if (r.status===400 && /api key/i.test(em)) throw new Error("Google refused the Gemini API key. Copy it again from aistudio.google.com.");
+  if (r.status===403) throw new Error("Google refused the Gemini key (403). Make sure the key is from aistudio.google.com and is still active. "+em.slice(0,150));
+  if (r.status===404) throw new Error("Google doesn't know the voice model \""+$("vhGemModel").value+"\". Check the model name. "+em.slice(0,150));
+  if (r.status===429) throw new Error("Gemini limit reached for now. Wait a minute and try again, or add billing in aistudio.google.com.");
+  if (!r.ok) throw new Error("Gemini error "+r.status+": "+em.slice(0,200));
+  const a = findAudio(d); if (!a) throw new Error("Gemini answered but sent no audio. Try again, or shorten the script.");
+  const bin = atob(a.data), bytes = new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+  const mt = String(a.mime_type||a.mimeType||"audio/wav");
+  if (/l16|pcm/i.test(mt)){ const m = mt.match(/rate=(\d+)/); return pcmToWav(bytes, m?Number(m[1]):24000); }
+  return new Blob([bytes], { type: /wav/.test(mt) ? "audio/wav" : mt });
+}
+/* own recordings: a person records the product pitch; it is used instead of the AI voice */
+const ownKey = p => "own|" + p.id;
+const ownGet = p => cacheGet(ownKey(p));
+const REC = { mr:null, p:null };
+async function recProduct(p){
+  const c = cardOf(p), btn = c.querySelector('[data-act="rec"]'), st = c.querySelector("[data-st]");
+  if (REC.mr){ const same = REC.p===p; REC.mr.stop(); if (same) return; }
+  const dev = $("vhMic").value;
+  let stream; try{ stream = await navigator.mediaDevices.getUserMedia({ audio: dev ? { deviceId:{ exact:dev } } : true }); }
+  catch(e){ return vmsg("vhMsg","err","Couldn't open the microphone. Allow the microphone for this site (lock icon next to the address)."); }
+  const chunks = [], mr = new MediaRecorder(stream); REC.mr = mr; REC.p = p;
+  mr.ondataavailable = e=>{ if (e.data.size) chunks.push(e.data); };
+  mr.onstop = async ()=>{
+    stream.getTracks().forEach(t=>t.stop()); REC.mr = REC.p = null;
+    btn.textContent = "🎙️ Rec"; btn.classList.remove("rec-on");
+    const blob = new Blob(chunks, { type: mr.mimeType });
+    if (blob.size < 2000){ setSt(st,"err","recording too short"); return; }
+    await cachePut(ownKey(p), blob); cardStatus(p);
+    vmsg("vhMsg","ok",`Saved your recording for ${S.codes[p.id]}. Press ▶ Play to hear it. The auto show will use it.`);
+  };
+  mr.start(); btn.textContent = "■ Stop"; btn.classList.add("rec-on"); setSt(st,"busy","recording… press ■ Stop when done");
+}
+async function unrecProduct(p){
+  if (!confirm("Remove your recording for "+S.codes[p.id]+"? The AI voice will be used again.")) return;
+  const d = await db(); if (d) await new Promise(res=>{ try{ const t = d.transaction("clips","readwrite"); t.objectStore("clips").delete(ownKey(p)); t.oncomplete = t.onerror = ()=>res(); }catch(e){ res(); } });
+  cardStatus(p);
+}
+
+/* redo one voice: make a new take of the same script; Undo swaps back to the previous take */
+async function redoVoice(text, st){
+  setSt(st,"busy","making a new take…"); await voiceBlob(text, true); setSt(st,"ok","new take ready — ▶ to hear it");
+}
+async function undoVoice(text, st){
+  const k = clipKey(String(text||"").trim()), old = await cacheGet(k+"|prev");
+  if (!old){ vmsg("vhMsg","warn","There is no earlier take to go back to."); return; }
+  const cur = await cacheGet(k); await cachePut(k, old); if (cur) await cachePut(k+"|prev", cur);
+  setSt(st,"ok","previous take back");
+}
+
+/* ---------- voice cloning (Gemini voice replication) ---------- */
+const GV = "https://generativelanguage.googleapis.com/v1beta/";
+const CL = { sample:null, consent:null, rec:null };
+async function toWav24k(blob){ // any audio → 24 kHz mono 16-bit WAV, as Google recommends
+  const ctx = new AudioContext();
+  let buf; try{ buf = await ctx.decodeAudioData(await blob.arrayBuffer()); } finally { ctx.close(); }
+  const len = Math.ceil(buf.duration * 24000), off = new OfflineAudioContext(1, len, 24000);
+  const src = off.createBufferSource(); src.buffer = buf; src.connect(off.destination); src.start();
+  const out = (await off.startRendering()).getChannelData(0);
+  let peak = 0; for (let i=0;i<out.length;i++){ const a=Math.abs(out[i]); if (a>peak) peak=a; }
+  const gain = peak>0 && peak<0.5 ? 0.9/peak : 1;            // lift quiet recordings
+  const pcm = new Uint8Array(out.length*2), dv = new DataView(pcm.buffer);
+  for (let i=0;i<out.length;i++){ const x = Math.max(-1, Math.min(1, out[i]*gain)); dv.setInt16(i*2, x<0 ? x*32768 : x*32767, true); }
+  return { wav: pcmToWav(pcm, 24000), sec: buf.duration };
+}
+const b64 = blob => new Promise((ok,no)=>{ const r = new FileReader(); r.onload = ()=>ok(String(r.result).split(",")[1]); r.onerror = no; r.readAsDataURL(blob); });
+async function takeClip(which, blob){
+  const info = $(which==="sample" ? "clSampleInfo" : "clConsentInfo");
+  try{
+    let { wav, sec } = await toWav24k(blob);
+    if (which==="sample" && sec > 30){ // keep the first 30 seconds
+      const bytes = new Uint8Array(await wav.arrayBuffer()).slice(44, 44 + 30*24000*2);
+      wav = pcmToWav(bytes, 24000); sec = 30;
+      info.textContent = "✓ used the first 30 seconds";
+    } else info.textContent = `✓ ${sec.toFixed(1)} seconds`;
+    if (which==="sample" && sec < 10){ CL.sample = null; info.textContent = `${sec.toFixed(1)} seconds — too short, needs at least 10`; return; }
+    if (which==="consent" && sec < 3){ CL.consent = null; info.textContent = "too short — read the whole sentence"; return; }
+    CL[which] = wav;
+    const a = new Audio(URL.createObjectURL(wav)); info.insertAdjacentHTML("beforeend", ` <a href="#" data-play="${which}">▶ listen</a>`);
+    info.querySelector("a").onclick = e=>{ e.preventDefault(); a.currentTime = 0; a.play(); };
+  }catch(e){ CL[which] = null; info.textContent = "couldn't read this file — try mp3, m4a or wav"; }
+}
+$("clSampleFile").onchange = e=>{ const f = e.target.files[0]; if (f) takeClip("sample", f); e.target.value = ""; };
+$("clConsentFile").onchange = e=>{ const f = e.target.files[0]; if (f) takeClip("consent", f); e.target.value = ""; };
+async function recToggle(which){
+  const btn = $(which==="sample" ? "clSampleRec" : "clConsentRec");
+  if (CL.rec){ CL.rec.stop(); return; }
+  let st; try{ st = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:true } }); }
+  catch(e){ return vmsg("clMsg","err","Couldn't open the microphone. Allow the microphone for this site (lock icon next to the address)."); }
+  const chunks = [], mr = new MediaRecorder(st); CL.rec = mr;
+  mr.ondataavailable = e=>{ if (e.data.size) chunks.push(e.data); };
+  mr.onstop = ()=>{ st.getTracks().forEach(t=>t.stop()); CL.rec = null; btn.textContent = "⏺ Record"; btn.classList.remove("vh-stop");
+    takeClip(which, new Blob(chunks, { type: mr.mimeType })); };
+  mr.start(); btn.textContent = "■ Stop"; btn.classList.add("vh-stop");
+  vmsg("clMsg","ok", which==="sample" ? "Recording… talk naturally for 15–25 seconds, then press Stop." : "Recording… read the sentence clearly, then press Stop.");
+}
+$("clSampleRec").onclick = ()=>recToggle("sample");
+$("clConsentRec").onclick = ()=>recToggle("consent");
+function gemErr(r, d, what){
+  const em = (d && d.error && d.error.message) || "";
+  if (r.status===400 && /api key/i.test(em)) return "Google refused the Gemini API key. Copy it again from aistudio.google.com.";
+  if (/consent/i.test(em)) return "Google couldn't confirm the consent recording. Read the exact sentence clearly, same person and same mic as the sample. ("+em.slice(0,160)+")";
+  if (r.status===429) return "Gemini limit reached for now. Wait a minute and try again.";
+  return what+" failed ("+r.status+"): "+(em||"no details").slice(0,220);
+}
+const findVoiceId = d => { const m = JSON.stringify(d||{}).match(/voice_[A-Za-z0-9_-]+/); return m ? m[0] : ""; };
+$("clCreate").onclick = async ()=>{
+  const key = $("vhGemKey").value.trim(), name = $("clName").value.trim();
+  if (!key) return vmsg("clMsg","err","Add your Gemini API key first (Settings, on the left).");
+  if (!name) return vmsg("clMsg","err","Give the voice a name.");
+  if (!CL.sample) return vmsg("clMsg","err","Add the voice sample (step 1) — 10 to 30 seconds.");
+  if (!CL.consent) return vmsg("clMsg","err","Add the consent recording (step 2).");
+  const btn = $("clCreate"); btn.disabled = true; vmsg("clMsg","ok","Sending to Google… this can take up to a minute.");
+  try{
+    const body = { store:true, voice:{ model:$("vhGemModel").value.trim()||"gemini-3.8-flash-tts", type:"replicated", display_name:name,
+      replicated:{ source_audio:{ mime_type:"audio/wav", data:await b64(CL.sample) }, consent_audio:{ mime_type:"audio/wav", data:await b64(CL.consent) } } } };
+    let r; try{ r = await fetch(GV+"voices", { method:"POST", headers:{ "x-goog-api-key":key, "Content-Type":"application/json" }, body:JSON.stringify(body) }); }
+    catch(e){ throw new Error("Couldn't reach Google Gemini. Check the internet connection."); }
+    let d = await r.json().catch(()=>({}));
+    if (!r.ok) throw new Error(gemErr(r, d, "Cloning"));
+    // some Google APIs answer with a job to wait for
+    for (let i=0; !findVoiceId(d) && d.name && /operations\//.test(d.name) && !d.done && i<30; i++){
+      await new Promise(ok=>setTimeout(ok, 2000));
+      const r2 = await fetch(GV+d.name, { headers:{ "x-goog-api-key":key } }); d = await r2.json().catch(()=>({}));
+      if (d.error) throw new Error(gemErr(r2, d, "Cloning"));
+    }
+    const id = findVoiceId(d); if (!id) throw new Error("Google answered but didn't send a voice ID. Press Load my cloned voices in a minute.");
+    const list = LS.get("gkl_clones", []).filter(v=>v.id!==id); list.unshift({ id, name }); LS.set("gkl_clones", list);
+    renderClones(); $("vhGemVoice").value = id; saveSet();
+    CL.sample = CL.consent = null; $("clSampleInfo").textContent = $("clConsentInfo").textContent = "none yet"; $("clName").value = "";
+    vmsg("clMsg","ok",`Done! "${name}" is now chosen as the Voice. Press Test voice to hear it, then Make all voices.`);
+  }catch(e){ vmsg("clMsg","err",e.message); }
+  finally{ btn.disabled = false; }
+};
+$("clLoad").onclick = async ()=>{
+  const key = $("vhGemKey").value.trim(); if (!key) return vmsg("clMsg","err","Add your Gemini API key first.");
+  try{
+    const r = await fetch(GV+"voices?pageSize=100", { headers:{ "x-goog-api-key":key } }); const d = await r.json().catch(()=>({}));
+    if (!r.ok) throw new Error(gemErr(r, d, "Loading voices"));
+    const arr = (d.voices || []).filter(v=>!v.type || /replicat/i.test(String(v.type)));
+    const list = arr.map(v=>({ id: findVoiceId(v), name: v.display_name || v.displayName || "Cloned voice" })).filter(v=>v.id);
+    LS.set("gkl_clones", list); const cur = $("vhGemVoice").value; renderClones(); if ([...$("vhGemVoice").options].some(o=>o.value===cur)) $("vhGemVoice").value = cur;
+    vmsg("clMsg","ok", list.length ? `Found ${list.length} cloned voice${list.length>1?"s":""}. Pick one in the Voice list.` : "No cloned voices in your Google project yet.");
+  }catch(e){ vmsg("clMsg","err",e.message); }
+};
+$("clDelete").onclick = async ()=>{
+  const id = $("vhGemVoice").value, key = $("vhGemKey").value.trim();
+  if (!/^voice_/.test(id)) return vmsg("clMsg","err","First choose the cloned voice in the Voice list above.");
+  const nm = $("vhGemVoice").selectedOptions[0].textContent;
+  if (!confirm("Delete "+nm+" from Google? Clips already made with it stay saved here.")) return;
+  try{
+    const r = await fetch(GV+"voices/"+encodeURIComponent(id), { method:"DELETE", headers:{ "x-goog-api-key":key } });
+    if (!r.ok && r.status!==404){ const d = await r.json().catch(()=>({})); throw new Error(gemErr(r, d, "Deleting")); }
+    LS.set("gkl_clones", LS.get("gkl_clones", []).filter(v=>v.id!==id)); renderClones(); $("vhGemVoice").value = "Kore"; saveSet();
+    vmsg("clMsg","ok","Deleted. The Voice is back to Kore.");
+  }catch(e){ vmsg("clMsg","err",e.message); }
+};
+
+async function ttsEleven(text){
+  const key = $("vhElKey").value.trim(), voice = $("vhElVoice").value;
+  if (!key) throw new Error("Add your ElevenLabs key in the settings.");
+  if (!voice) throw new Error("Press Load voices and pick an ElevenLabs voice.");
+  const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}?output_format=mp3_44100_128`, { method:"POST",
+    headers:{ "xi-api-key":key, "Content-Type":"application/json", "Accept":"audio/mpeg" }, body:JSON.stringify({ text, model_id:$("vhElModel").value }) });
+  if (!r.ok) throw new Error("ElevenLabs error "+r.status+": "+(await r.text()).slice(0,200));
+  return r.blob();
+}
+async function voiceBlob(text, fresh){
+  text = String(text||"").trim(); if (!text) throw new Error("The script is empty.");
+  const k = clipKey(text), hit = await cacheGet(k);
+  if (hit && !fresh) return { blob:hit, cached:true };
+  if (hit) await cachePut(k+"|prev", hit);   // keep the old take for "Undo"
+  const en = $("vhEngine").value;
+  const blob = en==="camb" ? await ttsCamb(text) : en==="gemini" ? await ttsGemini(text) : en==="azure" ? await ttsAzure(text) : await ttsEleven(text);
+  await cachePut(k, blob);
+  return { blob, cached:false };
+}
+$("vhElLoad").onclick = async ()=>{
+  const key = $("vhElKey").value.trim(); if (!key) return vmsg("vhVoiceMsg","err","Add your ElevenLabs key first.");
+  try{ const r = await fetch("https://api.elevenlabs.io/v1/voices",{ headers:{ "xi-api-key":key } });
+    if (!r.ok) throw new Error("ElevenLabs error "+r.status);
+    const d = await r.json();
+    $("vhElVoice").innerHTML = (d.voices||[]).map(v=>`<option value="${esc(v.voice_id)}">${esc(v.name)}</option>`).join("");
+    saveSet(); vmsg("vhVoiceMsg","ok",`Loaded ${(d.voices||[]).length} voices.`);
+  }catch(e){ vmsg("vhVoiceMsg","err",e.message); }
+};
+
+/* ---------- audio routing ---------- */
+const A = { ctx:null };
+function audio(){
+  if (A.ctx){ if (A.ctx.state==="suspended") A.ctx.resume(); return; }
+  const ctx = A.ctx = new (window.AudioContext||window.webkitAudioContext)();
+  A.dest = ctx.createMediaStreamDestination();
+  A.voiceGain = ctx.createGain(); A.voiceGain.gain.value = $("vhVol").value/100;
+  A.monitorGain = ctx.createGain(); A.monitorGain.gain.value = $("vhMonitor").checked?1:0;
+  A.analyser = ctx.createAnalyser(); A.analyser.fftSize = 512;
+  A.voiceGain.connect(A.dest); A.voiceGain.connect(A.analyser); A.voiceGain.connect(A.monitorGain);
+  A.monitorGain.connect(ctx.destination);
+  A.outEl = new Audio(); A.outEl.srcObject = A.dest.stream; A.outEl.autoplay = true;
+  applySink(); A.outEl.play().catch(()=>{});
+  const buf = new Uint8Array(A.analyser.fftSize), bar = $("vhMeter");
+  (function tick(){ A.analyser.getByteTimeDomainData(buf); let pk=0; for (let i=0;i<buf.length;i++){ const v=Math.abs(buf[i]-128); if (v>pk) pk=v; }
+    bar.style.width = Math.min(100, pk/128*140)+"%"; bar.style.background = pk>118 ? "var(--live)" : "var(--teal)"; requestAnimationFrame(tick); })();
+}
+async function applySink(){
+  const id = $("vhOut").value, name = $("vhOut").selectedOptions[0] ? $("vhOut").selectedOptions[0].textContent : "Default speakers";
+  $("vhRoute").textContent = id ? name : "default speakers";
+  if (!A.outEl) return;
+  if (typeof A.outEl.setSinkId!=="function"){ vmsg("vhRouteMsg","warn","This browser can't choose an output. Use Google Chrome or Edge."); return; }
+  try{ await A.outEl.setSinkId(id||""); }catch(e){ vmsg("vhRouteMsg","err","Couldn't switch output: "+e.message); }
+}
+async function listDevices(){
+  const devs = await navigator.mediaDevices.enumerateDevices();
+  const keepOut = $("vhOut").value || saved.vhOut || "", keepMic = $("vhMic").value || saved.vhMic || "";
+  const skip = d => d.deviceId==="default" || d.deviceId==="communications";
+  $("vhOut").innerHTML = `<option value="">Default speakers</option>` + devs.filter(d=>d.kind==="audiooutput" && !skip(d)).map(d=>`<option value="${esc(d.deviceId)}">${esc(d.label||"Speaker")}</option>`).join("");
+  $("vhMic").innerHTML = `<option value="">Default mic</option>` + devs.filter(d=>d.kind==="audioinput" && !skip(d) && !/cable output/i.test(d.label)).map(d=>`<option value="${esc(d.deviceId)}">${esc(d.label||"Microphone")}</option>`).join("");
+  const outs = [...$("vhOut").options];
+  if (outs.some(o=>o.value===keepOut)) $("vhOut").value = keepOut;
+  else { const cab = outs.find(o=>/cable input/i.test(o.textContent)); if (cab) $("vhOut").value = cab.value; }
+  if ([...$("vhMic").options].some(o=>o.value===keepMic)) $("vhMic").value = keepMic;
+  if (!outs.some(o=>/cable input/i.test(o.textContent))) vmsg("vhRouteMsg","warn","CABLE Input not found. Install VB-Cable (see First-time setup), restart, then press Allow devices again.");
+  else vmsg("vhRouteMsg","ok","Voice will go to: "+$("vhOut").selectedOptions[0].textContent+". In Live Producer choose Microphone = CABLE Output.");
+  saveSet();
+}
+$("vhAllow").onclick = async ()=>{
+  try{ const s = await navigator.mediaDevices.getUserMedia({ audio:true }); s.getTracks().forEach(t=>t.stop());
+    audio(); await listDevices(); await applySink(); if ($("vhMicOn").checked) await startMic(); }
+  catch(e){ vmsg("vhRouteMsg","err","The browser blocked device access. Click the lock icon in the address bar → allow Microphone, then try again."); }
+};
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener("devicechange", ()=>{ if (A.ctx) listDevices(); });
+$("vhOut").addEventListener("change", ()=>{ audio(); applySink(); });
+$("vhMonitor").addEventListener("change", ()=>{ if (A.monitorGain) A.monitorGain.gain.value = $("vhMonitor").checked?1:0; });
+async function startMic(){
+  audio(); stopMic();
+  const id = $("vhMic").value;
+  try{
+    A.micStream = await navigator.mediaDevices.getUserMedia({ audio:{ deviceId:id?{exact:id}:undefined, echoCancellation:true, noiseSuppression:true, autoGainControl:true } });
+    A.micSrc = A.ctx.createMediaStreamSource(A.micStream);
+    A.micGain = A.ctx.createGain(); A.micGain.gain.value = $("vhMicVol").value/100;
+    A.micSrc.connect(A.micGain); A.micGain.connect(A.dest); A.micGain.connect(A.analyser);
+    vmsg("vhRouteMsg","ok","Your microphone is mixed into the live.");
+  }catch(e){ $("vhMicOn").checked = false; vmsg("vhRouteMsg","err","Couldn't open the microphone: "+e.message); }
+}
+function stopMic(){ try{ A.micSrc && A.micSrc.disconnect(); A.micGain && A.micGain.disconnect(); }catch(e){}
+  if (A.micStream) A.micStream.getTracks().forEach(t=>t.stop()); A.micStream = A.micSrc = A.micGain = null; }
+$("vhMicOn").addEventListener("change", ()=>{ if ($("vhMicOn").checked) startMic(); else { stopMic(); vmsg("vhRouteMsg","warn","Microphone removed from the live."); } });
+$("vhMic").addEventListener("change", ()=>{ saveSet(); if ($("vhMicOn").checked) startMic(); });
+function duck(on){ A.ducked = on; if (!A.micGain || !$("vhDuck").checked) return;
+  const v = $("vhMicVol").value/100; A.micGain.gain.setTargetAtTime(on ? v*0.15 : v, A.ctx.currentTime, 0.08); }
+$("vhTone").onclick = ()=>{ audio(); stop();
+  const o = A.ctx.createOscillator(), g = A.ctx.createGain(); o.frequency.value = 660; g.gain.value = .25;
+  o.connect(g); g.connect(A.voiceGain); o.start(); o.stop(A.ctx.currentTime+1.2);
+  $("vhNow").textContent = "Test tone"; o.onended = ()=>{ $("vhNow").textContent = "Ready"; }; };
+
+/* ---------- playback (a queue, so the AI reminder can play before a product) ---------- */
+let playToken = 0;
+function stop(){
+  playToken++; musicDuck(false); sendScreen({ type:"voiceEnd" });
+  if (A.current){ try{ A.current.onended = null; A.current.stop(); }catch(e){} A.current = null; }
+  document.querySelectorAll(".vh-card.playing").forEach(c=>c.classList.remove("playing"));
+  if (A.ctx) duck(false); $("vhNow").textContent = "Ready";
+}
+async function playQueue(items, card){ // items: [{blob,label}]
+  audio(); stop(); claimVoice(); const my = playToken;
+  card && card.classList.add("playing"); duck(true); musicDuck(true);
+  for (const it of items){
+    if (my!==playToken) return;
+    const buf = await A.ctx.decodeAudioData(await it.blob.arrayBuffer());
+    if (my!==playToken) return;
+    await new Promise(res=>{ const src = A.ctx.createBufferSource(); src.buffer = buf; src.connect(A.voiceGain);
+      A.current = src; $("vhNow").textContent = "▶ "+it.label; src.onended = res; src.start(); sendScreen({ type:"voice", dur:buf.duration }); });
+  }
+  if (my===playToken){ A.current = null; card && card.classList.remove("playing"); duck(false); musicDuck(false); sendScreen({ type:"voiceEnd" }); $("vhNow").textContent = "Ready"; }
+}
+function setSt(el, cls, text){ if (el){ el.className = "vh-st"+(cls?" "+cls:""); el.textContent = text; } }
+$("vhStop").onclick = ()=>stopShow();
+$("vhTestVoice").onclick = async ()=>{
+  vmsg("vhVoiceMsg","warn","Making voice…");
+  try{ const r = await voiceBlob($("vhTestText").value); await playQueue([{ blob:r.blob, label:"Test voice" }]);
+    vmsg("vhVoiceMsg","ok", r.cached ? "Played the saved copy (no cost)." : "Voice works."); }
+  catch(e){ vmsg("vhVoiceMsg","err",e.message); }
+};
+
+/* ---------- quick lines (Opening + AI reminder always keep the disclosure) ---------- */
+const DEF_LINES = {
+  km:[
+    {key:"open",  label:"Opening",      text:DISCLOSURE.km+" ថ្ងៃនេះយើងមានសម្លៀកបំពាក់កូនៗស្អាតៗ ថ្មីៗច្រើនណាស់ ចាំមើលដល់ចប់ណាបង!"},
+    {key:"order", label:"How to order", text:"បងចង់កុម្ម៉ង់ងាយស្រួលណាស់! គ្រាន់តែ comment លេខកូដ 4 ខ្ទង់ ទំហំ និងលេខទូរស័ព្ទ។ ក្រុមការងារយើងនឹងទាក់ទងទៅបងភ្លាមៗ។"},
+    {key:"remind",label:"AI reminder",  text:DISCLOSURE_REMIND.km},
+    {key:"thanks",label:"Thank you",    text:"អរគុណច្រើនបងៗដែលបានចូលមើល និងកុម្ម៉ង់ជាមួយ Goat Kids ថ្ងៃនេះ។ ជួបគ្នាលើក Live ក្រោយទៀតណាបង!"}
+  ],
+  en:[
+    {key:"open",  label:"Opening",      text:DISCLOSURE.en+" Today we have lots of lovely new kids' clothes, so stay to the end!"},
+    {key:"order", label:"How to order", text:"Ordering is easy! Just comment the 4-digit code, the size and your phone number, and our team will contact you right away."},
+    {key:"remind",label:"AI reminder",  text:DISCLOSURE_REMIND.en},
+    {key:"thanks",label:"Thank you",    text:"Thank you so much for watching and ordering with Goat Kids today. See you at the next live!"}
+  ]
+};
+let LINES = [];
+function loadLines(){ LINES = LS.get("gkl_vh_lines_"+lang(), null) || JSON.parse(JSON.stringify(DEF_LINES[lang()])); }
+function saveLines(){ LS.set("gkl_vh_lines_"+lang(), LINES); }
+function required(l){ return l.key==="open" ? DISCLOSURE[lang()] : l.key==="remind" ? DISCLOSURE_REMIND[lang()] : ""; }
+function lineText(l){ const need = required(l); return need && !l.text.includes(need) ? need+" "+l.text : l.text; }
+const LINE_KEYS = ["q","w","e","r"];
+function renderLines(){
+  $("vhLines").innerHTML = LINES.map((l,i)=>`<div class="vh-line" data-i="${i}">
+    <div class="lbl">${esc(l.label)}${required(l)?' <span class="hint">🔒 AI label</span>':""}</div>
+    <textarea data-line="${i}">${esc(l.text)}</textarea>
+    <div class="row" style="margin:0"><button class="btn vh-play vh-sm" data-lplay="${i}">▶ ${LINE_KEYS[i].toUpperCase()}</button><button class="btn ghost vh-sm" data-lredo="${i}" title="Make a new take of this line">🔁 Redo</button><span class="vh-st" data-lst="${i}">—</span></div></div>`).join("");
+  LINES.forEach((l,i)=>lineStatus(i));
+}
+async function lineStatus(i){ const el = document.querySelector(`[data-lst="${i}"]`), t = lineText(LINES[i]);
+  setSt(el, t.trim() && await cacheGet(clipKey(t)) ? "ok" : "", t.trim() && await cacheGet(clipKey(t)) ? "voice ready" : "not made yet"); }
+$("vhLines").addEventListener("input", e=>{ const i = e.target.dataset.line; if (i===undefined) return; LINES[i].text = e.target.value; saveLines(); lineStatus(+i); });
+$("vhLines").addEventListener("change", e=>{ const i = e.target.dataset.line; if (i===undefined) return;
+  const t = lineText(LINES[i]); if (t!==LINES[i].text){ LINES[i].text = t; e.target.value = t; saveLines(); vmsg("vhMsg","warn","The AI host disclosure was put back into "+LINES[i].label+"."); } });
+async function playLine(i){ const l = LINES[i], st = document.querySelector(`[data-lst="${i}"]`);
+  showLineOnScreen(l);
+  try{ setSt(st,"busy","making voice…"); const r = await voiceBlob(lineText(l)); setSt(st,"ok","voice ready");
+    if (l.key==="open") VH.played = 0;
+    await playQueue([{ blob:r.blob, label:l.label }]); }
+  catch(e){ setSt(st,"err","error"); vmsg("vhMsg","err",e.message); } }
+$("vhLines").addEventListener("click", async e=>{ const i = e.target.dataset.lplay; if (i!==undefined) playLine(+i);
+  const j = e.target.dataset.lredo; if (j!==undefined){ const st = document.querySelector(`[data-lst="${j}"]`);
+    try{ await redoVoice(lineText(LINES[+j]), st); }catch(err){ setSt(st,"err","error"); vmsg("vhMsg","err",err.message); } } });
+
+/* ---------- Claude script writer ---------- */
+const LEN = { short:"about 35-50 words (around 15 seconds spoken)", medium:"about 70-90 words (around 30 seconds spoken)", long:"about 110-130 words (around 45 seconds spoken)" };
+function systemPrompt(){
+  const km = lang()==="km", notes = $("vhStyle").value.trim();
+  return `You write spoken scripts for a Facebook Live selling show for "Goat Kids", a children's clothing shop in Phnom Penh, Cambodia. An AI voice reads your script out loud while the product is shown on camera. (The show already tells viewers the host is an AI; you don't need to repeat that.)
+
+Write the way a real, warm, energetic Cambodian live-selling host talks to parents watching on their phones: natural, friendly, a little playful, never stiff or like a printed advert. Speak directly to viewers.
+
+Rules:
+- Language: ${km ? "natural spoken Khmer as people in Phnom Penh really talk (polite but casual, e.g. calling viewers បងៗ). Brand words like Goat Kids or Live can stay in English." : "natural, friendly spoken English."}
+- Length: ${LEN[$("vhLength").value]}.
+- Say the 4-digit product code clearly near the start, and again at the end.
+- Mention the price and the sizes given. Only describe what is in the product details or clearly visible in an attached product photo; never invent fabric, discounts, stock counts or delivery promises.
+- If a product photo is attached, add one or two short, lively sentences about what you can clearly see: colours, prints or patterns, and style details such as ruffles, bows, lace, buttons or the type of garment. Don't guess anything you can't see, like fabric or brand.
+- End with how to order: comment the code, the size and a phone number.
+- Write numbers so a voice reads them correctly${km ? ' (a price like "$8.50" can be written as "8 ដុល្លារ 50 សេន"; sizes and codes as digits are fine)' : ""}.
+- Plain spoken text only: no emojis, hashtags, markdown, stage directions or quotation marks around the script.
+- Output only the script.${notes ? "\n\nHost style notes from the shop owner:\n"+notes : ""}`;
+}
+function brief(p){
+  const sz = availSizes(p);
+  return [`Code: ${S.codes[p.id]}`, `Name: ${p.name}`, `Price: ${money(p.price)}`, sz.length ? `Sizes available: ${sz.join(", ")}` : "", p.category ? `Category: ${p.category}` : ""].filter(Boolean).join("\n");
+}
+async function claude(userText, photos){
+  if ($("vhWriter").value==="gemini") return geminiWrite(userText, photos);
+  const key = $("vhClaudeKey").value.trim(); if (!key) throw new Error("Add your Claude API key in the settings.");
+  let r;
+  try{ r = await fetch("https://api.anthropic.com/v1/messages", { method:"POST",
+    headers:{ "x-api-key":key, "anthropic-version":"2023-06-01", "content-type":"application/json", "anthropic-dangerous-direct-browser-access":"true" },
+    body:JSON.stringify({ model:$("vhModel").value.trim()||"claude-sonnet-5-5", max_tokens:900, system:systemPrompt(), messages:[{ role:"user", content:userText }] }) }); }
+  catch(e){ throw new Error("Couldn't reach Claude. Check the internet connection."); }
+  const d = await r.json().catch(()=>({}));
+  if (r.status===401) throw new Error("Claude refused the API key. Copy it again from platform.claude.com.");
+  if (r.status===400 && /credit/i.test(JSON.stringify(d))) throw new Error("Your Claude account has no credit. Add some in platform.claude.com → Billing.");
+  if (r.status===404 && /model/i.test(JSON.stringify(d))) throw new Error("Claude doesn't know the model name \""+$("vhModel").value+"\". Check the model name in the settings.");
+  if (!r.ok) throw new Error("Claude error "+r.status+": "+((d.error&&d.error.message)||"").slice(0,200));
+  return (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").trim();
+}
+/* product photo → small JPEG for Gemini (skipped quietly if the photo can't be read) */
+async function photoPart(url){
+  try{
+    let blob;
+    if (/^data:/.test(url)){ blob = await (await fetch(url)).blob(); }
+    else { const r = await fetch(url, { mode:"cors", referrerPolicy:"no-referrer" }); if (!r.ok) return null; blob = await r.blob(); }
+    const bmp = await createImageBitmap(blob), sc = Math.min(1, 768/Math.max(bmp.width, bmp.height));
+    const cv = document.createElement("canvas"); cv.width = Math.round(bmp.width*sc); cv.height = Math.round(bmp.height*sc);
+    cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+    return { inline_data:{ mime_type:"image/jpeg", data: cv.toDataURL("image/jpeg", 0.8).split(",")[1] } };
+  }catch(e){ console.warn("Photo not sent to Gemini:", url, e.message); return null; }
+}
+async function geminiWrite(userText, photos){
+  const key = $("vhGemKey").value.trim(); if (!key) throw new Error("Add your Gemini API key in the voice settings (from aistudio.google.com).");
+  const model = $("vhGemTextModel").value.trim() || "gemini-3.8-flash";
+  let r;
+  try{ r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method:"POST",
+    headers:{ "x-goog-api-key":key, "Content-Type":"application/json" },
+    body:JSON.stringify({ systemInstruction:{ parts:[{ text:systemPrompt() }] }, contents:[{ role:"user", parts:[...(photos||[]), { text:userText }] }], generationConfig:{ temperature:0.9, maxOutputTokens:2048 } }) }); }
+  catch(e){ throw new Error("Couldn't reach Google Gemini. Check the internet connection."); }
+  const d = await r.json().catch(()=>({})), em = (d.error && d.error.message) || "";
+  if (r.status===400 && /api key/i.test(em)) throw new Error("Google refused the Gemini API key. Copy it again from aistudio.google.com.");
+  if (r.status===403) throw new Error("Google refused the Gemini key (403). "+em.slice(0,150));
+  if (r.status===404) throw new Error("Google doesn't know the writer model \""+model+"\". Check the model name. "+em.slice(0,150));
+  if (r.status===429) throw new Error("Gemini free limit reached for now. Wait a minute and try again.");
+  if (!r.ok) throw new Error("Gemini error "+r.status+": "+em.slice(0,200));
+  const parts = (((d.candidates||[])[0]||{}).content||{}).parts || [];
+  const t = parts.filter(p=>typeof p.text==="string" && !p.thought).map(p=>p.text).join("").trim();
+  if (!t) throw new Error("Gemini sent back an empty script. Press Write again.");
+  return t;
+}
+$("vhTestClaude").onclick = async ()=>{
+  vmsg("vhClaudeMsg","warn","Writing a sample…");
+  try{ const t = await claude("Write the script for this product:\nCode: 1258\nName: Girls cotton dress\nPrice: $8.50\nSizes available: 90, 100, 110, 120"); msg("vhClaudeMsg","ok",t); }
+  catch(e){ vmsg("vhClaudeMsg","err",e.message); }
+};
+
+/* ---------- product cards ---------- */
+const items = ()=> S.products.filter(p=>S.selected.has(p.id) && S.codes[p.id]);
+const scriptOf = p => VH.scripts[p.id] || "";
+function setScript(p, t){ VH.scripts[p.id] = t; LS.set("gkl_vh_scripts", VH.scripts); }
+function renderVoice(){
+  const list = items();
+  if (!list.length){ $("vhProducts").innerHTML = `<div class="box hint">No products yet. On the <b>Products &amp; codes</b> tab, tick the products you will show in this live (they need a code), then come back here.</div>`; return; }
+  const pillTxt = {in:"In stock",low:"Few left",out:"Out of stock"};
+  $("vhProducts").innerHTML = list.map((p,i)=>{ const s = stockState(p); return `<div class="vh-card" data-pid="${esc(p.id)}">
+    <div class="vh-top">${thumbHtml(p,true)}<div style="min-width:0"><div><span class="num">${i<9?"key "+(i+1):"#"+(i+1)}</span> <span class="code">${esc(S.codes[p.id])}</span></div>
+      <div class="nm">${esc(p.name)}</div><div class="hint">${money(p.price)} · <span class="pill ${s}">${pillTxt[s]} (${p.total})</span></div></div></div>
+    <textarea data-script="${esc(p.id)}" placeholder="Press ✍️ Write, or type your own script">${esc(scriptOf(p))}</textarea>
+    <div class="vh-cardbtns">
+      <button class="btn vh-play vh-sm" data-act="play">▶ Play</button>
+      <button class="btn ghost vh-sm" data-act="write">✍️ Write</button>
+      <button class="btn ghost vh-sm" data-act="voice">🗣️ Voice</button>
+      <button class="btn ghost vh-sm" data-act="redo" title="Voice sounds wrong? Make a new take of the same script">🔁 Redo</button>
+      <button class="btn ghost vh-sm" data-act="rec" title="Record your own voice for this product — it is used instead of the AI voice">🎙️ Rec</button>
+    </div>
+    <div class="vh-own">🎙️ Your own recording is used for this product (instead of the AI voice). <a href="#" data-act="unrec">Remove it</a></div>
+    <div class="vh-undo"><a href="#" data-act="undo">↩ bring back the previous take</a></div>
+    <div class="vh-cardst"><span class="vh-st" data-st>—</span><span class="hint" data-len>${scriptOf(p).length} chars</span></div></div>`; }).join("");
+  list.forEach(p=>cardStatus(p));
+}
+const cardOf = p => document.querySelector(`.vh-card[data-pid="${CSS.escape(p.id)}"]`);
+async function cardStatus(p){
+  const c = cardOf(p); if (!c) return; const st = c.querySelector("[data-st]"), t = scriptOf(p);
+  const own = await ownGet(p); c.classList.toggle("has-own", !!own);
+  if (own) return setSt(st,"ok","your recording ready");
+  if (!t.trim()) return setSt(st,"","no script");
+  const hit = await cacheGet(clipKey(t)); setSt(st, hit?"ok":"", hit?"voice ready":"voice not made");
+  c.classList.toggle("has-prev", !!(hit && await cacheGet(clipKey(t)+"|prev")));
+}
+async function writeOne(p, ask){
+  const c = cardOf(p), st = c && c.querySelector("[data-st]");
+  if (ask && scriptOf(p).trim() && !confirm("Replace the current script for "+S.codes[p.id]+"?")) return false;
+  setSt(st,"busy","writing…");
+  let photos = [];
+  if ($("vhPhoto").checked && $("vhWriter").value==="gemini"){
+    const urls = ((p.images && p.images.length) ? p.images : [p.image]).filter(Boolean).slice(0, 2);
+    photos = (await Promise.all(urls.map(photoPart))).filter(Boolean);
+  }
+  const t = await claude("Write the script for this product:\n"+brief(p)+(photos.length ? "\n(The product photo is attached.)" : ""), photos);
+  setScript(p, t);
+  if (c){ c.querySelector("textarea").value = t; c.querySelector("[data-len]").textContent = t.length+" chars"; }
+  cardStatus(p); return true;
+}
+async function playProduct(p){
+  const c = cardOf(p), st = c && c.querySelector("[data-st]");
+  showOnScreen(p);
+  try{
+    const own = await ownGet(p);
+    if (!own) setSt(st,"busy","making voice…");
+    const r = own ? { blob:own } : await voiceBlob(scriptOf(p)); setSt(st,"ok", own ? "your recording ready" : "voice ready");
+    const q = [], every = Number($("repeatEvery").value)||5;
+    if ($("vhAutoRemind").checked && VH.played>0 && VH.played % every===0){
+      const rl = LINES.find(l=>l.key==="remind"); if (rl){ const rr = await voiceBlob(lineText(rl)); q.push({ blob:rr.blob, label:"AI reminder" }); }
+    }
+    VH.played++;
+    q.push({ blob:r.blob, label:S.codes[p.id]+" "+p.name });
+    await playQueue(q, c);
+  }catch(e){ setSt(st,"err","error"); vmsg("vhMsg","err",e.message); }
+}
+$("vhProducts").addEventListener("input", e=>{ const id = e.target.dataset.script; if (!id) return;
+  const p = S.products.find(x=>x.id===id); setScript(p, e.target.value);
+  e.target.closest(".vh-card").querySelector("[data-len]").textContent = e.target.value.length+" chars"; cardStatus(p); });
+$("vhProducts").addEventListener("click", async e=>{
+  const act = e.target.dataset.act; if (!act) return; if (act==="undo" || act==="unrec") e.preventDefault();
+  const p = S.products.find(x=>x.id===e.target.closest(".vh-card").dataset.pid); if (!p) return;
+  const st = cardOf(p).querySelector("[data-st]");
+  if (act==="play") return playProduct(p);
+  try{
+    if (act==="write"){ await writeOne(p, true); vmsg("vhMsg","",""); }
+    if (act==="voice"){ setSt(st,"busy","making voice…"); await voiceBlob(scriptOf(p)); setSt(st,"ok","voice ready"); }
+    if (act==="redo"){ await redoVoice(scriptOf(p), st); cardOf(p).classList.add("has-prev"); }
+    if (act==="undo"){ e.preventDefault(); await undoVoice(scriptOf(p), st); }
+    if (act==="rec") await recProduct(p);
+    if (act==="unrec") await unrecProduct(p);
+  }catch(err){ setSt(st,"err","error"); vmsg("vhMsg","err",err.message); }
+});
+$("vhWriteAll").onclick = async ()=>{
+  const todo = items().filter(p=>!scriptOf(p).trim());
+  if (!items().length) return vmsg("vhMsg","warn","Tick products on the Products & codes tab first.");
+  let list = todo;
+  if (!todo.length){
+    if (!confirm("Every product already has a script.\n\nRewrite ALL of them now (for example after changing the language or turning on photo descriptions)?")) return;
+    list = items();
+  }
+  $("vhWriteAll").disabled = true; let done = 0;
+  try{ for (const p of list){ vmsg("vhMsg","warn",`Writing scripts… ${done}/${list.length}`); await writeOne(p,false); done++; }
+    vmsg("vhMsg","ok",`Wrote ${done} script(s). Read them, fix anything, then press Make all voices.`); }
+  catch(e){ vmsg("vhMsg","err",e.message); }
+  finally{ $("vhWriteAll").disabled = false; }
+};
+$("vhVoiceAll").onclick = async ()=>{
+  const mine = []; for (const p of items()) if (!(await ownGet(p))) mine.push(p);
+  const texts = [...mine.map(scriptOf), ...LINES.map(lineText)].filter(t=>t.trim());
+  if (!texts.length) return vmsg("vhMsg","warn","No scripts yet. Write them first.");
+  $("vhVoiceAll").disabled = true; let made = 0, reused = 0, chars = 0;
+  try{ for (let i=0;i<texts.length;i++){ vmsg("vhMsg","warn",`Making voices… ${i}/${texts.length}`);
+      const r = await voiceBlob(texts[i]); if (r.cached) reused++; else { made++; chars += texts[i].length; } }
+    vmsg("vhMsg","ok",`All voices ready. New: ${made} (${chars} characters). Reused free: ${reused}.`); }
+  catch(e){ vmsg("vhMsg","err",e.message); }
+  finally{ $("vhVoiceAll").disabled = false; items().forEach(cardStatus); LINES.forEach((l,i)=>lineStatus(i)); }
+};
+$("vhRefresh").onclick = renderVoice;
+
+/* ---------- live screen (live-show.html) + auto show ---------- */
+let SHOW_BC = null, lastScreen = null;
+try{ SHOW_BC = new BroadcastChannel("gk-live-show"); }catch(e){}
+function sendScreen(m){
+  if (m.type==="product" || m.type==="line") lastScreen = m;
+  try{ SHOW_BC && SHOW_BC.postMessage(m); }catch(e){}
+}
+/* only one Live Desk may talk at a time: when this window starts playing, any other
+   open Live Desk window (an old tab still running its show) stops itself */
+const DESK_ID = Math.random().toString(36).slice(2);
+function claimVoice(){ try{ SHOW_BC && SHOW_BC.postMessage({ type:"deskPlay", from:DESK_ID }); }catch(e){} }
+if (SHOW_BC) SHOW_BC.onmessage = e=>{
+  if (e.data && e.data.type==="deskPlay" && e.data.from!==DESK_ID && (SHOW.on || A.current)){
+    stopShow(); vmsg("shMsg","warn","Stopped here because another Live Desk window started playing. Use only one Live Desk window — close the others.");
+    vmsg("vhMsg","warn","Stopped here because another Live Desk window started playing. Close the other Live Desk tabs.");
+  }
+  if (e.data && e.data.type==="hello" && lastScreen) sendScreen(lastScreen);
+  if (e.data && e.data.type==="camError") vmsg("shMsg","err","Live camera: "+e.data.msg);
+};
+function screenProduct(p){
+  if (!p) return null;
+  const imgs = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
+  return { code:S.codes[p.id]||"", name:p.name, price:p.price, promo:p.promoPrice||0, sizes:availSizes(p), images:imgs, image:imgs[0]||"", total:p.total };
+}
+function showOnScreen(p){
+  const list = SHOW.list.length ? SHOW.list : items();
+  const i = list.findIndex(x=>x.id===p.id);
+  const nx = i>=0 && list.length>1 ? list[(i+1) % list.length] : null;
+  const n = screenProduct(nx);
+  sendScreen({ type:"product", p:screenProduct(p), next: n ? { name:n.code+" · "+n.name, image:n.image } : null });
+}
+function showLineOnScreen(l){ sendScreen({ type:"line", key:l.key, label:l.label, text:lineText(l) }); }
+
+$("shOpen").onclick = ()=>{
+  const w = window.open("live-show.html", "gkLiveScreen", "popup,width=540,height=960");
+  if (!w) return vmsg("shMsg","err","The browser blocked the new window. Allow pop-ups for this site, then press Open live screen again.");
+  vmsg("shMsg","ok","Live screen opened. In Live Producer choose Share screen → Window → \"Goat Kids Live Screen\". Make the window tall (portrait); press F on it for full screen.");
+};
+
+/* shop background photo: shrunk to 1080 px and kept in this browser */
+$("shBgFile").onchange = async e=>{
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  try{
+    const img = await createImageBitmap(f), sc = Math.min(1, 1080/img.width, 1920/img.height);
+    const cv = document.createElement("canvas"); cv.width = Math.round(img.width*sc); cv.height = Math.round(img.height*sc);
+    cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+    const url = cv.toDataURL("image/jpeg", 0.82);
+    localStorage.setItem("gkl_show_bg", url);
+    sendScreen({ type:"bg", url }); vmsg("shMsg","ok","Shop background saved.");
+  }catch(err){ vmsg("shMsg","err","Couldn't use that photo: "+(err.message||err)); }
+  e.target.value = "";
+};
+$("shBgClear").onclick = ()=>{ try{ localStorage.removeItem("gkl_show_bg"); }catch(e){} sendScreen({ type:"bg", url:"" }); vmsg("shMsg","ok","Background removed — the screen uses the Goat Kids colours."); };
+
+/* background music: saved in this browser, loops softly and dips while the voice talks */
+const MUSIC_KEY = "show-music";
+function musicVol(){ return Number($("shMusicVol").value)/100; }
+function musicDuck(on){ if (A.musicGain && A.ctx) A.musicGain.gain.setTargetAtTime(on ? musicVol()*0.35 : musicVol(), A.ctx.currentTime, 0.25); }
+async function startMusic(){
+  stopMusic(); const blob = await cacheGet(MUSIC_KEY); if (!blob) return;
+  audio();
+  try{
+    const buf = await A.ctx.decodeAudioData(await blob.arrayBuffer());
+    const src = A.ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    A.musicGain = A.ctx.createGain(); A.musicGain.gain.value = musicVol();
+    src.connect(A.musicGain); A.musicGain.connect(A.dest); A.musicGain.connect(A.monitorGain);
+    src.start(); A.music = src;
+  }catch(e){ vmsg("shMsg","err","Couldn't play the music file: "+e.message); }
+}
+function stopMusic(){ try{ A.music && A.music.stop(); A.musicGain && A.musicGain.disconnect(); }catch(e){} A.music = A.musicGain = null; }
+$("shMusicFile").onchange = async e=>{
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  await cachePut(MUSIC_KEY, f); localStorage.setItem("gkl_show_music_name", f.name);
+  $("shMusicName").textContent = f.name; vmsg("shMsg","ok","Music saved. It plays when the auto show starts.");
+  if (SHOW.on) startMusic(); e.target.value = "";
+};
+$("shMusicClear").onclick = async ()=>{ await cachePut(MUSIC_KEY, null); try{ localStorage.removeItem("gkl_show_music_name"); }catch(e){}
+  stopMusic(); $("shMusicName").textContent = "no music"; vmsg("shMsg","ok","Music removed."); };
+$("shMusicVol").addEventListener("input", ()=>{ if (A.musicGain && !A.current) A.musicGain.gain.value = musicVol(); try{ localStorage.setItem("gkl_show_music_vol", $("shMusicVol").value); }catch(e){} });
+try{ const v = localStorage.getItem("gkl_show_music_vol"); if (v) $("shMusicVol").value = v; const n = localStorage.getItem("gkl_show_music_name"); if (n) $("shMusicName").textContent = n; }catch(e){}
+["shGap","shOpening","shLoop"].forEach(id=>{ const k = "gkl_"+id, el = $(id);
+  try{ const v = localStorage.getItem(k); if (v!==null){ if (el.type==="checkbox") el.checked = v==="1"; else el.value = v; } }catch(e){}
+  el.addEventListener("change", ()=>{ try{ localStorage.setItem(k, el.type==="checkbox" ? (el.checked?"1":"0") : el.value); }catch(e){} }); });
+
+/* live camera: the live screen opens the camera itself; these settings tell it how */
+async function listCams(ask){
+  const sel = $("shCamDev"), saved = localStorage.getItem("gkl_cam_dev") || "";
+  try{
+    if (ask){ const st = await navigator.mediaDevices.getUserMedia({ video:true, audio:false }); st.getTracks().forEach(t=>t.stop()); }
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==="videoinput");
+    sel.innerHTML = `<option value="">Default camera</option>` + cams.map((d,i)=>`<option value="${d.deviceId}">${(d.label||("Camera "+(i+1))).replace(/[<>&"]/g,"")}</option>`).join("");
+    if (saved && cams.some(d=>d.deviceId===saved)) sel.value = saved;
+    if (ask) vmsg("shMsg","ok", cams.length ? `Found ${cams.length} camera${cams.length>1?"s":""}.` : "No camera found. Plug it in, then press Find cameras again.");
+  }catch(err){ if (ask) vmsg("shMsg","err","Couldn't open the camera: "+(err.name==="NotAllowedError" ? "allow the camera for this site (lock icon next to the address)." : (err.message||err.name))); }
+}
+function saveCam(){
+  try{
+    localStorage.setItem("gkl_cam_mode", $("shCamMode").value);
+    localStorage.setItem("gkl_cam_dev", $("shCamDev").value);
+    localStorage.setItem("gkl_cam_mirror", $("shCamMirror").checked ? "1" : "0");
+  }catch(e){}
+  sendScreen({ type:"cam" });
+}
+try{ $("shCamMode").value = localStorage.getItem("gkl_cam_mode") || "off"; $("shCamMirror").checked = localStorage.getItem("gkl_cam_mirror")==="1"; }catch(e){}
+["shCamMode","shCamDev","shCamMirror"].forEach(id=>$(id).addEventListener("change", saveCam));
+$("shCamFind").onclick = ()=>listCams(true);
+if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) listCams(false);
+
+/* the auto show loop */
+const SHOW = { on:false, run:0, list:[] };
+function showAlive(run){ return SHOW.on && run===SHOW.run; }
+async function wait(sec, run){ const end = Date.now()+sec*1000; while (Date.now()<end){ if (!showAlive(run)) return; await new Promise(r=>setTimeout(r,200)); } }
+async function ready(text){ return !!(text && text.trim() && await cacheGet(clipKey(text))); }
+function showUi(text){ $("shNow").textContent = text; $("shStart").disabled = SHOW.on; }
+async function startShow(){
+  if (SHOW.on) return;
+  const all = items();
+  if (!all.length) return vmsg("shMsg","warn","Tick products on the Products & codes tab first (they need a code).");
+  const okList = []; for (const p of all) if ((await ownGet(p)) || await ready(scriptOf(p))) okList.push(p);
+  if (!okList.length) return vmsg("shMsg","err","No product has a voice yet. Press ✍️ Write all scripts, then 🗣️ Make all voices, then start again.");
+  const skipped = all.length - okList.length;
+  vmsg("shMsg", skipped ? "warn" : "ok", skipped ? `Starting with ${okList.length} products. ${skipped} skipped because their voice isn't made yet.` : `Auto show running with ${okList.length} products. Press ■ Stop show (or Space) to stop.`);
+  SHOW.on = true; const run = ++SHOW.run; SHOW.list = okList; VH.played = 0;
+  audio(); showUi("Starting…"); await startMusic();
+  try{
+    const oi = LINES.findIndex(l=>l.key==="open");
+    if ($("shOpening").checked && oi>=0 && await ready(lineText(LINES[oi]))){ showUi("▶ Opening"); await playLine(oi); await wait(1.5, run); }
+    let round = 0;
+    do{
+      round++;
+      for (let i=0; i<SHOW.list.length; i++){
+        if (!showAlive(run)) return;
+        const p = SHOW.list[i];
+        showUi(`▶ ${i+1}/${SHOW.list.length} · ${S.codes[p.id]} ${p.name}${round>1?" (round "+round+")":""}`);
+        await playProduct(p);
+        if (!showAlive(run)) return;
+        await wait(Number($("shGap").value)||4, run);
+      }
+    } while (showAlive(run) && $("shLoop").checked);
+    const ti = LINES.findIndex(l=>l.key==="thanks");
+    if (showAlive(run) && ti>=0 && await ready(lineText(LINES[ti]))){ showUi("▶ Thank you"); await playLine(ti); }
+  } finally {
+    if (run===SHOW.run){ SHOW.on = false; SHOW.list = []; stopMusic(); showUi("Finished"); }
+  }
+}
+function stopShow(){
+  const was = SHOW.on; SHOW.on = false; SHOW.run++; SHOW.list = [];
+  stop(); stopMusic(); showUi(was ? "Stopped" : "Not running");
+}
+$("shStart").onclick = startShow;
+$("shStop").onclick = stopShow;
+
+/* ---------- tab + keys ---------- */
+document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click", ()=>{ if (b.dataset.view==="voice") renderVoice(); }));
+document.addEventListener("keydown", e=>{
+  if (!$("view-voice").classList.contains("active")) return;
+  const tag = (e.target.tagName||"").toLowerCase();
+  if (["input","textarea","select"].includes(tag) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector("dialog[open]")) return;
+  if (e.key===" "){ e.preventDefault(); stopShow(); return; }
+  if (/^[1-9]$/.test(e.key)){ const p = items()[Number(e.key)-1]; if (p) playProduct(p); return; }
+  const li = LINE_KEYS.indexOf(e.key.toLowerCase()); if (li>=0 && LINES[li]) playLine(li);
+});
+loadLines(); renderLines(); renderVoice();
+})();
+</script>
+<div id="zoom" role="dialog" aria-label="Product photo"><figure style="margin:0"><img alt=""><div></div></figure></div>
 </body>
 </html>
