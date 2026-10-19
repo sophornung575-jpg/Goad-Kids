@@ -68,6 +68,8 @@ th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);verti
 th{background:#F6F9F7;font-weight:600}
 tr:last-child td{border-bottom:0}
 .code{font-weight:800;font-size:1.15rem;letter-spacing:.06em;color:var(--teal)}
+.cloneBox{margin-top:14px;padding:12px;border:1px dashed var(--teal);border-radius:10px;background:#f6faf8}
+.consentTxt{font-size:.92rem;font-weight:600;background:#fff;border-left:3px solid var(--teal);padding:6px 10px;margin:2px 0 6px;border-radius:4px}
 .catPill{display:inline-block;font-size:.72rem;font-weight:600;padding:1px 8px;border-radius:99px;background:#eef3f1;color:var(--teal);vertical-align:middle;white-space:nowrap}
 .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.8rem;font-weight:600}
 .pill.in{background:var(--teal-soft);color:var(--teal)}
@@ -406,6 +408,24 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
           <label for="vhGemStyle">How the voice should sound</label>
           <input type="text" id="vhGemStyle" value="Speak natural Khmer like a warm, cheerful, energetic Cambodian live-selling host talking to parents">
           <label for="vhGemModel">Gemini voice model</label><input type="text" id="vhGemModel" value="gemini-3.8-flash-tts">
+
+          <div class="cloneBox">
+            <h4 style="margin:0 0 4px">🎙️ Clone a voice</h4>
+            <p class="hint" style="margin:0">Make the AI host speak with a real person's voice. Only clone a voice with that person's permission — Google needs them to read a consent sentence. Both recordings: the <b>same person</b>, the <b>same microphone</b>, a <b>quiet room</b>. Use a real recording, not an AI voice.</p>
+            <label for="clName">Name for this voice</label>
+            <input type="text" id="clName" placeholder="e.g. Sophorn" maxlength="40">
+            <label>1 · Voice sample — 10 to 30 seconds of natural talking</label>
+            <div class="row" style="margin:0"><input type="file" id="clSampleFile" accept="audio/*" style="max-width:220px"><button class="btn ghost vh-sm" id="clSampleRec">⏺ Record</button><span class="hint" id="clSampleInfo">none yet</span></div>
+            <label>2 · Consent — the same person reads this sentence out loud</label>
+            <div class="consentTxt">I am the owner of this voice and I consent to Google using this voice to create a synthetic voice model.</div>
+            <div class="row" style="margin:0"><input type="file" id="clConsentFile" accept="audio/*" style="max-width:220px"><button class="btn ghost vh-sm" id="clConsentRec">⏺ Record</button><span class="hint" id="clConsentInfo">none yet</span></div>
+            <div class="row" style="margin:8px 0 0">
+              <button class="btn" id="clCreate">Create cloned voice</button>
+              <button class="btn ghost vh-sm" id="clLoad" title="Get the cloned voices saved in your Google project">Load my cloned voices</button>
+              <button class="btn ghost vh-sm" id="clDelete">Delete selected cloned voice</button>
+            </div>
+            <div id="clMsg"></div>
+          </div>
         </div>
         <div id="vhAzureBox" style="display:none">
           <label for="vhAzKey">Azure Speech key</label><input type="password" id="vhAzKey" placeholder="KEY 1" autocomplete="off">
@@ -1521,6 +1541,15 @@ function saveSet(){
   if ($("vhRemember").checked){ const k={}; KEYS.forEach(id=>k[id]=$(id).value); LS.set("gkl_vh_keys", k); }
   else { try{ localStorage.removeItem("gkl_vh_keys"); }catch(e){} }
 }
+/* cloned voices (Gemini voice replication) live in their own group of the Voice list */
+function renderClones(){
+  const sel = $("vhGemVoice"), list = LS.get("gkl_clones", []);
+  let g = sel.querySelector("optgroup[data-clones]");
+  if (!list.length){ if (g) g.remove(); return; }
+  if (!g){ g = document.createElement("optgroup"); g.dataset.clones = "1"; g.label = "My cloned voices"; sel.insertBefore(g, sel.firstChild); }
+  g.innerHTML = list.map(v=>`<option value="${esc(v.id)}">🎙️ ${esc(v.name)} (cloned)</option>`).join("");
+}
+renderClones();
 const saved = LS.get("gkl_vh_set", {});
 if (saved.vhEngine==="azure" && !saved.vhGemMigrated){ saved.vhEngine = "gemini"; saved.vhGemMigrated = true; }
 if (saved.vhEngine && saved.vhEngine!=="camb" && !saved.vhCambMigrated){ saved.vhEngine = "camb"; }
@@ -1669,6 +1698,114 @@ async function ttsGemini(text){
   if (/l16|pcm/i.test(mt)){ const m = mt.match(/rate=(\d+)/); return pcmToWav(bytes, m?Number(m[1]):24000); }
   return new Blob([bytes], { type: /wav/.test(mt) ? "audio/wav" : mt });
 }
+/* ---------- voice cloning (Gemini voice replication) ---------- */
+const GV = "https://generativelanguage.googleapis.com/v1beta/";
+const CL = { sample:null, consent:null, rec:null };
+async function toWav24k(blob){ // any audio → 24 kHz mono 16-bit WAV, as Google recommends
+  const ctx = new AudioContext();
+  let buf; try{ buf = await ctx.decodeAudioData(await blob.arrayBuffer()); } finally { ctx.close(); }
+  const len = Math.ceil(buf.duration * 24000), off = new OfflineAudioContext(1, len, 24000);
+  const src = off.createBufferSource(); src.buffer = buf; src.connect(off.destination); src.start();
+  const out = (await off.startRendering()).getChannelData(0);
+  let peak = 0; for (let i=0;i<out.length;i++){ const a=Math.abs(out[i]); if (a>peak) peak=a; }
+  const gain = peak>0 && peak<0.5 ? 0.9/peak : 1;            // lift quiet recordings
+  const pcm = new Uint8Array(out.length*2), dv = new DataView(pcm.buffer);
+  for (let i=0;i<out.length;i++){ const x = Math.max(-1, Math.min(1, out[i]*gain)); dv.setInt16(i*2, x<0 ? x*32768 : x*32767, true); }
+  return { wav: pcmToWav(pcm, 24000), sec: buf.duration };
+}
+const b64 = blob => new Promise((ok,no)=>{ const r = new FileReader(); r.onload = ()=>ok(String(r.result).split(",")[1]); r.onerror = no; r.readAsDataURL(blob); });
+async function takeClip(which, blob){
+  const info = $(which==="sample" ? "clSampleInfo" : "clConsentInfo");
+  try{
+    let { wav, sec } = await toWav24k(blob);
+    if (which==="sample" && sec > 30){ // keep the first 30 seconds
+      const bytes = new Uint8Array(await wav.arrayBuffer()).slice(44, 44 + 30*24000*2);
+      wav = pcmToWav(bytes, 24000); sec = 30;
+      info.textContent = "✓ used the first 30 seconds";
+    } else info.textContent = `✓ ${sec.toFixed(1)} seconds`;
+    if (which==="sample" && sec < 10){ CL.sample = null; info.textContent = `${sec.toFixed(1)} seconds — too short, needs at least 10`; return; }
+    if (which==="consent" && sec < 3){ CL.consent = null; info.textContent = "too short — read the whole sentence"; return; }
+    CL[which] = wav;
+    const a = new Audio(URL.createObjectURL(wav)); info.insertAdjacentHTML("beforeend", ` <a href="#" data-play="${which}">▶ listen</a>`);
+    info.querySelector("a").onclick = e=>{ e.preventDefault(); a.currentTime = 0; a.play(); };
+  }catch(e){ CL[which] = null; info.textContent = "couldn't read this file — try mp3, m4a or wav"; }
+}
+$("clSampleFile").onchange = e=>{ const f = e.target.files[0]; if (f) takeClip("sample", f); e.target.value = ""; };
+$("clConsentFile").onchange = e=>{ const f = e.target.files[0]; if (f) takeClip("consent", f); e.target.value = ""; };
+async function recToggle(which){
+  const btn = $(which==="sample" ? "clSampleRec" : "clConsentRec");
+  if (CL.rec){ CL.rec.stop(); return; }
+  let st; try{ st = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:true } }); }
+  catch(e){ return vmsg("clMsg","err","Couldn't open the microphone. Allow the microphone for this site (lock icon next to the address)."); }
+  const chunks = [], mr = new MediaRecorder(st); CL.rec = mr;
+  mr.ondataavailable = e=>{ if (e.data.size) chunks.push(e.data); };
+  mr.onstop = ()=>{ st.getTracks().forEach(t=>t.stop()); CL.rec = null; btn.textContent = "⏺ Record"; btn.classList.remove("vh-stop");
+    takeClip(which, new Blob(chunks, { type: mr.mimeType })); };
+  mr.start(); btn.textContent = "■ Stop"; btn.classList.add("vh-stop");
+  vmsg("clMsg","ok", which==="sample" ? "Recording… talk naturally for 15–25 seconds, then press Stop." : "Recording… read the sentence clearly, then press Stop.");
+}
+$("clSampleRec").onclick = ()=>recToggle("sample");
+$("clConsentRec").onclick = ()=>recToggle("consent");
+function gemErr(r, d, what){
+  const em = (d && d.error && d.error.message) || "";
+  if (r.status===400 && /api key/i.test(em)) return "Google refused the Gemini API key. Copy it again from aistudio.google.com.";
+  if (/consent/i.test(em)) return "Google couldn't confirm the consent recording. Read the exact sentence clearly, same person and same mic as the sample. ("+em.slice(0,160)+")";
+  if (r.status===429) return "Gemini limit reached for now. Wait a minute and try again.";
+  return what+" failed ("+r.status+"): "+(em||"no details").slice(0,220);
+}
+const findVoiceId = d => { const m = JSON.stringify(d||{}).match(/voice_[A-Za-z0-9_-]+/); return m ? m[0] : ""; };
+$("clCreate").onclick = async ()=>{
+  const key = $("vhGemKey").value.trim(), name = $("clName").value.trim();
+  if (!key) return vmsg("clMsg","err","Add your Gemini API key first (Settings, on the left).");
+  if (!name) return vmsg("clMsg","err","Give the voice a name.");
+  if (!CL.sample) return vmsg("clMsg","err","Add the voice sample (step 1) — 10 to 30 seconds.");
+  if (!CL.consent) return vmsg("clMsg","err","Add the consent recording (step 2).");
+  const btn = $("clCreate"); btn.disabled = true; vmsg("clMsg","ok","Sending to Google… this can take up to a minute.");
+  try{
+    const body = { store:true, voice:{ model:$("vhGemModel").value.trim()||"gemini-3.8-flash-tts", type:"replicated", display_name:name,
+      replicated:{ source_audio:{ mime_type:"audio/wav", data:await b64(CL.sample) }, consent_audio:{ mime_type:"audio/wav", data:await b64(CL.consent) } } } };
+    let r; try{ r = await fetch(GV+"voices", { method:"POST", headers:{ "x-goog-api-key":key, "Content-Type":"application/json" }, body:JSON.stringify(body) }); }
+    catch(e){ throw new Error("Couldn't reach Google Gemini. Check the internet connection."); }
+    let d = await r.json().catch(()=>({}));
+    if (!r.ok) throw new Error(gemErr(r, d, "Cloning"));
+    // some Google APIs answer with a job to wait for
+    for (let i=0; !findVoiceId(d) && d.name && /operations\//.test(d.name) && !d.done && i<30; i++){
+      await new Promise(ok=>setTimeout(ok, 2000));
+      const r2 = await fetch(GV+d.name, { headers:{ "x-goog-api-key":key } }); d = await r2.json().catch(()=>({}));
+      if (d.error) throw new Error(gemErr(r2, d, "Cloning"));
+    }
+    const id = findVoiceId(d); if (!id) throw new Error("Google answered but didn't send a voice ID. Press Load my cloned voices in a minute.");
+    const list = LS.get("gkl_clones", []).filter(v=>v.id!==id); list.unshift({ id, name }); LS.set("gkl_clones", list);
+    renderClones(); $("vhGemVoice").value = id; saveSet();
+    CL.sample = CL.consent = null; $("clSampleInfo").textContent = $("clConsentInfo").textContent = "none yet"; $("clName").value = "";
+    vmsg("clMsg","ok",`Done! "${name}" is now chosen as the Voice. Press Test voice to hear it, then Make all voices.`);
+  }catch(e){ vmsg("clMsg","err",e.message); }
+  finally{ btn.disabled = false; }
+};
+$("clLoad").onclick = async ()=>{
+  const key = $("vhGemKey").value.trim(); if (!key) return vmsg("clMsg","err","Add your Gemini API key first.");
+  try{
+    const r = await fetch(GV+"voices?pageSize=100", { headers:{ "x-goog-api-key":key } }); const d = await r.json().catch(()=>({}));
+    if (!r.ok) throw new Error(gemErr(r, d, "Loading voices"));
+    const arr = (d.voices || []).filter(v=>!v.type || /replicat/i.test(String(v.type)));
+    const list = arr.map(v=>({ id: findVoiceId(v), name: v.display_name || v.displayName || "Cloned voice" })).filter(v=>v.id);
+    LS.set("gkl_clones", list); const cur = $("vhGemVoice").value; renderClones(); if ([...$("vhGemVoice").options].some(o=>o.value===cur)) $("vhGemVoice").value = cur;
+    vmsg("clMsg","ok", list.length ? `Found ${list.length} cloned voice${list.length>1?"s":""}. Pick one in the Voice list.` : "No cloned voices in your Google project yet.");
+  }catch(e){ vmsg("clMsg","err",e.message); }
+};
+$("clDelete").onclick = async ()=>{
+  const id = $("vhGemVoice").value, key = $("vhGemKey").value.trim();
+  if (!/^voice_/.test(id)) return vmsg("clMsg","err","First choose the cloned voice in the Voice list above.");
+  const nm = $("vhGemVoice").selectedOptions[0].textContent;
+  if (!confirm("Delete "+nm+" from Google? Clips already made with it stay saved here.")) return;
+  try{
+    const r = await fetch(GV+"voices/"+encodeURIComponent(id), { method:"DELETE", headers:{ "x-goog-api-key":key } });
+    if (!r.ok && r.status!==404){ const d = await r.json().catch(()=>({})); throw new Error(gemErr(r, d, "Deleting")); }
+    LS.set("gkl_clones", LS.get("gkl_clones", []).filter(v=>v.id!==id)); renderClones(); $("vhGemVoice").value = "Kore"; saveSet();
+    vmsg("clMsg","ok","Deleted. The Voice is back to Kore.");
+  }catch(e){ vmsg("clMsg","err",e.message); }
+};
+
 async function ttsEleven(text){
   const key = $("vhElKey").value.trim(), voice = $("vhElVoice").value;
   if (!key) throw new Error("Add your ElevenLabs key in the settings.");
