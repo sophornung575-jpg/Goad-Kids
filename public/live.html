@@ -2133,17 +2133,29 @@ $("vhElLoad").onclick = async ()=>{
 
 /* ---------- audio routing ---------- */
 const A = { ctx:null };
+/* Sound goes out as normal media playback, straight from the audio engine to the chosen
+   device (AudioContext.setSinkId). The old way — a MediaStream played by an <audio>
+   element — is treated by Windows as a voice call, so the PC's sound driver "adjusted"
+   the voice for the first seconds. That way is kept only for old browsers.          */
 function audio(){
-  if (A.ctx){ if (A.ctx.state==="suspended") A.ctx.resume(); return; }
-  const ctx = A.ctx = new (window.AudioContext||window.webkitAudioContext)();
-  A.dest = ctx.createMediaStreamDestination();
+  if (A.ctx){ if (A.ctx.state==="suspended") A.ctx.resume(); if (A.mctx && A.mctx.state==="suspended") A.mctx.resume(); return; }
+  const AC = window.AudioContext||window.webkitAudioContext;
+  const ctx = A.ctx = new AC({ latencyHint:"playback" });
+  A.direct = typeof ctx.setSinkId === "function";
   A.voiceGain = ctx.createGain(); A.voiceGain.gain.value = $("vhVol").value/100;
-  A.monitorGain = ctx.createGain(); A.monitorGain.gain.value = $("vhMonitor").checked?1:0;
+  A.monitorGain = ctx.createGain(); A.monitorGain.gain.value = 0;
   A.analyser = ctx.createAnalyser(); A.analyser.fftSize = 512;
+  if (A.direct){
+    A.dest = ctx.createGain(); A.dest.connect(ctx.destination);           // the live output bus
+    // "Let me hear the voice": a second player on the default speakers
+    A.monDest = ctx.createMediaStreamDestination(); A.monitorGain.connect(A.monDest);
+  } else {
+    A.dest = ctx.createMediaStreamDestination();
+    A.monitorGain.connect(ctx.destination);
+    A.outEl = new Audio(); A.outEl.srcObject = A.dest.stream; A.outEl.autoplay = true; A.outEl.play().catch(()=>{});
+  }
   A.voiceGain.connect(A.dest); A.voiceGain.connect(A.analyser); A.voiceGain.connect(A.monitorGain);
-  A.monitorGain.connect(ctx.destination);
-  A.outEl = new Audio(); A.outEl.srcObject = A.dest.stream; A.outEl.autoplay = true;
-  applySink(); A.outEl.play().catch(()=>{});
+  applySink();
   const buf = new Uint8Array(A.analyser.fftSize), bar = $("vhMeter");
   (function tick(){ A.analyser.getByteTimeDomainData(buf); let pk=0; for (let i=0;i<buf.length;i++){ const v=Math.abs(buf[i]-128); if (v>pk) pk=v; }
     bar.style.width = Math.min(100, pk/128*140)+"%"; bar.style.background = pk>118 ? "var(--live)" : "var(--teal)"; requestAnimationFrame(tick); })();
@@ -2151,9 +2163,25 @@ function audio(){
 async function applySink(){
   const id = $("vhOut").value, name = $("vhOut").selectedOptions[0] ? $("vhOut").selectedOptions[0].textContent : "Default speakers";
   $("vhRoute").textContent = id ? name : "default speakers";
-  if (!A.outEl) return;
-  if (typeof A.outEl.setSinkId!=="function"){ vmsg("vhRouteMsg","warn","This browser can't choose an output. Use Google Chrome or Edge."); return; }
-  try{ await A.outEl.setSinkId(id||""); }catch(e){ vmsg("vhRouteMsg","err","Couldn't switch output: "+e.message); }
+  if (!A.ctx) return;
+  try{
+    if (A.direct) await A.ctx.setSinkId(id||"");
+    else if (A.outEl && typeof A.outEl.setSinkId==="function") await A.outEl.setSinkId(id||"");
+    else vmsg("vhRouteMsg","warn","This browser can't choose an output. Use Google Chrome or Edge.");
+  }catch(e){ vmsg("vhRouteMsg","err","Couldn't switch output: "+e.message); }
+  applyMonitor();
+}
+/* the monitor only plays when the live output is another device (e.g. CABLE) —
+   otherwise you would hear the voice twice, slightly out of step */
+function applyMonitor(){
+  if (!A.ctx) return;
+  const want = $("vhMonitor").checked && !!$("vhOut").value;
+  A.monitorGain.gain.value = want ? 1 : 0;
+  if (A.direct && want && !A.mctx){
+    A.mctx = new (window.AudioContext||window.webkitAudioContext)({ latencyHint:"playback" });
+    A.mctx.createMediaStreamSource(A.monDest.stream).connect(A.mctx.destination);
+  }
+  if (A.mctx) want ? A.mctx.resume() : A.mctx.suspend();
 }
 async function listDevices(){
   const devs = await navigator.mediaDevices.enumerateDevices();
@@ -2176,7 +2204,7 @@ $("vhAllow").onclick = async ()=>{
 };
 if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener("devicechange", ()=>{ if (A.ctx) listDevices(); });
 $("vhOut").addEventListener("change", ()=>{ audio(); applySink(); });
-$("vhMonitor").addEventListener("change", ()=>{ if (A.monitorGain) A.monitorGain.gain.value = $("vhMonitor").checked?1:0; });
+$("vhMonitor").addEventListener("change", ()=>{ audio(); applyMonitor(); });
 async function startMic(){
   audio(); stopMic();
   const id = $("vhMic").value;
