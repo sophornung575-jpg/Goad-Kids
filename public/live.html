@@ -68,6 +68,9 @@ th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);verti
 th{background:#F6F9F7;font-weight:600}
 tr:last-child td{border-bottom:0}
 .code{font-weight:800;font-size:1.15rem;letter-spacing:.06em;color:var(--teal)}
+.syncbar{font-size:.86rem;margin:0 0 10px;padding:7px 12px;border-radius:8px;background:#eef3f1;color:var(--teal)}
+.syncbar.err{background:#fde7ea;color:#9b1c2c}
+.syncbar pre{white-space:pre-wrap;background:#fff;border:1px solid #e3c4c9;border-radius:6px;padding:8px;margin:6px 0;color:#1d2833;font-size:.8rem}
 .cloneBox{margin-top:14px;padding:12px;border:1px dashed var(--teal);border-radius:10px;background:#f6faf8}
 .consentTxt{font-size:.92rem;font-weight:600;background:#fff;border-left:3px solid var(--teal);padding:6px 10px;margin:2px 0 6px;border-radius:4px}
 .catPill{display:inline-block;font-size:.72rem;font-weight:600;padding:1px 8px;border-radius:99px;background:#eef3f1;color:var(--teal);vertical-align:middle;white-space:nowrap}
@@ -151,7 +154,7 @@ tr:last-child td{border-bottom:0}
 <!-- CONNECT -->
 <section class="view active" id="view-connect">
   <h2>Connect to your product data</h2>
-  <p class="lead">This tool only reads your products. It writes only to its own collections, <b>live_codes</b> and <b>live_report</b>. Your store data is never changed.</p>
+  <p class="lead">This tool only reads your products. It writes only to its own collections, <b>live_codes</b>, <b>live_report</b> and <b>live_desk</b> (the shared Live Desk data). Your store data is never changed.</p>
   <div class="grid2">
     <div class="box">
       <label for="cfg">Firebase config (paste the object from your store file)</label>
@@ -305,6 +308,7 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
 <!-- VOICE HOST -->
 <section class="view" id="view-voice">
   <h2>🎙️ Voice host</h2>
+  <div id="syncBar" class="syncbar">☁️ Shared data: connect first.</div>
   <p class="lead">Claude writes a natural selling script for each product you ticked on the Products tab, an AI voice reads it, and you press ▶ to play it straight into the live. Each voice is made once and saved, so playing it again costs nothing.</p>
   <div class="disclosure"><strong>AI host label:</strong> the <b>Opening</b> line always starts with the AI host disclosure, and the AI reminder plays automatically every few products (same setting as the Live script tab).</div>
 
@@ -558,7 +562,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const LS = { get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}}, set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}} };
 /* ticked products are remembered in this browser, so they come back after a reload */
 { const t = LS.get("gkl_selected", []); if (Array.isArray(t)) t.forEach(id=>S.selected.add(String(id))); }
-function saveSelected(){ LS.set("gkl_selected", [...S.selected]); }
+function saveSelected(){ LS.set("gkl_selected", [...S.selected]); if (window.gkSyncDirty) window.gkSyncDirty(); }
 
 /* ============ PERMANENT AI DISCLOSURE ============
    These lines are added by code, not by the user.
@@ -654,6 +658,7 @@ async function connect(){
     S.db = app.firestore(); S.mode = "firebase";
     await loadProducts();
     msg("connectMsg","ok",`Loaded ${S.products.length} products from ${storeList().map(x=>x.label).join(" and ")}.`);
+    if (window.gkSyncStart) window.gkSyncStart();
   }catch(e){
     msg("connectMsg","err","Could not load products: "+(e.message||e)+". Check the store IDs and Firestore rules.");
   }
@@ -1537,6 +1542,12 @@ $("discPreview").textContent = disclosureFor($("lang").value);
    S.codes / S.selected from the Live Desk; never writes to Firebase. */
 (function(){
 const VH = { scripts: LS.get("gkl_vh_scripts", {}), played:0 };
+/* shared-data (Firebase) state — see SHARED DATA below */
+const BG_KEY = "show-bg";
+const LOCAL_ONLY_SET = ["vhVol","vhMicVol","vhMonitor","vhMicOn","vhDuck","vhRemember","vhOut","vhMic"];
+const SY = { on:false, starting:false, id:Math.random().toString(36).slice(2), meta:new Map(), metaReady:false,
+             applying:false, timer:null, pulls:new Map(), upQ:Promise.resolve(), pending:0, last:null, err:"" };
+
 const vmsg = (el,type,text)=> text ? msg(el,type,text) : ($(el).innerHTML="");
 const lang = ()=> $("vhLang").value;
 
@@ -1550,6 +1561,7 @@ function saveSet(){
   LS.set("gkl_vh_set", s);
   if ($("vhRemember").checked){ const k={}; KEYS.forEach(id=>k[id]=$(id).value); LS.set("gkl_vh_keys", k); }
   else { try{ localStorage.removeItem("gkl_vh_keys"); }catch(e){} }
+  syncDirty();
 }
 /* cloned voices (Gemini voice replication) live in their own group of the Voice list */
 function renderClones(){
@@ -1558,6 +1570,7 @@ function renderClones(){
   if (!list.length){ if (g) g.remove(); return; }
   if (!g){ g = document.createElement("optgroup"); g.dataset.clones = "1"; g.label = "My cloned voices"; sel.insertBefore(g, sel.firstChild); }
   g.innerHTML = list.map(v=>`<option value="${esc(v.id)}">🎙️ ${esc(v.name)} (cloned)</option>`).join("");
+  syncDirty();
 }
 renderClones();
 const saved = LS.get("gkl_vh_set", {});
@@ -1593,10 +1606,220 @@ function db(){
     r.onupgradeneeded = ()=>r.result.createObjectStore("clips"); r.onsuccess = ()=>res(r.result); r.onerror = ()=>res(null); }catch(e){ res(null); } });
   return dbP;
 }
-async function cacheGet(k){ const d = await db(); if (!d) return null;
+async function rawGet(k){ const d = await db(); if (!d) return null;
   return new Promise(res=>{ try{ const q = d.transaction("clips").objectStore("clips").get(k); q.onsuccess=()=>res(q.result||null); q.onerror=()=>res(null); }catch(e){ res(null); } }); }
-async function cachePut(k,b){ const d = await db(); if (!d) return;
+async function rawPut(k,b){ const d = await db(); if (!d) return;
   return new Promise(res=>{ try{ const t = d.transaction("clips","readwrite"); t.objectStore("clips").put(b,k); t.oncomplete=()=>res(); t.onerror=()=>res(); }catch(e){ res(); } }); }
+/* the shared copy (Firebase) is checked first, so a clip made or redone on another PC is used here */
+async function cacheGet(k){ const fresh = await syncPull(k); return fresh !== undefined ? fresh : rawGet(k); }
+async function cachePut(k,b){ await rawPut(k,b); syncPush(k,b); }
+/* ============ SHARED DATA (Firebase) ============
+   So every staff PC sees the same Live Desk: ticked products, scripts, quick lines,
+   voice settings, cloned-voice list, show options, the made voice clips, own
+   recordings, background music and shop photo are kept in Firestore under live_desk/.
+   Stays on each PC: API keys, speakers / microphone / camera, volumes.
+   Clips are split into parts under 1 MB (a Firestore document limit) and are also
+   kept in this browser, so a live keeps playing even if the internet drops.        */
+const PART = 900000;
+const sId = k => String(k).replace(/\//g,"_");
+const syncable = k => !!k && !String(k).endsWith("|prev");
+const deskRef = ()=> S.db.collection("live_desk").doc("state");
+const metaCol = ()=> S.db.collection("live_desk").doc("clips").collection("meta");
+const partCol = ()=> S.db.collection("live_desk").doc("clips").collection("parts");
+const LV = { get(){ return LS.get("gkl_clipver", {}); }, set(k,v){ const m = LV.get(); if (v) m[k]=v; else delete m[k]; LS.set("gkl_clipver", m); } };
+
+function syncBar(){
+  const el = document.getElementById("syncBar"); if (!el) return;
+  if (SY.err){ el.className = "syncbar err"; el.innerHTML = SY.err; return; }
+  el.className = "syncbar";
+  if (!SY.on){ el.textContent = S.mode==="firebase" ? "☁️ Shared data: starting…" : "☁️ Shared data: connect to Firebase to share ticks, scripts and voices with your other PCs."; return; }
+  const t = SY.last ? SY.last.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }) : "—";
+  el.textContent = SY.pending ? `☁️ Saving to the shared copy… (${SY.pending} left)` : `☁️ Shared with all your PCs — ticks, scripts, voices and recordings. Last saved ${t}.`;
+}
+function syncFail(e){
+  const code = (e && e.code) || "";
+  if (code === "permission-denied"){
+    SY.on = false;
+    SY.err = `⚠️ Your Firestore rules don't allow the shared Live Desk data yet, so everything is still saved only on this PC. Add this rule in Firebase console → Firestore → Rules (inside <b>match /databases/{database}/documents { … }</b>), then press Publish and reload this page:<pre>match /live_desk/{rest=**} {\n  allow read, write: if isStaff();\n}</pre>`;
+  } else console.warn("Live Desk sync:", e);
+  syncBar();
+}
+
+/* ---- the small "state" document ---- */
+function gatherState(){
+  const set = LS.get("gkl_vh_set", {}); LOCAL_ONLY_SET.forEach(k=>delete set[k]);
+  const show = {};
+  ["shShape","shGap","shOpening","shLoop"].forEach(id=>{ const v = localStorage.getItem("gkl_"+id); if (v!==null) show[id] = v; });
+  show.musicName = localStorage.getItem("gkl_show_music_name") || "";
+  show.musicVol = localStorage.getItem("gkl_show_music_vol") || "";
+  return JSON.parse(JSON.stringify({ selected:[...S.selected], scripts:VH.scripts || {},
+    lines:{ km:LS.get("gkl_vh_lines_km", null), en:LS.get("gkl_vh_lines_en", null) },
+    set, clones:LS.get("gkl_clones", []), show, by:SY.id }));
+}
+function syncDirty(){ if (!SY.on || SY.applying) return; clearTimeout(SY.timer); SY.timer = setTimeout(pushState, 1200); }
+window.gkSyncDirty = syncDirty;
+async function pushState(){
+  if (!SY.on) return;
+  try{ await deskRef().set(Object.assign(gatherState(), { at: firebase.firestore.FieldValue.serverTimestamp() })); SY.last = new Date(); syncBar(); }
+  catch(e){ syncFail(e); }
+}
+function editing(){ const a = document.activeElement; return !!(a && a.closest && a.closest("#vhProducts, #vhLines") && /textarea|input/i.test(a.tagName)); }
+function applyState(d, merge){
+  SY.applying = true;
+  try{
+    // ticked products
+    let sel = Array.isArray(d.selected) ? d.selected.map(String) : [];
+    if (merge) sel = [...new Set([...sel, ...S.selected])];
+    S.selected.clear(); sel.forEach(id=>S.selected.add(id)); LS.set("gkl_selected", sel);
+    // scripts (another PC's text wins; on the first sync, scripts only this PC has are kept)
+    VH.scripts = Object.assign({}, merge ? VH.scripts : {}, d.scripts || {}); LS.set("gkl_vh_scripts", VH.scripts);
+    // quick lines
+    ["km","en"].forEach(l=>{ if (d.lines && Array.isArray(d.lines[l])) LS.set("gkl_vh_lines_"+l, d.lines[l]); });
+    // cloned voices first, so the Voice list has the option before it is chosen
+    if (Array.isArray(d.clones)){
+      let cl = d.clones; if (merge){ const seen = new Set(cl.map(v=>v.id)); cl = cl.concat(LS.get("gkl_clones", []).filter(v=>!seen.has(v.id))); }
+      LS.set("gkl_clones", cl); renderClones();
+    }
+    // voice settings (this PC keeps its own speakers, mic and volumes)
+    if (d.set){
+      const cur = LS.get("gkl_vh_set", {}), ns = Object.assign({}, cur, d.set);
+      LOCAL_ONLY_SET.forEach(k=>{ if (k in cur) ns[k] = cur[k]; else delete ns[k]; });
+      LS.set("gkl_vh_set", ns);
+      SET.forEach(id=>{ if (ns[id]!=null && !LOCAL_ONLY_SET.includes(id)) $(id).value = ns[id]; });
+      CHK.forEach(id=>{ if (ns[id]!=null && !LOCAL_ONLY_SET.includes(id)) $(id).checked = ns[id]; });
+      if (ns.vhCambVoice) $("vhCambVoice").innerHTML = `<option value="${esc(ns.vhCambVoice)}">${esc(ns.vhCambVoiceName||"(saved voice)")}</option>`;
+      syncUI();
+    }
+    // show options
+    const sh = d.show || {};
+    ["shShape","shGap","shOpening","shLoop"].forEach(id=>{ if (sh[id]==null) return; try{ localStorage.setItem("gkl_"+id, sh[id]); }catch(e){}
+      const el = $(id); if (el.type==="checkbox") el.checked = sh[id]==="1"; else el.value = sh[id]; });
+    if (sh.musicVol){ try{ localStorage.setItem("gkl_show_music_vol", sh.musicVol); }catch(e){} $("shMusicVol").value = sh.musicVol; }
+    if (sh.musicName != null){ try{ sh.musicName ? localStorage.setItem("gkl_show_music_name", sh.musicName) : localStorage.removeItem("gkl_show_music_name"); }catch(e){} $("shMusicName").textContent = sh.musicName || "no music"; }
+  } finally { SY.applying = false; }
+  loadLines(); renderLines();
+  if (S.products.length && typeof renderProducts==="function") renderProducts();
+  refreshVoiceView();
+}
+function refreshVoiceView(){
+  if (!$("view-voice").classList.contains("active")) return;
+  if (editing()){ SY.later = true; return; }      // don't replace what someone is typing
+  renderVoice();
+}
+document.addEventListener("focusout", ()=>{ if (SY.later){ setTimeout(()=>{ if (!editing()){ SY.later = false; refreshVoiceView(); } }, 300); } });
+
+/* ---- voice clips, recordings, music, shop photo ---- */
+function syncPull(k){                      // undefined = use this PC's copy
+  if (!SY.on || !syncable(k)) return Promise.resolve(undefined);
+  const m = SY.meta.get(sId(k));
+  if (!m || LV.get()[k] === m.v) return Promise.resolve(undefined);
+  if (SY.pulls.has(k)) return SY.pulls.get(k);
+  const pr = (async ()=>{
+    try{
+      const docs = await Promise.all(Array.from({ length:m.n }, (_,i)=> partCol().doc(`${sId(k)}~${m.v}~${i}`).get()));
+      if (docs.some(d=>!d.exists)) return undefined;              // still uploading — try again later
+      const arrs = docs.map(d=>d.data().d.toUint8Array());
+      const b = new Blob(arrs, { type: m.type || "audio/wav" });
+      await rawPut(k, b); LV.set(k, m.v); onClipArrived(k, b);
+      return b;
+    }catch(e){ syncFail(e); return undefined; }
+    finally{ SY.pulls.delete(k); }
+  })();
+  SY.pulls.set(k, pr); return pr;
+}
+function syncPush(k, b){
+  if (!SY.on || !syncable(k)) return;
+  SY.pending++; syncBar();
+  SY.upQ = SY.upQ.then(async ()=>{
+    try{
+      const id = sId(k), old = SY.meta.get(id);
+      if (!b){                                                     // removed on this PC → remove for all
+        await metaCol().doc(id).delete(); SY.meta.delete(id); LV.set(k, null);
+      } else {
+        const bytes = new Uint8Array(await b.arrayBuffer()), v = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+        const n = Math.max(1, Math.ceil(bytes.length / PART));
+        for (let i=0;i<n;i++) await partCol().doc(`${id}~${v}~${i}`).set({ d: firebase.firestore.Blob.fromUint8Array(bytes.subarray(i*PART, (i+1)*PART)) });
+        const m = { v, n, size:bytes.length, type:b.type || "", by:SY.id, at:firebase.firestore.FieldValue.serverTimestamp() };
+        await metaCol().doc(id).set(m); SY.meta.set(id, m); LV.set(k, v);
+      }
+      if (old) for (let i=0;i<old.n;i++) partCol().doc(`${id}~${old.v}~${i}`).delete().catch(()=>{});
+      SY.last = new Date();
+    }catch(e){ syncFail(e); }
+    finally{ SY.pending--; syncBar(); }
+  });
+}
+function onClipArrived(k, b){                // a clip changed on another PC
+  if (k === BG_KEY){
+    if (b){ const r = new FileReader(); r.onload = ()=>{ try{ localStorage.setItem("gkl_show_bg", r.result); }catch(e){} sendScreen({ type:"bg", url:r.result }); }; r.readAsDataURL(b); }
+    else { try{ localStorage.removeItem("gkl_show_bg"); }catch(e){} sendScreen({ type:"bg", url:"" }); }
+  }
+}
+function neededKeys(){
+  const ks = new Set([MUSIC_KEY, BG_KEY]);
+  items().forEach(p=>{ ks.add(ownKey(p)); const t = scriptOf(p); if (t.trim()) ks.add(clipKey(t)); });
+  ["km","en"].forEach(l=>{ const ls = LS.get("gkl_vh_lines_"+l, null) || DEF_LINES[l]; if (l===lang()) ls.forEach(x=>{ const t = lineText(x); if (t.trim()) ks.add(clipKey(t)); }); });
+  return [...ks];
+}
+async function syncClips(){                   // upload what only this PC has, download what it lacks
+  for (const k of neededKeys()){
+    if (!SY.on) return;
+    const m = SY.meta.get(sId(k)), lv = LV.get()[k];
+    if (!m){
+      let local = await rawGet(k);
+      if (!local && k===BG_KEY){ const u = localStorage.getItem("gkl_show_bg"); if (u) local = await (await fetch(u)).blob(); }
+      if (local) syncPush(k, local);
+    } else if (lv !== m.v) await syncPull(k);
+  }
+  items().forEach(p=>cardStatus(p)); LINES.forEach((l,i)=>lineStatus(i));
+}
+
+async function syncStart(){
+  if (SY.on || SY.starting || S.mode!=="firebase" || !S.db) return;
+  SY.starting = true; SY.err = ""; syncBar();
+  try{
+    // 1) clip list (small documents only)
+    const ms = await metaCol().get();
+    ms.forEach(d=>SY.meta.set(d.id, d.data())); SY.metaReady = true;
+    // 2) shared state: first time on this PC, keep a backup and merge
+    const snap = await deskRef().get();
+    SY.on = true;
+    if (snap.exists){
+      if (!localStorage.getItem("gkl_backup_before_sync")) LS.set("gkl_backup_before_sync", Object.assign(gatherState(), { savedAt: new Date().toISOString() }));
+      const before = JSON.stringify(snap.data().scripts||{}) + JSON.stringify(snap.data().selected||[]);
+      applyState(snap.data(), true);
+      const after = JSON.stringify(VH.scripts) + JSON.stringify([...S.selected]);
+      if (before !== after || !snap.data().set) await pushState();
+    } else if (Object.keys(VH.scripts||{}).length || S.selected.size){
+      await pushState();                                           // first PC: share what it has
+    }
+    SY.last = new Date(); syncBar();
+    // 3) live updates from the other PCs
+    deskRef().onSnapshot(sn=>{
+      if (!sn.exists || sn.metadata.hasPendingWrites) return;
+      const d = sn.data(); if (d.by === SY.id) return;
+      applyState(d, false); SY.last = new Date(); syncBar();
+      syncClips();
+    }, syncFail);
+    metaCol().onSnapshot(qs=>{
+      let changed = false;
+      qs.docChanges().forEach(ch=>{
+        if (ch.type === "removed"){
+          SY.meta.delete(ch.doc.id); changed = true;
+          const k = ch.doc.id;                                        // removed on another PC
+          if (LV.get()[k]){ LV.set(k, null); rawPut(k, null); onClipArrived(k, null); }
+        } else {
+          const m = ch.doc.data(); SY.meta.set(ch.doc.id, m);
+          if (m.by !== SY.id) changed = true;
+        }
+      });
+      if (changed){ items().forEach(p=>cardStatus(p)); LINES.forEach((l,i)=>lineStatus(i)); if (SY.metaReady) syncClips(); }
+    }, syncFail);
+    syncClips();
+  }catch(e){ syncFail(e); }
+  finally{ SY.starting = false; }
+}
+window.gkSyncStart = syncStart;
+
 function hash(str){ let h1=0xdeadbeef,h2=0x41c6ce57;
   for (let i=0;i<str.length;i++){ const c=str.charCodeAt(i); h1=Math.imul(h1^c,2654435761); h2=Math.imul(h2^c,1597334677); }
   h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);
@@ -1733,7 +1956,7 @@ async function recProduct(p){
 }
 async function unrecProduct(p){
   if (!confirm("Remove your recording for "+S.codes[p.id]+"? The AI voice will be used again.")) return;
-  const d = await db(); if (d) await new Promise(res=>{ try{ const t = d.transaction("clips","readwrite"); t.objectStore("clips").delete(ownKey(p)); t.oncomplete = t.onerror = ()=>res(); }catch(e){ res(); } });
+  await cachePut(ownKey(p), null);
   cardStatus(p);
 }
 
@@ -1999,7 +2222,7 @@ const DEF_LINES = {
 };
 let LINES = [];
 function loadLines(){ LINES = LS.get("gkl_vh_lines_"+lang(), null) || JSON.parse(JSON.stringify(DEF_LINES[lang()])); }
-function saveLines(){ LS.set("gkl_vh_lines_"+lang(), LINES); }
+function saveLines(){ LS.set("gkl_vh_lines_"+lang(), LINES); syncDirty(); }
 function required(l){ return l.key==="open" ? DISCLOSURE[lang()] : l.key==="remind" ? DISCLOSURE_REMIND[lang()] : ""; }
 function lineText(l){ const need = required(l); return need && !l.text.includes(need) ? need+" "+l.text : l.text; }
 const LINE_KEYS = ["q","w","e","r"];
@@ -2103,7 +2326,7 @@ $("vhTestClaude").onclick = async ()=>{
 /* ---------- product cards ---------- */
 const items = ()=> S.products.filter(p=>S.selected.has(p.id) && S.codes[p.id]);
 const scriptOf = p => VH.scripts[p.id] || "";
-function setScript(p, t){ VH.scripts[p.id] = t; LS.set("gkl_vh_scripts", VH.scripts); }
+function setScript(p, t){ VH.scripts[p.id] = t; LS.set("gkl_vh_scripts", VH.scripts); syncDirty(); }
 function renderVoice(){
   const list = items();
   if (!list.length){ $("vhProducts").innerHTML = `<div class="box hint">No products yet. On the <b>Products &amp; codes</b> tab, tick the products you will show in this live (they need a code), then come back here.</div>`; return; }
@@ -2258,11 +2481,11 @@ $("shBgFile").onchange = async e=>{
     cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
     const url = cv.toDataURL("image/jpeg", 0.82);
     localStorage.setItem("gkl_show_bg", url);
-    sendScreen({ type:"bg", url }); vmsg("shMsg","ok","Shop background saved.");
+    sendScreen({ type:"bg", url }); vmsg("shMsg","ok","Shop background saved."); syncPush(BG_KEY, await (await fetch(url)).blob());
   }catch(err){ vmsg("shMsg","err","Couldn't use that photo: "+(err.message||err)); }
   e.target.value = "";
 };
-$("shBgClear").onclick = ()=>{ try{ localStorage.removeItem("gkl_show_bg"); }catch(e){} sendScreen({ type:"bg", url:"" }); vmsg("shMsg","ok","Background removed — the screen uses the Goat Kids colours."); };
+$("shBgClear").onclick = ()=>{ try{ localStorage.removeItem("gkl_show_bg"); }catch(e){} sendScreen({ type:"bg", url:"" }); syncPush(BG_KEY, null); vmsg("shMsg","ok","Background removed — the screen uses the Goat Kids colours."); };
 
 /* background music: saved in this browser, loops softly and dips while the voice talks */
 const MUSIC_KEY = "show-music";
@@ -2283,16 +2506,17 @@ function stopMusic(){ try{ A.music && A.music.stop(); A.musicGain && A.musicGain
 $("shMusicFile").onchange = async e=>{
   const f = e.target.files && e.target.files[0]; if (!f) return;
   await cachePut(MUSIC_KEY, f); localStorage.setItem("gkl_show_music_name", f.name);
-  $("shMusicName").textContent = f.name; vmsg("shMsg","ok","Music saved. It plays when the auto show starts.");
+  $("shMusicName").textContent = f.name; vmsg("shMsg","ok","Music saved. It plays when the auto show starts."); syncDirty();
   if (SHOW.on) startMusic(); e.target.value = "";
 };
 $("shMusicClear").onclick = async ()=>{ await cachePut(MUSIC_KEY, null); try{ localStorage.removeItem("gkl_show_music_name"); }catch(e){}
-  stopMusic(); $("shMusicName").textContent = "no music"; vmsg("shMsg","ok","Music removed."); };
+  stopMusic(); $("shMusicName").textContent = "no music"; vmsg("shMsg","ok","Music removed."); syncDirty(); };
 $("shMusicVol").addEventListener("input", ()=>{ if (A.musicGain && !A.current) A.musicGain.gain.value = musicVol(); try{ localStorage.setItem("gkl_show_music_vol", $("shMusicVol").value); }catch(e){} });
+$("shMusicVol").addEventListener("change", ()=>syncDirty());
 try{ const v = localStorage.getItem("gkl_show_music_vol"); if (v) $("shMusicVol").value = v; const n = localStorage.getItem("gkl_show_music_name"); if (n) $("shMusicName").textContent = n; }catch(e){}
 ["shShape","shGap","shOpening","shLoop"].forEach(id=>{ const k = "gkl_"+id, el = $(id);
   try{ const v = localStorage.getItem(k); if (v!==null){ if (el.type==="checkbox") el.checked = v==="1"; else el.value = v; } }catch(e){}
-  el.addEventListener("change", ()=>{ try{ localStorage.setItem(k, el.type==="checkbox" ? (el.checked?"1":"0") : el.value); }catch(e){} }); });
+  el.addEventListener("change", ()=>{ try{ localStorage.setItem(k, el.type==="checkbox" ? (el.checked?"1":"0") : el.value); }catch(e){} syncDirty(); }); });
 
 /* live camera: the live screen opens the camera itself; these settings tell it how */
 async function listCams(ask){
@@ -2373,6 +2597,7 @@ document.addEventListener("keydown", e=>{
   const li = LINE_KEYS.indexOf(e.key.toLowerCase()); if (li>=0 && LINES[li]) playLine(li);
 });
 loadLines(); renderLines(); renderVoice();
+syncBar(); if (S.mode==="firebase" && S.products.length) syncStart();
 })();
 </script>
 <div id="zoom" role="dialog" aria-label="Product photo"><figure style="margin:0"><img alt=""><div></div></figure></div>
