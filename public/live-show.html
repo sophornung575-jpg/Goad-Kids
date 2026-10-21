@@ -44,6 +44,11 @@ body.wide .left .next img{width:4cqw;height:4cqw}
 body.wide.cam-small .left .cam{left:1.4cqw;bottom:1.4cqw;width:24cqw;height:30cqw;border-radius:2.4cqw}
 body.wide.cam-big .left .photo{right:1.4cqw;bottom:1.4cqw;width:24cqw;height:30cqw;border-radius:2.4cqw}
 body.wide.cam-small .left .next, body.wide.cam-big .left .next{max-width:30cqw}
+/* Half on the wide screen: camera on the left half, product photo on the right half */
+body.wide.cam-half .left .cam{left:0;top:0;bottom:0;right:auto;width:calc(50% - .8cqw);height:auto;border-radius:3cqw}
+body.wide.cam-half .left .photo{top:0;left:calc(50% + .8cqw)}
+body.wide.cam-half .left .next{max-width:20cqw}
+body.wide.cam-half .left .code{left:calc(50% + 1.6cqw)}
 body.wide .main{justify-content:center}
 body.wide .info{padding:4cqw 5cqw}
 body.wide .name{font-size:6cqw;-webkit-line-clamp:3}
@@ -86,13 +91,17 @@ body.wide.mode-line .left .photoWrap, body.wide.mode-line .left .code, body.wide
 
 /* live camera (webcam). Small = box in the photo corner. Big = camera fills the photo area, product photo goes to the corner. */
 .cam{position:absolute;z-index:3;overflow:hidden;background:#111;display:none;box-shadow:0 2cqw 6cqw rgba(0,0,0,.4)}
-.cam video{width:100%;height:100%;object-fit:cover;display:block}
+.cam video{width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit}
 .cam.mirror video{transform:scaleX(-1)}
 body.cam-small .cam{display:block;left:2.4cqw;bottom:2.4cqw;width:36cqw;height:48cqw;border-radius:4cqw;border:.8cqw solid #fff}
 body.cam-big .cam{display:block;inset:0;border-radius:5cqw}
 body.cam-big .photo{inset:auto;right:2.4cqw;bottom:2.4cqw;width:34cqw;height:42cqw;z-index:4;border:.8cqw solid #fff;border-radius:4cqw}
 body.cam-big .next{right:auto;left:2.4cqw;max-width:50cqw}
 body.cam-small .next{max-width:50cqw}
+/* Half: tall screen = camera on the top half, product photo on the bottom half */
+body.cam-half .cam{display:block;left:0;right:0;top:0;height:calc(50% - 1cqw);border-radius:5cqw}
+body.cam-half .photo{top:calc(50% + 1cqw)}
+body.cam-half .next{max-width:60cqw}
 body.mode-line .cam{visibility:hidden}
 
 /* info card */
@@ -267,6 +276,7 @@ body.connected .help{display:none}
     const mode = LS.get("gkl_cam_mode") || "off", dev = LS.get("gkl_cam_dev") || "";
     document.body.classList.toggle("cam-small", mode==="small");
     document.body.classList.toggle("cam-big", mode==="big");
+    document.body.classList.toggle("cam-half", mode==="half");
     $("cam").classList.toggle("mirror", LS.get("gkl_cam_mirror")==="1");
     if (mode==="off"){ stopCam(); return; }
     if (camStream && camDev===dev) return;
@@ -276,7 +286,7 @@ body.connected .help{display:none}
         video: Object.assign({ width:{ideal:1280}, height:{ideal:720} }, dev ? { deviceId:{ exact:dev } } : {}) });
       camDev = dev; $("camVideo").srcObject = camStream;
     }catch(err){
-      document.body.classList.remove("cam-small","cam-big");
+      document.body.classList.remove("cam-small","cam-big","cam-half");
       try{ bc && bc.postMessage({ type:"camError", msg: err.name==="NotReadableError" ? "The camera is being used by another app. Close it there, then try again." : (err.message||err.name) }); }catch(e){}
     }
   }
