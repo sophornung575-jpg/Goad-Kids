@@ -473,6 +473,7 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
         <label class="check" style="margin-top:10px"><input type="checkbox" id="vhMicOn"> Mix my microphone into the live</label>
         <label class="check"><input type="checkbox" id="vhDuck" checked> Lower my mic while the voice plays</label>
         <label for="vhMic">My microphone</label><select id="vhMic"><option value="">Default mic</option></select>
+        <label class="check"><input type="checkbox" id="vhRecClean"> 🎙️ Rec: reduce background noise (only for a noisy room — it can make the voice sound muffled)</label>
         <label for="vhMicVol">Mic volume <span id="vhMicVolVal"></span></label><input type="range" id="vhMicVol" min="0" max="200" value="100" style="width:100%">
       </div>
     </div>
@@ -1544,7 +1545,7 @@ $("discPreview").textContent = disclosureFor($("lang").value);
 const VH = { scripts: LS.get("gkl_vh_scripts", {}), played:0 };
 /* shared-data (Firebase) state — see SHARED DATA below */
 const BG_KEY = "show-bg";
-const LOCAL_ONLY_SET = ["vhVol","vhMicVol","vhMonitor","vhMicOn","vhDuck","vhRemember","vhOut","vhMic"];
+const LOCAL_ONLY_SET = ["vhVol","vhMicVol","vhMonitor","vhMicOn","vhDuck","vhRemember","vhOut","vhMic","vhRecClean"];
 const SY = { on:false, starting:false, id:Math.random().toString(36).slice(2), meta:new Map(), metaReady:false,
              applying:false, timer:null, pulls:new Map(), upQ:Promise.resolve(), pending:0, last:null, err:"" };
 
@@ -1553,7 +1554,7 @@ const lang = ()=> $("vhLang").value;
 
 /* ---------- settings ---------- */
 const SET = ["vhCambModel","vhCambLang","vhCambRate","vhCambStyle","vhWriter","vhGemTextModel","vhModel","vhLang","vhLength","vhStyle","vhEngine","vhGemVoice","vhGemStyle","vhGemModel","vhAzRegion","vhAzVoice","vhAzRate","vhElModel","vhVol","vhMicVol"];
-const CHK = ["vhGemNatural","vhPhoto","vhMonitor","vhMicOn","vhDuck","vhRemember","vhAutoRemind"];
+const CHK = ["vhRecClean","vhGemNatural","vhPhoto","vhMonitor","vhMicOn","vhDuck","vhRemember","vhAutoRemind"];
 const KEYS = ["vhClaudeKey","vhCambKey","vhGemKey","vhAzKey","vhElKey"];
 function saveSet(){
   const s = {}; SET.forEach(id=>s[id]=$(id).value); CHK.forEach(id=>s[id]=$(id).checked);
@@ -1939,20 +1940,42 @@ const REC = { mr:null, p:null };
 async function recProduct(p){
   const c = cardOf(p), btn = c.querySelector('[data-act="rec"]'), st = c.querySelector("[data-st]");
   if (REC.mr){ const same = REC.p===p; REC.mr.stop(); if (same) return; }
-  const dev = $("vhMic").value;
-  let stream; try{ stream = await navigator.mediaDevices.getUserMedia({ audio: dev ? { deviceId:{ exact:dev } } : true }); }
+  const dev = $("vhMic").value, clean = $("vhRecClean").checked;
+  // studio-style: no call-style processing (it makes a voice sound muffled), full quality
+  const audio = { channelCount:1, sampleRate:48000, echoCancellation:false, noiseSuppression:clean, autoGainControl:false };
+  if (dev) audio.deviceId = { exact:dev };
+  let stream; try{ stream = await navigator.mediaDevices.getUserMedia({ audio }); }
   catch(e){ return vmsg("vhMsg","err","Couldn't open the microphone. Allow the microphone for this site (lock icon next to the address)."); }
-  const chunks = [], mr = new MediaRecorder(stream); REC.mr = mr; REC.p = p;
+  const type = ["audio/webm;codecs=opus","audio/mp4","audio/webm"].find(t=>window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+  const chunks = [], mr = new MediaRecorder(stream, Object.assign({ audioBitsPerSecond:192000 }, type ? { mimeType:type } : {})); REC.mr = mr; REC.p = p;
   mr.ondataavailable = e=>{ if (e.data.size) chunks.push(e.data); };
   mr.onstop = async ()=>{
     stream.getTracks().forEach(t=>t.stop()); REC.mr = REC.p = null;
     btn.textContent = "🎙️ Rec"; btn.classList.remove("rec-on");
-    const blob = new Blob(chunks, { type: mr.mimeType });
+    let blob = new Blob(chunks, { type: mr.mimeType });
     if (blob.size < 2000){ setSt(st,"err","recording too short"); return; }
+    setSt(st,"busy","saving…");
+    try{ blob = await cleanTake(blob); }catch(e){ /* keep the original recording */ }
     await cachePut(ownKey(p), blob); cardStatus(p);
     vmsg("vhMsg","ok",`Saved your recording for ${S.codes[p.id]}. Press ▶ Play to hear it. The auto show will use it.`);
   };
   mr.start(); btn.textContent = "■ Stop"; btn.classList.add("rec-on"); setSt(st,"busy","recording… press ■ Stop when done");
+}
+/* evens out the volume and trims silence at the start/end; kept as full-quality WAV */
+async function cleanTake(blob){
+  const ctx = new AudioContext();
+  let buf; try{ buf = await ctx.decodeAudioData(await blob.arrayBuffer()); } finally { ctx.close(); }
+  const x = buf.getChannelData(0), rate = buf.sampleRate, win = Math.round(rate*0.02);
+  let peak = 0; for (let i=0;i<x.length;i++){ const a = Math.abs(x[i]); if (a>peak) peak = a; }
+  if (peak < 0.003) return blob;                                    // silence — leave as is
+  const loud = i=>{ let m=0; for (let j=i;j<Math.min(i+win,x.length);j++){ const a=Math.abs(x[j]); if (a>m) m=a; } return m > peak*0.06; };
+  let a = 0; while (a < x.length && !loud(a)) a += win;
+  let b = x.length; while (b > a && !loud(Math.max(0,b-win))) b -= win;
+  a = Math.max(0, a - Math.round(rate*0.15)); b = Math.min(x.length, b + Math.round(rate*0.25));   // keep a little breathing room
+  const g = Math.min(0.89 / peak, 8);                              // up to 8× louder, never clipping
+  const n = b - a, pcm = new Uint8Array(n*2), dv = new DataView(pcm.buffer);
+  for (let i=0;i<n;i++){ let v = x[a+i]*g; v = v>1?1:v<-1?-1:v; dv.setInt16(i*2, v<0 ? v*32768 : v*32767, true); }
+  return pcmToWav(pcm, rate);
 }
 async function unrecProduct(p){
   if (!confirm("Remove your recording for "+S.codes[p.id]+"? The AI voice will be used again.")) return;
