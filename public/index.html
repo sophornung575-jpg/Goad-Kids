@@ -1045,7 +1045,10 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         <div class="admin-card" style="margin-bottom:1rem">
                             <div class="admin-card-header" style="display:flex;justify-content:space-between;align-items:center">
                                 <div class="admin-card-title"><i class="fas fa-warehouse" style="color:var(--primary)"></i> Branch Stock Overview</div>
-                                <button class="btn btn-outline btn-small" onclick="branchStockRefresh()"><i class="fas fa-sync"></i> Refresh</button>
+                                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                    <button class="btn btn-outline btn-small" onclick="findDuplicateProducts()" title="Same item listed twice in one store"><i class="fas fa-clone"></i> Find duplicates</button>
+                                    <button class="btn btn-outline btn-small" onclick="branchStockRefresh()"><i class="fas fa-sync"></i> Refresh</button>
+                                </div>
                             </div>
                             <div class="admin-card-body">
                                 <p style="font-size:0.83rem;color:var(--gray);margin-bottom:1rem">View stock at any branch in real-time. Click a quantity to adjust it directly (bypasses transfer approval).</p>
@@ -4464,6 +4467,15 @@ function sendToTelegram(order, callback) {
         console.log('Diagnostic complete. Share above with developer.');
     }
 
+    // When staff come back to the app (switch tab / unlock phone), reload live stock,
+    // so receives and transfers done on other devices show up here before selling.
+    var _lastProductRefresh = Date.now();
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState !== 'visible' || Date.now() - _lastProductRefresh < 60000) return;
+        _lastProductRefresh = Date.now();
+        refreshProductsFromServer();
+    });
+
     // Reloads this store's products from the database (same mapping as loadData) and
     // re-renders. Used where stale local data would hide new / restocked items.
     async function refreshProductsFromServer() {
@@ -4737,11 +4749,31 @@ function sendToTelegram(order, callback) {
         showStatus('Syncing...', 'online');
         document.getElementById('statusBar').classList.add('show');
         try {
+            // Stock is NEVER pushed from this device's copy for products that already
+            // exist on the server. This page loads stock once, so after a receive in the
+            // Restock tool or a transfer confirmed on another device, its numbers are old —
+            // pushing them put transferred stock back into the sending store (stock doubled).
+            // Receive, transfer, sale and Edit Product already write stock themselves.
+            var productsCol = db.collection('stores').doc(STATE.storeId).collection('products');
+            var onServer = {};
+            (await productsCol.get()).forEach(function(d) { onServer[d.id] = d.data() || {}; });
+            var unsynced = [];
+            try { unsynced = JSON.parse(localStorage.getItem('goatUnsyncedProducts') || '[]'); } catch (ue) {}
             for (var i = 0; i < STATE.products.length; i++) {
                 var p = STATE.products[i];
                 if (!String(p.name || '').trim()) continue; // never push a blank leftover
-                await db.collection('stores').doc(STATE.storeId).collection('products').doc(p.id).set(withProductDates(p, { name: p.name, slug: p.slug || makeSlug(p.name), price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), promoPrice: (promoPriceOf(p) != null ? p.promoPrice : null), stock: p.stock, category: p.category, images: p.images || [], sizes: p.sizes || [], active: true, updatedAt: new Date().toISOString() }), { merge: true });
+                var live = onServer[p.id];
+                // Deleted on another device → leave it deleted (Sync used to switch it back on,
+                // bringing an old copy and its old stock back as a second copy of the item).
+                if (live && isDeletedProductDoc(live)) continue;
+                // Not on the server: only upload it if it was added on THIS device and never
+                // reached the server. Anything else was removed elsewhere — don't re-create it.
+                if (!live && unsynced.indexOf(p.id) === -1) continue;
+                var payload = { name: p.name, slug: p.slug || makeSlug(p.name), price: p.price, costPrice: (p.costPrice != null ? p.costPrice : null), promoPrice: (promoPriceOf(p) != null ? p.promoPrice : null), category: p.category, images: p.images || [], active: true, updatedAt: new Date().toISOString() };
+                if (!live) { payload.stock = p.stock; payload.sizes = p.sizes || []; } // brand-new product only
+                await productsCol.doc(p.id).set(withProductDates(p, payload), { merge: true });
             }
+            try { localStorage.setItem('goatUnsyncedProducts', '[]'); } catch (ue2) {}
             // Delete products that were deleted locally
             var deleted = JSON.parse(localStorage.getItem('goatDeletedProducts') || '[]');
             for (var d = 0; d < deleted.length; d++) {
@@ -4749,10 +4781,17 @@ function sendToTelegram(order, callback) {
             }
             if (deleted.length > 0) localStorage.setItem('goatDeletedProducts', '[]');
 
+            // Orders: upload only ones the server doesn't have. Re-sending an old copy could
+            // turn an order confirmed on another device back into Pending (stock taken twice).
             var all = STATE.pendingOrders.concat(STATE.confirmedOrders);
             for (var j = 0; j < all.length; j++) {
-                await db.collection('stores').doc(STATE.storeId).collection('orders').doc(all[j].orderId).set(Object.assign({}, all[j], { updatedAt: new Date().toISOString() }), { merge: true });
+                if (!all[j] || !all[j].orderId) continue;
+                var oRef = db.collection('stores').doc(STATE.storeId).collection('orders').doc(all[j].orderId);
+                if ((await oRef.get()).exists) continue;
+                await oRef.set(Object.assign({}, all[j], { updatedAt: new Date().toISOString() }), { merge: true });
             }
+            // Pick up the live stock so this device stops showing old numbers.
+            await refreshProductsFromServer();
             showStatus('Synced!', 'online');
             showToast('Data synced successfully!', 'success');
         } catch (e) {
@@ -5535,6 +5574,37 @@ function sendToTelegram(order, callback) {
     function makeSlug(name) {
         return (name || '').trim().toLowerCase().replace(/\s+/g, '_');
     }
+    // Loose name key: "Cutie Dresses_218", "cutie dresses 218 " and "Cutie-Dresses_218" are the same item.
+    function productNameKey(name) {
+        return String(name || '').toLowerCase().replace(/[\s_\-]+/g, ' ').trim();
+    }
+
+    // Finds the SAME product in another store for a transfer. Deleted records are
+    // skipped (stock used to land in a hidden deleted copy, which later came back as
+    // a second copy). Order: slug → exact name → loose name → same ID. Returns
+    // { ref, data } or null when the store genuinely doesn't have it yet.
+    async function findTransferDestProduct(storeId, slug, name, productId) {
+        var col = db.collection('stores').doc(storeId).collection('products');
+        function pick(snap) {
+            var hit = null;
+            snap.forEach(function(d) { if (!hit && !isDeletedProductDoc(d.data())) hit = d; });
+            return hit;
+        }
+        var hit = pick(await col.where('slug', '==', slug).get());
+        if (!hit && name) hit = pick(await col.where('name', '==', name).get());
+        if (!hit && name) {
+            var key = productNameKey(name);
+            (await col.get()).forEach(function(d) {
+                var dt = d.data();
+                if (!hit && !isDeletedProductDoc(dt) && productNameKey(dt.name) === key) hit = d;
+            });
+        }
+        if (!hit && productId) {
+            var byId = await col.doc(productId).get();
+            if (byId.exists && !isDeletedProductDoc(byId.data())) hit = byId;
+        }
+        return hit ? { ref: hit.ref, data: JSON.parse(JSON.stringify(hit.data())) } : null;
+    }
 
     // PROMOTION PRICE — optional per product. Valid only when above 0 and below the normal price.
     // Shown everywhere as the normal price crossed out + the promotion price. In the cart it is
@@ -5591,7 +5661,20 @@ function sendToTelegram(order, callback) {
         STATE.products.push({ id: 'p' + Date.now(), name: n, slug: makeSlug(n), price: pr, costPrice: cost, promoPrice: promoIn.value, stock: t, category: c, images: imgs, sizes: STATE.newProductSizes.slice(), addedAt: Date.now(), lastRestockDate: Date.now(), active: true });
         saveProducts();
         logActivity('Add Product', n + ' ($' + pr + ')' + (cost !== null ? ' | Cost: $' + cost.toFixed(2) : ''));
-        if (STATE.firebaseOnline) syncToFirebase();
+        // Save ONLY the new product. (This used to run a full Sync, which also pushed
+        // this device's old stock numbers for every other product.)
+        if (db) {
+            var np = STATE.products[STATE.products.length - 1];
+            db.collection('stores').doc(STATE.storeId).collection('products').doc(np.id).set(withProductDates(np, {
+                name: np.name, slug: np.slug, price: np.price, costPrice: np.costPrice, promoPrice: np.promoPrice, stock: np.stock,
+                category: np.category, images: np.images, sizes: np.sizes, active: true, updatedAt: new Date().toISOString()
+            }), { merge: true }).catch(function(e) {
+                try { var un = JSON.parse(localStorage.getItem('goatUnsyncedProducts') || '[]'); un.push(np.id); localStorage.setItem('goatUnsyncedProducts', JSON.stringify(un)); } catch (ue) {}
+                showToast('Product saved on this device only — press Sync when online: ' + e.message, 'warning');
+            });
+        } else {
+            try { var un2 = JSON.parse(localStorage.getItem('goatUnsyncedProducts') || '[]'); un2.push(STATE.products[STATE.products.length - 1].id); localStorage.setItem('goatUnsyncedProducts', JSON.stringify(un2)); } catch (ue3) {}
+        }
         document.getElementById('productName').value = ''; document.getElementById('productPrice').value = ''; document.getElementById('productCategory').value = '';
         if (costEl) costEl.value = '';
         var promoEl0 = document.getElementById('productPromoPrice'); if (promoEl0) promoEl0.value = '';
@@ -11665,6 +11748,135 @@ function sendToTelegram(order, callback) {
         else loadBranchStockTab();
     }
 
+    // ── FIND DUPLICATES ──
+    // Lists every item that exists more than once inside the SAME store (same name,
+    // ignoring capitals / spaces / "_"). For each, staff choose which copy to keep:
+    //  • "Keep only this" — the other copies are removed, their stock is NOT added
+    //    (use when the second copy is a wrong/doubled count).
+    //  • "Merge into this" — the other copies' stock is added to this one, then removed
+    //    (use when both copies hold real pieces).
+    var _dupGroups = [];
+    async function findDuplicateProducts() {
+        var box = document.getElementById('branchStockListContainer');
+        if (!db) { showToast('Firebase offline', 'error'); return; }
+        box.innerHTML = '<div style="text-align:center;color:var(--gray);padding:2rem"><i class="fas fa-spinner fa-spin"></i> Checking every store for duplicates...</div>';
+        try {
+            var stores = await getAllStoreList();
+            _dupGroups = [];
+            for (var i = 0; i < stores.length; i++) {
+                var snap = await db.collection('stores').doc(stores[i].id).collection('products').get();
+                var byKey = {};
+                snap.forEach(function(d) {
+                    var dt = d.data() || {};
+                    if (isDeletedProductDoc(dt) || !String(dt.name || '').trim()) return;
+                    var k = productNameKey(dt.name);
+                    (byKey[k] = byKey[k] || []).push(Object.assign({}, dt, { id: d.id }));
+                });
+                Object.keys(byKey).forEach(function(k) {
+                    if (byKey[k].length < 2) return;
+                    var copies = byKey[k].sort(function(a, b) { return (a.addedAt || 0) - (b.addedAt || 0); });
+                    _dupGroups.push({ storeId: stores[i].id, storeName: stores[i].name, name: copies[0].name, copies: copies });
+                });
+            }
+            renderDuplicateGroups();
+        } catch (e) {
+            box.innerHTML = '<div style="color:var(--danger);padding:1rem">❌ Could not check duplicates: ' + escHtml(e.message) + '</div>';
+        }
+    }
+    function dupStock(p) { return (p.sizes && p.sizes.length) ? p.sizes.reduce(function(a, s) { return a + (Number(s.qty) || 0); }, 0) : (Number(p.stock) || 0); }
+    function renderDuplicateGroups() {
+        var box = document.getElementById('branchStockListContainer');
+        var back = '<button class="btn btn-outline btn-small" onclick="branchStockRefresh()" style="margin-bottom:0.8rem"><i class="fas fa-arrow-left"></i> Back to stock</button>';
+        if (!_dupGroups.length) {
+            box.innerHTML = back + '<div style="text-align:center;color:var(--success);padding:2rem">✅ No duplicates — every item is listed once in each store.</div>';
+            return;
+        }
+        var html = back + '<div style="font-size:0.85rem;background:var(--light);border-radius:8px;padding:0.6rem 0.9rem;margin-bottom:0.8rem"><b>' + _dupGroups.length +
+            '</b> item(s) listed more than once in the same store. Pick the copy to keep.<br>' +
+            '<b>Keep only this</b> = the other copy\'s stock is a mistake and is dropped. <b>Merge into this</b> = both copies are real pieces, add them together.</div>';
+        _dupGroups.forEach(function(g, gi) {
+            html += '<div style="background:var(--light);border-radius:10px;padding:0.7rem 0.9rem;margin-bottom:0.6rem">' +
+                '<div style="font-weight:700">' + escHtml(g.name) + ' <span style="font-weight:400;color:var(--gray)">· ' + escHtml(g.storeName) + ' · ' + g.copies.length + ' copies</span></div>';
+            g.copies.forEach(function(c, ci) {
+                var sizes = (c.sizes || []).map(function(s) { return escHtml(s.name) + ': <b>' + (Number(s.qty) || 0) + '</b>'; }).join(' · ') || ('Stock: <b>' + dupStock(c) + '</b>');
+                var added = c.addedAt ? new Date(c.addedAt).toLocaleDateString() : '—';
+                html += '<div style="background:#fff;border:1px solid var(--gray-light);border-radius:8px;padding:0.5rem 0.7rem;margin-top:0.5rem;font-size:0.8rem">' +
+                    '<div><b>Copy ' + (ci + 1) + '</b> <span style="color:var(--gray)">· total ' + dupStock(c) + ' · added ' + escHtml(added) + ' · ID ' + escHtml(c.id) + (c.name !== g.name ? ' · name "' + escHtml(c.name) + '"' : '') + '</span></div>' +
+                    '<div style="margin:3px 0 6px">' + sizes + '</div>' +
+                    '<button class="btn btn-success btn-small" onclick="resolveDuplicate(' + gi + ',' + ci + ',false)"><i class="fas fa-check"></i> Keep only this</button> ' +
+                    '<button class="btn btn-outline btn-small" onclick="resolveDuplicate(' + gi + ',' + ci + ',true)"><i class="fas fa-object-group"></i> Merge into this</button>' +
+                    '</div>';
+            });
+            html += '</div>';
+        });
+        box.innerHTML = html;
+    }
+    function resolveDuplicate(gi, keepIdx, merge) {
+        if (STATE.adminRole !== 'full') { showToast('Full admin required', 'error'); return; }
+        var g = _dupGroups[gi]; if (!g) return;
+        var keep = g.copies[keepIdx], others = g.copies.filter(function(c, i) { return i !== keepIdx; });
+        var otherTot = others.reduce(function(a, c) { return a + dupStock(c); }, 0);
+        var msg = merge
+            ? 'MERGE "' + g.name + '" at ' + g.storeName + '?\n\nKeep copy ' + (keepIdx + 1) + ' (' + dupStock(keep) + ' pcs) and ADD ' + otherTot + ' pcs from the other copy → ' + (dupStock(keep) + otherTot) + ' pcs.\nThe other copy is then removed.'
+            : 'KEEP ONLY copy ' + (keepIdx + 1) + ' of "' + g.name + '" at ' + g.storeName + '?\n\nIt stays at ' + dupStock(keep) + ' pcs. The other copy (' + otherTot + ' pcs) is removed and its stock is NOT added.';
+        requireProductPassword(function() {
+            if (!confirm(msg)) return;
+            applyDuplicateFix(g, keep, others, merge);
+        });
+    }
+    async function applyDuplicateFix(g, keep, others, merge) {
+        try {
+            var col = db.collection('stores').doc(g.storeId).collection('products');
+            var now = Date.now(), iso = new Date().toISOString();
+            // Re-read live so nothing sold in the meantime is lost.
+            var keepSnap = await col.doc(keep.id).get();
+            if (!keepSnap.exists || isDeletedProductDoc(keepSnap.data())) { showToast('That copy no longer exists — run Find duplicates again', 'error'); return; }
+            var k = JSON.parse(JSON.stringify(keepSnap.data()));
+            var oldStock = dupStock(k), deltas = [];
+            var liveOthers = [];
+            for (var i = 0; i < others.length; i++) {
+                var s = await col.doc(others[i].id).get();
+                if (s.exists && !isDeletedProductDoc(s.data())) liveOthers.push(Object.assign({ id: s.id }, s.data()));
+            }
+            if (merge) {
+                k.sizes = Array.isArray(k.sizes) ? k.sizes : [];
+                liveOthers.forEach(function(o) {
+                    if (o.sizes && o.sizes.length && (k.sizes.length || !(Number(k.stock) > 0))) {
+                        o.sizes.forEach(function(os) {
+                            var n = Number(os.qty) || 0; if (!n) return;
+                            var ks = k.sizes.find(function(x) { return sameSize(x.name, os.name); });
+                            if (!ks) { ks = { name: os.name, qty: 0 }; k.sizes.push(ks); }
+                            var before = Number(ks.qty) || 0; ks.qty = before + n;
+                            deltas.push({ size: ks.name, oldQty: before, newQty: ks.qty, delta: n });
+                        });
+                    } else if (!k.sizes.length) {
+                        k.stock = (Number(k.stock) || 0) + dupStock(o);
+                    }
+                });
+                if (k.sizes.length) k.stock = k.sizes.reduce(function(a, x) { return a + (Number(x.qty) || 0); }, 0);
+            }
+            var batch = db.batch();
+            if (merge) batch.set(col.doc(keep.id), { sizes: k.sizes, stock: k.stock, updatedAt: iso }, { merge: true });
+            liveOthers.forEach(function(o) {
+                batch.set(col.doc(o.id), { active: false, deletedAt: iso, mergedInto: keep.id, stockAtRemoval: dupStock(o), removedReason: merge ? 'Duplicate merged' : 'Duplicate removed (stock not added)' }, { merge: true });
+            });
+            batch.set(db.collection('stores').doc(g.storeId).collection('stockAdjustments').doc(), {
+                productId: keep.id, productName: k.name || g.name, oldStock: oldStock, newStock: merge ? k.stock : oldStock,
+                totalDelta: merge ? k.stock - oldStock : 0, sizeDeltas: deltas,
+                reason: merge ? 'Duplicate copy merged' : 'Duplicate copy removed (' + liveOthers.reduce(function(a, o) { return a + dupStock(o); }, 0) + ' pcs dropped)',
+                removedCopies: liveOthers.map(function(o) { return { id: o.id, sizes: o.sizes || null, stock: dupStock(o) }; }),
+                timestamp: now, timeStr: new Date(now).toLocaleString(), user: STATE.adminRole || 'admin'
+            });
+            await batch.commit();
+            logActivity(merge ? 'Duplicate Merged' : 'Duplicate Removed', (k.name || g.name) + ' @ ' + g.storeName + ' | kept ' + keep.id + ', removed ' + liveOthers.map(function(o) { return o.id; }).join(', '));
+            showToast('✅ Fixed: ' + (k.name || g.name) + ' at ' + g.storeName, 'success');
+            if (g.storeId === STATE.storeId) await refreshProductsFromServer();
+            findDuplicateProducts();
+        } catch (e) {
+            showToast('Fix failed, nothing changed: ' + e.message, 'error');
+        }
+    }
+
     var _branchStockIsAllMode = false;
 
     async function loadBranchStockTab() {
@@ -12774,32 +12986,9 @@ function sendToTelegram(order, callback) {
             var destData = null;
             var productSlug = p.slug || makeSlug(p.name);
 
-            // 1. Slug match (most reliable — same product name always same slug)
-            var slugSnap = await db.collection('stores').doc(t.toStoreId).collection('products')
-                .where('slug', '==', productSlug).limit(1).get();
-            if (!slugSnap.empty) {
-                destProductRef = slugSnap.docs[0].ref;
-                destData = JSON.parse(JSON.stringify(slugSnap.docs[0].data()));
-            }
-
-            // 2. Name match fallback (for products without slug yet)
-            if (!destProductRef) {
-                var nameSnap = await db.collection('stores').doc(t.toStoreId).collection('products')
-                    .where('name', '==', p.name).limit(1).get();
-                if (!nameSnap.empty) {
-                    destProductRef = nameSnap.docs[0].ref;
-                    destData = JSON.parse(JSON.stringify(nameSnap.docs[0].data()));
-                }
-            }
-
-            // 3. ID match fallback
-            if (!destProductRef) {
-                var byIdSnap = await db.collection('stores').doc(t.toStoreId).collection('products').doc(t.productId).get();
-                if (byIdSnap.exists) {
-                    destProductRef = byIdSnap.ref;
-                    destData = JSON.parse(JSON.stringify(byIdSnap.data()));
-                }
-            }
+            // Slug → exact name → loose name → ID, never a deleted copy
+            var destHit = await findTransferDestProduct(t.toStoreId, productSlug, p.name, t.productId);
+            if (destHit) { destProductRef = destHit.ref; destData = destHit.data; }
 
             if (!destProductRef) {
                 // Genuinely new product in destination — fresh auto-generated ID, never reuse source ID
@@ -12974,32 +13163,9 @@ function sendToTelegram(order, callback) {
             var srcP2 = sourceProductCache[srcKeyOf(t)];
             var productSlug2 = (srcP2 && srcP2.slug) ? srcP2.slug : makeSlug(t.productName);
 
-            // 1. Slug match (primary — stable cross-store key)
-            var slugSnap2 = await db.collection('stores').doc(t.toStoreId).collection('products')
-                .where('slug', '==', productSlug2).limit(1).get();
-            if (!slugSnap2.empty) {
-                var sd = slugSnap2.docs[0];
-                destProductCache[destKey] = { ref: sd.ref, data: JSON.parse(JSON.stringify(sd.data())) };
-            }
-
-            // 2. Name match fallback (products without slug yet)
-            if (!destProductCache[destKey]) {
-                var nameSnap2 = await db.collection('stores').doc(t.toStoreId).collection('products')
-                    .where('name', '==', t.productName).limit(1).get();
-                if (!nameSnap2.empty) {
-                    var nd = nameSnap2.docs[0];
-                    destProductCache[destKey] = { ref: nd.ref, data: JSON.parse(JSON.stringify(nd.data())) };
-                }
-            }
-
-            // 3. ID match fallback
-            if (!destProductCache[destKey]) {
-                var byIdRef2 = db.collection('stores').doc(t.toStoreId).collection('products').doc(t.productId);
-                var byIdSnap3 = await byIdRef2.get();
-                if (byIdSnap3.exists) {
-                    destProductCache[destKey] = { ref: byIdRef2, data: JSON.parse(JSON.stringify(byIdSnap3.data())) };
-                }
-            }
+            // Slug → exact name → loose name → ID, never a deleted copy
+            var destHit2 = await findTransferDestProduct(t.toStoreId, productSlug2, t.productName, t.productId);
+            if (destHit2) destProductCache[destKey] = destHit2;
 
             // 4. Genuinely new — fresh auto-generated ID, never reuse source ID
             if (!destProductCache[destKey]) {
