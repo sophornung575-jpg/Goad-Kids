@@ -113,7 +113,10 @@
             if (!auth) { resolve(); return; }
             var done = false;
             var unsub = auth.onAuthStateChanged(function() { if (!done) { done = true; try { unsub(); } catch (e) {} resolve(); } });
-            setTimeout(function() { if (!done) { done = true; resolve(); } }, 6000);
+            // Staff devices wait longer: renewing a saved login after the app was closed
+            // can take more than 6s on a phone, and giving up early hid the orders.
+            var staffSaved = false; try { staffSaved = localStorage.getItem('goatAdmin') === 'true'; } catch (e) {}
+            setTimeout(function() { if (!done) { done = true; resolve(); } }, staffSaved ? 30000 : 6000);
         });
         // Returns 'ok' | 'created' | 'wrong' | 'weak' | 'offline' | 'noauth' | 'fail:<code>'
         async function staffSignIn(email, pw, allowCreate) {
@@ -14300,14 +14303,28 @@ function sendToTelegram(order, callback) {
             document.getElementById('adminNavLinkMobile').classList.remove('hidden');
             document.getElementById('adminLoginBtn').classList.add('hidden');
             document.getElementById('adminLoginBtnMobile').classList.add('hidden');
-            // Sessions from before the secure login don't have a Firebase account
-            // signed in — ask for one fresh login so this device keeps working.
-            authReady.then(function() {
-                if (auth && STATE.isAdmin && !isStaffUser()) {
-                    adminLogout();
-                    setTimeout(function() { showToast('Security upgrade: please log in to Admin again (one time only).', 'info'); }, 600);
-                }
-            });
+            // Check the saved login once Firebase has REALLY finished restoring it.
+            // (This used to give up after 6 seconds. After the app had been closed a
+            // while, Firebase needs the internet to renew the login, which on a phone
+            // often takes longer — so staff were logged out on almost every reopen.)
+            if (auth) {
+                var unsubRestore = auth.onAuthStateChanged(function(u) {
+                    try { unsubRestore(); } catch (e) {}
+                    if (!STATE.isAdmin) return;
+                    var email = (u && u.email || '').toLowerCase();
+                    if (!isStaffUser()) {
+                        adminLogout();
+                        setTimeout(function() { showToast('Please log in to Admin again.', 'info'); }, 600);
+                        return;
+                    }
+                    // The login must belong to THIS store and role (Super Admin may open any store).
+                    // Stops a Main Store login carrying into another store after Reset Store Selection.
+                    if (email !== staffEmail(STATE.adminRole, STATE.storeId) && email !== staffEmail('super', 'global')) {
+                        adminLogout();
+                        setTimeout(function() { showToast('This device was logged in for another store. Please log in with this store\'s password.', 'warning'); }, 600);
+                    }
+                });
+            }
         }
 
         // If the staff login ends (e.g. the role password was changed on another
