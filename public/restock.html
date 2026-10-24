@@ -183,6 +183,8 @@
   .mark-received:hover{ background:var(--info); color:#fff; }
   .undo-status{ background:none; border:1px solid var(--gray); color:var(--gray-dark); border-radius:5px; padding:3px 8px; font-size:0.72rem; font-weight:600; cursor:pointer; font-family:inherit; }
   .undo-status:hover{ background:var(--gray); color:#fff; }
+  .btn.rcv-undo{ border-color:#e53e3e; color:#e53e3e; }
+  .btn.rcv-undo:hover{ background:#e53e3e; color:#fff; }
   .send-status{ font-size:0.82rem; margin-top:10px; padding:10px 12px; border-radius:var(--radius); display:none; }
   .send-status.ok{ background:#e6fffa; color:#2c7a7b; display:block; }
   .send-status.err{ background:#fff5f5; color:#c53030; display:block; }
@@ -2800,6 +2802,8 @@ function rcvItemHtml(bid, x){
         <input class="rcv-note" type="text" placeholder="Note (e.g. 2 torn, wrong colour)" data-k="${escapeHtml(nk)}" value="${escapeHtml(String(rcvVal(nk, '')))}" oninput="rcvSet(this)">
         <button class="btn btn-primary btn-small" type="button" onclick="rcvItem(this,'receive')"><i class="fas fa-check"></i> Receive this item</button>
         <button class="btn btn-outline btn-small" type="button" onclick="rcvItem(this,'close')"><i class="fas fa-ban"></i> Rest not received</button>
+        ${done ? `<button class="btn btn-outline btn-small rcv-undo" type="button" title="Received by mistake? Take the stock back out and receive it again (password)"
+          onclick="rcvUndo('waiting', this.dataset.bid, this.dataset.hid)" data-bid="${escapeHtml(bid)}" data-hid="${escapeHtml(x.histId)}"><i class="fas fa-rotate-left"></i> Undo receive</button>` : ''}
       </div>
     </div>
   </details>`;
@@ -3344,6 +3348,155 @@ async function rcvReopen(bid, pairs){
   }
 }
 
+// ---------- Undo receive (one item) ----------
+// For a receive done by mistake: takes the good pieces back out of Main Store
+// stock, puts the cost price back (if nothing changed it since), and returns the
+// item to the Waiting list with all its pieces waiting again, so it can be
+// received again correctly. Needs the Restock Settings password.
+// kind 'waiting'  = item still on the Waiting list with some pieces done
+// kind 'received' = item in Received orders (closedAt identifies the entry)
+async function rcvUndoPassword(){
+  const entered = prompt('Undo receive — enter the Restock Settings password:');
+  if(entered === null) return false;
+  let correct = sharedSettingsPassword || DEFAULT_SETTINGS_PASSWORD;
+  try{
+    const d = await db.collection('_admin_').doc('restockConfig').get();
+    if(d.exists && d.data().password) correct = d.data().password;
+  }catch(e){ console.warn('Password check failed, using cached password:', e); }
+  if(entered !== correct){ alert('Incorrect password — nothing was changed.'); return false; }
+  return true;
+}
+async function rcvUndo(kind, bid, hid, closedAt){
+  if(!db){ alert('Not connected to the database.'); return; }
+  if(rcvBusy) return;
+  const h = historyCache.find(o => o.id === hid);
+  if(!h){ alert('Item not found — refresh and try again.'); return; }
+  let x = null, r = null;
+  if(kind === 'waiting'){
+    x = (h.incoming || {})[bid];
+    if(!x){ alert('Item not found — refresh and try again.'); return; }
+  }else{
+    r = (h.receiveLog || []).find(o => o && o.batchId === bid && (Number(o.closedAt) || 0) === Number(closedAt));
+    if(!r){ alert('Item not found — it may already be undone.'); return; }
+  }
+  const src = x || r;
+  const lines = incomingLines(src);
+  const G = rcvSum(lines, 'got'), R = rcvSum(lines, 'rej'), M = rcvSum(lines, 'miss');
+  if(!G && !R && !M){ alert('Nothing has been received on this item yet.'); return; }
+  if(!(await rcvUndoPassword())) return;
+
+  rcvBusy = true;
+  try{
+    const pRef = db.collection('stores').doc(STORE_MAIN_ID).collection('products').doc(src.productId);
+    const pSnap = await pRef.get();
+    let prod = pSnap.exists ? (pSnap.data() || {}) : null;
+    if(prod && storeDocGone(prod)) prod = null;
+    if(G && !prod){ alert('This product was deleted from the store app, so its stock can\'t be taken back. Nothing was changed.'); return; }
+
+    // Work out the stock change exactly the way receiving added it.
+    let upd = null, deltas = [], oldStock = 0, newStock = 0;
+    if(G){
+      const sizes = (Array.isArray(prod.sizes) ? prod.sizes : []).map(s => ({ ...s }));
+      const oldSizeSum = sizes.reduce((a, s) => a + (Number(s.qty) || 0), 0);
+      oldStock = Number(prod.stock) || 0;
+      let unsized = 0;
+      const short = [];
+      lines.forEach(l => {
+        if(!l.got) return;
+        if(!l.name || !sizeNameFromVariant(l.name)){ unsized += l.got; return; }
+        const s = sizes.find(o => ((o.name || '') + '').trim().toLowerCase() === l.name.trim().toLowerCase())
+               || sizes.find(o => normalizeSizeName(o.name) === normalizeSizeName(l.name));
+        const have = s ? (Number(s.qty) || 0) : 0;
+        if(have < l.got){ short.push(`${l.name}: needs ${l.got}, Main Store has ${have}`); return; }
+        s.qty = have - l.got;
+        deltas.push({ size: s.name, oldQty: have, newQty: s.qty, delta: -l.got });
+      });
+      const extraNow = sizes.length ? Math.max(0, oldStock - oldSizeSum) : oldStock;
+      if(unsized && extraNow < unsized) short.push(`(no size): needs ${unsized}, Main Store has ${extraNow}`);
+      if(short.length){
+        alert('Can\'t undo — some of these pieces are no longer in Main Store stock (probably already transferred to a branch or sold):\n\n' +
+          short.join('\n') + '\n\nFix the branch stock first (or transfer them back), then try Undo again. Nothing was changed.');
+        return;
+      }
+      newStock = sizes.length ? sizes.reduce((a, s) => a + (Number(s.qty) || 0), 0) + Math.max(0, oldStock - oldSizeSum - unsized) : oldStock - G;
+      upd = { sizes, stock: newStock, updatedAt: new Date().toISOString() };
+    }
+
+    // Cost price: put back the value from before this receive, only if nothing changed it since.
+    let costMsg = '';
+    if(G){
+      try{
+        const adjSnap = await db.collection('stores').doc(STORE_MAIN_ID).collection('stockAdjustments').where('productId', '==', src.productId).get();
+        let last = null;
+        adjSnap.forEach(d => { const a = d.data() || {}; if(a.user === 'restock-tool' && a.reason === 'New stock received' && (!last || (a.timestamp || 0) > (last.timestamp || 0))) last = a; });
+        const cur = prod.costPrice != null && prod.costPrice !== '' ? Number(prod.costPrice) : null;
+        if(last && last.newCostPrice != null && cur === Number(last.newCostPrice) && last.oldCostPrice !== last.newCostPrice){
+          upd.costPrice = last.oldCostPrice;
+          costMsg = `\nCost price back to $${last.oldCostPrice != null ? Number(last.oldCostPrice).toFixed(2) : '—'} (was $${cur.toFixed(2)})`;
+        }
+      }catch(e){ console.warn('Cost history could not be read:', e); }
+    }
+
+    const name = src.productName || (prod && prod.name) || '';
+    if(!confirm(`Undo receive of ${name}?\n\n` +
+      (G ? `− ${G} good piece${G === 1 ? '' : 's'} taken back out of Main Store stock\n` : '') +
+      (R ? `${R} rejected and ` : '') + (M ? `${M} not-received ` : '') + (R || M ? 'pieces cleared\n' : '') +
+      costMsg + `\n\nThe item goes back to Waiting with all ${rcvSum(lines, 'qty') - rcvSum(lines, 'extra')} pieces waiting, so you can receive it again.`)) return;
+
+    // Item goes back to Waiting with nothing received (extra pieces removed from the order).
+    const resetLines = lines.map(l => {
+      const nl = { name: l.name, qty: Math.max(0, l.qty - (l.extra || 0)), got: 0, rej: 0, miss: 0 };
+      if(l.added) nl.added = true;
+      return nl;
+    }).filter(l => l.qty > 0);
+    const note = 'Receive undone ' + new Date().toLocaleString() + (G ? ` (${G} pcs taken back out of stock)` : '');
+    const FV = firebase.firestore.FieldValue, b = db.batch(), now = Date.now();
+    const hRef = db.collection('restockTool_history').doc(hid);
+    if(kind === 'waiting'){
+      b.update(hRef, { ['incoming.' + bid + '.lines']: resetLines, ['incoming.' + bid + '.notes']: (x.notes || []).concat([note]) });
+    }else{
+      const entry = {
+        orderKey: r.orderKey || bid, productId: r.productId, productName: r.productName || '', colour: r.colour || '',
+        lines: resetLines, total: resetLines.reduce((a, l) => a + l.qty, 0), notes: (r.notes || []).concat([note]),
+        createdAt: r.orderedAt || now,
+        unitCost: Number(r.unitCost) > 0 ? Number(r.unitCost) : (Number(r.cost) > 0 ? Number(r.cost) : null),
+        unitYuan: r.unitYuan || null
+      };
+      if(Array.isArray(r.restockItemIds)) entry.restockItemIds = r.restockItemIds;
+      b.update(hRef, { ['incoming.' + bid]: entry, receiveLog: FV.arrayRemove(r), receivedKeys: FV.arrayRemove(r.orderKey || bid) });
+    }
+    if(upd){
+      b.update(pRef, upd);
+      b.set(db.collection('stores').doc(STORE_MAIN_ID).collection('stockAdjustments').doc(), {
+        productId: src.productId, productName: name, oldStock, newStock, totalDelta: newStock - oldStock, sizeDeltas: deltas,
+        reason: 'Receive undone', oldCostPrice: prod.costPrice != null ? prod.costPrice : null, newCostPrice: upd.costPrice !== undefined ? upd.costPrice : (prod.costPrice != null ? prod.costPrice : null),
+        timestamp: now, timeStr: new Date(now).toLocaleString(), user: 'restock-tool'
+      });
+    }
+    await b.commit();
+    // Restock List lines ticked "received" go back to "ordered" (they may have been removed — fine).
+    if(r && Array.isArray(r.restockItemIds)) r.restockItemIds.forEach(id => db.collection('restockTool_items').doc(id).update({ status: 'ordered', previousStatus: 'received' }).catch(() => {}));
+    db.collection('activityLogs').add({
+      action: 'Stock receive undone (Restock tool)', details: `${name}: ${G} good taken back out of stock, ${R} rejected / ${M} not received cleared`,
+      time: new Date(now).toLocaleString(), timestamp: now, user: 'restock-tool', storeId: STORE_MAIN_ID, storeName: STORE_MAIN_ID
+    }).catch(() => {});
+    try{
+      const img = (prod && Array.isArray(prod.images) && prod.images[0]) || '';
+      notifyInventoryBot(`↩️ <b>RECEIVE UNDONE</b> — Main Store\n📦 ${escapeHtml(name)}\n` +
+        (G ? `➖ ${G} taken back out of stock: ` + lines.filter(l => l.got).map(l => `${escapeHtml(l.name || '(no size)')}×${l.got}`).join(', ') + '\n' : '') +
+        `⏳ Back to Waiting — to be received again\n🕐 ${new Date(now).toLocaleString()}`, img ? [img] : [])
+        .catch(e => console.warn('Undo notice failed:', e));
+    }catch(e){}
+    alert(`Undone — ${name} is back on the Waiting list.` + (G ? `\n${G} piece${G === 1 ? '' : 's'} taken back out of Main Store stock.` : '') + costMsg +
+      (G ? '\n\nIf the store app is open on another device, refresh it.' : ''));
+  }catch(err){
+    console.warn('Undo receive failed:', err);
+    alert('Undo failed, nothing was changed: ' + err.message);
+  }finally{
+    rcvBusy = false;
+  }
+}
+
 // Finished items (nothing left waiting), grouped by order — newest first.
 function renderReceived(){
   const card = document.getElementById('receivedCard');
@@ -3374,7 +3527,9 @@ function renderReceived(){
       const missN = rcvSum(ls, 'miss');
       const reopenBtn = missN ? ` <button class="btn btn-outline btn-small" type="button" title="Put the ${missN} not-received piece${missN === 1 ? '' : 's'} back on the waiting list"
         onclick="rcvReopen('${escapeHtml(g.batchId)}', [[this.dataset.hid, Number(this.dataset.ca)]])" data-hid="${escapeHtml(r._hid)}" data-ca="${Number(r.closedAt) || 0}"><i class="fas fa-undo"></i> Reopen ${missN}</button>` : '';
-      return `<div class="rcv-log-row"><b>${escapeHtml(r.productName || '')}</b>${r.colour ? ` <span class="rcv-colour" title="${escapeHtml(r.colour)}">${escapeHtml(zhLabel(r.colour))}</span>` : ''} — <span class="ok">${rcvSum(ls, 'got')}</span>/${rcvSum(ls, 'qty')} received${bad ? ' · ' + bad : ''}${reopenBtn}
+      const undoBtn = ` <button class="btn btn-outline btn-small rcv-undo" type="button" title="Received by mistake? Take the stock back out and receive it again (password)"
+        onclick="rcvUndo('received', this.dataset.bid, this.dataset.hid, Number(this.dataset.ca))" data-bid="${escapeHtml(g.batchId)}" data-hid="${escapeHtml(r._hid)}" data-ca="${Number(r.closedAt) || 0}"><i class="fas fa-rotate-left"></i> Undo receive</button>`;
+      return `<div class="rcv-log-row"><b>${escapeHtml(r.productName || '')}</b>${r.colour ? ` <span class="rcv-colour" title="${escapeHtml(r.colour)}">${escapeHtml(zhLabel(r.colour))}</span>` : ''} — <span class="ok">${rcvSum(ls, 'got')}</span>/${rcvSum(ls, 'qty')} received${bad ? ' · ' + bad : ''}${reopenBtn}${undoBtn}
         ${(r.notes || []).map(n => `<div class="rcv-prev-note">📝 ${escapeHtml(n)}</div>`).join('')}</div>`;
     }).join('');
     const hasProblem = rcvSum(all, 'rej') + rcvSum(all, 'miss') > 0;
