@@ -112,8 +112,32 @@
   .rcv-note{ flex:1; min-width:180px; padding:6px 8px; border:2px solid var(--gray-light); border-radius:5px; font:inherit; font-size:0.78rem; }
   .rcv-prev-note{ font-size:0.72rem; color:var(--gray-dark); margin-top:4px; }
   .rcv-log-row{ font-size:0.78rem; padding:6px 0; border-top:1px solid var(--light); }
-  @media (max-width:600px){ .rcv-body{ padding-left:0; } }
-  .rl-item{ display:flex; gap:12px; align-items:center; border:1px solid var(--gray-light); border-radius:var(--radius); padding:10px; margin-bottom:10px; }
+  /* Fixed button rows: same place on every item */
+  .rcv-log-btns{ display:flex; gap:8px; margin-top:6px; }
+  .rcv-log-btns:empty{ display:none; }
+  .rcv-log-btns .btn{ margin:0; }
+  .rcv-item-btns{ display:grid; grid-template-columns:repeat(3, max-content); gap:8px; margin-top:8px; }
+  .rcv-actions input[type=number]{ padding:6px 8px; border:2px solid var(--gray-light); border-radius:5px; font:inherit; font-size:0.78rem; }
+  @media (max-width:600px){
+    .rcv-body{ padding-left:0; }
+    /* Size table fits the phone: all columns incl. Reject visible without sideways scrolling */
+    .rcv-table{ min-width:0; width:100%; font-size:0.74rem; }
+    .rcv-table th, .rcv-table td{ padding:4px 3px; }
+    .rcv-table input{ width:44px; padding:5px 2px; }
+    .rcv-item-btns{ grid-template-columns:1fr 1fr; }
+    .rcv-item-btns .btn{ justify-content:center; padding:9px 6px; }
+    .rcv-item-btns .rcv-undo{ grid-column:1 / -1; }
+    .rcv-log-btns{ display:grid; grid-template-columns:1fr 1fr; }
+    .rcv-log-btns .btn{ justify-content:center; padding:8px 6px; }
+    .add-shop-row input.name, .add-shop-row input.id, .add-shop-row .btn{ flex:1 1 100%; width:auto; }
+  }
+  /* Restock List as a table: same columns on every row, buttons always in the same place */
+  .rl-head, .rl-item{ display:grid; grid-template-columns:22px 56px minmax(0,1fr) 130px 150px; column-gap:12px; align-items:center; }
+  .rl-head{ padding:0 10px 6px; font-size:0.7rem; font-weight:700; color:var(--gray); text-transform:uppercase; letter-spacing:0.03em; border-bottom:2px solid var(--gray-light); margin-bottom:8px; }
+  .rl-item{ border:1px solid var(--gray-light); border-radius:var(--radius); padding:10px; margin-bottom:8px; }
+  .rl-item .rl-link{ font-size:0.78rem; min-width:0; }
+  .rl-item .rl-link a, .rl-item .rl-link .rl-locked-link{ white-space:normal; }
+  .rl-nolink{ color:var(--gray-light); }
   .rl-item input[type=checkbox]{ width:18px; height:18px; flex-shrink:0; }
   .rl-item .rl-thumb{ width:56px; height:56px; flex-shrink:0; border-radius:6px; overflow:hidden; background:var(--light); display:flex; align-items:center; justify-content:center; color:var(--gray); font-size:9px; text-align:center; }
   .rl-item .rl-thumb img{ width:100%; height:100%; object-fit:cover; }
@@ -125,7 +149,8 @@
   .rl-size-label{ flex:1; min-width:0; color:var(--gray-dark); word-break:break-word; }
   .rl-item input.qty{ width:56px; flex-shrink:0; padding:5px 6px; border:2px solid var(--gray-light); border-radius:5px; font-size:0.78rem; font-family:inherit; }
   .rl-size-remove{ background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.75rem; padding:2px; flex-shrink:0; font-family:inherit; }
-  .rl-item .rl-actions{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; }
+  .rl-item .rl-actions{ display:grid; grid-template-columns:1fr; gap:6px; }
+  .rl-item .rl-actions button{ width:100%; padding:7px 6px; font-size:0.75rem; line-height:1.2; text-align:center; white-space:normal; }
   .rl-item a{ color:var(--primary); text-decoration:none; font-size:0.78rem; font-weight:600; white-space:nowrap; }
   .rl-locked-link{ color:var(--gray); font-size:0.78rem; font-weight:600; white-space:nowrap; }
   .rl-item.is-received{ opacity:0.65; }
@@ -213,7 +238,8 @@
   .shop-row:last-of-type{ border-bottom:none; }
   .shop-row .name{ font-weight:600; width:130px; flex-shrink:0; }
   .shop-row .id{ color:var(--gray-dark); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .add-shop-row{ display:flex; gap:8px; margin-top:10px; }
+  .add-shop-row{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .add-shop-row input.id{ min-width:0; }
   .add-shop-row input{ padding:8px 10px; border:2px solid var(--gray-light); border-radius:6px; font-size:0.82rem; font-family:inherit; }
   .add-shop-row input.name{ width:110px; }
   .add-shop-row input.id{ flex:1; }
@@ -336,9 +362,18 @@
     .status-filter, .category-filter{ gap:6px; }
     .status-filter-btn, .category-filter-btn{ padding:5px 9px; font-size:0.7rem; }
 
-    .rl-item{ flex-wrap:wrap; }
-    .rl-item .rl-thumb{ width:44px; height:44px; }
-    .rl-item .rl-actions{ flex-direction:row; flex-wrap:wrap; align-items:center; width:100%; margin-left:56px; }
+    /* Phone: product on top, then the link, then the two buttons side by side — same spot on every row */
+    .rl-head{ display:none; }
+    .rl-item{ grid-template-columns:22px 44px minmax(0,1fr); grid-template-areas:"cb th info" "link link link" "act act act"; row-gap:8px; }
+    .rl-item > input[type=checkbox]{ grid-area:cb; }
+    .rl-item .rl-thumb{ grid-area:th; width:44px; height:44px; }
+    .rl-item .rl-info{ grid-area:info; }
+    .rl-item .rl-link{ grid-area:link; }
+    .rl-item .rl-link:has(.rl-nolink){ display:none; } /* no empty line when there is no link */
+    .rl-item .rl-actions{ grid-area:act; grid-template-columns:1fr 1fr; }
+    .rl-item .rl-actions .undo-status{ grid-column:1 / -1; }
+    .rl-item .rl-actions button{ padding:9px 6px; font-size:0.8rem; }
+    .header-actions{ flex-wrap:wrap; overflow-x:visible; row-gap:6px; } /* wrap instead of hiding buttons off-screen */
 
     .add-form{ grid-template-columns: 1fr; }
     .add-form input#itemUrl{ grid-column: 1; }
@@ -742,6 +777,7 @@ const TRANSLATIONS = {
     restockListTitle: 'Restock list', restockListDesc: "Select the items you're ready to order, then send them to Telegram.",
     sendTelegramBtnLabel: 'Send selected to Telegram',
     statusAll: 'All', statusPending: 'Not sent', statusSent: 'Sent', statusOrdered: 'Ordered', statusReceived: 'Received', statusTodo: 'To do', selectedCount: '{n} selected', noneSelected: 'Tick products to send', pcsShort: 'pcs', editSizesBtn: 'Details',
+    colPhoto: 'Photo', colProduct: 'Product & sizes', colLink: 'Link Source', colAction: 'Action',
     selectAllLabel: 'Select all', emptyRestockDefault: 'Nothing added yet. Use "Add to list" on a product.',
     noItemsMatchFilter: 'No items match this filter.',
     settingsProtectedTitle: 'Settings Protected', settingsProtectedDesc: 'Enter the settings password to continue',
@@ -793,6 +829,7 @@ const TRANSLATIONS = {
     restockListTitle: 'បញ្ជីបញ្ជាទិញ', restockListDesc: 'ជ្រើសរើសទំនិញដែលអ្នកត្រៀមខ្លួនបញ្ជាទិញ រួចផ្ញើវាទៅ Telegram។',
     sendTelegramBtnLabel: 'ផ្ញើទំនិញដែលបានជ្រើសរើសទៅ Telegram',
     statusAll: 'ទាំងអស់', statusPending: 'មិនទាន់ផ្ញើ', statusSent: 'បានផ្ញើ', statusOrdered: 'បានបញ្ជាទិញ', statusReceived: 'បានទទួល', statusTodo: 'ត្រូវធ្វើ', selectedCount: 'បានជ្រើស {n} មុខ', noneSelected: 'ធីកទំនិញដើម្បីផ្ញើ', pcsShort: 'ដុំ', editSizesBtn: 'លម្អិត',
+    colPhoto: 'រូបភាព', colProduct: 'ទំនិញ និងទំហំ', colLink: 'Link Source', colAction: 'សកម្មភាព',
     selectAllLabel: 'ជ្រើសរើសទាំងអស់', emptyRestockDefault: 'មិនទាន់មានអ្វីត្រូវបានបន្ថែមនៅឡើយទេ។ ប្រើ "បន្ថែមទៅបញ្ជី" នៅលើទំនិញមួយ។',
     noItemsMatchFilter: 'គ្មានទំនិញត្រូវនឹងតម្រងនេះទេ។',
     settingsProtectedTitle: 'ការកំណត់ត្រូវបានការពារ', settingsProtectedDesc: 'បញ្ចូលពាក្យសម្ងាត់ការកំណត់ដើម្បីបន្ត',
@@ -844,6 +881,7 @@ const TRANSLATIONS = {
     restockListTitle: '补货清单', restockListDesc: '选择您准备订购的商品，然后发送到Telegram。',
     sendTelegramBtnLabel: '将所选发送到Telegram',
     statusAll: '全部', statusPending: '未发送', statusSent: '已发送', statusOrdered: '已订购', statusReceived: '已收货', statusTodo: '待处理', selectedCount: '已选 {n} 款', noneSelected: '勾选商品后发送', pcsShort: '件', editSizesBtn: '详情',
+    colPhoto: '图片', colProduct: '产品和尺码', colLink: 'Link Source', colAction: '操作',
     selectAllLabel: '全选', emptyRestockDefault: '尚未添加任何内容。请在产品上使用"添加到清单"。',
     noItemsMatchFilter: '没有符合此筛选条件的商品。',
     settingsProtectedTitle: '设置已受保护', settingsProtectedDesc: '输入设置密码以继续',
@@ -2801,6 +2839,8 @@ function rcvItemHtml(bid, x){
       </div>
       <div class="rcv-actions">
         <input class="rcv-note" type="text" placeholder="Note (e.g. 2 torn, wrong colour)" data-k="${escapeHtml(nk)}" value="${escapeHtml(String(rcvVal(nk, '')))}" oninput="rcvSet(this)">
+      </div>
+      <div class="rcv-item-btns">
         <button class="btn btn-primary btn-small" type="button" onclick="rcvItem(this,'receive')"><i class="fas fa-check"></i> Receive this item</button>
         <button class="btn btn-outline btn-small" type="button" onclick="rcvItem(this,'close')"><i class="fas fa-ban"></i> Rest not received</button>
         ${done ? `<button class="btn btn-outline btn-small rcv-undo" type="button" title="Received by mistake? Take the stock back out and receive it again (password)"
@@ -3557,7 +3597,7 @@ function renderReceived(){
         onclick="rcvReopen('${escapeHtml(g.batchId)}', [[this.dataset.hid, Number(this.dataset.ca)]])" data-hid="${escapeHtml(r._hid)}" data-ca="${Number(r.closedAt) || 0}"><i class="fas fa-undo"></i> Reopen ${missN}</button>` : '';
       const undoBtn = ` <button class="btn btn-outline btn-small rcv-undo" type="button" title="Received by mistake? Take the stock back out and receive it again (password)"
         onclick="rcvUndo('received', this.dataset.bid, this.dataset.hid, Number(this.dataset.ca))" data-bid="${escapeHtml(g.batchId)}" data-hid="${escapeHtml(r._hid)}" data-ca="${Number(r.closedAt) || 0}"><i class="fas fa-rotate-left"></i> Undo receive</button>`;
-      return `<div class="rcv-log-row"><b>${escapeHtml(r.productName || '')}</b>${r.colour ? ` <span class="rcv-colour" title="${escapeHtml(r.colour)}">${escapeHtml(zhLabel(r.colour))}</span>` : ''} — <span class="ok">${rcvSum(ls, 'got')}</span>/${rcvSum(ls, 'qty')} received${bad ? ' · ' + bad : ''}${reopenBtn}${undoBtn}
+      return `<div class="rcv-log-row"><b>${escapeHtml(r.productName || '')}</b>${r.colour ? ` <span class="rcv-colour" title="${escapeHtml(r.colour)}">${escapeHtml(zhLabel(r.colour))}</span>` : ''} — <span class="ok">${rcvSum(ls, 'got')}</span>/${rcvSum(ls, 'qty')} received${bad ? ' · ' + bad : ''}<div class="rcv-log-btns">${undoBtn}${reopenBtn}</div>
         ${(r.notes || []).map(n => `<div class="rcv-prev-note">📝 ${escapeHtml(n)}</div>`).join('')}</div>`;
     }).join('');
     const hasProblem = rcvSum(all, 'rej') + rcvSum(all, 'miss') > 0;
@@ -4022,7 +4062,7 @@ function renderRestock(){
   }
   empty.style.display = 'none';
 
-  wrap.innerHTML = filtered.map(group => {
+  wrap.innerHTML = `<div class="rl-head"><span></span><span>${t('colPhoto')}</span><span>${t('colProduct')}</span><span>${t('colLink')}</span><span>${t('colAction')}</span></div>` + filtered.map(group => {
     const images = getImages(group.lines[0]);
     const thumb = images.length
       ? `<img src="${escapeHtml(images[0])}" alt="" referrerpolicy="no-referrer" onerror="this.parentElement.textContent='No image'">`
@@ -4068,11 +4108,13 @@ function renderRestock(){
             </div>
           </details>
         </div>
-        <div class="rl-actions">
+        <div class="rl-link">
           ${group.url ? (links1688Unlocked
               ? `<a href="${escapeHtml(group.url)}" target="_blank" rel="noopener">${group.isSearchLink ? t('searchOn1688Arrow') : t('orderOn1688Arrow')}</a>`
               : `<span class="rl-locked-link" title="Unlock Link Source links to view"><i class="fas fa-lock"></i> ${t('linkLockedLabel')}</span>`
-            ) : ''}
+            ) : '<span class="rl-nolink">—</span>'}
+        </div>
+        <div class="rl-actions">
           ${status === 'dead'
             ? `<button class="undo-status" data-k="${escapeHtml(group.key)}" onclick="restoreGroups([this.dataset.k])"><i class="fas fa-rotate-left"></i> ${t('restoreBtn')}</button>`
             : `<button class="mark-ordered" data-k="${escapeHtml(group.key)}" onclick="queueGroupsToReceiving([this.dataset.k])" title="Ordered — wait for the goods on the Receiving tab"><i class="fas fa-box-open"></i> Move to Receiving</button>
