@@ -93,6 +93,7 @@
   .rcv-order .bad{ color:var(--danger); font-weight:700; }
   .rcv-order .miss{ color:#d69e2e; font-weight:700; }
   .rcv-item{ border-top:1px solid var(--gray-light); padding:8px 0; }
+  .rcv-item.rcv-flash{ background:#fff7d6; box-shadow:0 0 0 3px #f6c343; border-radius:8px; transition:background .3s; }
   .rcv-item summary{ display:flex; align-items:center; gap:10px; cursor:pointer; list-style:none; }
   .rcv-thumb{ width:44px; height:44px; flex-shrink:0; border-radius:6px; overflow:hidden; background:var(--light); }
   .rcv-thumb img{ width:100%; height:100%; object-fit:cover; }
@@ -3487,8 +3488,35 @@ async function rcvUndo(kind, bid, hid, closedAt){
         `⏳ Back to Waiting — to be received again\n🕐 ${new Date(now).toLocaleString()}`, img ? [img] : [])
         .catch(e => console.warn('Undo notice failed:', e));
     }catch(e){}
-    alert(`Undone — ${name} is back on the Waiting list.` + (G ? `\n${G} piece${G === 1 ? '' : 's'} taken back out of Main Store stock.` : '') + costMsg +
+    // Check on the SERVER that the item really is back on the waiting list.
+    let fresh = null;
+    try{ fresh = await hRef.get({ source: 'server' }); }catch(e){ try{ fresh = await hRef.get(); }catch(e2){} }
+    const fd = fresh && fresh.exists ? (fresh.data() || {}) : null;
+    const backOk = !!(fd && fd.incoming && fd.incoming[bid] && fd.incoming[bid].productId);
+    const stillReceived = !!(fd && r && (fd.receiveLog || []).some(o => o && o.batchId === bid && (Number(o.closedAt) || 0) === Number(closedAt)));
+    if(!backOk){
+      console.warn('Undo check failed', { hid, bid, fd });
+      alert(`⚠ Stock was taken back, but ${name} did NOT reach the Waiting list on the server.\n\n` +
+        `Please send a screenshot of this message to fix it.\nItem: ${hid} / order ${bid}` + (fd ? '' : ' (catalog entry not found)'));
+      return;
+    }
+    // Put the fresh data on screen straight away (don't wait for the live listener),
+    // switch to Waiting, open the item and highlight it.
+    const hi = historyCache.findIndex(o => o.id === hid);
+    if(hi >= 0) historyCache[hi] = { id: hid, ...fd };
+    rcvOpen.add(bid + '|' + hid);
+    if(typeof setRcvView === 'function') setRcvView('waiting');
+    renderIncoming(true);
+    alert(`Undone — ${name} is back on the Waiting list (opened for you).` + (G ? `\n${G} piece${G === 1 ? '' : 's'} taken back out of Main Store stock.` : '') + costMsg +
+      (stillReceived ? '\n\nNote: it also still shows under Received orders — tell us if you see it twice.' : '') +
       (G ? '\n\nIf the store app is open on another device, refresh it.' : ''));
+    const el = [...document.querySelectorAll('#incomingWrap .rcv-item')].find(e => e.dataset.bid === bid && e.dataset.hid === hid);
+    if(el){
+      el.open = true;
+      el.classList.add('rcv-flash');
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => el.classList.remove('rcv-flash'), 4000);
+    }
   }catch(err){
     console.warn('Undo receive failed:', err);
     alert('Undo failed, nothing was changed: ' + err.message);
