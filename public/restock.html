@@ -3407,6 +3407,72 @@ async function rcvUndoPassword(){
   if(entered !== correct){ alert('Incorrect password — nothing was changed.'); return false; }
   return true;
 }
+// ---------- Check stock (read-only) ----------
+// "I received it but Main Store didn't go up" — shows, for one received item:
+// what was received per size, what the receive actually added to stock (its
+// stock record), what Main Store has now, and everything that changed this
+// product in Main Store since (transfers out, edits, sales…), with a verdict.
+async function rcvCheck(bid, hid, closedAt){
+  if(!db){ alert('Not connected to the database.'); return; }
+  const h = historyCache.find(o => o.id === hid);
+  const r = h && (h.receiveLog || []).find(o => o && o.batchId === bid && (Number(o.closedAt) || 0) === Number(closedAt));
+  if(!r){ alert('Item not found — refresh and try again.'); return; }
+  const lines = incomingLines(r), G = rcvSum(lines, 'got');
+  const pid = r.productId, name = r.productName || '';
+  const fmt = ts => ts ? new Date(ts).toLocaleString() : '?';
+  const sizeTxt = arr => (arr || []).map(s => `${s.name || '(no size)'}: ${Number(s.qty) || 0}`).join(', ') || '(no sizes)';
+  try{
+    const main = db.collection('stores').doc(STORE_MAIN_ID);
+    const [pSnap, adjSnap, trSnap] = await Promise.all([
+      main.collection('products').doc(pid).get(),
+      main.collection('stockAdjustments').where('productId', '==', pid).get(),
+      db.collection('transfers').where('productId', '==', pid).get().catch(() => null)
+    ]);
+    const prod = pSnap.exists ? (pSnap.data() || {}) : null;
+    const from = (Number(r.orderedAt) || 0) - 60000, to = (Number(closedAt) || 0) + 120000;
+    const adjs = []; adjSnap.forEach(d => adjs.push(d.data() || {}));
+    adjs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    const rcvAdj = adjs.filter(a => a.user === 'restock-tool' && a.reason === 'New stock received' && (a.timestamp || 0) >= from && (a.timestamp || 0) <= to);
+    const added = rcvAdj.reduce((s, a) => s + (Number(a.totalDelta) || 0), 0);
+    const later = adjs.filter(a => (a.timestamp || 0) > to);
+    const trs = [];
+    if(trSnap) trSnap.forEach(d => { const t = d.data() || {}; if(t.fromStoreId === STORE_MAIN_ID && (t.requestedAt || 0) > from) trs.push(t); });
+    trs.sort((a, b) => (a.requestedAt || 0) - (b.requestedAt || 0));
+    const movedOut = trs.filter(t => t.status === 'approved').reduce((s, t) => s + (Number(t.qty) || 0), 0);
+
+    let msg = `CHECK STOCK — ${name}${r.colour ? ' (' + r.colour + ')' : ''}\n\n`;
+    msg += `RECEIVED ${fmt(closedAt)}: ${G} good\n  ` + lines.filter(l => l.got).map(l => `${l.name || '(no size)'} ×${l.got}`).join(', ') + '\n\n';
+    msg += `STOCK RECORD OF THAT RECEIVE:\n`;
+    if(!rcvAdj.length) msg += `  none found\n`;
+    rcvAdj.forEach(a => {
+      msg += `  ${fmt(a.timestamp)}: total ${a.oldStock} → ${a.newStock}\n`;
+      (a.sizeDeltas || []).forEach(d => { msg += `    ${d.size}: ${d.oldQty} → ${d.newQty}\n`; });
+    });
+    msg += `\nMAIN STORE NOW: ` + (prod ? `total ${Number(prod.stock) || 0}${prod.active === false ? ' (DELETED product)' : ''}\n  ${sizeTxt(prod.sizes)}` : 'product not found') + '\n';
+    if(trs.length){
+      msg += `\nTRANSFERS FROM MAIN SINCE THEN:\n` + trs.slice(0, 12).map(t => `  ${fmt(t.requestedAt)}: ${t.size || ''} ×${t.qty} → ${t.toStoreName || t.toStoreId} (${t.status})`).join('\n') + (trs.length > 12 ? '\n  …' : '') + '\n';
+    }
+    if(later.length){
+      msg += `\nOTHER STOCK CHANGES SINCE THEN:\n` + later.slice(-8).map(a => `  ${fmt(a.timestamp)}: ${a.reason || '?'} (${a.oldStock} → ${a.newStock})`).join('\n') + '\n';
+    }
+    // Verdict
+    const sizeNames = (prod && Array.isArray(prod.sizes) ? prod.sizes : []).map(s => ((s.name || '') + '').trim().toLowerCase());
+    const unmatched = lines.filter(l => l.got && l.name && !sizeNames.includes(l.name.trim().toLowerCase()) && !sizeNames.includes(String(normalizeSizeName(l.name)).toLowerCase()));
+    msg += `\nRESULT: `;
+    if(!prod) msg += `The product no longer exists in Main Store, so there is nothing to add to.`;
+    else if(!rcvAdj.length) msg += `No stock record was saved for this receive — the ${G} pieces were probably never added. Use "Add stock manually" to add them.`;
+    else if(added < G) msg += `The receive only added ${added} of ${G} (some sizes didn't match the product's sizes).`;
+    else if(unmatched.length) msg += `The receive added the pieces under size names the product doesn't show the same way (${unmatched.map(l => l.name).join(', ')}). Check the sizes in the store app.`;
+    else if(movedOut >= G) msg += `The ${G} pieces were added, then transferred out of Main Store (${movedOut} pcs approved) — that's normal.`;
+    else if(movedOut > 0) msg += `The pieces were added; ${movedOut} were transferred out. If Main still shows too few, the rest was overwritten later (see changes above).`;
+    else msg += `The pieces WERE added (${added}), but Main Store is lower now and no transfer explains it. Most likely an old device pressed Sync and put back its old count (that bug is fixed since 24 Oct). Add the missing pieces again with "Add stock manually".`;
+    alert(msg);
+  }catch(err){
+    console.warn('Check stock failed:', err);
+    alert('Could not check: ' + err.message);
+  }
+}
+
 async function rcvUndo(kind, bid, hid, closedAt){
   if(!db){ alert('Not connected to the database.'); return; }
   if(rcvBusy) return;
@@ -3597,7 +3663,8 @@ function renderReceived(){
         onclick="rcvReopen('${escapeHtml(g.batchId)}', [[this.dataset.hid, Number(this.dataset.ca)]])" data-hid="${escapeHtml(r._hid)}" data-ca="${Number(r.closedAt) || 0}"><i class="fas fa-undo"></i> Reopen ${missN}</button>` : '';
       const undoBtn = ` <button class="btn btn-outline btn-small rcv-undo" type="button" title="Received by mistake? Take the stock back out and receive it again (password)"
         onclick="rcvUndo('received', this.dataset.bid, this.dataset.hid, Number(this.dataset.ca))" data-bid="${escapeHtml(g.batchId)}" data-hid="${escapeHtml(r._hid)}" data-ca="${Number(r.closedAt) || 0}"><i class="fas fa-rotate-left"></i> Undo receive</button>`;
-      return `<div class="rcv-log-row"><b>${escapeHtml(r.productName || '')}</b>${r.colour ? ` <span class="rcv-colour" title="${escapeHtml(r.colour)}">${escapeHtml(zhLabel(r.colour))}</span>` : ''} — <span class="ok">${rcvSum(ls, 'got')}</span>/${rcvSum(ls, 'qty')} received${bad ? ' · ' + bad : ''}<div class="rcv-log-btns">${undoBtn}${reopenBtn}</div>
+      return `<div class="rcv-log-row"><b>${escapeHtml(r.productName || '')}</b>${r.colour ? ` <span class="rcv-colour" title="${escapeHtml(r.colour)}">${escapeHtml(zhLabel(r.colour))}</span>` : ''} — <span class="ok">${rcvSum(ls, 'got')}</span>/${rcvSum(ls, 'qty')} received${bad ? ' · ' + bad : ''}<div class="rcv-log-btns">${undoBtn}${reopenBtn}<button class="btn btn-outline btn-small" type="button" title="Received but stock didn't go up? See what happened"
+        onclick="rcvCheck(this.dataset.bid, this.dataset.hid, Number(this.dataset.ca))" data-bid="${escapeHtml(g.batchId)}" data-hid="${escapeHtml(r._hid)}" data-ca="${Number(r.closedAt) || 0}"><i class="fas fa-magnifying-glass"></i> Check stock</button></div>
         ${(r.notes || []).map(n => `<div class="rcv-prev-note">📝 ${escapeHtml(n)}</div>`).join('')}</div>`;
     }).join('');
     const hasProblem = rcvSum(all, 'rej') + rcvSum(all, 'miss') > 0;
