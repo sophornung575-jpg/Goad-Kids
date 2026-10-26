@@ -4260,6 +4260,7 @@ function sendToTelegram(order, callback) {
                 if (d.exists) cachePasswordsFrom(d.data(), getStoredPasswords());
             }).catch(function() {});
             if (STATE.firebaseOnline) setTimeout(function() { loadData(); }, 300);   // orders are only loaded for signed-in staff
+            startLiveProducts();
         }
         addLoginRecord(name, role, true);
         renderPending(); renderHistory(); renderInventory(); updateAdminBadges();
@@ -4287,6 +4288,7 @@ function sendToTelegram(order, callback) {
     }
 
     function adminLogout() {
+        stopLiveProducts();
         try { if (auth && auth.currentUser) auth.signOut(); } catch (e) {}
         STATE.isAdmin = false; STATE.adminRole = '';
         localStorage.removeItem('goatAdmin'); localStorage.removeItem('goatAdminRole');
@@ -4478,6 +4480,52 @@ function sendToTelegram(order, callback) {
         _lastProductRefresh = Date.now();
         refreshProductsFromServer();
     });
+
+    // ── LIVE STOCK ── while staff are logged in, every device listens for product
+    // changes, so a receive, transfer, sale or edit on ANY device shows up here within
+    // seconds. (Before, a phone left open kept old numbers — and saving from it could
+    // overwrite newer stock.) Customers' phones don't listen, to keep reads low.
+    var _liveProdUnsub = null, _liveRenderTimer = null;
+    function liveMapProduct(d) {
+        var dt = d.data();
+        if (isDeletedProductDoc(dt)) return null;
+        return Object.assign({}, dt, {
+            id: d.id, name: dt.name || '', slug: dt.slug || makeSlug(dt.name || ''),
+            price: dt.price || 0, stock: dt.stock || 0, category: dt.category || '',
+            images: dt.images || [], sizes: dt.sizes || [], addedAt: dt.addedAt || 0,
+            lastRestockDate: dt.lastRestockDate || dt.addedAt || 0, active: dt.active !== false
+        });
+    }
+    function liveRender() {
+        clearTimeout(_liveRenderTimer);
+        var ae = document.activeElement;
+        // Don't rebuild lists under someone's fingers (typing a quantity); try again shortly.
+        if (ae && /INPUT|SELECT|TEXTAREA/.test(ae.tagName) && !/search|filter/i.test(ae.id || '') && ae.closest && ae.closest('#adminInventoryTab, #productsGrid')) {
+            _liveRenderTimer = setTimeout(liveRender, 1500); return;
+        }
+        try { renderProducts(); } catch (e) {}
+        try { renderInventory(); } catch (e) {}
+        try { updateAdminBadges(); } catch (e) {}
+    }
+    function startLiveProducts() {
+        if (!db || _liveProdUnsub || !STATE.isAdmin || !isStaffUser() || localStorage.getItem('goatCustomerShop') === '1') return;
+        _liveProdUnsub = db.collection('stores').doc(STATE.storeId).collection('products').onSnapshot(function(snap) {
+            var p = [];
+            snap.forEach(function(d) { var x = liveMapProduct(d); if (x) p.push(x); });
+            if (!p.length) return;
+            STATE.products = p;
+            saveProducts();
+            _lastProductRefresh = Date.now();
+            clearTimeout(_liveRenderTimer);
+            _liveRenderTimer = setTimeout(liveRender, 400);
+        }, function(err) {
+            console.warn('Live stock listener stopped:', err && err.message);
+            _liveProdUnsub = null;
+        });
+    }
+    function stopLiveProducts() {
+        if (_liveProdUnsub) { try { _liveProdUnsub(); } catch (e) {} _liveProdUnsub = null; }
+    }
 
     // Reloads this store's products from the database (same mapping as loadData) and
     // re-renders. Used where stale local data would hide new / restocked items.
@@ -11751,14 +11799,37 @@ function sendToTelegram(order, callback) {
         else loadBranchStockTab();
     }
 
-    // ── FIND DUPLICATES ──
+    // ── FIND DUPLICATES / CORRECT ID ──
     // Lists every item that exists more than once inside the SAME store (same name,
-    // ignoring capitals / spaces / "_"). For each, staff choose which copy to keep:
-    //  • "Keep only this" — the other copies are removed, their stock is NOT added
-    //    (use when the second copy is a wrong/doubled count).
-    //  • "Merge into this" — the other copies' stock is added to this one, then removed
-    //    (use when both copies hold real pieces).
+    // ignoring capitals / spaces / "_"). For each copy it shows activity clues (last
+    // transfer, last sale, last stock change) and suggests the real one. "Correct ID"
+    // keeps that copy with ITS quantity and removes the others — their stock is never
+    // added (adding leftover copies together is what doubled stock before).
     var _dupGroups = [];
+    async function dupLoadClues(storeId) {
+        var act = {}; // productId -> { t: lastTs, what: label }
+        function bump(id, ts, what) { if (!id || !ts) return; if (!act[id] || ts > act[id].t) act[id] = { t: ts, what: what }; }
+        var jobs = [
+            function() { return db.collection('transfers').where('toStoreId', '==', storeId).get().then(function(s) { s.forEach(function(d) { var t = d.data() || {}; if (t.status === 'approved') bump(t.destProductId, t.approvedAt || t.requestedAt, 'transfer in'); }); }); },
+            function() { return db.collection('transfers').where('fromStoreId', '==', storeId).get().then(function(s) { s.forEach(function(d) { var t = d.data() || {}; if (t.status === 'approved') bump(t.sourceProductId, t.approvedAt || t.requestedAt, 'transfer out'); }); }); },
+            function() { return db.collection('stores').doc(storeId).collection('stockAdjustments').get().then(function(s) { s.forEach(function(d) { var a = d.data() || {}; if (!/^Duplicate/.test(a.reason || '')) bump(a.productId, a.timestamp, 'stock change'); }); }); },
+            function() { return db.collection('stores').doc(storeId).collection('orders').orderBy('timestamp', 'desc').limit(300).get().then(function(s) { s.forEach(function(d) { var o = d.data() || {}; if (o.status === 'confirmed') (o.cart || []).forEach(function(it) { bump(it.productId, o.confirmedTimestamp || o.timestamp, 'sale'); }); }); }); }
+        ];
+        // Each clue is optional: if one query fails, the others still count.
+        await Promise.all(jobs.map(function(j) { return Promise.resolve().then(j).catch(function(e) { console.warn('Duplicate clue skipped:', e.message); }); }));
+        return act;
+    }
+    function dupSuggest(g) {
+        var acts = g.copies.map(function(c) { return c._act ? c._act.t : 0; });
+        var best = Math.max.apply(null, acts);
+        if (best > 0 && acts.filter(function(a) { return a === best; }).length === 1) {
+            var i = acts.indexOf(best), a = g.copies[i]._act;
+            return { idx: i, why: 'most recent activity (' + a.what + ' ' + new Date(a.t).toLocaleDateString() + ')' };
+        }
+        var withStock = g.copies.map(function(c, i) { return dupStock(c) > 0 ? i : -1; }).filter(function(i) { return i >= 0; });
+        if (best === 0 && withStock.length === 1) return { idx: withStock[0], why: 'the only copy with stock — the others are empty' };
+        return null; // no clear winner: staff must choose
+    }
     async function findDuplicateProducts() {
         var box = document.getElementById('branchStockListContainer');
         if (!db) { showToast('Firebase offline', 'error'); return; }
@@ -11775,10 +11846,15 @@ function sendToTelegram(order, callback) {
                     var k = productNameKey(dt.name);
                     (byKey[k] = byKey[k] || []).push(Object.assign({}, dt, { id: d.id }));
                 });
-                Object.keys(byKey).forEach(function(k) {
-                    if (byKey[k].length < 2) return;
+                var groups = Object.keys(byKey).filter(function(k) { return byKey[k].length > 1; });
+                if (!groups.length) continue;
+                var act = await dupLoadClues(stores[i].id);
+                groups.forEach(function(k) {
                     var copies = byKey[k].sort(function(a, b) { return (a.addedAt || 0) - (b.addedAt || 0); });
-                    _dupGroups.push({ storeId: stores[i].id, storeName: stores[i].name, name: copies[0].name, copies: copies });
+                    copies.forEach(function(c) { c._act = act[c.id] || null; });
+                    var g = { storeId: stores[i].id, storeName: stores[i].name, name: copies[0].name, copies: copies };
+                    g.suggest = dupSuggest(g);
+                    _dupGroups.push(g);
                 });
             }
             renderDuplicateGroups();
@@ -11794,40 +11870,68 @@ function sendToTelegram(order, callback) {
             box.innerHTML = back + '<div style="text-align:center;color:var(--success);padding:2rem">✅ No duplicates — every item is listed once in each store.</div>';
             return;
         }
+        var nSug = _dupGroups.filter(function(g) { return g.suggest; }).length;
         var html = back + '<div style="font-size:0.85rem;background:var(--light);border-radius:8px;padding:0.6rem 0.9rem;margin-bottom:0.8rem"><b>' + _dupGroups.length +
-            '</b> item(s) listed more than once in the same store. Pick the copy to keep.<br>' +
-            '<b>Keep only this</b> = the other copy\'s stock is a mistake and is dropped. <b>Merge into this</b> = both copies are real pieces, add them together.</div>';
+            '</b> item(s) listed more than once in the same store.<br><b>Correct ID</b> keeps that copy with its own quantity and removes the others (their stock is NOT added). ' +
+            '⭐ = the copy the tool thinks is real. <b>Count the shelf to confirm before fixing.</b></div>' +
+            (nSug ? '<button class="btn btn-success btn-small" style="margin-bottom:0.8rem" onclick="correctAllDuplicates()"><i class="fas fa-wand-magic-sparkles"></i> Correct all suggested (' + nSug + ')</button>' : '') +
+            (nSug < _dupGroups.length ? '<div style="font-size:0.78rem;color:var(--warning);margin-bottom:0.6rem">' + (_dupGroups.length - nSug) + ' item(s) have no clear winner — choose the copy yourself.</div>' : '');
         _dupGroups.forEach(function(g, gi) {
             html += '<div style="background:var(--light);border-radius:10px;padding:0.7rem 0.9rem;margin-bottom:0.6rem">' +
                 '<div style="font-weight:700">' + escHtml(g.name) + ' <span style="font-weight:400;color:var(--gray)">· ' + escHtml(g.storeName) + ' · ' + g.copies.length + ' copies</span></div>';
             g.copies.forEach(function(c, ci) {
+                var sug = g.suggest && g.suggest.idx === ci;
                 var sizes = (c.sizes || []).map(function(s) { return escHtml(s.name) + ': <b>' + (Number(s.qty) || 0) + '</b>'; }).join(' · ') || ('Stock: <b>' + dupStock(c) + '</b>');
                 var added = c.addedAt ? new Date(c.addedAt).toLocaleDateString() : '—';
-                html += '<div style="background:#fff;border:1px solid var(--gray-light);border-radius:8px;padding:0.5rem 0.7rem;margin-top:0.5rem;font-size:0.8rem">' +
-                    '<div><b>Copy ' + (ci + 1) + '</b> <span style="color:var(--gray)">· total ' + dupStock(c) + ' · added ' + escHtml(added) + ' · ID ' + escHtml(c.id) + (c.name !== g.name ? ' · name "' + escHtml(c.name) + '"' : '') + '</span></div>' +
+                var last = c._act ? 'last activity: ' + c._act.what + ' ' + new Date(c._act.t).toLocaleDateString() : 'no transfers, sales or stock changes found';
+                html += '<div style="background:#fff;border:' + (sug ? '2px solid var(--success)' : '1px solid var(--gray-light)') + ';border-radius:8px;padding:0.5rem 0.7rem;margin-top:0.5rem;font-size:0.8rem">' +
+                    '<div><b>' + (sug ? '⭐ ' : '') + 'Copy ' + (ci + 1) + '</b> <span style="color:var(--gray)">· total ' + dupStock(c) + ' · added ' + escHtml(added) + ' · ID ' + escHtml(c.id) + (c.name !== g.name ? ' · name "' + escHtml(c.name) + '"' : '') + '</span></div>' +
+                    '<div style="color:' + (c._act ? 'var(--gray-dark)' : 'var(--gray)') + ';font-size:0.75rem">' + escHtml(last) + '</div>' +
+                    (sug ? '<div style="color:var(--success);font-size:0.75rem;font-weight:600">Suggested: ' + escHtml(g.suggest.why) + '</div>' : '') +
                     '<div style="margin:3px 0 6px">' + sizes + '</div>' +
-                    '<button class="btn btn-success btn-small" onclick="resolveDuplicate(' + gi + ',' + ci + ',false)"><i class="fas fa-check"></i> Keep only this</button> ' +
-                    '<button class="btn btn-outline btn-small" onclick="resolveDuplicate(' + gi + ',' + ci + ',true)"><i class="fas fa-object-group"></i> Merge into this</button>' +
+                    '<button class="btn ' + (sug ? 'btn-success' : 'btn-outline') + ' btn-small" onclick="resolveDuplicate(' + gi + ',' + ci + ')"><i class="fas fa-check"></i> Correct ID — keep this</button>' +
                     '</div>';
             });
             html += '</div>';
         });
         box.innerHTML = html;
     }
-    function resolveDuplicate(gi, keepIdx, merge) {
+    function resolveDuplicate(gi, keepIdx) {
         if (STATE.adminRole !== 'full') { showToast('Full admin required', 'error'); return; }
         var g = _dupGroups[gi]; if (!g) return;
         var keep = g.copies[keepIdx], others = g.copies.filter(function(c, i) { return i !== keepIdx; });
         var otherTot = others.reduce(function(a, c) { return a + dupStock(c); }, 0);
-        var msg = merge
-            ? 'MERGE "' + g.name + '" at ' + g.storeName + '?\n\nKeep copy ' + (keepIdx + 1) + ' (' + dupStock(keep) + ' pcs) and ADD ' + otherTot + ' pcs from the other copy → ' + (dupStock(keep) + otherTot) + ' pcs.\nThe other copy is then removed.'
-            : 'KEEP ONLY copy ' + (keepIdx + 1) + ' of "' + g.name + '" at ' + g.storeName + '?\n\nIt stays at ' + dupStock(keep) + ' pcs. The other copy (' + otherTot + ' pcs) is removed and its stock is NOT added.';
+        var msg = 'CORRECT ID for "' + g.name + '" at ' + g.storeName + '?\n\nKeep copy ' + (keepIdx + 1) + ' (' + dupStock(keep) + ' pcs).\n' +
+            'Remove the other ' + others.length + ' cop' + (others.length === 1 ? 'y' : 'ies') + ' (' + otherTot + ' pcs) — that stock is NOT added.';
         requireProductPassword(function() {
             if (!confirm(msg)) return;
-            applyDuplicateFix(g, keep, others, merge);
+            applyDuplicateFix(g, keep, others, false);
         });
     }
-    async function applyDuplicateFix(g, keep, others, merge) {
+    function correctAllDuplicates() {
+        if (STATE.adminRole !== 'full') { showToast('Full admin required', 'error'); return; }
+        var list = _dupGroups.filter(function(g) { return g.suggest; });
+        if (!list.length) return;
+        var dropped = 0;
+        var lines = list.map(function(g) {
+            var keep = g.copies[g.suggest.idx], d = g.copies.reduce(function(a, c, i) { return a + (i === g.suggest.idx ? 0 : dupStock(c)); }, 0);
+            dropped += d;
+            return g.name + ' @ ' + g.storeName + ': keep ' + dupStock(keep) + ' pcs, remove ' + d + ' pcs';
+        });
+        requireProductPassword(async function() {
+            if (!confirm('CORRECT ' + list.length + ' item(s) using the ⭐ suggestions?\n\n' + lines.slice(0, 15).join('\n') + (lines.length > 15 ? '\n…and ' + (lines.length - 15) + ' more' : '') +
+                '\n\n' + dropped + ' pcs on the removed copies are dropped (not added). Each removal is logged.')) return;
+            var ok = 0, failed = 0;
+            for (var i = 0; i < list.length; i++) {
+                var g = list[i], keep = g.copies[g.suggest.idx], others = g.copies.filter(function(c, j) { return j !== g.suggest.idx; });
+                if (await applyDuplicateFix(g, keep, others, false, true)) ok++; else failed++;
+            }
+            showToast('✅ Corrected ' + ok + ' item(s)' + (failed ? ' — ' + failed + ' failed, see console' : ''), failed ? 'warning' : 'success');
+            await refreshProductsFromServer();
+            findDuplicateProducts();
+        });
+    }
+    async function applyDuplicateFix(g, keep, others, merge, quiet) {
         try {
             var col = db.collection('stores').doc(g.storeId).collection('products');
             var now = Date.now(), iso = new Date().toISOString();
@@ -11872,10 +11976,13 @@ function sendToTelegram(order, callback) {
             });
             await batch.commit();
             logActivity(merge ? 'Duplicate Merged' : 'Duplicate Removed', (k.name || g.name) + ' @ ' + g.storeName + ' | kept ' + keep.id + ', removed ' + liveOthers.map(function(o) { return o.id; }).join(', '));
+            if (quiet) return true;
             showToast('✅ Fixed: ' + (k.name || g.name) + ' at ' + g.storeName, 'success');
             if (g.storeId === STATE.storeId) await refreshProductsFromServer();
             findDuplicateProducts();
+            return true;
         } catch (e) {
+            if (quiet) { console.warn('Correct ID failed for', g.name, e); return false; }
             showToast('Fix failed, nothing changed: ' + e.message, 'error');
         }
     }
@@ -14322,7 +14429,9 @@ function sendToTelegram(order, callback) {
                     if (email !== staffEmail(STATE.adminRole, STATE.storeId) && email !== staffEmail('super', 'global')) {
                         adminLogout();
                         setTimeout(function() { showToast('This device was logged in for another store. Please log in with this store\'s password.', 'warning'); }, 600);
+                        return;
                     }
+                    startLiveProducts();
                 });
             }
         }
