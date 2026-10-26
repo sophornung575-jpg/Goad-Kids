@@ -3500,63 +3500,90 @@ async function rcvUndo(kind, bid, hid, closedAt){
     if(prod && storeDocGone(prod)) prod = null;
     if(G && !prod){ alert('This product was deleted from the store app, so its stock can\'t be taken back. Nothing was changed.'); return; }
 
-    // Work out the stock change exactly the way receiving added it.
+    // Take back only what is STILL in Main Store (never locks). Pieces that already
+    // went to a branch (or were sold) stay counted as received, so nothing is
+    // counted twice when the item is received again.
     let upd = null, deltas = [], oldStock = 0, newStock = 0;
+    const took = lines.map(() => 0);   // pieces taken back, per line
     if(G){
       const sizes = (Array.isArray(prod.sizes) ? prod.sizes : []).map(s => ({ ...s }));
       const oldSizeSum = sizes.reduce((a, s) => a + (Number(s.qty) || 0), 0);
       oldStock = Number(prod.stock) || 0;
-      let unsized = 0;
-      const short = [];
-      lines.forEach(l => {
+      let unsizedAvail = sizes.length ? Math.max(0, oldStock - oldSizeSum) : Math.max(0, oldStock), unsizedTook = 0;
+      lines.forEach((l, i) => {
         if(!l.got) return;
-        if(!l.name || !sizeNameFromVariant(l.name)){ unsized += l.got; return; }
+        if(!l.name || !sizeNameFromVariant(l.name)){
+          const t = Math.min(l.got, unsizedAvail); unsizedAvail -= t; unsizedTook += t; took[i] = t; return;
+        }
         const s = sizes.find(o => ((o.name || '') + '').trim().toLowerCase() === l.name.trim().toLowerCase())
                || sizes.find(o => normalizeSizeName(o.name) === normalizeSizeName(l.name));
-        const have = s ? (Number(s.qty) || 0) : 0;
-        if(have < l.got){ short.push(`${l.name}: needs ${l.got}, Main Store has ${have}`); return; }
-        s.qty = have - l.got;
-        deltas.push({ size: s.name, oldQty: have, newQty: s.qty, delta: -l.got });
+        const have = s ? Math.max(0, Number(s.qty) || 0) : 0;
+        const t = Math.min(l.got, have);
+        took[i] = t;
+        if(t){ s.qty = have - t; deltas.push({ size: s.name, oldQty: have, newQty: s.qty, delta: -t }); }
       });
-      const extraNow = sizes.length ? Math.max(0, oldStock - oldSizeSum) : oldStock;
-      if(unsized && extraNow < unsized) short.push(`(no size): needs ${unsized}, Main Store has ${extraNow}`);
-      if(short.length){
-        alert('Can\'t undo — some of these pieces are no longer in Main Store stock (probably already transferred to a branch or sold):\n\n' +
-          short.join('\n') + '\n\nFix the branch stock first (or transfer them back), then try Undo again. Nothing was changed.');
-        return;
+      const T0 = took.reduce((a, v) => a + v, 0);
+      if(T0){
+        newStock = sizes.length ? sizes.reduce((a, s) => a + (Number(s.qty) || 0), 0) + Math.max(0, oldStock - oldSizeSum - unsizedTook) : oldStock - T0;
+        upd = { sizes, stock: newStock, updatedAt: new Date().toISOString() };
       }
-      newStock = sizes.length ? sizes.reduce((a, s) => a + (Number(s.qty) || 0), 0) + Math.max(0, oldStock - oldSizeSum - unsized) : oldStock - G;
-      upd = { sizes, stock: newStock, updatedAt: new Date().toISOString() };
+    }
+    const T = took.reduce((a, v) => a + v, 0);   // taken back
+    const K = G - T;                              // stays received (already left Main Store)
+    if(!T && !R && !M){
+      alert(`Nothing to undo — none of the ${G} good pieces of ${src.productName || ''} are in Main Store any more (all transferred or sold).\n\nFix it at the branch instead. Nothing was changed.`);
+      return;
     }
 
-    // Cost price: put back the value from before this receive, only if nothing changed it since.
+    // Where did the pieces that are no longer in Main Store go? (info only)
+    let whereMsg = '';
+    if(K){
+      try{
+        const since = (Number(src.orderedAt || src.createdAt) || 0) - 60000;
+        const trSnap = await db.collection('transfers').where('productId', '==', src.productId).get();
+        const per = {};
+        trSnap.forEach(d => { const t = d.data() || {}; if(t.fromStoreId === STORE_MAIN_ID && t.status === 'approved' && (t.requestedAt || 0) >= since){ const k = t.toStoreName || t.toStoreId; per[k] = (per[k] || 0) + (Number(t.qty) || 0); } });
+        const parts = Object.entries(per).map(([k, v]) => `${k}: ${v}`);
+        whereMsg = parts.length ? ` (transferred since: ${parts.join(', ')})` : ' (transferred or sold)';
+      }catch(e){ whereMsg = ' (transferred or sold)'; }
+    }
+
+    // Cost price: put back the value from before this receive — only when ALL pieces were taken back.
     let costMsg = '';
-    if(G){
+    if(G && T === G){
       try{
         const adjSnap = await db.collection('stores').doc(STORE_MAIN_ID).collection('stockAdjustments').where('productId', '==', src.productId).get();
         let last = null;
         adjSnap.forEach(d => { const a = d.data() || {}; if(a.user === 'restock-tool' && a.reason === 'New stock received' && (!last || (a.timestamp || 0) > (last.timestamp || 0))) last = a; });
         const cur = prod.costPrice != null && prod.costPrice !== '' ? Number(prod.costPrice) : null;
-        if(last && last.newCostPrice != null && cur === Number(last.newCostPrice) && last.oldCostPrice !== last.newCostPrice){
+        if(last && last.newCostPrice != null && cur === Number(last.newCostPrice) && last.oldCostPrice !== undefined && last.oldCostPrice !== last.newCostPrice){
           upd.costPrice = last.oldCostPrice;
           costMsg = `\nCost price back to $${last.oldCostPrice != null ? Number(last.oldCostPrice).toFixed(2) : '—'} (was $${cur.toFixed(2)})`;
         }
       }catch(e){ console.warn('Cost history could not be read:', e); }
     }
 
-    const name = src.productName || (prod && prod.name) || '';
-    if(!confirm(`Undo receive of ${name}?\n\n` +
-      (G ? `− ${G} good piece${G === 1 ? '' : 's'} taken back out of Main Store stock\n` : '') +
-      (R ? `${R} rejected and ` : '') + (M ? `${M} not-received ` : '') + (R || M ? 'pieces cleared\n' : '') +
-      costMsg + `\n\nThe item goes back to Waiting with all ${rcvSum(lines, 'qty') - rcvSum(lines, 'extra')} pieces waiting, so you can receive it again.`)) return;
-
-    // Item goes back to Waiting with nothing received (extra pieces removed from the order).
-    const resetLines = lines.map(l => {
-      const nl = { name: l.name, qty: Math.max(0, l.qty - (l.extra || 0)), got: 0, rej: 0, miss: 0 };
+    // New lines: pieces that stay received keep their ✔; everything taken back plus
+    // rejected / not-received pieces go back to waiting. Fully undone lines drop any extras.
+    const resetLines = lines.map((l, i) => {
+      const keep = l.got - took[i];
+      const nl = keep
+        ? { name: l.name, qty: l.qty, got: keep, rej: 0, miss: 0 }
+        : { name: l.name, qty: Math.max(0, l.qty - (l.extra || 0)), got: 0, rej: 0, miss: 0 };
+      if(keep && l.extra) nl.extra = l.extra;
       if(l.added) nl.added = true;
       return nl;
     }).filter(l => l.qty > 0);
-    const note = 'Receive undone ' + new Date().toLocaleString() + (G ? ` (${G} pcs taken back out of stock)` : '');
+    const waitingAgain = rcvSum(resetLines, 'left');
+
+    const name = src.productName || (prod && prod.name) || '';
+    const tookTxt = lines.map((l, i) => took[i] ? `${l.name || '(no size)'}×${took[i]}` : '').filter(Boolean).join(', ');
+    if(!confirm(`Undo receive of ${name}?\n\n` +
+      (T ? `− ${T} piece${T === 1 ? '' : 's'} taken back out of Main Store: ${tookTxt}\n` : '') +
+      (K ? `✔ ${K} piece${K === 1 ? '' : 's'} already left Main Store${whereMsg} — they stay counted as received\n` : '') +
+      (R ? `${R} rejected and ` : '') + (M ? `${M} not-received ` : '') + (R || M ? 'pieces go back to waiting\n' : '') +
+      costMsg + `\n\n${waitingAgain} piece${waitingAgain === 1 ? '' : 's'} go back to Waiting, so you can receive them again.`)) return;
+    const note = 'Receive undone ' + new Date().toLocaleString() + (T ? ` (${T} pcs taken back out of stock)` : '') + (K ? `, ${K} pcs had already left Main Store` : '');
     const FV = firebase.firestore.FieldValue, b = db.batch(), now = Date.now();
     const hRef = db.collection('restockTool_history').doc(hid);
     if(kind === 'waiting'){
@@ -3584,14 +3611,14 @@ async function rcvUndo(kind, bid, hid, closedAt){
     // Restock List lines ticked "received" go back to "ordered" (they may have been removed — fine).
     if(r && Array.isArray(r.restockItemIds)) r.restockItemIds.forEach(id => db.collection('restockTool_items').doc(id).update({ status: 'ordered', previousStatus: 'received' }).catch(() => {}));
     db.collection('activityLogs').add({
-      action: 'Stock receive undone (Restock tool)', details: `${name}: ${G} good taken back out of stock, ${R} rejected / ${M} not received cleared`,
+      action: 'Stock receive undone (Restock tool)', details: `${name}: ${T} of ${G} good taken back out of stock${K ? ' (' + K + ' had already left Main Store)' : ''}, ${R} rejected / ${M} not received back to waiting`,
       time: new Date(now).toLocaleString(), timestamp: now, user: 'restock-tool', storeId: STORE_MAIN_ID, storeName: STORE_MAIN_ID
     }).catch(() => {});
     try{
       const img = (prod && Array.isArray(prod.images) && prod.images[0]) || '';
       notifyInventoryBot(`↩️ <b>RECEIVE UNDONE</b> — Main Store\n📦 ${escapeHtml(name)}\n` +
-        (G ? `➖ ${G} taken back out of stock: ` + lines.filter(l => l.got).map(l => `${escapeHtml(l.name || '(no size)')}×${l.got}`).join(', ') + '\n' : '') +
-        `⏳ Back to Waiting — to be received again\n🕐 ${new Date(now).toLocaleString()}`, img ? [img] : [])
+        (T ? `➖ ${T} taken back out of stock: ${escapeHtml(tookTxt)}\n` : '') + (K ? `✔ ${K} had already left Main Store — kept as received\n` : '') +
+        `⏳ ${waitingAgain} back to Waiting — to be received again\n🕐 ${new Date(now).toLocaleString()}`, img ? [img] : [])
         .catch(e => console.warn('Undo notice failed:', e));
     }catch(e){}
     // Check on the SERVER that the item really is back on the waiting list.
@@ -3613,9 +3640,9 @@ async function rcvUndo(kind, bid, hid, closedAt){
     rcvOpen.add(bid + '|' + hid);
     if(typeof setRcvView === 'function') setRcvView('waiting');
     renderIncoming(true);
-    alert(`Undone — ${name} is back on the Waiting list (opened for you).` + (G ? `\n${G} piece${G === 1 ? '' : 's'} taken back out of Main Store stock.` : '') + costMsg +
+    alert(`Undone — ${name}: ${waitingAgain} piece${waitingAgain === 1 ? ' is' : 's are'} back on the Waiting list (opened for you).` + (T ? `\n${T} piece${T === 1 ? '' : 's'} taken back out of Main Store stock.` : '') + (K ? `\n${K} had already left Main Store and stay counted as received.` : '') + costMsg +
       (stillReceived ? '\n\nNote: it also still shows under Received orders — tell us if you see it twice.' : '') +
-      (G ? '\n\nIf the store app is open on another device, refresh it.' : ''));
+      (T ? '\n\nIf the store app is open on another device, refresh it.' : ''));
     const el = [...document.querySelectorAll('#incomingWrap .rcv-item')].find(e => e.dataset.bid === bid && e.dataset.hid === hid);
     if(el){
       el.open = true;
