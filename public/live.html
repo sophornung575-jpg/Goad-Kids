@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Noto+Sans+Khmer:wght@400;600&display=swap" rel="stylesheet">
+<script src="tools-i18n.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -31,6 +32,7 @@ header.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding:
 @keyframes pulse{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){.onair::before{animation:none}}
 .status{margin-left:auto;font-size:.9rem;color:var(--muted)}
+header.top select.ui-lang{width:auto;flex:0 0 auto;font:inherit;font-size:.9rem;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:inherit}
 .status b{color:var(--ink)}
 
 nav.tabs{display:flex;gap:4px;padding:0 24px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto}
@@ -138,7 +140,23 @@ tr:last-child td{border-bottom:0}
   <h1 class="brand">Goat Kids Live Desk</h1>
   <span class="onair">AI host label always on</span>
   <div class="status" id="status">Not connected</div>
+  <select id="uiLang" class="ui-lang" translate="no" aria-label="Language">
+    <option value="en">English</option><option value="kh">ខ្មែរ</option><option value="zh">中文</option>
+  </select>
 </header>
+<script>
+// Screen language (tools-i18n.js). Separate from the script / answer language settings.
+(function(){
+  var sel = document.getElementById('uiLang'), l = 'en';
+  try { l = localStorage.getItem('liveDesk_uiLang') || 'en'; } catch(e){}
+  sel.value = l;
+  if (window.ToolI18n) ToolI18n.setLang(l);
+  sel.addEventListener('change', function(){
+    try { localStorage.setItem('liveDesk_uiLang', sel.value); } catch(e){}
+    if (window.ToolI18n) ToolI18n.setLang(sel.value);
+  });
+})();
+</script>
 
 <nav class="tabs" role="tablist">
   <button role="tab" aria-selected="true" data-view="connect">Connect</button>
@@ -1054,14 +1072,14 @@ function renderReport(){
   $("reportBody").innerHTML = rows.length ? rows.map(({r,i})=>`<tr style="${r.replied?"opacity:.5":""}">
     <td>${esc(new Date(r.time).toLocaleTimeString())}</td>
     <td><input class="cell-in" data-edit="name" data-i="${i}" value="${esc(r.name)}" placeholder="Name (see live)"><div><span class="pill ${cls(r.type)}">${esc(r.type)}</span></div></td>
-    <td>${esc(r.text)}</td>
+    <td translate="no">${esc(r.text)}</td>
     <td>${r.code?thumbHtml(productByCode(r.code),true):""}</td>
     <td>${r.code?`<span class="code">${esc(r.code)}</span>`:"—"}<div class="hint">${esc(r.product)}${r.price!==""?" · "+money(r.price):""}</div></td>
     <td>${esc(r.size||"—")}</td>
     <td><input class="cell-in" data-edit="phone" data-i="${i}" value="${esc(r.phone)}" placeholder="—" inputmode="tel"></td>
     <td><input class="cell-in wide" data-edit="location" data-i="${i}" value="${esc(r.location)}" placeholder="—">${r.province?`<div class="hint">📍 ${esc(r.province)}</div>`:""}</td>
     <td>${esc(r.stock||"—")}</td>
-    <td style="min-width:240px"><div class="r" style="white-space:pre-wrap">${esc(r.answer)}</div>
+    <td style="min-width:240px"><div class="r" style="white-space:pre-wrap" translate="no">${esc(r.answer)}</div>
       <button class="btn ghost" style="margin-top:6px;padding:5px 10px" data-copyrow="${i}">Copy answer</button>
       ${r.code && r.product ? (r.sentOrderId
         ? `<div style="margin-top:6px"><span class="pill in">✅ Sent: ${esc(r.sentOrderId)}${r.sentStoreLabel?" · "+esc(r.sentStoreLabel):""}</span></div>`
