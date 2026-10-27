@@ -1120,6 +1120,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                 </div>
                                 <div class="store-info-item"><small>Cloud Sync</small><button class="btn btn-success w-full" onclick="syncToFirebase()"><i class="fas fa-cloud-upload-alt"></i> Sync to Cloud</button>
                                     <button class="btn btn-outline btn-small w-full" style="margin-top:6px" onclick="copyCostPricesFromStore271()"><i class="fas fa-dollar-sign"></i> Copy Cost Prices from Goat Kids 271 → All Stores</button>
+                                    <button class="btn btn-outline btn-small w-full" style="margin-top:6px" onclick="copyPhotosFromStore271()"><i class="fas fa-images"></i> Copy Photos from Goat Kids 271 → All Stores</button>
                                     <button class="btn btn-outline btn-small w-full" style="margin-top:6px" onclick="copyPromoPricesToAllStores()"><i class="fas fa-tags"></i> Copy Discounts from this store → All Stores</button>
                                 </div>
                                 <div class="store-info-item">
@@ -5128,6 +5129,91 @@ function sendToTelegram(order, callback) {
         } catch (e) {
             console.error('Cost price copy failed:', e);
             showToast('Copy failed - check console', 'error');
+        }
+    }
+
+    // Copy product photos from Goat Kids 271 to Main Store and Goat Kids PH, matching
+    // products by name/slug exactly like copyCostPricesFromStore271(). A matched product
+    // gets 271's photos (replacing its own). Products with no real photo in 271 are left
+    // alone, so nothing is ever wiped. Only the photos change: no stock, price or cost.
+    async function copyPhotosFromStore271() {
+        if (!db) { showToast('Not connected to the database', 'error'); return; }
+        var SOURCE_STORE = 'GOAT-GOAT-KIDS-271-0889';
+        var TARGET_STORES = [
+            { id: 'GOAT-1979', name: 'Main Store' },
+            { id: 'GOAT-GOAT-KIDS-PH-6012', name: 'Goat Kids PH' }
+        ];
+        function normKey(name, slug) {
+            return (slug && slug.trim()) ? slug.trim().toLowerCase() : makeSlug(name || '');
+        }
+        function realPhotos(dt) {
+            var arr = Array.isArray(dt.images) ? dt.images : [];
+            if (typeof dt.image === 'string' && dt.image && arr.indexOf(dt.image) === -1) arr = arr.concat([dt.image]);
+            return arr.filter(function(u) { return typeof u === 'string' && u.trim() && u.indexOf('images.unsplash.com/photo-1583743814966') === -1; });
+        }
+        try {
+            showToast('Checking photos...', 'info');
+            var srcSnap = await db.collection('stores').doc(SOURCE_STORE).collection('products').get();
+            var srcMap = {}, srcCount = 0;
+            srcSnap.forEach(function(d) {
+                var dt = d.data() || {};
+                if (isDeletedProductDoc(dt)) return;
+                var imgs = realPhotos(dt);
+                if (imgs.length) { srcMap[normKey(dt.name, dt.slug)] = { name: dt.name || '', images: imgs }; srcCount++; }
+            });
+            if (!srcCount) { showToast('No photos found in Goat Kids 271', 'error'); return; }
+
+            // First count what would change, then ask once.
+            var plan = [];
+            for (var t = 0; t < TARGET_STORES.length; t++) {
+                var store = TARGET_STORES[t];
+                var tgtSnap = await db.collection('stores').doc(store.id).collection('products').get();
+                var changes = [];
+                tgtSnap.forEach(function(d) {
+                    var dt = d.data() || {};
+                    if (isDeletedProductDoc(dt)) return;
+                    var src = srcMap[normKey(dt.name, dt.slug)];
+                    if (!src) return;
+                    var cur = Array.isArray(dt.images) ? dt.images : [];
+                    if (JSON.stringify(cur) === JSON.stringify(src.images)) return; // already the same
+                    changes.push({ id: d.id, name: dt.name || d.id, images: src.images });
+                });
+                plan.push({ store: store, changes: changes });
+            }
+            var total = plan.reduce(function(a, p) { return a + p.changes.length; }, 0);
+            if (!total) { showToast('All stores already have the same photos as Goat Kids 271', 'success'); return; }
+            var msg = 'Copy photos from Goat Kids 271 (matching products by name):\n\n' +
+                plan.map(function(p) { return p.store.name + ': ' + p.changes.length + ' product(s)'; }).join('\n') +
+                '\n\nTheir current photos will be REPLACED with the 271 photos. Stock, price and cost are not touched. Continue?';
+            if (!confirm(msg)) return;
+
+            for (var k = 0; k < plan.length; k++) {
+                var pl = plan[k];
+                for (var i = 0; i < pl.changes.length; i += 400) {
+                    var batch = db.batch();
+                    pl.changes.slice(i, i + 400).forEach(function(m) {
+                        batch.update(db.collection('stores').doc(pl.store.id).collection('products').doc(m.id),
+                            { images: m.images, updatedAt: new Date().toISOString() });
+                    });
+                    await batch.commit();
+                }
+                console.log(pl.store.name + ': photos copied to ' + pl.changes.length + ' product(s)');
+                pl.changes.forEach(function(m) { console.log('  ✅ ' + m.name + ' (' + m.images.length + ' photo' + (m.images.length === 1 ? '' : 's') + ')'); });
+            }
+            showToast('Photos copied to ' + total + ' product(s) in ' + plan.filter(function(p) { return p.changes.length; }).length + ' store(s)', 'success');
+
+            // Refresh this device if it is one of the target stores.
+            if (STATE.storeId === 'GOAT-1979' || STATE.storeId === 'GOAT-GOAT-KIDS-PH-6012') {
+                var mine = plan.filter(function(p) { return p.store.id === STATE.storeId; })[0];
+                if (mine) mine.changes.forEach(function(m) {
+                    var lp = STATE.products.find(function(x) { return x.id === m.id; });
+                    if (lp) lp.images = m.images.slice();
+                });
+                saveProducts(); renderInventory(); renderProducts();
+            }
+        } catch (e) {
+            console.error('Photo copy failed:', e);
+            showToast('Photo copy failed, see console: ' + (e.message || e), 'error');
         }
     }
 
