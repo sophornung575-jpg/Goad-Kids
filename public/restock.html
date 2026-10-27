@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Restock Search — Goat Kids</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="tools-i18n.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -293,10 +294,9 @@
   .manual-add, .bulk-import{ margin-top:18px; }
   .manual-add summary, .bulk-import summary{ cursor:pointer; font-size:0.85rem; color:var(--gray-dark); font-weight:600; list-style:none; padding:2px 0; }
   .manual-add summary::-webkit-details-marker, .bulk-import summary::-webkit-details-marker{ display:none; }
-  .manual-add summary::before{ content:"Can't find it in search? Add an item by link ▸"; }
-  .manual-add[open] summary::before{ content:"Can't find it in search? Add an item by link ▾"; }
-  .bulk-import summary::before{ content:"Add multiple products at once ▸"; }
-  .bulk-import[open] summary::before{ content:"Add multiple products at once ▾"; }
+  /* Text comes from data-label so tools-i18n.js can translate it */
+  .manual-add summary::before, .bulk-import summary::before{ content:attr(data-label) " ▸"; }
+  .manual-add[open] summary::before, .bulk-import[open] summary::before{ content:attr(data-label) " ▾"; }
   .add-form{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:12px; }
   .add-form input#itemUrl{ grid-column: 1 / -1; }
   .add-form button{ grid-column: 1 / -1; }
@@ -413,7 +413,7 @@
   <div class="header-container">
     <div class="logo"><i class="fas fa-truck-loading"></i> GOAT KIDS <span class="sub">Restock Search</span></div>
     <div class="header-actions">
-      <select id="langSelect" class="lang-select">
+      <select id="langSelect" class="lang-select" translate="no">
         <option value="en">English</option>
         <option value="kh">ខ្មែរ</option>
         <option value="zh">中文</option>
@@ -460,7 +460,7 @@
           <div class="admin-empty" id="historyEmpty" data-t="emptyHistoryDefault">No saved products yet. Search 1688 or add an item by link, and everything you find will show up here for next time.</div>
 
           <details class="bulk-import">
-            <summary></summary>
+            <summary data-label="Add multiple products at once"></summary>
             <div class="import-option">
               <h3 data-t="pasteListHeading">Paste a list</h3>
               <p class="hint" data-t="pasteListHint">One per line — product links (a name before the link becomes the title), or plain product names with no link, like from a 1688 export. Names get a ready-made "Search on 1688" link since there's no exact product page to point to.</p>
@@ -539,7 +539,7 @@
           <div class="admin-empty" id="emptyState" data-t="noResultsYet">No results yet — try a search above.</div>
 
           <details class="manual-add">
-            <summary></summary>
+            <summary data-label="Can't find it in search? Add an item by link"></summary>
             <p class="hint" data-t="manualAddHint">If a supplier's item isn't showing up in search, paste its 1688 product link here to add it straight to your restock list. It'll also be saved to your Home catalog.</p>
             <div class="add-form">
               <input type="text" class="form-control" id="itemUrl" data-t-ph="itemUrlPh" placeholder="Link Source product link">
@@ -1036,7 +1036,9 @@ function setLanguage(lang){
   currentLang = lang;
   localStorage.setItem('restockTool_lang', lang);
   applyTranslations();
+  if(window.ToolI18n) ToolI18n.setLang(lang);  // everything else on the page (tools-i18n.js)
 }
+if(window.ToolI18n) ToolI18n.setLang(currentLang);
 
 document.getElementById('langSelect').addEventListener('change', e => setLanguage(e.target.value));
 
