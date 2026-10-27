@@ -2485,12 +2485,39 @@ function storeSizesFromVariants(variants){
 // Reads Main Store's products and works out exactly what would be created.
 // Used by both the "Check next numbers" preview and the real import, so what
 // you see in the preview is what gets written.
+// Which live Main Store product a catalog card points to, for the CSV import.
+// Same order as receiving from the Restock List: the item the import created,
+// then a hand-made link, then (if that copy was removed as a duplicate) the
+// copy that was kept, then a unique name match. docs = { id: data } of ALL
+// Main Store products, including removed ones.
+function importLinkedProduct(hd, docs){
+  const live = id => id && docs[id] && !storeDocGone(docs[id]) ? id : null;
+  const follow = id => { // removed duplicate -> the copy that was kept
+    for(let i = 0; id && docs[id] && i < 5; i++){
+      if(live(id)) return id;
+      id = docs[id].mergedInto;
+    }
+    return live(id);
+  };
+  const ids = [hd.storeProductId];
+  if((hd.linkedStoreId || STORE_MAIN_ID) === STORE_MAIN_ID) ids.push(hd.linkedProductId);
+  for(const id of ids){ const a = live(id); if(a) return a; }
+  for(const id of ids){ const b = follow(id); if(b) return b; }
+  const norm = n => ((n || '') + '').trim().toLowerCase().replace(/\s+/g, ' ');
+  for(const n of [hd.linkedProductName, hd.storeProductName].filter(Boolean).map(norm)){
+    const m = Object.keys(docs).filter(id => live(id) && norm(docs[id].name) === n);
+    if(m.length === 1) return m[0];
+  }
+  return null;
+}
+
 async function storeBuildPlan(entries, prefixRaw){
   const prefix = prefixRaw.trim();
   await pricingRefresh();  // always use the latest rule from the store app
   const snap = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').get();
   const existing = [];
-  snap.forEach(d => existing.push({ id: d.id, name: ((d.data().name || '') + '').trim(), active: !storeDocGone(d.data()) }));
+  const docs = {};
+  snap.forEach(d => { docs[d.id] = d.data() || {}; existing.push({ id: d.id, name: ((d.data().name || '') + '').trim(), active: !storeDocGone(d.data()) }); });
   // A product deleted in the store app can leave an empty record behind
   // (active:false) — treat it as gone so the item is created again.
   const existingIds = new Set(existing.filter(p => p.active).map(p => p.id));
@@ -2516,12 +2543,9 @@ async function storeBuildPlan(entries, prefixRaw){
     const hd = hist.exists ? (hist.data() || {}) : {};
     // Already in the app: created by an earlier import, or linked by hand to
     // an existing store product (a re-order of something you already sell).
-    if(hd.storeProductId && existingIds.has(hd.storeProductId)){
-      skipped.push(hd.storeProductName || e.title);
-      continue;
-    }
-    if(hd.linkedProductId && (hd.linkedStoreId || STORE_MAIN_ID) === STORE_MAIN_ID && existingIds.has(hd.linkedProductId)){
-      skipped.push(hd.linkedProductName || e.title);
+    const linkedId = importLinkedProduct(hd, docs);
+    if(linkedId && existingIds.has(linkedId)){
+      skipped.push(docs[linkedId].name || hd.linkedProductName || hd.storeProductName || e.title);
       continue;
     }
     // Photos from this colour's Home card, else from the offer's main card.
@@ -2716,8 +2740,8 @@ document.getElementById('csvImportBtn').onclick = async () => {
 async function incomingQueue(entries, orderKey){
   await pricingRefresh();  // exchange rate for this order's unit cost
   const snap = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').get();
-  const live = {};
-  snap.forEach(d => { const x = d.data() || {}; if(!storeDocGone(x)) live[d.id] = x; });
+  const live = {}, docs = {};
+  snap.forEach(d => { const x = d.data() || {}; docs[d.id] = x; if(!storeDocGone(x)) live[d.id] = x; });
   const batchId = 'r' + Date.now();
   const key = orderKey || batchId;
   const wb = db.batch();
@@ -2727,7 +2751,7 @@ async function incomingQueue(entries, orderKey){
     const hid = e.key || e.offerId;
     const hist = await db.collection('restockTool_history').doc(hid).get();
     const hd = hist.exists ? (hist.data() || {}) : {};
-    const pid = hd.storeProductId;
+    const pid = importLinkedProduct(hd, docs);
     if(!pid || !live[pid]) continue;
     const pending = Object.entries(hd.incoming || {});
     // Same order already waiting for this product: keep it — unless nothing has
