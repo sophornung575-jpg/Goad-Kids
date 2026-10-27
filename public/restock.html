@@ -314,6 +314,17 @@
   #csvColumnSelect{ max-width:260px; margin-top:6px; }
   #csvPreviewText{ margin-top:8px; }
   #csvImportBtn{ margin-top:8px; }
+  .plan-wrap{ overflow-x:auto; margin-top:8px; border:1px solid var(--gray-light); border-radius:8px; }
+  .plan-table{ width:100%; border-collapse:collapse; font-size:0.8rem; }
+  .plan-table th, .plan-table td{ padding:6px 8px; border-bottom:1px solid var(--gray-light); text-align:left; vertical-align:middle; }
+  .plan-table th{ background:rgba(0,0,0,0.04); font-weight:700; white-space:nowrap; }
+  .plan-table tr:last-child td{ border-bottom:none; }
+  .plan-table img{ width:40px; height:40px; object-fit:cover; border-radius:4px; display:block; }
+  .plan-table .t{ max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .plan-table .nm{ font-weight:700; white-space:nowrap; }
+  .plan-badge{ display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.72rem; font-weight:700; white-space:nowrap; }
+  .plan-badge.new{ background:#dcfce7; color:#166534; }
+  .plan-badge.have{ background:#e0e7ff; color:#3730a3; }
 
   .settings-label{ display:block; font-size:0.8rem; font-weight:600; color:var(--dark); margin:0 0 5px; }
   .settings-lock{ display:flex; align-items:center; justify-content:center; padding:3rem 1rem; }
@@ -490,7 +501,7 @@
                     </select>
                     <label class="hint" for="storePushPrefix" style="margin-top:8px;display:block">Name prefix — each item becomes "prefix + next number"</label>
                     <input class="form-control" id="storePushPrefix" style="max-width:260px" placeholder="e.g. cutie dress">
-                    <p class="hint" id="storePushPreview" style="margin-top:8px"></p>
+                    <div class="hint" id="storePushPreview" style="margin-top:8px"></div>
                     <button class="btn btn-outline btn-small" id="storePushPreviewBtn" style="margin-top:6px" type="button">Check next numbers</button>
                   </div>
                 </div>
@@ -2537,6 +2548,7 @@ async function storeBuildPlan(entries, prefixRaw){
   // Skip products this catalog already created in the store earlier.
   const plan = [];
   const skipped = [];
+  const rows = [];  // every file item in order, for the preview table
   let next = max + 1;
   for(const e of entries){
     const hist = await db.collection('restockTool_history').doc(e.key).get();
@@ -2545,7 +2557,10 @@ async function storeBuildPlan(entries, prefixRaw){
     // an existing store product (a re-order of something you already sell).
     const linkedId = importLinkedProduct(hd, docs);
     if(linkedId && existingIds.has(linkedId)){
-      skipped.push(docs[linkedId].name || hd.linkedProductName || hd.storeProductName || e.title);
+      const nm = docs[linkedId].name || hd.linkedProductName || hd.storeProductName || e.title;
+      skipped.push(nm);
+      const di = restockOwnImages(docs[linkedId]);
+      rows.push({ entry: e, name: nm, isNew: false, img: (restockOwnImages(hd)[0] || orderBaseImages(e)[0] || di[0] || '') });
       continue;
     }
     // Photos from this colour's Home card, else from the offer's main card.
@@ -2555,9 +2570,38 @@ async function storeBuildPlan(entries, prefixRaw){
     existingNames.add(name.toLowerCase());
     plan.push({ entry: e, name, sizes: storeSizesFromVariants(e.sizes), images: catalogImgs,
                 pricing: pricingCalc(yuanFrom(e.price)) });
+    rows.push({ entry: e, name, isNew: true, img: catalogImgs[0] || '', pricing: plan[plan.length - 1].pricing });
     next++;
   }
-  return { plan, skipped, lastName };
+  return { plan, skipped, lastName, rows };
+}
+
+// The same check as a table, one row per item in the file.
+function storePlanTable(result, category){
+  const { plan, skipped, lastName, rows } = result;
+  const sizesTxt = e => Object.entries(e.qtyBySize || {}).filter(([, q]) => q > 0)
+    .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }))
+    .map(([sz, q]) => (sz || '—') + '×' + q).join(', ') || '—';
+  let head = `<div><b>${plan.length}</b> new in "${escapeHtml(category)}" · <b>${skipped.length}</b> already in the app · ` +
+    (lastName ? `last existing item: <b>${escapeHtml(lastName)}</b>` : '<b>no existing item uses this prefix — numbering starts at 1, check the spelling</b>') + '</div>';
+  if(plan.length && !plan.some(p => p.pricing)) head += '<div>No pricing rule set in the store app — new items start at $0.</div>';
+  const body = (rows || []).map((r, i) => {
+    const e = r.entry;
+    const title = (e.title || '') + (e.colour ? ' · ' + e.colour : '');
+    return `<tr>
+      <td>${i + 1}</td>
+      <td>${r.img ? `<img src="${escapeHtml(r.img)}" alt="" loading="lazy">` : ''}</td>
+      <td class="nm">${escapeHtml(r.name)}</td>
+      <td><span class="plan-badge ${r.isNew ? 'new' : 'have'}">${r.isNew ? 'New' : 'Already in app'}</span></td>
+      <td style="white-space:nowrap">${e.qtyTotal || 0}</td>
+      <td>${escapeHtml(sizesTxt(e))}</td>
+      <td style="white-space:nowrap">${escapeHtml(e.price || '—')}${r.isNew ? (r.pricing ? ' → $' + r.pricing.price.toFixed(2) : ' → $0') : ''}</td>
+      <td class="t" title="${escapeHtml(title)}">${escapeHtml(title)}</td>
+    </tr>`;
+  }).join('');
+  return head + `<div class="plan-wrap"><table class="plan-table"><thead><tr>
+      <th>#</th><th>Photo</th><th>Store item</th><th>Status</th><th>Qty</th><th>Sizes</th><th>Price</th><th>1688 item</th>
+    </tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
 function storePlanSummary(result, category){
@@ -2591,7 +2635,7 @@ document.getElementById('storePushPreviewBtn').onclick = async () => {
   out.textContent = 'Checking...';
   try{
     const result = await storeBuildPlan(csvOrderEntries, prefix);
-    out.textContent = storePlanSummary(result, document.getElementById('storePushCategory').value);
+    out.innerHTML = storePlanTable(result, document.getElementById('storePushCategory').value);
   }catch(err){
     out.textContent = 'Could not read the store products: ' + err.message;
   }
