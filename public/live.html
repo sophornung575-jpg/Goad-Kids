@@ -163,6 +163,7 @@ tr:last-child td{border-bottom:0}
   <button role="tab" aria-selected="true" data-view="connect">Connect</button>
   <button role="tab" aria-selected="false" data-view="products">Products &amp; codes</button>
   <button role="tab" aria-selected="false" data-view="voice">🎙️ Voice host</button>
+  <button role="tab" aria-selected="false" data-view="vsettings">⚙️ Voice settings</button>
   <button role="tab" aria-selected="false" data-view="comments">Comment replies</button>
 </nav>
 
@@ -281,6 +282,85 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
   <p class="lead">Claude writes a natural selling script for each product you ticked on the Products tab, an AI voice reads it, and you press ▶ to play it straight into the live. Each voice is made once and saved, so playing it again costs nothing.</p>
   <div class="disclosure"><strong>AI host label:</strong> the <b>Opening</b> line always starts with the AI host disclosure, and the AI reminder plays automatically every few products.</div>
 
+  <div class="box vh-nowbar">
+    <span class="hint">Now playing:</span> <b id="vhNow">Ready</b>
+    <button class="btn vh-stop" id="vhStop">■ Stop</button>
+    <span class="hint" style="margin-left:auto">Keys, voices and sound: <a href="#" id="vhGoSettings">⚙️ Voice settings tab</a></span>
+  </div>
+
+  <div class="box">
+    <h3 style="margin:0 0 6px;font-size:1.05rem">📺 Live screen &amp; auto show</h3>
+    <p class="hint" style="margin:0">The <b>live screen</b> is a vertical page for Facebook Live Producer → <b>Share screen</b>. <b>Auto show</b> runs the live by itself: it shows each ticked product on the screen, plays its voice, pauses, then goes to the next. Make all voices first — products without a voice are skipped, so nothing is generated during the live.</p>
+    <div class="row">
+      <select id="shShape" style="max-width:250px" aria-label="Screen shape">
+        <option value="wide">Wide 16:9 — Facebook Live from a computer</option>
+        <option value="tall">Tall 9:16 — vertical / phone</option>
+      </select>
+      <button class="btn" id="shOpen">📺 Open live screen</button>
+      <button class="btn vh-play" id="shStart">▶ Start auto show</button>
+      <button class="btn vh-stop" id="shStop">■ Stop show</button>
+      <span class="hint" id="shNow">Not running</span>
+    </div>
+    <div class="grid2">
+      <div>
+        <label for="shGap">Pause between products</label>
+        <select id="shGap"><option value="2">2 seconds</option><option value="4" selected>4 seconds</option><option value="6">6 seconds</option><option value="10">10 seconds</option></select>
+        <label class="check"><input type="checkbox" id="shOpening" checked> Play the Opening line first</label>
+        <label class="check"><input type="checkbox" id="shLoop" checked> When the list ends, start again (otherwise play Thank you and stop)</label>
+      </div>
+      <div>
+        <label for="shBgFile">Shop background photo</label>
+        <div class="row" style="margin:0"><input type="file" id="shBgFile" accept="image/*" style="max-width:220px"><button class="btn ghost vh-sm" id="shBgClear">Remove</button></div>
+        <label for="shMusicFile">Background music (mp3) — use music you have the rights to</label>
+        <div class="row" style="margin:0"><input type="file" id="shMusicFile" accept="audio/*" style="max-width:220px"><button class="btn ghost vh-sm" id="shMusicClear">Remove</button></div>
+        <label for="shMusicVol">Music volume <span class="hint" id="shMusicName">no music</span></label>
+        <input type="range" id="shMusicVol" min="0" max="60" value="15" style="width:100%">
+      </div>
+    </div>
+    <div class="grid2">
+      <div>
+        <label for="shCamMode">📷 Live camera on the screen</label>
+        <select id="shCamMode">
+          <option value="off">Off</option>
+          <option value="small">Small — camera in the photo corner</option>
+          <option value="big">Big — camera large, product photo in the corner</option>
+          <option value="half">Half — camera and product photo half and half</option>
+        </select>
+        <label class="check"><input type="checkbox" id="shCamMirror"> Mirror the camera (like a selfie)</label>
+      </div>
+      <div>
+        <label for="shCamDev">Which camera</label>
+        <div class="row" style="margin:0"><select id="shCamDev" style="max-width:240px"><option value="">Default camera</option></select><button class="btn ghost vh-sm" id="shCamFind">Find cameras</button></div>
+        <p class="hint" style="margin:4px 0 0">Camera picture only — no sound, so it won't pick up the shop.</p>
+      </div>
+    </div>
+    <div id="shMsg"></div>
+  </div>
+
+  <div class="box">
+    <h3 style="margin:0 0 6px;font-size:1.05rem">⚡ Quick lines</h3>
+    <p class="hint" style="margin:0">Keys <b>Q W E R</b> play them while this tab is open. The Opening always keeps the AI host disclosure.</p>
+    <div id="vhLines" class="vh-lines"></div>
+  </div>
+
+  <div class="box">
+    <h3 style="margin:0 0 6px;font-size:1.05rem">👕 Products for this live</h3>
+    <p class="hint" style="margin:0">These are the products ticked on the <b>Products &amp; codes</b> tab. Before the live: <b>Write all scripts</b> → read and fix them → <b>Make all voices</b>. During the live: ▶ or keys <b>1–9</b>, <b>Space</b> stops.</p>
+    <div class="row">
+      <button class="btn" id="vhWriteAll">✍️ Write all scripts</button>
+      <button class="btn" id="vhVoiceAll">🗣️ Make all voices</button>
+      <button class="btn ghost" id="vhRefresh">↻ Refresh list</button>
+      <label class="check" style="margin:0"><input type="checkbox" id="vhAutoRemind" checked> Auto-play the AI reminder every few products</label>
+    </div>
+    <div id="vhMsg"></div>
+  </div>
+  <div id="vhProducts" class="vh-grid"></div>
+</section>
+
+<!-- VOICE SETTINGS -->
+<section class="view" id="view-vsettings">
+  <h2>⚙️ Voice settings</h2>
+  <p class="lead">Set these up once before the live: the keys for the script writer and the voice, which voice to use, and how the sound goes into Facebook Live. They are used by the <b>Voice host</b> tab.</p>
   <details class="box vh-det" id="vhGuide">
     <summary>📘 First-time setup (VB-Cable, keys, Live Producer)</summary>
     <ol class="vh-ol">
@@ -294,7 +374,7 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
     <p class="hint">Keys stay only in this browser on this laptop.</p>
   </details>
 
-  <details class="box vh-det" id="vhSettings">
+  <details class="box vh-det" id="vhSettings" open>
     <summary>⚙️ Script writer &amp; voice settings</summary>
     <div class="grid2">
       <div>
@@ -448,80 +528,11 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
     </div>
     <div class="row"><button class="btn ghost" id="vhTone">Test tone</button>
       <span class="hint">Output: <b id="vhRoute">not set</b></span>
-      <span class="vh-meter" title="Level going into the live"><i id="vhMeter"></i></span>
-      <span class="hint" id="vhNow">Ready</span>
-      <button class="btn vh-stop" id="vhStop">■ Stop</button></div>
+      <span class="vh-meter" title="Level going into the live"><i id="vhMeter"></i></span></div>
     <div id="vhRouteMsg"></div>
   </div>
-
-  <div class="box">
-    <h3 style="margin:0 0 6px;font-size:1.05rem">📺 Live screen &amp; auto show</h3>
-    <p class="hint" style="margin:0">The <b>live screen</b> is a vertical page for Facebook Live Producer → <b>Share screen</b>. <b>Auto show</b> runs the live by itself: it shows each ticked product on the screen, plays its voice, pauses, then goes to the next. Make all voices first — products without a voice are skipped, so nothing is generated during the live.</p>
-    <div class="row">
-      <select id="shShape" style="max-width:250px" aria-label="Screen shape">
-        <option value="wide">Wide 16:9 — Facebook Live from a computer</option>
-        <option value="tall">Tall 9:16 — vertical / phone</option>
-      </select>
-      <button class="btn" id="shOpen">📺 Open live screen</button>
-      <button class="btn vh-play" id="shStart">▶ Start auto show</button>
-      <button class="btn vh-stop" id="shStop">■ Stop show</button>
-      <span class="hint" id="shNow">Not running</span>
-    </div>
-    <div class="grid2">
-      <div>
-        <label for="shGap">Pause between products</label>
-        <select id="shGap"><option value="2">2 seconds</option><option value="4" selected>4 seconds</option><option value="6">6 seconds</option><option value="10">10 seconds</option></select>
-        <label class="check"><input type="checkbox" id="shOpening" checked> Play the Opening line first</label>
-        <label class="check"><input type="checkbox" id="shLoop" checked> When the list ends, start again (otherwise play Thank you and stop)</label>
-      </div>
-      <div>
-        <label for="shBgFile">Shop background photo</label>
-        <div class="row" style="margin:0"><input type="file" id="shBgFile" accept="image/*" style="max-width:220px"><button class="btn ghost vh-sm" id="shBgClear">Remove</button></div>
-        <label for="shMusicFile">Background music (mp3) — use music you have the rights to</label>
-        <div class="row" style="margin:0"><input type="file" id="shMusicFile" accept="audio/*" style="max-width:220px"><button class="btn ghost vh-sm" id="shMusicClear">Remove</button></div>
-        <label for="shMusicVol">Music volume <span class="hint" id="shMusicName">no music</span></label>
-        <input type="range" id="shMusicVol" min="0" max="60" value="15" style="width:100%">
-      </div>
-    </div>
-    <div class="grid2">
-      <div>
-        <label for="shCamMode">📷 Live camera on the screen</label>
-        <select id="shCamMode">
-          <option value="off">Off</option>
-          <option value="small">Small — camera in the photo corner</option>
-          <option value="big">Big — camera large, product photo in the corner</option>
-          <option value="half">Half — camera and product photo half and half</option>
-        </select>
-        <label class="check"><input type="checkbox" id="shCamMirror"> Mirror the camera (like a selfie)</label>
-      </div>
-      <div>
-        <label for="shCamDev">Which camera</label>
-        <div class="row" style="margin:0"><select id="shCamDev" style="max-width:240px"><option value="">Default camera</option></select><button class="btn ghost vh-sm" id="shCamFind">Find cameras</button></div>
-        <p class="hint" style="margin:4px 0 0">Camera picture only — no sound, so it won't pick up the shop.</p>
-      </div>
-    </div>
-    <div id="shMsg"></div>
-  </div>
-
-  <div class="box">
-    <h3 style="margin:0 0 6px;font-size:1.05rem">⚡ Quick lines</h3>
-    <p class="hint" style="margin:0">Keys <b>Q W E R</b> play them while this tab is open. The Opening always keeps the AI host disclosure.</p>
-    <div id="vhLines" class="vh-lines"></div>
-  </div>
-
-  <div class="box">
-    <h3 style="margin:0 0 6px;font-size:1.05rem">👕 Products for this live</h3>
-    <p class="hint" style="margin:0">These are the products ticked on the <b>Products &amp; codes</b> tab. Before the live: <b>Write all scripts</b> → read and fix them → <b>Make all voices</b>. During the live: ▶ or keys <b>1–9</b>, <b>Space</b> stops.</p>
-    <div class="row">
-      <button class="btn" id="vhWriteAll">✍️ Write all scripts</button>
-      <button class="btn" id="vhVoiceAll">🗣️ Make all voices</button>
-      <button class="btn ghost" id="vhRefresh">↻ Refresh list</button>
-      <label class="check" style="margin:0"><input type="checkbox" id="vhAutoRemind" checked> Auto-play the AI reminder every few products</label>
-    </div>
-    <div id="vhMsg"></div>
-  </div>
-  <div id="vhProducts" class="vh-grid"></div>
 </section>
+
 
 </main>
 
@@ -1365,11 +1376,11 @@ $("cfg").value = LS.get("gkl_cfg",""); $("stores").value = LS.get("gkl_stores",$
 })();
 </script>
 <style>
-#view-voice .grid2>div{min-width:0}
+#view-voice .grid2>div,#view-vsettings .grid2>div{min-width:0}
 /* tidy settings: fields never spill out of their column */
-#view-voice input,#view-voice select,#view-voice textarea{box-sizing:border-box;max-width:100%}
-#view-voice input[type=file]{width:100%}
-#view-voice .row{row-gap:8px}
+#view-voice input,#view-voice select,#view-voice textarea,#view-vsettings input,#view-vsettings select,#view-vsettings textarea{box-sizing:border-box;max-width:100%}
+#view-voice input[type=file],#view-vsettings input[type=file]{width:100%}
+#view-voice .row,#view-vsettings .row{row-gap:8px}
 .vh-sec{font-size:.95rem;font-weight:700;margin:4px 0 2px;padding-bottom:6px;border-bottom:1px solid var(--line)}
 .vh-pair{display:flex;gap:8px;align-items:center}
 .vh-pair>select,.vh-pair>input{flex:1;min-width:0}
@@ -1383,8 +1394,9 @@ $("cfg").value = LS.get("gkl_cfg",""); $("stores").value = LS.get("gkl_stores",$
 .vh-det>*:not(summary){margin-left:18px;margin-right:18px}
 .vh-det>*:last-child{margin-bottom:18px}
 .vh-ol{padding-left:20px;margin:0 0 8px}.vh-ol li{margin:6px 0}
-#view-voice input[type=password]{width:100%;border:1px solid var(--line);border-radius:6px;padding:9px 10px;background:#fff}
-#view-voice code{background:#F1F5F3;padding:1px 5px;border-radius:4px;font-size:.85rem}
+#view-voice input[type=password],#view-vsettings input[type=password]{width:100%;border:1px solid var(--line);border-radius:6px;padding:9px 10px;background:#fff}
+#view-voice code,#view-vsettings code{background:#F1F5F3;padding:1px 5px;border-radius:4px;font-size:.85rem}
+.vh-nowbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 16px}
 .vh-meter{display:inline-block;width:110px;height:8px;background:#D4DDD8;border-radius:4px;overflow:hidden;vertical-align:middle}
 .vh-meter i{display:block;height:100%;width:0;background:var(--teal);transition:width .05s}
 .btn.vh-stop{background:var(--live);border-color:var(--live)}
@@ -1463,6 +1475,7 @@ const savedKeys = LS.get("gkl_vh_keys", {}); KEYS.forEach(id=>{ if (savedKeys[id
 if (saved.vhCambVoice){ $("vhCambVoice").innerHTML = `<option value="${esc(saved.vhCambVoice)}">${esc(saved.vhCambVoiceName||"(saved voice)")}</option>`; }
 if (saved.vhElVoice){ $("vhElVoice").innerHTML = `<option value="${esc(saved.vhElVoice)}">(saved voice)</option>`; }
 if (!$("vhCambKey").value && !$("vhGemKey").value && !$("vhAzKey").value && !$("vhClaudeKey").value){ $("vhGuide").open = true; $("vhSettings").open = true; }
+$("vhGoSettings").onclick = e=>{ e.preventDefault(); const b = document.querySelector('nav.tabs button[data-view="vsettings"]'); if (b) b.click(); };
 function syncUI(){
   const wr = $("vhWriter").value;
   $("vhGemWriterBox").style.display = wr==="gemini"?"":"none"; $("vhGemKeyRow").style.display = (wr==="gemini" || $("vhEngine").value==="gemini")?"":"none"; $("vhClaudeBox").style.display = wr==="claude"?"":"none";
@@ -1473,7 +1486,7 @@ function syncUI(){
   $("vhVolVal").textContent = $("vhVol").value+"%"; $("vhMicVolVal").textContent = $("vhMicVol").value+"%";
 }
 syncUI();
-document.querySelectorAll("#view-voice details input, #view-voice details select, #view-voice details textarea, #vhVol, #vhMicVol, #vhMonitor, #vhMicOn, #vhDuck, #vhAutoRemind")
+document.querySelectorAll("#view-vsettings details input, #view-vsettings details select, #view-vsettings details textarea, #vhVol, #vhMicVol, #vhMonitor, #vhMicOn, #vhDuck, #vhAutoRemind")
   .forEach(el=>{ if (el.id!=="vhTestText") el.addEventListener("change", ()=>{ syncUI(); saveSet(); }); });
 ["vhCambRate","vhAzRate","vhVol","vhMicVol"].forEach(id=>$(id).addEventListener("input", syncUI));
 $("vhVol").addEventListener("input", ()=>{ if (A.voiceGain) A.voiceGain.gain.value = $("vhVol").value/100; });
