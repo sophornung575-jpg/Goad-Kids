@@ -162,10 +162,8 @@ tr:last-child td{border-bottom:0}
 <nav class="tabs" role="tablist">
   <button role="tab" aria-selected="true" data-view="connect">Connect</button>
   <button role="tab" aria-selected="false" data-view="products">Products &amp; codes</button>
-  <button role="tab" aria-selected="false" data-view="script">Live script</button>
   <button role="tab" aria-selected="false" data-view="voice">🎙️ Voice host</button>
   <button role="tab" aria-selected="false" data-view="comments">Comment replies</button>
-  <button role="tab" aria-selected="false" data-view="export">Virbo export</button>
 </nav>
 
 <main>
@@ -223,38 +221,9 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
     </div>
   </div>
   <div class="tablewrap"><table>
-    <thead><tr><th>Live code</th><th>Photo</th><th>Product</th><th>Price</th><th>Size : qty by store</th><th>Total stock</th><th>Script</th></tr></thead>
+    <thead><tr><th>Live code</th><th>Photo</th><th>Product</th><th>Price</th><th>Size : qty by store</th><th>Total stock</th><th>Live</th></tr></thead>
     <tbody id="prodBody"><tr><td colspan="6" class="hint">Connect first, or try the sample products.</td></tr></tbody>
   </table></div>
-</section>
-
-<!-- SCRIPT -->
-<section class="view" id="view-script">
-  <h2>Live presenter script</h2>
-  <p class="lead">Tick products on the Products tab, then generate. The AI host disclosure is built into every script and is put back automatically if it gets deleted.</p>
-  <div class="disclosure"><strong>Always included:</strong> <span id="discPreview"></span></div>
-  <div class="box">
-    <div class="grid2">
-      <div>
-        <label for="lang">Language</label>
-        <select id="lang"><option value="km">Khmer</option><option value="en">English</option><option value="both">Khmer + English</option></select>
-      </div>
-      <div>
-        <label for="repeatEvery">Repeat the AI disclosure every</label>
-        <select id="repeatEvery"><option value="3">3 products</option><option value="5" selected>5 products</option><option value="8">8 products</option></select>
-      </div>
-    </div>
-    <div class="row">
-      <button class="btn" id="btnScript">Generate script</button>
-      <button class="btn ghost" id="btnCopyScript">Copy script</button>
-      <span class="hint" id="selInfo"></span>
-    </div>
-  </div>
-  <label for="scriptOut">Live title</label>
-  <input type="text" id="titleOut" readonly>
-  <label for="scriptOut">Script (you can edit it)</label>
-  <textarea class="out" id="scriptOut"></textarea>
-  <div id="scriptMsg"></div>
 </section>
 
 <!-- COMMENTS -->
@@ -305,31 +274,12 @@ GOAT-GOAT-KIDS-PH-6012 = PH</textarea>
   </table></div>
 </section>
 
-<!-- EXPORT -->
-<section class="view" id="view-export">
-  <h2>Export Q&amp;A rules for Virbo</h2>
-  <p class="lead">One rule per product: the keyword is the live code, the reply shows price, sizes and stock. Stock in these rules is a snapshot, so export again right before each live.</p>
-  <div class="box">
-    <div class="grid2">
-      <div><label for="eLang">Reply language</label>
-        <select id="eLang"><option value="km">Khmer</option><option value="en">English</option><option value="both">Khmer + English</option></select></div>
-      <div><label class="check" style="margin-top:34px"><input type="checkbox" id="eSelected"> Only products ticked for the script</label></div>
-    </div>
-    <div class="row">
-      <button class="btn" id="btnCsv">Download rules (CSV)</button>
-      <button class="btn ghost" id="btnPreviewRules">Preview</button>
-    </div>
-    <div id="exportMsg"></div>
-  </div>
-  <textarea class="out" id="rulesOut" readonly></textarea>
-</section>
-
 <!-- VOICE HOST -->
 <section class="view" id="view-voice">
   <h2>🎙️ Voice host</h2>
   <div id="syncBar" class="syncbar">☁️ Shared data: connect first.</div>
   <p class="lead">Claude writes a natural selling script for each product you ticked on the Products tab, an AI voice reads it, and you press ▶ to play it straight into the live. Each voice is made once and saved, so playing it again costs nothing.</p>
-  <div class="disclosure"><strong>AI host label:</strong> the <b>Opening</b> line always starts with the AI host disclosure, and the AI reminder plays automatically every few products (same setting as the Live script tab).</div>
+  <div class="disclosure"><strong>AI host label:</strong> the <b>Opening</b> line always starts with the AI host disclosure, and the AI reminder plays automatically every few products.</div>
 
   <details class="box vh-det" id="vhGuide">
     <summary>📘 First-time setup (VB-Cable, keys, Live Producer)</summary>
@@ -587,7 +537,7 @@ function saveSelected(){ LS.set("gkl_selected", [...S.selected]); if (window.gkS
 
 /* ============ PERMANENT AI DISCLOSURE ============
    These lines are added by code, not by the user.
-   ensureDisclosure() is run on generate AND on copy. */
+   Used by the Voice host Opening and AI reminder lines. */
 const DISCLOSURE = {
   km: "សួស្តីបងប្អូនទាំងអស់គ្នា! ខ្ញុំជាពិធីករនិម្មិត (AI) របស់ Goat Kids។ វីដេអូនេះបង្កើតដោយ AI។",
   en: "Hi everyone! I'm the Goat Kids virtual host — an AI presenter. This video is AI-generated."
@@ -596,15 +546,6 @@ const DISCLOSURE_REMIND = {
   km: "រំលឹក៖ ខ្ញុំជាពិធីករ AI។ ខមិនលេខកូដ 4 ខ្ទង់ ដើម្បីដឹងតម្លៃ និងស្តុកភ្លាមៗ។",
   en: "Reminder: I'm an AI host. Comment the 4-digit code to get price and stock right away."
 };
-const TITLE_TAG = "[AI virtual host]";
-function disclosureFor(lang){ return lang==="both" ? DISCLOSURE.km+"\n"+DISCLOSURE.en : DISCLOSURE[lang]; }
-function ensureDisclosure(text, lang){
-  const d = disclosureFor(lang);
-  const hasKm = text.includes(DISCLOSURE.km), hasEn = text.includes(DISCLOSURE.en);
-  const ok = lang==="km" ? hasKm : lang==="en" ? hasEn : (hasKm && hasEn);
-  return { text: ok ? text : d + "\n\n" + text, restored: !ok };
-}
-
 /* ============ FIELD HELPERS ============ */
 const GUESS = {
   name:["name","productName","title","nameEn","nameKh"],
@@ -835,7 +776,7 @@ function renderProducts(){
       <td>${esc(p.name)}${p.category?` <span class="catPill">${esc(catLabel(p.category))}</span>`:""}<div class="hint">${esc(p.id)}</div></td>
       <td>${money(p.price)}</td><td>${sizeTxt||"—"}</td>
       <td><span class="pill ${s}">${pillTxt[s]} (${p.total})</span></td>
-      <td><input type="checkbox" aria-label="Use ${esc(p.name)} in script" data-sel="${esc(p.id)}" ${S.selected.has(p.id)?"checked":""} ${code?"":"disabled"}></td>
+      <td><input type="checkbox" aria-label="Use ${esc(p.name)} in this live" data-sel="${esc(p.id)}" ${S.selected.has(p.id)?"checked":""} ${code?"":"disabled"}></td>
     </tr>`; }).join("") : `<tr><td colspan="7" class="hint">No products match.</td></tr>`;
   if (!q) $("countInfo").textContent ||= `${S.products.length} products, ${Object.keys(S.codes).length} with codes.`;
   updateSelInfo();
@@ -859,52 +800,7 @@ function tickShown(on){
   shownProducts().forEach(p=>{ if (!S.codes[p.id]) return; on ? S.selected.add(p.id) : S.selected.delete(p.id); });
   saveSelected(); renderProducts();
 }
-function updateSelInfo(){ $("selInfo").textContent = `${S.selected.size} product(s) ticked`; }
-
-/* ============ SCRIPT ============ */
-const T = {
-  km:{
-    open:"ថ្ងៃនេះ Goat Kids មានសម្លៀកបំពាក់កុមារស្អាតៗ មកបង្ហាញជូន។ សូមខមិនលេខកូដ 4 ខ្ទង់ ដើម្បីដឹងតម្លៃ ទំហំ និងស្តុក។",
-    item:(c,p,sz,st)=>`កូដ ${c} — ${p.name}\nតម្លៃ ${money(p.price)}${sz?` · ទំហំ ${sz}`:""}\n${st}\nចង់បាន សូមខមិន ${c} ឬ CF ${c}។`,
-    in:"មានស្តុកគ្រប់គ្រាន់។", low:n=>`នៅសល់តែ ${n} ប៉ុណ្ណោះ ប្រញាប់ឡើង!`, out:"អស់ពីស្តុកហើយ។",
-    close:"អរគុណដែលបានទស្សនា! សូមខមិនលេខកូដ ឬឆាតមកផេក ហើយយើងនឹងផ្ញើទំនិញជូន។"
-  },
-  en:{
-    open:"Today Goat Kids is showing new kids' clothes. Comment the 4-digit code to get the price, sizes and stock.",
-    item:(c,p,sz,st)=>`Code ${c} — ${p.name}\nPrice ${money(p.price)}${sz?` · Sizes ${sz}`:""}\n${st}\nWant it? Comment ${c} or CF ${c}.`,
-    in:"Plenty in stock.", low:n=>`Only ${n} left — be quick!`, out:"This one is sold out.",
-    close:"Thanks for watching! Comment the code or message our page and we will send you the product."
-  }
-};
-function scriptFor(lang){
-  const L = lang==="both" ? ["km","en"] : [lang];
-  const every = Number($("repeatEvery").value);
-  const items = S.products.filter(p=>S.selected.has(p.id) && S.codes[p.id]);
-  const parts = [disclosureFor(lang), L.map(l=>T[l].open).join("\n")];
-  items.forEach((p,i)=>{
-    if (i>0 && i%every===0) parts.push(L.map(l=>DISCLOSURE_REMIND[l]).join("\n"));
-    const s = stockState(p), sz = availSizes(p).join(", ");
-    parts.push(L.map(l=>withStores(T[l].item(S.codes[p.id],p,sz, s==="out"?T[l].out : s==="low"?T[l].low(p.total):T[l].in),p,l)).join("\n\n"));
-  });
-  parts.push(L.map(l=>T[l].close).join("\n"));
-  return { text: parts.join("\n\n———\n\n"), count: items.length };
-}
-function genScript(){
-  const lang = $("lang").value;
-  if (!S.selected.size){ msg("scriptMsg","warn","Tick at least one product on the Products tab first."); return; }
-  const r = scriptFor(lang);
-  $("scriptOut").value = r.text;
-  $("titleOut").value = `${TITLE_TAG} Goat Kids Live · ${r.count} item${r.count>1?"s":""}`;
-  msg("scriptMsg","ok",`Script ready for ${r.count} product(s). Turn on Facebook's AI label when you go live.`);
-}
-async function copyScript(){
-  const lang = $("lang").value;
-  const r = ensureDisclosure($("scriptOut").value, lang);
-  $("scriptOut").value = r.text;
-  try{ await navigator.clipboard.writeText(r.text);
-    msg("scriptMsg", r.restored?"warn":"ok", r.restored ? "Copied. The AI host disclosure was missing, so it was added back at the top." : "Copied with the AI host disclosure.");
-  }catch(e){ $("scriptOut").select(); msg("scriptMsg","warn","Select all and copy manually."); }
-}
+function updateSelInfo(){ const el = $("selInfo"); if (el) el.textContent = `${S.selected.size} product(s) ticked`; }
 
 /* ============ COMMENT REPLIES ============ */
 const INTENT = {
@@ -1216,36 +1112,6 @@ async function saveReport(){
   }catch(e){ msg("reportMsg","err","Could not save: "+(e.message||e)+". Check Firestore rules for live_report."); }
 }
 
-/* ============ VIRBO EXPORT ============ */
-function rulesRows(){
-  const lang = $("eLang").value, L = lang==="both" ? ["km","en"] : [lang];
-  const onlySel = $("eSelected").checked;
-  return S.products.filter(p=>S.codes[p.id] && (!onlySel || S.selected.has(p.id))).map(p=>{
-    const c = S.codes[p.id], st = stockState(p), sz = availSizes(p).join(", ");
-    const r1 = L.map(l=> st==="out" ? R[l].out(c,p)[0] : withStores(R[l].in(c,p,sz,st==="low")[0],p,l)).join("\n");
-    const r2 = L.map(l=> st==="out" ? R[l].out(c,p)[1] : withStores(R[l].in(c,p,sz,st==="low")[1],p,l)).join("\n");
-    return { rule:`Code ${c} ${p.name}`, keywords:c, r1, r2 };
-  });
-}
-function rulesCsv(rows){
-  const q = s => `"${String(s).replace(/"/g,'""')}"`;
-  return "\ufeff" + ["Rule Name,Keywords,Reply 1,Reply 2"].concat(rows.map(r=>[r.rule,r.keywords,r.r1,r.r2].map(q).join(","))).join("\r\n");
-}
-function previewRules(){
-  const rows = rulesRows();
-  if (!rows.length){ msg("exportMsg","warn","No products with codes to export. Assign codes first."); return null; }
-  $("rulesOut").value = rows.map(r=>`${r.rule}\nKeyword: ${r.keywords}\nReply 1: ${r.r1}\nReply 2: ${r.r2}`).join("\n\n———\n\n");
-  msg("exportMsg","ok",`${rows.length} rule(s). Stock snapshot taken ${new Date().toLocaleString()}.`);
-  return rows;
-}
-function downloadCsv(){
-  const rows = previewRules(); if (!rows) return;
-  const blob = new Blob([rulesCsv(rows)],{type:"text/csv;charset=utf-8"});
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-  a.download = `goat_kids_virbo_rules_${new Date().toISOString().slice(0,10)}.csv`; a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
-}
-
 /* ============ WIRING ============ */
 function saveFields(){ ["fName","fPrice","fStock","fSizes","lowStock"].forEach(id=>LS.set("gkl_"+id,$(id).value)); }
 document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>{
@@ -1262,8 +1128,6 @@ $("catFilter").onchange = ()=>{ LS.set("gkl_cat", $("catFilter").value); renderP
 $("btnTickShown").onclick = ()=>tickShown(true);
 $("btnUntickShown").onclick = ()=>tickShown(false);
 $("prodBody").addEventListener("change",e=>{ const id=e.target.dataset.sel; if(!id) return; e.target.checked?S.selected.add(id):S.selected.delete(id); saveSelected(); updateSelInfo(); });
-$("btnScript").onclick = genScript;
-$("btnCopyScript").onclick = copyScript;
 $("btnPaste").onclick = pasteComments;
 $("btnFbStart").onclick = fbStart;
 $("btnFbStop").onclick = fbStop;
@@ -1472,12 +1336,8 @@ $("rcPrint").onclick = printReceipt;
 $("rcCancel").onclick = ()=>$("receiptDlg").close();
 $("fbVideo").value = LS.get("gkl_fbVideo","");
 try{ $("fbToken").value = sessionStorage.getItem("gkl_fbToken")||""; }catch(e){}
-$("btnPreviewRules").onclick = previewRules;
-$("btnCsv").onclick = downloadCsv;
-$("lang").onchange = ()=>{ $("discPreview").textContent = disclosureFor($("lang").value); };
 ["fName","fPrice","fStock","fSizes","lowStock"].forEach(id=>{ const v=LS.get("gkl_"+id,null); if(v!==null) $(id).value=v; $(id).onchange=()=>{saveFields(); if(S.mode==="firebase") loadProducts(); else renderProducts();}; });
 $("cfg").value = LS.get("gkl_cfg",""); $("stores").value = LS.get("gkl_stores",$("stores").value); $("incInactive").checked = LS.get("gkl_inactive",false);
-$("discPreview").textContent = disclosureFor($("lang").value);
 // Inside the store app: use the store's own Firebase project, and only for signed-in staff
 // (the same login as the store's Admin Panel).
 (function(){
@@ -2448,7 +2308,7 @@ async function playProduct(p){
     const own = await ownGet(p);
     if (!own) setSt(st,"busy","making voice…");
     const r = own ? { blob:own } : await voiceBlob(scriptOf(p)); setSt(st,"ok", own ? "your recording ready" : "voice ready");
-    const q = [], every = Number($("repeatEvery").value)||5;
+    const q = [], every = 5;
     if ($("vhAutoRemind").checked && VH.played>0 && VH.played % every===0){
       const rl = LINES.find(l=>l.key==="remind"); if (rl){ const rr = await voiceBlob(lineText(rl)); q.push({ blob:rr.blob, label:"AI reminder" }); }
     }
