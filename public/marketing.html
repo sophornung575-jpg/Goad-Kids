@@ -64,19 +64,33 @@ textarea{font:inherit;color:var(--tx);background:var(--card);border:1px solid va
 .pth img,.pth .noimg{width:38px;height:38px;border-radius:6px;object-fit:cover;background:var(--bd);flex:none}
 .pn{font-size:12px;line-height:1.25}.pn small{color:var(--mut)}.pth b{cursor:pointer;color:var(--mut)}
 .ths.big{margin-bottom:10px}.ths.big .pth img,.ths.big .pth .noimg{width:64px;height:64px}.ths.big .pn{font-size:13px}
+.pvbtn{display:inline-block;padding:7px 11px;border:1px solid var(--bd);border-radius:8px;color:var(--tx);text-decoration:none;background:var(--card)}
 .lvh{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.lvh b{font-size:13px}.lvh .todo{flex:1;color:var(--mut);font-size:12px}
 .lf{display:flex;flex-direction:column;font-size:11px;color:var(--mut);flex:0 1 96px;gap:2px}.acts .lf input{flex:none;width:100%}
 .lvi{margin:6px 0}.lvi textarea{margin-top:4px;font-size:12px}.lmsg{font-size:12px;color:var(--mut);min-height:0}
+.gate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:200;padding:16px}
+body:not(.locked) #gate{display:none}body.locked .wrap{display:none}
+.gbox{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:20px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:10px}
+.gbox h2{margin:0;font-size:18px}.gbox label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mut)}.gbox a{font-size:12px;color:var(--mut)}
+.mut{color:var(--mut);font-size:12px;margin:0}#gMsg{min-height:16px}
 .empty{text-align:center;color:var(--mut);padding:30px}
 </style>
 </head>
-<body>
+<body class="locked">
+<div id="gate" class="gate"><div class="gbox">
+  <h2>Goat Kids – Marketing Summary</h2><p class="mut">Sign in with the Super Admin account.</p>
+  <label id="gCfgL" hidden>Firebase config (first time only)<textarea id="gCfg" rows="4" placeholder='{"apiKey":"...","projectId":"..."}'></textarea></label>
+  <label>Email or username<input id="gEmail" autocomplete="username"></label>
+  <label>Password<input id="gPass" type="password" autocomplete="current-password"></label>
+  <button class="pri" id="gGo">Sign in</button><div id="gMsg" class="mut">Checking…</div>
+  <a href="#" id="gCfgT">Change Firebase config</a>
+</div></div>
 <div class="wrap">
 <header>
   <h1>Goat Kids – Marketing Summary</h1>
   <div class="seg" id="range"><button data-d="7" class="on">7d</button><button data-d="14">14d</button><button data-d="30">30d</button></div>
   <button id="addBtn" class="pri">+ Add result</button>
-  <button id="gear" title="Settings">Settings</button><button id="theme">Theme</button>
+  <button id="gear" title="Settings">Settings</button><button id="lockBtn">Sign out</button><button id="theme">Theme</button>
 </header>
 
 <div id="syncTxt" style="font-size:12px;color:var(--mut);margin:-6px 0 10px"></div>
@@ -227,7 +241,7 @@ function render(){
       it.map(function(x){var el=x.type==='ad'?'clicks':x.type==='video'?'likes':'likes';var rl=x.type==='video'?'views':'reach';
         return '<div class="it"><span class="tag" style="background:'+COL[x.type]+'">'+LBL[x.type]+'</span>'+
         '<div><div>'+esc(x.name||'(no name)')+(x.id===bestId?' <span class="best">Best</span>':'')+'</div>'+
-        '<div class="nums">'+(x.type==='ad'?'$'+fmt(x.spend)+' spend · ':'')+fmt(x.reach)+' '+rl+' · '+fmt(x.eng)+' '+el+' · '+fmt(x.msgs)+' msgs · '+fmt(x.orders)+' orders'+(x.link?' · <a href="'+esc(x.link)+'" target="_blank" rel="noopener">Link</a>':'')+'</div></div><div class="sp">'+spark(x,dl,m)+'</div>'+
+        '<div class="nums">'+(x.type==='ad'?'$'+fmt(x.spend)+' spend · ':'')+fmt(x.reach)+' '+rl+' · '+fmt(x.eng)+' '+el+' · '+fmt(x.msgs)+' msgs · '+fmt(x.orders)+' orders'+(x.link?' · <a href="'+esc(x.link)+'" target="_blank" rel="noopener">Link</a> · <a href="#" data-pv="'+esc(x.link)+'">Preview</a>':'')+'</div></div><div class="sp">'+spark(x,dl,m)+'</div>'+
         '<button class="x" data-del="'+x.id+'" title="Delete">✕</button></div>'}).join('')+'</div>'}).join(''):
     '<div class="empty">No results in this range yet.<br><br><button id="demo">Load sample data</button></div>';
   var dm=$('demo');if(dm)dm.onclick=sample;
@@ -247,7 +261,7 @@ $('save').onclick=function(){
     spend:t==='ad'?+$('fSpend').value||0:0,reach:+$('fReach').value||0,eng:+$('fEng').value||0,msgs:+$('fMsgs').value||0,orders:+$('fOrders').value||0});
   ['fName','fLink','fSpend','fReach','fEng','fMsgs','fOrders'].forEach(function(i){$(i).value=''});
   save();$('form').classList.remove('show');render()};
-$('list').onclick=function(e){var id=e.target.getAttribute&&e.target.getAttribute('data-del');
+$('list').onclick=function(e){var pv=e.target.getAttribute&&e.target.getAttribute('data-pv');if(pv){e.preventDefault();openPreview(pv);return}var id=e.target.getAttribute&&e.target.getAttribute('data-del');
   if(id&&confirm(L('Delete this result?'))){data=data.filter(function(x){return x.id!==id});save();render()}};
 
 /* ---------- controls ---------- */
@@ -289,7 +303,7 @@ function initFb(){if(fbReady)return fbReady;
   fbReady=(async function(){var c=parseCfg(cfg.fb||'');if(!c.apiKey||!c.projectId)throw new Error('Firebase config is missing apiKey or projectId');
     if(!window.firebase)await loadScript(LIBS.app);if(!firebase.auth)await loadScript(LIBS.auth);if(!firebase.firestore)await loadScript(LIBS.fs);
     if(!firebase.apps.length)firebase.initializeApp(c);auth=firebase.auth();fdb=firebase.firestore();
-    auth.onAuthStateChanged(function(u){if(u)startSync();else stopSync();if(u){setStatus('Signed in as '+u.email);if(!ld(UKEY,'')&&u.email){sv(UKEY,u.email.split('@')[0])}fetchProducts()}else setStatus('Not signed in')});return true})();
+    auth.onAuthStateChanged(function(u){gateAuth(u)});return true})();
   fbReady.catch(function(){fbReady=null});return fbReady}
 async function fetchProducts(){
   try{var snap=await fdb.collection('stores').doc(cfg.store||'GOAT-1979').collection('products').get(),a=[];
@@ -298,7 +312,7 @@ async function fetchProducts(){
       a.push({id:d.id,name:x.name||'',price:x.price||0,stock:tot,sizeQty:sz.filter(function(z){return z.qty>0}),category:x.category||'',img:(x.images&&x.images[0])||'',sizes:(x.sizes||[]).filter(function(z){return z.qty>0}).map(function(z){return z.name})})});
     a.sort(function(p,q){return p.name.localeCompare(q.name)});products=a;sv(PRKEY,a);setStatus(''+a.length+' products loaded')}
   catch(e){setStatus(''+e.message)}}
-if(cfg.fb)initFb().catch(function(e){setStatus(''+e.message)});
+if(cfg.fb)initFb().catch(function(e){setStatus(e.message);GATEMSG=e.message;if(typeof lockUi==='function')lockUi()});
 
 function openSettings(){
   var m=$('modal');m.hidden=false;
@@ -348,7 +362,7 @@ function liveRow(t,r,i){
     '<div class="srch"><input data-s="'+key+'" placeholder="Search products (add as many as you need)'+(products.length?'':' - products not loaded, see Settings')+'" autocomplete="off"><div class="dd" hidden></div></div>'+
     '<div id="lm-'+r.id+'" class="lmsg"></div>'+items+
     '<div class="lvh" style="margin-top:10px"><b>Result - after the live</b></div>'+
-    '<div class="acts"><input data-link="'+key+'" value="'+esc(r.link||'')+'" placeholder="Paste the live link here" inputmode="url"><button data-lget="'+key+'">Get results</button></div>'+
+    '<div class="acts"><input data-link="'+key+'" value="'+esc(r.link||'')+'" placeholder="Paste the live link here" inputmode="url"><button data-prev="'+key+'">Preview</button><button data-lget="'+key+'">Get results</button></div>'+
     '<div id="lg-'+r.id+'" class="lmsg"></div>'+
     '<div class="acts" style="align-items:flex-end;margin-top:6px">'+
     [['views','Views'],['comments','Comments'],['likes','Reactions'],['msgs','Messages'],['orders','Orders']].map(function(f){return '<label class="lf">'+f[1]+'<input type="number" min="0" data-rf="'+key+'|'+f[0]+'" value="'+(r[f[0]]||'')+'"></label>'}).join('')+
@@ -364,6 +378,7 @@ function rowHTML(t,r,i){
     '<div class="acts"><button data-gen="'+key+'">Write script'+(r.script?' (saved)':'')+'</button>'+
     '<div class="ths">'+th+'</div>'+
     '<input data-link="'+key+'" value="'+esc(r.link||'')+'" placeholder="Paste the post link here" inputmode="url">'+
+    '<button data-prev="'+key+'">Preview</button>'+
     '<button class="pri" data-save="'+key+'">Save link</button></div></div>'}
 function renderTasks(){
   ensureRows(tDay);sv(PKEY,posts);
@@ -399,6 +414,17 @@ $('tBlocks').addEventListener('input',function(e){
 function pickProduct(t,rid,pid){var r=getRow(t,rid),p=products.filter(function(x){return x.id===pid})[0];if(!r||!p)return;
   r.products=r.products||[];if(t==='live'){if(!r.products.some(function(x){return x.id===pid}))r.products.push(p)}else r.products=[p];
   r.title='';sv(PKEY,posts);renderTasks()}
+function openPreview(url){
+  url=String(url||'').trim();
+  if(!/^https?:\/\/\S+$/i.test(url)){alert(L('Please paste the full post link (starts with https://).'));return}
+  var isVid=/\/(videos|reel|reels|watch)\b|[?&]v=\d|fb\.watch/i.test(url),
+      src='https://www.facebook.com/plugins/'+(isVid?'video':'post')+'.php?href='+encodeURIComponent(url)+'&show_text='+(isVid?'false':'true')+'&width=500';
+  var m=$('modal');m.hidden=false;
+  m.innerHTML='<div class="mbox"><h2 style="font-size:16px;display:flex;justify-content:space-between;gap:8px"><span>Preview</span><button class="x" id="pvClose">✕</button></h2>'+
+   '<div style="display:flex;justify-content:center;min-height:200px"><iframe src="'+esc(src)+'" width="500" height="'+(isVid?'400':'560')+'" style="border:0;max-width:100%;background:var(--bg)" scrolling="yes" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe></div>'+
+   '<p style="color:var(--mut);font-size:12px">If the box stays blank, the post is not public or Facebook blocked the preview. Use Open in new tab.</p>'+
+   '<div style="display:flex;gap:8px"><a class="pvbtn" href="'+esc(url)+'" target="_blank" rel="noopener">Open in new tab</a><button id="pvClose2" style="margin-left:auto">Close</button></div></div>';
+  $('pvClose').onclick=$('pvClose2').onclick=function(){m.hidden=true;m.innerHTML=''}}
 async function liveLoad(rid){
   var r=getRow('live',rid),box=$('lm-'+rid);if(!r)return;
   function say(m){if(box)box.textContent=m}
@@ -442,6 +468,7 @@ function saveLink(t,rid){var r=getRow(t,rid);if(!r)return;
   if(!(r.products||[]).length&&!r.title){alert(L('Please pick the product first.'));return}
   sv(UKEY,u);r.by=u;r.at=hhmm();sv(PKEY,posts);if(t==='live')upsertLive(r);renderTasks()}
 $('tBlocks').addEventListener('click',function(e){var g=function(k){return e.target.getAttribute&&e.target.getAttribute(k)},q;
+  if(g('data-prev')){var pq=g('data-prev').split('|'),pr=getRow(pq[0],pq[1]);openPreview(pr&&pr.link);return}
   if(g('data-lget')){liveFetch(g('data-lget').split('|')[1]);return}
   if(g('data-lload')){liveLoad(g('data-lload').split('|')[1]);return}
   if(g('data-pick')){q=g('data-pick').split('|');pickProduct(q[0],q[1],q.slice(2).join('|'));return}
@@ -538,6 +565,35 @@ function renderTarget(){
     return '<div class="kpi"><span>'+t.n+' (month)</span><b>'+done+' / '+goal+'</b><i class="'+(diff>=0?'up':'dn')+'">'+(diff>=0?'▲ ahead by ':'▼ behind by ')+Math.abs(diff)+'</i></div>'}).join('')}
 ['tgV','tgP','tgL'].forEach(function(id,i){$(id).onchange=function(){tg[['video','photo','live'][i]]=Math.max(0,+this.value||0);sv(TGKEY,tg);renderTarget()}});
 var _render=render;render=function(){_render();renderTarget()};
+/* ---------- ACCESS GATE: only accounts listed in _admin_/marketingAdmins (emails) ---------- */
+var GATEMSG='',GATE_DOMAIN='@staff.goatkids.app';
+function gmsg(m){$('gMsg').textContent=m}
+function lockUi(){document.body.classList.add('locked');if(!cfg.fb)$('gCfgL').hidden=false;if(!$('gEmail').value)$('gEmail').value=cfg.email||'';
+  gmsg(GATEMSG||(cfg.fb?'':'Paste the Firebase config to begin.'))}
+function unlockUi(){document.body.classList.remove('locked');gmsg('')}
+async function verifyAdmin(u){
+  var d;try{d=await fdb.collection('_admin_').doc('marketingAdmins').get()}catch(e){throw new Error((e&&e.code)==='permission-denied'?'No permission to read the access list. Check the Firestore rules.':(e.message||String(e)))}
+  if(!d.exists)throw new Error('Access list not set up yet. In Firebase, create the document _admin_/marketingAdmins with a field emails (array).');
+  var list=((d.data()||{}).emails||[]).map(function(x){return String(x).toLowerCase()});
+  if(list.indexOf(String(u.email||'').toLowerCase())<0)throw new Error('This account is not allowed to open the Marketing tool.')}
+async function gateAuth(u){
+  if(!u){stopSync();lockUi();setStatus('Not signed in');return}
+  try{await verifyAdmin(u)}catch(e){GATEMSG=e.message||String(e);try{await auth.signOut()}catch(x){lockUi()}return}
+  GATEMSG='';unlockUi();setStatus('Signed in as '+u.email);if(!ld(UKEY,'')&&u.email)sv(UKEY,u.email.split('@')[0]);startSync();fetchProducts()}
+$('gCfgT').onclick=function(e){e.preventDefault();$('gCfgL').hidden=!$('gCfgL').hidden;if(!$('gCfgL').hidden)$('gCfg').value=cfg.fb||''};
+$('gGo').onclick=async function(){
+  var cf=$('gCfg').value.trim();if(cf&&!$('gCfgL').hidden&&cf!==cfg.fb){cfg.fb=cf;sv(CKEY,cfg);if(fbReady){location.reload();return}}
+  var em=$('gEmail').value.trim().toLowerCase(),pw=$('gPass').value;
+  if(!cfg.fb){gmsg('Paste the Firebase config to begin.');return}
+  if(!em||!pw){gmsg('Enter your email and password.');return}
+  if(em.indexOf('@')<0)em+=GATE_DOMAIN;
+  cfg.email=em;sv(CKEY,cfg);GATEMSG='';gmsg('Signing in…');
+  try{await initFb();await auth.signInWithEmailAndPassword(em,pw);$('gPass').value=''}
+  catch(e){var c=(e&&e.code)||'';gmsg(/invalid|wrong-password|user-not-found|credential/.test(c)?'Wrong email or password.':((e&&e.message)||String(e)))}};
+$('gPass').addEventListener('keydown',function(e){if(e.key==='Enter')$('gGo').click()});
+$('lockBtn').onclick=function(){if(auth)auth.signOut().catch(function(){});else lockUi()};
+if(!cfg.fb){$('gCfgL').hidden=false;lockUi()}
+
 /* ---------- SHARED SYNC (Firestore: marketing_rows, marketing_results, marketing_settings/targets) ---------- */
 var SYNC={on:false,unsubs:[],remoteRows:{},remoteRes:{},pendRows:{},pendRes:{},tR:null,tS:null,err:'',pendingUi:false};
 function stab(v){return JSON.stringify(v,function(k,val){if(val&&typeof val==='object'&&!Array.isArray(val)){var o={};Object.keys(val).sort().forEach(function(kk){o[kk]=val[kk]});return o}return val})}
@@ -616,6 +672,11 @@ KM['Plan - before the live']='ផែនការ – មុនឡាយវ៍';K
 KM['Paste the live link here']='បិទភ្ជាប់តំណឡាយវ៍នៅទីនេះ';KM['Save result']='រក្សាលទ្ធផល';KM['Sign in first (Settings).']='សូមចូលជាមុនសិន (ការកំណត់)។';KM['Nothing selected in Live Desk yet.']='មិនទាន់មានទំនិញត្រូវបានជ្រើសក្នុង Live Desk ទេ។';
 KM['Get results']='យកលទ្ធផល';KM['Comments']='មតិ';KM['Reactions']='ប្រតិកម្ម';KM['Facebook page token (for live results; kept only until you close this tab)']='Facebook page token (សម្រាប់លទ្ធផលឡាយវ៍ រក្សាតែរហូតដល់បិទផ្ទាំងនេះ)';KM['Getting results…']='កំពុងយកលទ្ធផល…';
 KM['Shared with all staff']='ចែករំលែកជាមួយបុគ្គលិកទាំងអស់';KM['Saved on this device only - sign in under Settings to share']='រក្សាទុកតែលើឧបករណ៍នេះ – ចូលក្នុងការកំណត់ដើម្បីចែករំលែក';KM['No permission to save shared data. Check the Firestore rules.']='គ្មានសិទ្ធិរក្សាទិន្នន័យចែករំលែក។ សូមពិនិត្យ Firestore rules។';
+KM['Preview']='មើលជាមុន';KM['Open in new tab']='បើកក្នុងផ្ទាំងថ្មី';KM['If the box stays blank, the post is not public or Facebook blocked the preview. Use Open in new tab.']='ប្រសិនបើប្រអប់នៅទទេ មានន័យថាការផុសមិនសាធារណៈ ឬ Facebook បានទប់ស្កាត់។ សូមប្រើបើកក្នុងផ្ទាំងថ្មី។';
+KM['Sign in with the Super Admin account.']='ចូលជាមួយគណនី Super Admin។';KM['Firebase config (first time only)']='Firebase config (តែលើកដំបូង)';KM['Email or username']='អ៊ីមែល ឬឈ្មោះអ្នកប្រើ';KM['Password']='ពាក្យសម្ងាត់';KM['Sign in']='ចូល';KM['Checking…']='កំពុងពិនិត្យ…';KM['Change Firebase config']='ប្តូរ Firebase config';
+KM['Paste the Firebase config to begin.']='សូមបិទភ្ជាប់ Firebase config ដើម្បីចាប់ផ្តើម។';KM['Enter your email and password.']='សូមបញ្ចូលអ៊ីមែល និងពាក្យសម្ងាត់។';KM['Signing in…']='កំពុងចូល…';KM['Wrong email or password.']='អ៊ីមែល ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ។';
+KM['This account is not allowed to open the Marketing tool.']='គណនីនេះមិនមានសិទ្ធិបើកឧបករណ៍ទីផ្សារទេ។';KM['Access list not set up yet. In Firebase, create the document _admin_/marketingAdmins with a field emails (array).']='មិនទាន់បង្កើតបញ្ជីអ្នកមានសិទ្ធិ។ ក្នុង Firebase សូមបង្កើតឯកសារ _admin_/marketingAdmins ដែលមានវាល emails (array)។';
+KM['No permission to read the access list. Check the Firestore rules.']='គ្មានសិទ្ធិអានបញ្ជីអ្នកមានសិទ្ធិ។ សូមពិនិត្យ Firestore rules។';KM['Sign out']='ចាកចេញ';
 var WORDS={spend:'ចំណាយ',reach:'ការទៅដល់',views:'ចំនួនមើល',clicks:'ចុច',likes:'ចូលចិត្ត',msgs:'សារ',orders:'កុម្ម៉ង់'};
 var SRCH={'Search the product':'ស្វែងរកផលិតផល','Search products (add as many as you need)':'ស្វែងរកផលិតផល (បន្ថែមបានច្រើន)'};
 var NW='(?:spend|reach|views|clicks|likes|msgs|orders)',NUM='\\$?[\\d.,k]+';
