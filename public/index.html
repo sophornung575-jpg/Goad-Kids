@@ -707,6 +707,12 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                 <option value="phnompenh">Phnom Penh - $1.50</option>
                                 <option value="province">Province - $2.00</option>
                             </select>
+                            <!-- Staff only: change the delivery fee for this order (e.g. far address, free delivery promo) -->
+                            <div id="customFeeRow" class="hidden" style="display:flex;align-items:center;gap:0.5rem;margin-top:0.5rem">
+                                <label for="shippingFeeInput" style="margin:0;font-size:0.85rem;white-space:nowrap"><i class="fas fa-pen"></i> Delivery fee ($)</label>
+                                <input type="number" id="shippingFeeInput" class="form-control" min="0" step="0.25" inputmode="decimal" oninput="onCustomShippingFee()" style="max-width:120px">
+                                <button type="button" class="btn btn-outline btn-small" onclick="resetShippingFee()" title="Back to the standard price">Reset</button>
+                            </div>
                         </div>
                         <div class="form-group"><input type="text" id="customerName" class="form-control" data-translate="fullName" placeholder="Full Name *"></div>
                         <div class="form-group"><input type="tel" id="customerPhone" class="form-control" data-translate="phoneNumber" placeholder="Phone Number *"></div>
@@ -3056,13 +3062,31 @@ function sendToTelegram(order, callback) {
         if (totEl) totEl.textContent = '$' + total.toFixed(2);
     }
 
+    var DEFAULT_SHIPPING_FEES = { phnompenh: 1.50, province: 2.00 };
     function updateShipping() {
-        var loc = document.getElementById('shippingLocation');
-        var sh = 0;
-        if (loc && loc.value === 'phnompenh') sh = 1.50;
-        else if (loc && loc.value === 'province') sh = 2.00;
+        var locEl = document.getElementById('shippingLocation');
+        var loc = locEl ? locEl.value : '';
+        var def = DEFAULT_SHIPPING_FEES[loc] || 0;
+        // A typed fee belongs to the delivery area it was typed for; changing the area goes back to its standard price.
+        if (STATE.shippingFeeLoc !== loc) { STATE.shippingFeeLoc = loc; STATE.shippingCustom = null; }
+        var canEdit = !!STATE.isAdmin && (loc === 'phnompenh' || loc === 'province');
+        var sh = (canEdit && STATE.shippingCustom != null) ? STATE.shippingCustom : def;
+        var row = document.getElementById('customFeeRow');
+        if (row) row.classList.toggle('hidden', !canEdit);
+        var inp = document.getElementById('shippingFeeInput');
+        if (inp && document.activeElement !== inp) inp.value = sh.toFixed(2);
         STATE.shippingFee = sh;
         recalcCartTotals();
+    }
+    function onCustomShippingFee() {
+        var v = parseFloat(document.getElementById('shippingFeeInput').value);
+        STATE.shippingCustom = (isFinite(v) && v >= 0) ? Math.round(v * 100) / 100 : null;
+        updateShipping();
+    }
+    function resetShippingFee() {
+        STATE.shippingCustom = null;
+        var inp = document.getElementById('shippingFeeInput'); if (inp) inp.blur();
+        updateShipping();
     }
 
 
@@ -3177,6 +3201,7 @@ function sendToTelegram(order, callback) {
             customerNotes: document.getElementById('customerNotes').value.trim(),
             paymentMethod: 'cod', storeId: STATE.storeId,
             cart: savedCart, subtotal: sub, shipping: sh,
+            shippingCustom: STATE.shippingCustom != null,
             discount: disc, discountType: discountType, discountValue: discountValue,
             total: total
         };
@@ -3236,8 +3261,9 @@ function sendToTelegram(order, callback) {
                 } catch(e3) {}
             }
 
-            // Clear cart
+            // Clear cart (and any delivery fee typed for this order)
             STATE.cart = [];
+            STATE.shippingCustom = null;
             localStorage.setItem('goatCart', '[]');
             updateCartBadge();
 
@@ -13149,98 +13175,102 @@ function sendToTelegram(order, callback) {
 
             // Source = fromStoreId (the store sending the stock, e.g. Main Store)
             // Destination = toStoreId (this device — the branch confirming receipt)
+            // Find WHICH documents to use first (queries can't run inside a transaction)...
             var sourceRef = db.collection('stores').doc(t.fromStoreId).collection('products').doc(t.productId);
-            var sourceSnap = await sourceRef.get();
-            if (!sourceSnap.exists) {
-                // Try by name in source store
+            var sourceSnap0 = await sourceRef.get();
+            if (!sourceSnap0.exists) {
                 var srcByName = await db.collection('stores').doc(t.fromStoreId).collection('products')
-                    .where('name', '==', t.productName).limit(1).get();
-                if (srcByName.empty) {
+                    .where('name', '==', t.productName).get();
+                var srcHit = null;
+                srcByName.forEach(function(d){ if (!srcHit && !isDeletedProductDoc(d.data())) srcHit = d; });
+                if (!srcHit) {
                     showToast('Product "' + (t.productName||t.productId) + '" not found in ' + t.fromStoreName, 'error');
                     return;
                 }
-                sourceRef = srcByName.docs[0].ref;
-                sourceSnap = srcByName.docs[0];
+                sourceRef = srcHit.ref;
+                sourceSnap0 = srcHit;
             }
-            var p = Object.assign({ id: sourceRef.id }, sourceSnap.data ? sourceSnap.data() : sourceSnap);
-
-            // Check stock at source
-            var availQty;
-            if (p.sizes && p.sizes.length > 0 && t.size !== 'One Size') {
-                var sz = p.sizes.find(function(s){ return s.name === t.size; });
-                availQty = sz ? sz.qty : 0;
-            } else { availQty = p.stock || 0; }
-            if (availQty < t.qty) { showToast('Insufficient stock at ' + t.fromStoreName + ': only ' + availQty + ' available (size: ' + t.size + ')', 'error'); return; }
-
-            // Deduct from source store
-            if (p.sizes && p.sizes.length > 0 && t.size !== 'One Size') {
-                p.sizes.forEach(function(s){ if (s.name === t.size) s.qty -= t.qty; });
-                p.stock = getTotalStock(p);
-            } else { p.stock = (p.stock || 0) - t.qty; }
-
-            // Add to destination store — look up by slug (stable cross-store key), then name, then ID
-            var destProductRef = null;
-            var destData = null;
-            var productSlug = p.slug || makeSlug(p.name);
-
+            var src0 = sourceSnap0.data();
+            var productSlug = src0.slug || makeSlug(src0.name);
             // Slug → exact name → loose name → ID, never a deleted copy
-            var destHit = await findTransferDestProduct(t.toStoreId, productSlug, p.name, t.productId);
-            if (destHit) { destProductRef = destHit.ref; destData = destHit.data; }
+            var destHit = await findTransferDestProduct(t.toStoreId, productSlug, src0.name, t.productId);
+            var destProductRef = destHit ? destHit.ref : db.collection('stores').doc(t.toStoreId).collection('products').doc();
+            if (!destHit) console.log('ℹ️ Creating new product in destination with fresh ID:', destProductRef.id);
 
-            if (!destProductRef) {
-                // Genuinely new product in destination — fresh auto-generated ID, never reuse source ID
-                destProductRef = db.collection('stores').doc(t.toStoreId).collection('products').doc();
-                destData = Object.assign({}, p, {
-                    slug: productSlug,
-                    stock: 0,
-                    sizes: (p.sizes||[]).map(function(s){ return Object.assign({}, s, {qty: 0}); }),
-                    // This product is only now coming into existence at the
-                    // destination store — its age should start from here, not
-                    // from whenever Main Store originally registered it. Clear
-                    // any inherited lastRestockDate too — there's no real
-                    // restock history at THIS store yet, so it should fall
-                    // back to addedAt rather than carry over the source
-                    // store's unrelated value.
-                    addedAt: Date.now(),
-                    lastRestockDate: 0
+            // ...then read-check-write all three documents in ONE transaction. Two approvals
+            // running at the same time (quick taps, two devices, single + bulk) used to each
+            // read the same sizes and the later save wiped the earlier deduction — Main Store
+            // kept stock that had already left. A transaction re-reads and retries instead.
+            var tRef = db.collection('transfers').doc(transferId);
+            var p, destData;
+            var txResult = await db.runTransaction(async function(tx) {
+                var tSnap = await tx.get(tRef);
+                var sSnap = await tx.get(sourceRef);
+                var dSnap = await tx.get(destProductRef);
+                if (!tSnap.exists) return 'gone';
+                if (tSnap.data().status !== 'pending') return 'done:' + tSnap.data().status;
+                if (!sSnap.exists) return 'nosrc';
+                p = Object.assign({ id: sourceRef.id }, sSnap.data());
+
+                // Check stock at source (live, inside the transaction)
+                var availQty;
+                if (p.sizes && p.sizes.length > 0 && t.size !== 'One Size') {
+                    var sz = p.sizes.find(function(s){ return s.name === t.size; });
+                    availQty = sz ? sz.qty : 0;
+                } else { availQty = p.stock || 0; }
+                if (availQty < t.qty) return 'short:' + availQty;
+
+                // Deduct from source store
+                if (p.sizes && p.sizes.length > 0 && t.size !== 'One Size') {
+                    p.sizes.forEach(function(s){ if (s.name === t.size) s.qty -= t.qty; });
+                    p.stock = getTotalStock(p);
+                } else { p.stock = (p.stock || 0) - t.qty; }
+
+                if (dSnap.exists) {
+                    destData = JSON.parse(JSON.stringify(dSnap.data()));
+                } else {
+                    // Genuinely new product in destination — fresh auto-generated ID, never reuse source ID.
+                    // Its age starts here, not when Main Store first registered it.
+                    destData = Object.assign({}, JSON.parse(JSON.stringify(p)), {
+                        slug: productSlug,
+                        stock: 0,
+                        sizes: (p.sizes||[]).map(function(s){ return Object.assign({}, s, {qty: 0}); }),
+                        addedAt: Date.now(),
+                        lastRestockDate: 0
+                    });
+                }
+                if (!destData.slug) destData.slug = productSlug;
+                delete destData.id; // a copied source "id" field made the branch item point at the Main Store's id
+
+                // Keep cost of production in sync with the sending store on every transfer
+                if (p.costPrice != null && p.costPrice !== '') destData.costPrice = p.costPrice;
+                destData.promoPrice = (promoPriceOf(p) != null ? p.promoPrice : null); // discount is shared by all stores
+
+                if (destData.sizes && destData.sizes.length > 0 && t.size !== 'One Size') {
+                    var found = false;
+                    destData.sizes.forEach(function(s){ if (s.name === t.size) { s.qty += t.qty; found = true; } });
+                    if (!found) destData.sizes.push({ name: t.size, qty: t.qty });
+                    destData.stock = destData.sizes.reduce(function(a,s){ return a + (s.qty||0); }, 0);
+                } else { destData.stock = (destData.stock || 0) + t.qty; }
+
+                // Only reset the Promotion-flag clock on a genuine restock, not a correction.
+                if (isGenuineRestockT) destData.lastRestockDate = Date.now();
+
+                var pWrite = Object.assign({}, p); delete pWrite.id;
+                tx.set(sourceRef, pWrite, { merge: true });
+                tx.set(destProductRef, destData, { merge: true });
+                tx.update(tRef, {
+                    status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
+                    approvedAtStr: new Date().toLocaleString(),
+                    restockType: isGenuineRestockT ? 'new' : 'correction',
+                    sourceProductId: sourceRef.id, destProductId: destProductRef.id // exact items, for reconciliation
                 });
-                console.log('ℹ️ Creating new product in destination with fresh ID:', destProductRef.id);
-            }
-
-            // Ensure slug is set on destination product for future transfers
-            if (!destData.slug) destData.slug = productSlug;
-            delete destData.id; // a copied source "id" field made the branch item point at the Main Store's id
-
-            // Keep cost of production in sync with the sending store on every transfer
-            if (p.costPrice != null && p.costPrice !== '') destData.costPrice = p.costPrice;
-            destData.promoPrice = (promoPriceOf(p) != null ? p.promoPrice : null); // discount is shared by all stores
-
-            if (destData.sizes && destData.sizes.length > 0 && t.size !== 'One Size') {
-                var found = false;
-                destData.sizes.forEach(function(s){ if (s.name === t.size) { s.qty += t.qty; found = true; } });
-                if (!found) destData.sizes.push({ name: t.size, qty: t.qty });
-                destData.stock = destData.sizes.reduce(function(a,s){ return a + (s.qty||0); }, 0);
-            } else { destData.stock = (destData.stock || 0) + t.qty; }
-
-            // Only reset the Promotion-flag clock if this was confirmed as a
-            // genuine restock, not a correction/mistake transfer. A brand-new
-            // product at this store still gets its addedAt set above either
-            // way — that's just when it first appeared here, not a claim
-            // about restock intent.
-            if (isGenuineRestockT) destData.lastRestockDate = Date.now();
-
-            // Write atomically
-            var batch = db.batch();
-            var pWrite = Object.assign({}, p); delete pWrite.id;
-            batch.set(sourceRef, pWrite, { merge: true });
-            batch.set(destProductRef, destData, { merge: true });
-            batch.update(db.collection('transfers').doc(transferId), {
-                status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
-                approvedAtStr: new Date().toLocaleString(),
-                restockType: isGenuineRestockT ? 'new' : 'correction',
-                sourceProductId: sourceRef.id, destProductId: destProductRef.id // exact items, for reconciliation
+                return 'ok';
             });
-            await batch.commit();
+            if (txResult === 'gone') { showToast('Transfer not found', 'error'); return; }
+            if (txResult.indexOf('done:') === 0) { showToast('This transfer was already ' + txResult.slice(5) + ' — no changes made.', 'warning'); loadTransfers(); return; }
+            if (txResult === 'nosrc') { showToast('Product "' + (t.productName||t.productId) + '" not found in ' + t.fromStoreName, 'error'); return; }
+            if (txResult.indexOf('short:') === 0) { showToast('Insufficient stock at ' + t.fromStoreName + ': only ' + txResult.slice(6) + ' available (size: ' + t.size + ')', 'error'); return; }
 
             // Keep local STATE in sync if this product is in the local store
             var localP = STATE.products.find(function(x){ return x.id === destProductRef.id; });
@@ -13402,85 +13432,111 @@ function sendToTelegram(order, callback) {
             }
         }
 
-        // ── Step 4: Apply ALL deductions/additions in memory ──
+        // ── Step 4 + 5: re-read everything and apply it in ONE transaction ──
+        // Steps 1–3 only decided WHICH documents are involved. The quantities are read
+        // again inside the transaction, so an approval running at the same time (another
+        // device, a single approve) can't be overwritten — the transaction retries instead
+        // of saving stale sizes. That lost-update is what left Main Store with stock that
+        // had already been sent.
         var succeeded = [];
         var failed = [];
-
-        transfers.forEach(function(t) {
-            var srcP = sourceProductCache[srcKeyOf(t)];
-            if (!srcP) { failed.push({ name: t.productName, reason: 'Source product not found' }); return; }
-
-            var destKey = t.toStoreId + '|' + t.productName;
-            var dest = destProductCache[destKey];
-            if (!dest) { failed.push({ name: t.productName, reason: 'Destination product not found' }); return; }
-
-            // Check availability in accumulated (already-modified) source product
-            var availQty;
-            if (srcP.sizes && srcP.sizes.length > 0 && t.size !== 'One Size') {
-                var sz = srcP.sizes.find(function(s){ return s.name === t.size; });
-                availQty = sz ? sz.qty : 0;
-            } else { availQty = srcP.stock || 0; }
-
-            if (availQty < t.qty) {
-                failed.push({ name: t.productName, reason: 'Insufficient stock: ' + availQty + ' available for size ' + t.size });
-                return;
-            }
-
-            // Deduct from source (in memory)
-            if (srcP.sizes && srcP.sizes.length > 0 && t.size !== 'One Size') {
-                srcP.sizes.forEach(function(s){ if (s.name === t.size) s.qty -= t.qty; });
-                srcP.stock = srcP.sizes.reduce(function(a,s){ return a+(s.qty||0); }, 0);
-            } else { srcP.stock = (srcP.stock || 0) - t.qty; }
-
-            // Add to destination (in memory)
-            if (srcP.costPrice != null && srcP.costPrice !== '') dest.data.costPrice = srcP.costPrice;
-            dest.data.promoPrice = (promoPriceOf(srcP) != null ? srcP.promoPrice : null); // discount is shared by all stores
-            if (dest.data.sizes && dest.data.sizes.length > 0 && t.size !== 'One Size') {
-                var found = false;
-                dest.data.sizes.forEach(function(s){ if (s.name === t.size) { s.qty += t.qty; found = true; } });
-                if (!found) dest.data.sizes.push({ name: t.size, qty: t.qty });
-                dest.data.stock = dest.data.sizes.reduce(function(a,s){ return a+(s.qty||0); }, 0);
-            } else { dest.data.stock = (dest.data.stock || 0) + t.qty; }
-            // Only reset the Promotion-flag clock if this batch was confirmed
-            // as genuine restock, not a correction/mistake batch.
-            if (isGenuineRestockBulk) dest.data.lastRestockDate = Date.now();
-
-            t._srcId = srcP.id; t._destId = dest.ref.id;
-            succeeded.push(t);
-        });
-
-        // ── Step 5: Write everything to Firebase in ONE batch ──
-        if (succeeded.length) {
+        if (transfers.length) {
             try {
-                var batch = db.batch();
+                var destTemplates = {}; // path -> template for a product NEW to that store
+                Object.keys(destProductCache).forEach(function(key){ var d = destProductCache[key]; destTemplates[d.ref.path] = JSON.parse(JSON.stringify(d.data)); });
+                await db.runTransaction(async function(tx) {
+                    succeeded = []; failed = [];
+                    var tSnaps = {}, srcSnaps = {}, destSnaps = {};
+                    for (var a = 0; a < transfers.length; a++) tSnaps[transfers[a].transferId] = await tx.get(db.collection('transfers').doc(transfers[a].transferId));
+                    for (var sp in srcByPath) { var sp0 = srcByPath[sp]; srcSnaps[sp] = await tx.get(db.collection('stores').doc(sp0._storeId).collection('products').doc(sp0.id)); }
+                    var destRefsByPath = {};
+                    Object.keys(destProductCache).forEach(function(key){ destRefsByPath[destProductCache[key].ref.path] = destProductCache[key].ref; });
+                    for (var dp in destRefsByPath) destSnaps[dp] = await tx.get(destRefsByPath[dp]);
 
-                // Write updated source products back to THEIR OWN sending store (one write per document)
-                Object.keys(srcByPath).forEach(function(path) {
-                    var p = srcByPath[path];
-                    var pW = Object.assign({}, p); delete pW.id; delete pW._storeId;
-                    batch.set(db.collection('stores').doc(p._storeId).collection('products').doc(p.id), pW, { merge: true });
-                });
+                    // Fresh copies of every product, from inside the transaction
+                    var srcLive = {}, destLive = {};
+                    for (var sp2 in srcByPath) {
+                        if (srcSnaps[sp2].exists) srcLive[sp2] = Object.assign({ id: srcByPath[sp2].id, _storeId: srcByPath[sp2]._storeId }, JSON.parse(JSON.stringify(srcSnaps[sp2].data())));
+                    }
+                    for (var dp2 in destRefsByPath) {
+                        destLive[dp2] = { ref: destRefsByPath[dp2], data: destSnaps[dp2].exists ? JSON.parse(JSON.stringify(destSnaps[dp2].data())) : JSON.parse(JSON.stringify(destTemplates[dp2])) };
+                    }
 
-                // Write updated destination products (one write per document)
-                var destWritten = {};
-                Object.keys(destProductCache).forEach(function(key) {
-                    var dest = destProductCache[key];
-                    if (destWritten[dest.ref.path]) return; destWritten[dest.ref.path] = true;
-                    delete dest.data.id;
-                    batch.set(dest.ref, dest.data, { merge: true });
-                });
+                    transfers.forEach(function(t) {
+                        var ts = tSnaps[t.transferId];
+                        if (!ts || !ts.exists || ts.data().status !== 'pending') { failed.push({ name: t.productName, reason: 'Already ' + (ts && ts.exists ? ts.data().status : 'deleted') }); return; }
+                        var srcCached = sourceProductCache[srcKeyOf(t)];
+                        var srcPath = null;
+                        for (var pp in srcByPath) if (srcByPath[pp] === srcCached) srcPath = pp;
+                        var srcP = srcPath && srcLive[srcPath];
+                        if (!srcP) { failed.push({ name: t.productName, reason: 'Source product not found' }); return; }
 
-                // Mark all succeeded transfers as approved
-                succeeded.forEach(function(t) {
-                    batch.update(db.collection('transfers').doc(t.transferId), {
-                        status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
-                        approvedAtStr: new Date().toLocaleString(),
-                        restockType: isGenuineRestockBulk ? 'new' : 'correction',
-                        sourceProductId: t._srcId, destProductId: t._destId // exact items, for reconciliation
+                        var destCached = destProductCache[t.toStoreId + '|' + t.productName];
+                        var dest = destCached && destLive[destCached.ref.path];
+                        if (!dest) { failed.push({ name: t.productName, reason: 'Destination product not found' }); return; }
+
+                        // Check availability in the live, already-modified source product
+                        var availQty;
+                        if (srcP.sizes && srcP.sizes.length > 0 && t.size !== 'One Size') {
+                            var sz = srcP.sizes.find(function(s){ return s.name === t.size; });
+                            availQty = sz ? sz.qty : 0;
+                        } else { availQty = srcP.stock || 0; }
+                        if (availQty < t.qty) { failed.push({ name: t.productName, reason: 'Insufficient stock: ' + availQty + ' available for size ' + t.size }); return; }
+
+                        // Deduct from source
+                        if (srcP.sizes && srcP.sizes.length > 0 && t.size !== 'One Size') {
+                            srcP.sizes.forEach(function(s){ if (s.name === t.size) s.qty -= t.qty; });
+                            srcP.stock = srcP.sizes.reduce(function(a,s){ return a+(s.qty||0); }, 0);
+                        } else { srcP.stock = (srcP.stock || 0) - t.qty; }
+
+                        // Add to destination
+                        if (srcP.costPrice != null && srcP.costPrice !== '') dest.data.costPrice = srcP.costPrice;
+                        dest.data.promoPrice = (promoPriceOf(srcP) != null ? srcP.promoPrice : null); // discount is shared by all stores
+                        if (dest.data.sizes && dest.data.sizes.length > 0 && t.size !== 'One Size') {
+                            var found = false;
+                            dest.data.sizes.forEach(function(s){ if (s.name === t.size) { s.qty += t.qty; found = true; } });
+                            if (!found) dest.data.sizes.push({ name: t.size, qty: t.qty });
+                            dest.data.stock = dest.data.sizes.reduce(function(a,s){ return a+(s.qty||0); }, 0);
+                        } else { dest.data.stock = (dest.data.stock || 0) + t.qty; }
+                        if (!dest.data.slug && srcP.slug) dest.data.slug = srcP.slug;
+                        // Only reset the Promotion-flag clock on a genuine restock batch.
+                        if (isGenuineRestockBulk) dest.data.lastRestockDate = Date.now();
+
+                        t._srcId = srcP.id; t._destId = dest.ref.id; t._srcPath = srcPath; t._destPath = dest.ref.path;
+                        succeeded.push(t);
+                    });
+                    if (!succeeded.length) return;
+
+                    // Write only the documents that actually changed
+                    var srcDone = {}, destDone = {};
+                    succeeded.forEach(function(t) {
+                        if (!srcDone[t._srcPath]) {
+                            srcDone[t._srcPath] = true;
+                            var sp3 = srcLive[t._srcPath], pW = Object.assign({}, sp3); delete pW.id; delete pW._storeId;
+                            tx.set(db.collection('stores').doc(sp3._storeId).collection('products').doc(sp3.id), pW, { merge: true });
+                        }
+                        if (!destDone[t._destPath]) {
+                            destDone[t._destPath] = true;
+                            var dd = destLive[t._destPath]; delete dd.data.id;
+                            tx.set(dd.ref, dd.data, { merge: true });
+                        }
+                        tx.update(db.collection('transfers').doc(t.transferId), {
+                            status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
+                            approvedAtStr: new Date().toLocaleString(),
+                            restockType: isGenuineRestockBulk ? 'new' : 'correction',
+                            sourceProductId: t._srcId, destProductId: t._destId // exact items, for reconciliation
+                        });
                     });
                 });
+            } catch(eTx) {
+                showToast('Batch write failed: ' + eTx.message, 'error');
+                console.error('Bulk approve transaction failed:', eTx);
+                succeeded = [];
+            }
+        }
 
-                await batch.commit();
+        if (succeeded.length) {
+            try {
                 saveProducts();
 
                 // One Telegram message
