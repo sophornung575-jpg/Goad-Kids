@@ -79,11 +79,9 @@ body:not(.locked) #gate{display:none}body.locked .wrap{display:none}
 <body class="locked">
 <div id="gate" class="gate"><div class="gbox">
   <h2>Goat Kids – Marketing Summary</h2><p class="mut">Sign in with the Super Admin account.</p>
-  <label id="gCfgL" hidden>Firebase config (first time only)<textarea id="gCfg" rows="4" placeholder='{"apiKey":"...","projectId":"..."}'></textarea></label>
   <label>Email or username<input id="gEmail" autocomplete="username"></label>
   <label>Password<input id="gPass" type="password" autocomplete="current-password"></label>
   <button class="pri" id="gGo">Sign in</button><div id="gMsg" class="mut">Checking…</div>
-  <a href="#" id="gCfgT">Change Firebase config</a>
 </div></div>
 <div class="wrap">
 <header>
@@ -291,6 +289,8 @@ function uid(){return 'r'+Date.now().toString(36)+Math.floor(Math.random()*1e4).
 var CKEY='goatMktCfg',PRKEY='goatMktProducts',TGKEY='goatMktTargets',PKEY='goatDailyPosts',UKEY='goatTaskUser';
 var cfg=ld(CKEY,{fb:'',key:'',model:'gemini-3.8-flash',store:'GOAT-1979',email:''});
 if(cfg.model==='gemini-2.5-flash'||cfg.model==='gemini-2.0-flash'){cfg.model='gemini-3.8-flash';sv(CKEY,cfg)}
+var DEFAULT_FB='{"apiKey":"AIzaSyDBQyX-LC9dIzE-B-79kXBmr42KbWEoQSU","authDomain":"goat-kids-store.firebaseapp.com","projectId":"goat-kids-store","storageBucket":"goat-kids-store.firebasestorage.app","messagingSenderId":"372035223463","appId":"1:372035223463:web:a9948932607e81da2a4082"}';
+if(!cfg.fb)cfg.fb=DEFAULT_FB;
 var products=ld(PRKEY,[]),fbReady=null,auth=null,fdb=null,statusTxt='';
 var LIBS={app:['https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-app-compat.min.js','https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js'],
  auth:['https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-auth-compat.min.js','https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js'],
@@ -568,7 +568,7 @@ var _render=render;render=function(){_render();renderTarget()};
 /* ---------- ACCESS GATE: only accounts listed in _admin_/marketingAdmins (emails) ---------- */
 var GATEMSG='',GATE_DOMAIN='@staff.goatkids.app';
 function gmsg(m){$('gMsg').textContent=m}
-function lockUi(){document.body.classList.add('locked');if(!cfg.fb)$('gCfgL').hidden=false;if(!$('gEmail').value)$('gEmail').value=cfg.email||'';
+function lockUi(){document.body.classList.add('locked');if(!$('gEmail').value)$('gEmail').value=cfg.email||'';
   gmsg(GATEMSG||(cfg.fb?'':'Paste the Firebase config to begin.'))}
 function unlockUi(){document.body.classList.remove('locked');gmsg('')}
 async function verifyAdmin(u){
@@ -580,9 +580,7 @@ async function gateAuth(u){
   if(!u){stopSync();lockUi();setStatus('Not signed in');return}
   try{await verifyAdmin(u)}catch(e){GATEMSG=e.message||String(e);try{await auth.signOut()}catch(x){lockUi()}return}
   GATEMSG='';unlockUi();setStatus('Signed in as '+u.email);if(!ld(UKEY,'')&&u.email)sv(UKEY,u.email.split('@')[0]);startSync();fetchProducts()}
-$('gCfgT').onclick=function(e){e.preventDefault();$('gCfgL').hidden=!$('gCfgL').hidden;if(!$('gCfgL').hidden)$('gCfg').value=cfg.fb||''};
 $('gGo').onclick=async function(){
-  var cf=$('gCfg').value.trim();if(cf&&!$('gCfgL').hidden&&cf!==cfg.fb){cfg.fb=cf;sv(CKEY,cfg);if(fbReady){location.reload();return}}
   var em=$('gEmail').value.trim().toLowerCase(),pw=$('gPass').value;
   if(!cfg.fb){gmsg('Paste the Firebase config to begin.');return}
   if(!em||!pw){gmsg('Enter your email and password.');return}
@@ -592,7 +590,6 @@ $('gGo').onclick=async function(){
   catch(e){var c=(e&&e.code)||'';gmsg(/invalid|wrong-password|user-not-found|credential/.test(c)?'Wrong email or password.':((e&&e.message)||String(e)))}};
 $('gPass').addEventListener('keydown',function(e){if(e.key==='Enter')$('gGo').click()});
 $('lockBtn').onclick=function(){if(auth)auth.signOut().catch(function(){});else lockUi()};
-if(!cfg.fb){$('gCfgL').hidden=false;lockUi()}
 
 /* ---------- SHARED SYNC (Firestore: marketing_rows, marketing_results, marketing_settings/targets) ---------- */
 var SYNC={on:false,unsubs:[],remoteRows:{},remoteRes:{},pendRows:{},pendRes:{},tR:null,tS:null,err:'',pendingUi:false};
