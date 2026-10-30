@@ -65,7 +65,7 @@ textarea{font:inherit;color:var(--tx);background:var(--card);border:1px solid va
 .pn{font-size:12px;line-height:1.25}.pn small{color:var(--mut)}.pth b{cursor:pointer;color:var(--mut)}
 .ths.big{margin-bottom:10px}.ths.big .pth img,.ths.big .pth .noimg{width:64px;height:64px}.ths.big .pn{font-size:13px}
 .lvh{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.lvh b{font-size:13px}.lvh .todo{flex:1;color:var(--mut);font-size:12px}
-.lf{display:flex;flex-direction:column;font-size:11px;color:var(--mut);flex:0 1 96px;gap:2px}.lf input{width:100%}
+.lf{display:flex;flex-direction:column;font-size:11px;color:var(--mut);flex:0 1 96px;gap:2px}.acts .lf input{flex:none;width:100%}
 .lvi{margin:6px 0}.lvi textarea{margin-top:4px;font-size:12px}.lmsg{font-size:12px;color:var(--mut);min-height:0}
 .empty{text-align:center;color:var(--mut);padding:30px}
 </style>
@@ -79,6 +79,7 @@ textarea{font:inherit;color:var(--tx);background:var(--card);border:1px solid va
   <button id="gear" title="Settings">Settings</button><button id="theme">Theme</button>
 </header>
 
+<div id="syncTxt" style="font-size:12px;color:var(--mut);margin:-6px 0 10px"></div>
 <div class="tabs"><button id="tabS" class="on">Summary</button><button id="tabT">Daily Tasks</button></div>
 <div id="viewSummary">
 <div id="form" class="card">
@@ -132,7 +133,7 @@ var LBL={ad:'AD',post:'POST',video:'VIDEO'};
 var METRICS={spend:'Spend $',reach:'Reach / views',eng:'Clicks / likes',msgs:'Messages',orders:'Orders'};
 var data=[],days=7;
 try{data=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){data=[]}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}if(typeof schedRes==='function')schedRes()}
 function $(i){return document.getElementById(i)}
 function iso(d){var m=d.getMonth()+1,x=d.getDate();return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(x<10?'0':'')+x}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
@@ -261,13 +262,13 @@ function sample(){
   var names={ad:['Dress 110 promo','T-shirt bundle','Romper sale'],post:['New arrivals','Size guide','Customer photo'],video:['Live #12','Reel – outfit','Unboxing']};
   dayList(14).forEach(function(d,i){['ad','post','video'].forEach(function(t,j){
     if(Math.random()<.2)return;var r=Math.round(800+Math.random()*3500+i*60);
-    data.push({id:'s'+i+t,date:d,type:t,name:names[t][(i+j)%3],spend:t==='ad'?+(3+Math.random()*7).toFixed(2):0,
+    data.push({id:'s'+i+t,sample:true,date:d,type:t,name:names[t][(i+j)%3],spend:t==='ad'?+(3+Math.random()*7).toFixed(2):0,
       reach:r,eng:Math.round(r*(.02+Math.random()*.05)),msgs:Math.round(r/300*Math.random()*2),orders:Math.round(Math.random()*(t==='ad'?4:3))})})});
   save();render()}
 
 /* ---------- HELPERS ---------- */
 function ld(k,d){try{return JSON.parse(localStorage.getItem(k)||'')||d}catch(e){return d}}
-function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}if(k==='goatDailyPosts'&&typeof schedRows==='function')schedRows();if(k==='goatMktTargets'&&typeof schedTg==='function'&&!sv.quiet)schedTg()}
 function hhmm(){var t=new Date();return(t.getHours()<10?'0':'')+t.getHours()+':'+(t.getMinutes()<10?'0':'')+t.getMinutes()}
 function short(u){return u.replace(/^https?:\/\/(www\.)?/,'').slice(0,42)+(u.length>50?'…':'')}
 function uid(){return 'r'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36)}
@@ -288,7 +289,7 @@ function initFb(){if(fbReady)return fbReady;
   fbReady=(async function(){var c=parseCfg(cfg.fb||'');if(!c.apiKey||!c.projectId)throw new Error('Firebase config is missing apiKey or projectId');
     if(!window.firebase)await loadScript(LIBS.app);if(!firebase.auth)await loadScript(LIBS.auth);if(!firebase.firestore)await loadScript(LIBS.fs);
     if(!firebase.apps.length)firebase.initializeApp(c);auth=firebase.auth();fdb=firebase.firestore();
-    auth.onAuthStateChanged(function(u){if(u){setStatus('Signed in as '+u.email);if(!ld(UKEY,'')&&u.email){sv(UKEY,u.email.split('@')[0])}fetchProducts()}else setStatus('Not signed in')});return true})();
+    auth.onAuthStateChanged(function(u){if(u)startSync();else stopSync();if(u){setStatus('Signed in as '+u.email);if(!ld(UKEY,'')&&u.email){sv(UKEY,u.email.split('@')[0])}fetchProducts()}else setStatus('Not signed in')});return true})();
   fbReady.catch(function(){fbReady=null});return fbReady}
 async function fetchProducts(){
   try{var snap=await fdb.collection('stores').doc(cfg.store||'GOAT-1979').collection('products').get(),a=[];
@@ -308,14 +309,16 @@ function openSettings(){
   '<label>Staff email<input id="sEmail" type="email" autocomplete="username"></label>'+
   '<label>Password (not saved)<input id="sPass" type="password" autocomplete="current-password"></label>'+
   '<label>Gemini API key (free tier)<input id="sKey" type="password" autocomplete="off"></label>'+
-  '<label>Gemini model<input id="sModel"></label></div>'+
+  '<label>Gemini model<input id="sModel"></label>'+
+  '<label>Facebook page token (for live results; kept only until you close this tab)<input id="sTok" type="password" autocomplete="off"></label></div>'+
   '<p id="sStatus" style="color:var(--mut);font-size:12px;min-height:16px"></p>'+
   '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="pri" id="sSave">Save & sign in</button><button id="sReload">Reload products</button><button id="sOut">Sign out</button><button id="sClose" style="margin-left:auto">Close</button></div>'+
   '<p style="color:var(--mut);font-size:12px">Products loaded: '+products.length+'. The key and config are saved only in this browser.</p></div>';
-  $('sFb').value=cfg.fb||'';$('sStore').value=cfg.store||'GOAT-1979';$('sEmail').value=cfg.email||'';$('sKey').value=cfg.key||'';$('sModel').value=cfg.model||'gemini-3.8-flash';setStatus();
+  try{$('sTok').value=sessionStorage.getItem('goatMktFbToken')||''}catch(e){}$('sFb').value=cfg.fb||'';$('sStore').value=cfg.store||'GOAT-1979';$('sEmail').value=cfg.email||'';$('sKey').value=cfg.key||'';$('sModel').value=cfg.model||'gemini-3.8-flash';setStatus();
   $('sClose').onclick=function(){m.hidden=true;renderTasks()};
   $('sSave').onclick=async function(){
     cfg={fb:$('sFb').value.trim(),store:$('sStore').value.trim()||'GOAT-1979',email:$('sEmail').value.trim(),key:$('sKey').value.trim(),model:$('sModel').value.trim()||'gemini-3.8-flash'};sv(CKEY,cfg);
+    try{var tkv=$('sTok').value.trim();if(tkv)sessionStorage.setItem('goatMktFbToken',tkv);else sessionStorage.removeItem('goatMktFbToken')}catch(e){}
     var pw=$('sPass').value;if(!cfg.fb){setStatus('Saved (no Firebase config yet).');return}
     try{setStatus('Connecting…');await initFb();if(cfg.email&&pw){await auth.signInWithEmailAndPassword(cfg.email,pw)}else if(auth.currentUser){await fetchProducts()}else setStatus('Saved. Enter email and password to sign in.')}
     catch(e){setStatus(''+e.message)}};
@@ -345,10 +348,10 @@ function liveRow(t,r,i){
     '<div class="srch"><input data-s="'+key+'" placeholder="Search products (add as many as you need)'+(products.length?'':' - products not loaded, see Settings')+'" autocomplete="off"><div class="dd" hidden></div></div>'+
     '<div id="lm-'+r.id+'" class="lmsg"></div>'+items+
     '<div class="lvh" style="margin-top:10px"><b>Result - after the live</b></div>'+
-    '<div class="acts" style="align-items:flex-end"><input data-link="'+key+'" value="'+esc(r.link||'')+'" placeholder="Paste the live link here" inputmode="url">'+
-    '<label class="lf">Views<input type="number" min="0" data-rf="'+key+'|views" value="'+(r.views||'')+'"></label>'+
-    '<label class="lf">Messages<input type="number" min="0" data-rf="'+key+'|msgs" value="'+(r.msgs||'')+'"></label>'+
-    '<label class="lf">Orders<input type="number" min="0" data-rf="'+key+'|orders" value="'+(r.orders||'')+'"></label>'+
+    '<div class="acts"><input data-link="'+key+'" value="'+esc(r.link||'')+'" placeholder="Paste the live link here" inputmode="url"><button data-lget="'+key+'">Get results</button></div>'+
+    '<div id="lg-'+r.id+'" class="lmsg"></div>'+
+    '<div class="acts" style="align-items:flex-end;margin-top:6px">'+
+    [['views','Views'],['comments','Comments'],['likes','Reactions'],['msgs','Messages'],['orders','Orders']].map(function(f){return '<label class="lf">'+f[1]+'<input type="number" min="0" data-rf="'+key+'|'+f[0]+'" value="'+(r[f[0]]||'')+'"></label>'}).join('')+
     '<button class="pri" data-save="'+key+'">Save result</button></div></div>'}
 function rowHTML(t,r,i){
   if(t.id==='live')return liveRow(t,r,i);
@@ -408,10 +411,30 @@ async function liveLoad(rid){
       var o=p?JSON.parse(JSON.stringify(p)):{id:id,name:'Not in this store: '+id,price:0,img:''};o.script=sc[id]||'';r.products.push(o);added++});
     sv(PKEY,posts);renderTasks();var b2=$('lm-'+rid);if(b2)b2.textContent='Loaded '+added+' items from Live Desk'}
   catch(e){say(e.message||String(e))}}
+var GRAPH='https://graph.facebook.com/v26.0/';
+async function gget(path,token){var res=await fetch(GRAPH+path+(path.indexOf('?')>-1?'&':'?')+'access_token='+encodeURIComponent(token)),d=await res.json();if(d.error)throw new Error(d.error.message);return d}
+function fbVideoId(v){var t=String(v||''),m=t.match(/\/videos\/(?:[^\/?#]*\/)?(\d{8,})/)||t.match(/\/producer\/(?:v\d+\/)?(\d{8,})/)||t.match(/[?&]v=(\d{8,})/)||t.match(/^\s*(\d{8,}(?:_\d{8,})?)\s*$/);return m?m[1]:''}
+function fbToken(){try{return sessionStorage.getItem('goatMktFbToken')||sessionStorage.getItem('gkl_fbToken')||''}catch(e){return ''}}
+async function liveFetch(rid){
+  var r=getRow('live',rid),box=$('lg-'+rid);if(!r)return;function say(m){if(box)box.textContent=m}
+  var vid=fbVideoId(r.link);if(!vid){say('Paste the live video link first (the one with /videos/ and a long number).');return}
+  var tk=fbToken();if(!tk){say('Add the Facebook page token in Settings first.');return}
+  say('Getting results…');var got=[],bad=[],pageId='';
+  try{pageId=(await gget('me?fields=id',tk)).id}catch(e){bad.push(e.message)}
+  var ids=[vid];if(pageId&&vid.indexOf('_')<0)ids.push(pageId+'_'+vid);
+  async function first(fn){var err=null;for(var i=0;i<ids.length;i++){try{return await fn(ids[i])}catch(e){err=e}}throw err}
+  try{var v=await first(function(id){return gget(id+'?fields=live_views,views',tk)});var n=(v.live_views!==undefined?v.live_views:v.views);if(n===undefined)throw new Error('no view count returned');r.views=+n||0;got.push('Views '+r.views)}
+  catch(e){try{var vi=await first(function(id){return gget(id+'/video_insights?metric=total_video_views',tk)});r.views=+(((vi.data||[])[0]||{values:[{}]}).values[0].value)||0;got.push('Views '+r.views)}catch(e2){bad.push('views: '+e.message)}}
+  try{var c=await first(function(id){return gget(id+'/comments?summary=true&limit=0',tk)});r.comments=(c.summary&&c.summary.total_count)||0;got.push('Comments '+r.comments)}catch(e){bad.push('comments: '+e.message)}
+  try{var rc=await first(function(id){return gget(id+'/reactions?summary=total_count&limit=0',tk)});r.likes=(rc.summary&&rc.summary.total_count)||0;got.push('Reactions '+r.likes)}catch(e){bad.push('reactions: '+e.message)}
+  try{await initFb();if(!auth||!auth.currentUser)throw new Error('sign in first (Settings)');
+    var qs=await fdb.collection('live_report').where('liveId','in',ids).get(),seen={};qs.docs.forEach(function(d){var x=d.data();if(x.sentOrderId)seen[x.sentOrderId]=1});
+    r.orders=Object.keys(seen).length;got.push('Orders '+r.orders+' (sent to the Store App)')}catch(e){bad.push('orders: '+e.message)}
+  sv(PKEY,posts);renderTasks();var b2=$('lg-'+rid);if(b2)b2.textContent=(got.length?got.join(' · '):'')+(bad.length?(got.length?'  |  ':'')+'Could not read - '+bad.join('; '):'')+'  (Messages stay manual. Check the numbers, then press Save result.)'}
 function upsertLive(r){
   var names=(r.products||[]).map(function(p){return p.name}).join(', ');
   data=data.filter(function(x){return x.id!=='lv'+r.id});
-  data.push({id:'lv'+r.id,date:tDay,type:'video',name:('Live: '+names).slice(0,70),link:r.link||'',spend:0,reach:+r.views||0,eng:0,msgs:+r.msgs||0,orders:+r.orders||0});
+  data.push({id:'lv'+r.id,date:tDay,type:'video',name:('Live: '+names).slice(0,70),link:r.link||'',spend:0,reach:+r.views||0,eng:+r.likes||0,msgs:+r.msgs||0,orders:+r.orders||0});
   save();render()}
 function saveLink(t,rid){var r=getRow(t,rid);if(!r)return;
   var u=$('tUser').value.trim();if(!u){alert(L('Please type your name first (top right).'));return}
@@ -419,6 +442,7 @@ function saveLink(t,rid){var r=getRow(t,rid);if(!r)return;
   if(!(r.products||[]).length&&!r.title){alert(L('Please pick the product first.'));return}
   sv(UKEY,u);r.by=u;r.at=hhmm();sv(PKEY,posts);if(t==='live')upsertLive(r);renderTasks()}
 $('tBlocks').addEventListener('click',function(e){var g=function(k){return e.target.getAttribute&&e.target.getAttribute(k)},q;
+  if(g('data-lget')){liveFetch(g('data-lget').split('|')[1]);return}
   if(g('data-lload')){liveLoad(g('data-lload').split('|')[1]);return}
   if(g('data-pick')){q=g('data-pick').split('|');pickProduct(q[0],q[1],q.slice(2).join('|'));return}
   if(g('data-pickt')){q=g('data-pickt').split('|');var r=getRow(q[0],q[1]),inp=e.target.parentNode.parentNode.querySelector('input');if(r&&inp.value.trim()){r.title=inp.value.trim();r.products=[];sv(PKEY,posts);renderTasks()}return}
@@ -514,6 +538,52 @@ function renderTarget(){
     return '<div class="kpi"><span>'+t.n+' (month)</span><b>'+done+' / '+goal+'</b><i class="'+(diff>=0?'up':'dn')+'">'+(diff>=0?'▲ ahead by ':'▼ behind by ')+Math.abs(diff)+'</i></div>'}).join('')}
 ['tgV','tgP','tgL'].forEach(function(id,i){$(id).onchange=function(){tg[['video','photo','live'][i]]=Math.max(0,+this.value||0);sv(TGKEY,tg);renderTarget()}});
 var _render=render;render=function(){_render();renderTarget()};
+/* ---------- SHARED SYNC (Firestore: marketing_rows, marketing_results, marketing_settings/targets) ---------- */
+var SYNC={on:false,unsubs:[],remoteRows:{},remoteRes:{},pendRows:{},pendRes:{},tR:null,tS:null,err:'',pendingUi:false};
+function stab(v){return JSON.stringify(v,function(k,val){if(val&&typeof val==='object'&&!Array.isArray(val)){var o={};Object.keys(val).sort().forEach(function(kk){o[kk]=val[kk]});return o}return val})}
+function clone(o){return JSON.parse(JSON.stringify(o))}
+function winStart(){var d=new Date();d.setDate(d.getDate()-65);return iso(d)}
+function syncSay(){var e=$('syncTxt');if(!e)return;e.textContent=SYNC.err?SYNC.err:(SYNC.on?'Shared with all staff':'Saved on this device only - sign in under Settings to share')}
+function syncErr(e){var c=(e&&e.code)||'';SYNC.err=c==='permission-denied'?'No permission to save shared data. Check the Firestore rules.':'Sync problem: '+((e&&e.message)||e);syncSay()}
+function emptyRow(c){return !((c.products||[]).length||c.title||c.link||c.script||c.concept)}
+function currentRows(){var m={};Object.keys(posts).forEach(function(d){Object.keys(posts[d]||{}).forEach(function(t){(posts[d][t]||[]).forEach(function(r){var c=clone(r);c.day=d;c.type=t;if(!emptyRow(c))m[r.id]=c})})});return m}
+function schedRows(){if(!SYNC.on)return;clearTimeout(SYNC.tR);SYNC.tR=setTimeout(pushRows,800)}
+function schedRes(){if(!SYNC.on)return;clearTimeout(SYNC.tS);SYNC.tS=setTimeout(pushRes,800)}
+function schedTg(){if(!SYNC.on)return;try{fdb.collection('marketing_settings').doc('targets').set({video:+tg.video||0,photo:+tg.photo||0,live:+tg.live||0,upd:Date.now()}).catch(syncErr)}catch(e){syncErr(e)}}
+async function pushGeneric(col,cur,remote,pend){
+  var ops=[];Object.keys(cur).forEach(function(id){var j=stab(cur[id]);if(remote[id]!==j)ops.push(['set',id,j])});
+  Object.keys(remote).forEach(function(id){if(!cur[id])ops.push(['del',id])});
+  for(var i=0;i<ops.length;i+=400){var chunk=ops.slice(i,i+400),b=fdb.batch();
+    chunk.forEach(function(o){pend[o[1]]=1;var ref=fdb.collection(col).doc(o[1]);if(o[0]==='set'){var x=clone(cur[o[1]]);x.upd=Date.now();b.set(ref,x)}else b.delete(ref)});
+    try{await b.commit();chunk.forEach(function(o){if(o[0]==='set')remote[o[1]]=o[2];else delete remote[o[1]]})}
+    catch(e){syncErr(e)}
+    chunk.forEach(function(o){delete pend[o[1]]})}}
+function pushRows(){if(SYNC.on)pushGeneric('marketing_rows',currentRows(),SYNC.remoteRows,SYNC.pendRows)}
+function pushRes(){if(!SYNC.on)return;var m={};data.forEach(function(x){if(!x.sample)m[x.id]=clone(x)});pushGeneric('marketing_results',m,SYNC.remoteRes,SYNC.pendRes)}
+function typing(){var a=document.activeElement;return !!(a&&a.closest&&a.closest('#tBlocks')&&/textarea|input/i.test(a.tagName))}
+function uiRefresh(){render();renderTarget();if($('viewTasks').style.display!=='none'){if(typing())SYNC.pendingUi=true;else renderTasks()}}
+$('tBlocks').addEventListener('focusout',function(){setTimeout(function(){if(SYNC.pendingUi&&!typing()){SYNC.pendingUi=false;renderTasks()}},400)});
+function onRows(snap){var ch=false;
+  snap.docChanges().forEach(function(c){var id=c.doc.id,x=c.doc.data();if(SYNC.pendRows[id])return;ch=true;
+    if(c.type==='removed'){delete SYNC.remoteRows[id];if(posts[x.day]&&posts[x.day][x.type])posts[x.day][x.type]=posts[x.day][x.type].filter(function(r){return r.id!==id})}
+    else{var o=clone(x);delete o.upd;SYNC.remoteRows[id]=stab(o);
+      posts[o.day]=posts[o.day]||{};var arr=posts[o.day][o.type]=(posts[o.day][o.type]||[]).filter(function(r){return r.id===id||!emptyRow(r)}),k=-1;
+      arr.forEach(function(r,i){if(r.id===id)k=i});if(k>-1)arr[k]=o;else arr.push(o);arr.sort(function(a,b){return a.id<b.id?-1:1})}});
+  if(ch){sv(PKEY,posts);uiRefresh()}}
+function onRes(snap){var ch=false;
+  snap.docChanges().forEach(function(c){var id=c.doc.id,x=c.doc.data();if(SYNC.pendRes[id])return;ch=true;
+    if(c.type==='removed'){delete SYNC.remoteRes[id];data=data.filter(function(y){return y.id!==id})}
+    else{var o=clone(x);delete o.upd;SYNC.remoteRes[id]=stab(o);var k=-1;data.forEach(function(y,i){if(y.id===id)k=i});if(k>-1)data[k]=o;else data.push(o)}});
+  if(ch){try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}uiRefresh()}}
+function onTg(d){if(!d.exists)return;var x=d.data();['video','photo','live'].forEach(function(k){if(x[k]!==undefined)tg[k]=+x[k]||0});sv.quiet=true;sv(TGKEY,tg);sv.quiet=false;renderTarget();if($('viewTasks').style.display!=='none'&&!typing())renderTasks()}
+function startSync(){if(SYNC.on||!fdb||!auth||!auth.currentUser)return;SYNC.on=true;SYNC.err='';var st=winStart();
+  SYNC.unsubs=[fdb.collection('marketing_rows').where('day','>=',st).onSnapshot(onRows,syncErr),
+    fdb.collection('marketing_results').where('date','>=',st).onSnapshot(onRes,syncErr),
+    fdb.collection('marketing_settings').doc('targets').onSnapshot(onTg,syncErr)];
+  syncSay();schedRows();schedRes();schedTg()}
+function stopSync(){SYNC.unsubs.forEach(function(u){try{u()}catch(e){}});SYNC.unsubs=[];SYNC.on=false;SYNC.remoteRows={};SYNC.remoteRes={};syncSay()}
+syncSay();
+
 /* ---------- LANGUAGE: English / Khmer ---------- */
 var LANG=ld('goatMktLang','en');
 var KM={
@@ -544,6 +614,8 @@ var KM={
 'Connecting…':'កំពុងភ្ជាប់…','Not signed in':'មិនទាន់ចូល','Sign in first.':'សូមចូលជាមុនសិន។','Saved (no Firebase config yet).':'បានរក្សាទុក (មិនទាន់មាន Firebase config)។','Saved. Enter email and password to sign in.':'បានរក្សាទុក។ បញ្ចូលអ៊ីមែល និងពាក្យសម្ងាត់ដើម្បីចូល។'};
 KM['Plan - before the live']='ផែនការ – មុនឡាយវ៍';KM['Result - after the live']='លទ្ធផល – ក្រោយឡាយវ៍';KM['Load from Live Desk']='ទាញពី Live Desk';KM['No script yet']='មិនទាន់មានស្គ្រីប';
 KM['Paste the live link here']='បិទភ្ជាប់តំណឡាយវ៍នៅទីនេះ';KM['Save result']='រក្សាលទ្ធផល';KM['Sign in first (Settings).']='សូមចូលជាមុនសិន (ការកំណត់)។';KM['Nothing selected in Live Desk yet.']='មិនទាន់មានទំនិញត្រូវបានជ្រើសក្នុង Live Desk ទេ។';
+KM['Get results']='យកលទ្ធផល';KM['Comments']='មតិ';KM['Reactions']='ប្រតិកម្ម';KM['Facebook page token (for live results; kept only until you close this tab)']='Facebook page token (សម្រាប់លទ្ធផលឡាយវ៍ រក្សាតែរហូតដល់បិទផ្ទាំងនេះ)';KM['Getting results…']='កំពុងយកលទ្ធផល…';
+KM['Shared with all staff']='ចែករំលែកជាមួយបុគ្គលិកទាំងអស់';KM['Saved on this device only - sign in under Settings to share']='រក្សាទុកតែលើឧបករណ៍នេះ – ចូលក្នុងការកំណត់ដើម្បីចែករំលែក';KM['No permission to save shared data. Check the Firestore rules.']='គ្មានសិទ្ធិរក្សាទិន្នន័យចែករំលែក។ សូមពិនិត្យ Firestore rules។';
 var WORDS={spend:'ចំណាយ',reach:'ការទៅដល់',views:'ចំនួនមើល',clicks:'ចុច',likes:'ចូលចិត្ត',msgs:'សារ',orders:'កុម្ម៉ង់'};
 var SRCH={'Search the product':'ស្វែងរកផលិតផល','Search products (add as many as you need)':'ស្វែងរកផលិតផល (បន្ថែមបានច្រើន)'};
 var NW='(?:spend|reach|views|clicks|likes|msgs|orders)',NUM='\\$?[\\d.,k]+';
@@ -573,6 +645,7 @@ var RULES=[
  [/^Not in this store: (.+)$/,function(m){return 'មិនមានក្នុងហាងនេះ៖ '+m[1]}],
  [/^(.+) - script$/,function(m){return trk(m[1])+' – ស្គ្រីប'}],
  [/^Products loaded: (\d+)\. The key and config are saved only in this browser\.$/,function(m){return 'ផលិតផលបានផ្ទុក៖ '+m[1]+'។ key និង config រក្សាទុកតែក្នុងកម្មវិធីរុករកនេះប៉ុណ្ណោះ។'}],
+ [/^Sync problem: (.+)$/,function(m){return 'បញ្ហាសមកាលកម្ម៖ '+m[1]}],
  [/^Signed in as (.+)$/,function(m){return 'បានចូលជា '+m[1]}],[/^(\d+) products loaded$/,function(m){return 'បានផ្ទុកផលិតផល '+m[1]}]];
 function trk(s){var o=KM[s];return o===undefined?s:o}
 function trRaw(s){var m=s.match(/^(\s*)([\s\S]*?)(\s*)$/),core=m[2];if(!core)return s;
