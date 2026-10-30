@@ -1,0 +1,28 @@
+name: Marketing post results
+
+on:
+  schedule:
+    - cron: '7 23 * * *'   # every day 06:07 Phnom Penh time (GitHub may start it a few minutes late)
+  workflow_dispatch:         # "Run workflow" button on the Actions page
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install firebase-admin
+        run: npm install --no-save firebase-admin@13
+
+      - name: Collect post results from Meta
+        env:
+          META_TOKEN: ${{ secrets.META_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/marketing-stats.js
