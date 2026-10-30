@@ -214,6 +214,16 @@ async function adResultsByPost(sinceKey){
 (async () => {
   if (!TOKEN) throw new Error('META_TOKEN secret is missing.');
   const db = initFirebase();
+  // Whole ad account, yesterday (all ads, not only boosted posts) — shown in "Review yesterday's results".
+  const yKey = addDays(dayKeyOf(new Date()), -1), daily = {};
+  try {
+    const j = await graph(AD_ACCOUNT + '/insights', { fields: 'spend,reach,impressions', time_range: { since: yKey, until: yKey } });
+    const r = (j.data && j.data[0]) || {};
+    daily[yKey] = { adSpend: Math.round((Number(r.spend) || 0) * 100) / 100, adReach: Number(r.reach) || 0, adImpressions: Number(r.impressions) || 0, updatedAt: Date.now() };
+    console.log(`  All ads on ${yKey}: $${daily[yKey].adSpend} spend, ${daily[yKey].adReach} reach.`);
+  } catch (e) { console.warn('  All ads yesterday: ' + e.message); }
+  if (Object.keys(daily).length) await db.collection(COL).doc('postStats').set({ daily }, { merge: true });
+
   const posts = await savedPosts(db);
   console.log(`Saved post links in the last ${LOOKBACK_DAYS} days: ${posts.length}`);
   if (!posts.length) return;
