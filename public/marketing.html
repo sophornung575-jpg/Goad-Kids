@@ -70,6 +70,7 @@ details.blk summary span{color:var(--mut);font-weight:400;font-size:12px}
     <label>Date<input type="date" id="fDate"></label>
     <label>Type<select id="fType"><option value="ad">Ad</option><option value="post">Post</option><option value="video">Video</option></select></label>
     <label style="grid-column:span 2">Name / product<input id="fName" placeholder="e.g. Dress 110 promo"></label>
+    <label style="grid-column:span 2">Post link<input id="fLink" placeholder="https://..." inputmode="url"></label>
     <label id="lSpend">Spend $<input type="number" id="fSpend" min="0" step="0.01"></label>
     <label id="lReach">Reach<input type="number" id="fReach" min="0"></label>
     <label id="lEng">Clicks<input type="number" id="fEng" min="0"></label>
@@ -206,7 +207,7 @@ function render(){
       it.map(function(x){var el=x.type==='ad'?'clicks':x.type==='video'?'likes':'likes';var rl=x.type==='video'?'views':'reach';
         return '<div class="it"><span class="tag" style="background:'+COL[x.type]+'">'+LBL[x.type]+'</span>'+
         '<div><div>'+esc(x.name||'(no name)')+(x.id===bestId?' <span class="best">★ best</span>':'')+'</div>'+
-        '<div class="nums">'+(x.type==='ad'?'$'+fmt(x.spend)+' spend · ':'')+fmt(x.reach)+' '+rl+' · '+fmt(x.eng)+' '+el+' · '+fmt(x.msgs)+' msgs · '+fmt(x.orders)+' orders</div></div><div class="sp">'+spark(x,dl,m)+'</div>'+
+        '<div class="nums">'+(x.type==='ad'?'$'+fmt(x.spend)+' spend · ':'')+fmt(x.reach)+' '+rl+' · '+fmt(x.eng)+' '+el+' · '+fmt(x.msgs)+' msgs · '+fmt(x.orders)+' orders'+(x.link?' · <a href="'+esc(x.link)+'" target="_blank" rel="noopener">🔗 link</a>':'')+'</div></div><div class="sp">'+spark(x,dl,m)+'</div>'+
         '<button class="x" data-del="'+x.id+'" title="Delete">✕</button></div>'}).join('')+'</div>'}).join(''):
     '<div class="empty">No results in this range yet.<br><br><button id="demo">Load sample data</button></div>';
   var dm=$('demo');if(dm)dm.onclick=sample;
@@ -222,9 +223,9 @@ $('addBtn').onclick=function(){$('fDate').value=iso(new Date());typeLabels();$('
 $('cancel').onclick=function(){$('form').classList.remove('show')};
 $('save').onclick=function(){
   var t=$('fType').value;
-  data.push({id:'m'+Date.now().toString(36),date:$('fDate').value||iso(new Date()),type:t,name:$('fName').value.trim(),
+  data.push({id:'m'+Date.now().toString(36),date:$('fDate').value||iso(new Date()),type:t,name:$('fName').value.trim(),link:/^https?:\/\//i.test($('fLink').value.trim())?$('fLink').value.trim():'',
     spend:t==='ad'?+$('fSpend').value||0:0,reach:+$('fReach').value||0,eng:+$('fEng').value||0,msgs:+$('fMsgs').value||0,orders:+$('fOrders').value||0});
-  ['fName','fSpend','fReach','fEng','fMsgs','fOrders'].forEach(function(i){$(i).value=''});
+  ['fName','fLink','fSpend','fReach','fEng','fMsgs','fOrders'].forEach(function(i){$(i).value=''});
   save();$('form').classList.remove('show');render()};
 $('list').onclick=function(e){var id=e.target.getAttribute&&e.target.getAttribute('data-del');
   if(id&&confirm('Delete this result?')){data=data.filter(function(x){return x.id!==id});save();render()}};
@@ -245,53 +246,46 @@ function sample(){
       reach:r,eng:Math.round(r*(.02+Math.random()*.05)),msgs:Math.round(r/300*Math.random()*2),orders:Math.round(Math.random()*(t==='ad'?4:3))})})});
   save();render()}
 
-/* ---------- DAILY TASKS ---------- */
-var TKEY='goatDailyTasks',DKEY='goatTaskDefs',UKEY='goatTaskUser';
-var DEF=[
- {id:'morning',n:'🌅 Morning check',t:['Check ad account status & budget','Check yesterday\'s results','Reply to overnight messages','Check stock of promoted products']},
- {id:'content',n:'🎨 Content',t:['Write caption for today\'s post','Prepare photo / video','Publish post','Boost best post (if any)']},
- {id:'inbox',n:'💬 Inbox',t:['Reply to Messenger','Reply to comments','Confirm new orders']},
- {id:'liveprep',n:'📋 Live prep',t:['Pick products for live','Prepare script / offers','Test phone, light & sound']},
- {id:'live',n:'🔴 Live',t:['Go live','Pin products & prices','Record live for reel']},
- {id:'closing',n:'🌙 Closing',t:['Enter today\'s results (Summary tab)','Check ad spend vs budget','Plan tomorrow\'s content']}];
-var defs,done={},tDay=iso(new Date());
+/* ---------- DAILY TASKS: video post, photo post, live ---------- */
+var PKEY='goatDailyPosts',UKEY='goatTaskUser';
+var TASKS=[{id:'video',n:'🎬 Video post',c:COL.video,sum:'video'},{id:'photo',n:'📷 Photo post',c:COL.post,sum:'post'},{id:'live',n:'🔴 Live',c:'#ef4444',sum:'video'}];
+var posts,tDay=iso(new Date());
 function ld(k,d){try{return JSON.parse(localStorage.getItem(k)||'')||d}catch(e){return d}}
 function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
-defs=ld(DKEY,null);
-if(!defs){defs=DEF.map(function(b){return{id:b.id,n:b.n,t:b.t.map(function(x,i){return{id:b.id+i,n:x}})}});sv(DKEY,defs)}
-done=ld(TKEY,{});
-function allTasks(){var a=[];defs.forEach(function(b){b.t.forEach(function(t){a.push(t)})});return a}
-function pct(day){var a=allTasks();if(!a.length)return 0;var d=done[day]||{};return a.filter(function(t){return d[t.id]}).length/a.length}
+posts=ld(PKEY,{});
+function dayPosts(d){return posts[d]||{}}
+function nDone(d){var p=dayPosts(d);return TASKS.filter(function(t){return(p[t.id]||[]).length}).length}
+function hhmm(){var t=new Date();return(t.getHours()<10?'0':'')+t.getHours()+':'+(t.getMinutes()<10?'0':'')+t.getMinutes()}
+function short(u){return u.replace(/^https?:\/\/(www\.)?/,'').slice(0,42)+(u.length>50?'…':'')}
 function renderTasks(){
   $('tDate').value=tDay;$('tUser').value=ld(UKEY,'');
-  var d=done[tDay]||{},a=allTasks(),n=a.filter(function(t){return d[t.id]}).length,p=a.length?Math.round(n/a.length*100):0;
-  $('tPct').textContent=n+'/'+a.length+' · '+p+'%';$('tBar').style.width=p+'%';
-  var open={};[].forEach.call(document.querySelectorAll('details.blk'),function(e){open[e.getAttribute('data-b')]=e.open});
-  $('tBlocks').innerHTML=defs.map(function(b){
-    var c=b.t.filter(function(t){return d[t.id]}).length,isOpen=open[b.id]!==undefined?open[b.id]:c<b.t.length;
-    return '<details class="blk" data-b="'+b.id+'"'+(isOpen?' open':'')+'><summary>'+esc(b.n)+'<span>'+(c===b.t.length&&c?'✅ ':'')+c+'/'+b.t.length+'</span></summary>'+
-      b.t.map(function(t){var r=d[t.id];
-        return '<label class="tk'+(r?' done':'')+'"><input type="checkbox" data-t="'+t.id+'"'+(r?' checked':'')+'><span class="tn">'+esc(t.n)+'</span>'+
-          (r?'<small>'+esc(r.by||'?')+' · '+r.at+'</small>':'<button class="x" data-rm="'+b.id+'|'+t.id+'" title="Remove task">✕</button>')+'</label>'}).join('')+
-      '<div class="addt"><input placeholder="+ add task" data-add="'+b.id+'"><button data-addb="'+b.id+'">Add</button></div></details>'}).join('');
-  /* 14-day chart */
-  var dl=dayList(14),vals=dl.map(function(x){return Math.round(pct(x)*100)});
+  var p=dayPosts(tDay),n=nDone(tDay),pc=Math.round(n/TASKS.length*100);
+  $('tPct').textContent=n+'/'+TASKS.length+' · '+pc+'%';$('tBar').style.width=pc+'%';
+  $('tBlocks').innerHTML=TASKS.map(function(t){var e=p[t.id]||[];
+    return '<div class="day"><div class="dh"><span><span class="tag" style="background:'+t.c+';margin-right:8px">'+(e.length?'✓ DONE':'TODO')+'</span>'+t.n+'</span><small>'+e.length+' posted</small></div>'+
+      e.map(function(x,i){return '<div class="tk done"><span class="tn" style="text-decoration:none;color:var(--tx)"><div>'+esc(x.title||t.n)+'</div>'+
+        '<a href="'+esc(x.link)+'" target="_blank" rel="noopener" style="font-size:12px;word-break:break-all">🔗 '+esc(short(x.link))+'</a></span>'+
+        '<small>'+esc(x.by||'?')+' · '+x.at+'</small>'+
+        '<button class="x" data-res="'+t.id+'|'+i+'" title="Enter results in Summary" style="font-size:12px;border:1px solid var(--bd);border-radius:6px">📊 results</button>'+
+        '<button class="x" data-rm="'+t.id+'|'+i+'" title="Delete">✕</button></div>'}).join('')+
+      '<div class="addt" style="flex-wrap:wrap"><input placeholder="Title (optional)" data-title="'+t.id+'" style="flex:1 1 140px"><input placeholder="Paste the post link here" data-link="'+t.id+'" style="flex:2 1 220px" inputmode="url"><button class="pri" data-save="'+t.id+'">Save link</button></div></div>'}).join('');
+  var dl=dayList(14),vals=dl.map(function(x){return Math.round(nDone(x)/TASKS.length*100)});
   var s='<svg viewBox="0 0 '+W+' '+H+'">'+axes(100,dl),bw=(W-PL-PR)/14*.65;
   dl.forEach(function(x,i){var h=(H-PT-PB)*vals[i]/100,xx=PL+(W-PL-PR)*(i+.5)/14-bw/2;
-    s+='<rect x="'+xx+'" y="'+(H-PB-h)+'" width="'+bw+'" height="'+h+'" rx="3" fill="'+(vals[i]>=80?'#10b981':vals[i]>=50?'#f59e0b':'#ef4444')+'" opacity="'+(x===tDay?1:.7)+'"><title>'+x+': '+vals[i]+'%</title></rect>'});
-  $('tChart').innerHTML=s+'</svg><div class="leg"><span><i style="background:#10b981"></i>80%+</span><span><i style="background:#f59e0b"></i>50–79%</span><span><i style="background:#ef4444"></i>under 50%</span></div>'}
-function hhmm(){var t=new Date();return(t.getHours()<10?'0':'')+t.getHours()+':'+(t.getMinutes()<10?'0':'')+t.getMinutes()}
-$('tBlocks').onchange=function(e){var id=e.target.getAttribute('data-t');if(!id)return;
-  var u=$('tUser').value.trim();if(!u){alert('Please type your name first (top right).');e.target.checked=!e.target.checked;return}
-  sv(UKEY,u);done[tDay]=done[tDay]||{};
-  if(e.target.checked)done[tDay][id]={by:u,at:hhmm()};else delete done[tDay][id];
-  sv(TKEY,done);renderTasks()};
-function addTask(bid){var inp=document.querySelector('input[data-add="'+bid+'"]'),v=inp.value.trim();if(!v)return;
-  defs.forEach(function(b){if(b.id===bid)b.t.push({id:bid+Date.now().toString(36),n:v})});sv(DKEY,defs);renderTasks()}
-$('tBlocks').onclick=function(e){var a=e.target.getAttribute('data-addb'),r=e.target.getAttribute('data-rm');
-  if(a)addTask(a);
-  if(r){var p=r.split('|');if(confirm('Remove this task from the daily list?')){defs.forEach(function(b){if(b.id===p[0])b.t=b.t.filter(function(t){return t.id!==p[1]})});sv(DKEY,defs);renderTasks()}}};
-$('tBlocks').onkeydown=function(e){var a=e.target.getAttribute&&e.target.getAttribute('data-add');if(a&&e.key==='Enter')addTask(a)};
+    s+='<rect x="'+xx+'" y="'+(H-PB-h)+'" width="'+bw+'" height="'+h+'" rx="3" fill="'+(vals[i]>=100?'#10b981':vals[i]>=60?'#f59e0b':'#ef4444')+'" opacity="'+(x===tDay?1:.7)+'"><title>'+x+': '+nDone(x)+'/3 posted</title></rect>'});
+  $('tChart').innerHTML=s+'</svg><div class="leg"><span><i style="background:#10b981"></i>all 3 done</span><span><i style="background:#f59e0b"></i>2 of 3</span><span><i style="background:#ef4444"></i>0–1 of 3</span></div>'}
+function saveLink(id){
+  var u=$('tUser').value.trim();if(!u){alert('Please type your name first (top right).');return}
+  var l=document.querySelector('input[data-link="'+id+'"]').value.trim(),t=document.querySelector('input[data-title="'+id+'"]').value.trim();
+  if(!/^https?:\/\/\S+$/i.test(l)){alert('Please paste the full post link (starts with https://).');return}
+  sv(UKEY,u);posts[tDay]=posts[tDay]||{};(posts[tDay][id]=posts[tDay][id]||[]).push({link:l,title:t,by:u,at:hhmm()});
+  sv(PKEY,posts);renderTasks()}
+$('tBlocks').onclick=function(e){var g=function(k){return e.target.getAttribute&&e.target.getAttribute(k)};
+  if(g('data-save'))saveLink(g('data-save'));
+  var r=g('data-rm');if(r){var q=r.split('|');if(confirm('Delete this link?')){posts[tDay][q[0]].splice(+q[1],1);sv(PKEY,posts);renderTasks()}}
+  var rs=g('data-res');if(rs){var q2=rs.split('|'),x=posts[tDay][q2[0]][+q2[1]],tk=TASKS.filter(function(t){return t.id===q2[0]})[0];
+    tab('s');$('fDate').value=tDay;$('fType').value=tk.sum;typeLabels();$('fName').value=x.title||tk.n;$('fLink').value=x.link;$('form').classList.add('show');$('form').scrollIntoView()}};
+$('tBlocks').onkeydown=function(e){var a=e.target.getAttribute&&e.target.getAttribute('data-link');if(a&&e.key==='Enter')saveLink(a)};
 function shift(n){var d=new Date(tDay+'T00:00');d.setDate(d.getDate()+n);tDay=iso(d);renderTasks()}
 $('dPrev').onclick=function(){shift(-1)};$('dNext').onclick=function(){shift(1)};$('dToday').onclick=function(){tDay=iso(new Date());renderTasks()};
 $('tDate').onchange=function(){if(this.value){tDay=this.value;renderTasks()}};
