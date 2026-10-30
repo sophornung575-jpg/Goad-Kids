@@ -67,7 +67,7 @@ textarea{font:inherit;color:var(--tx);background:var(--card);border:1px solid va
 .pvbtn{display:inline-block;padding:7px 11px;border:1px solid var(--bd);border-radius:8px;color:var(--tx);text-decoration:none;background:var(--card)}
 .lvh{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.lvh b{font-size:13px}.lvh .todo{flex:1;color:var(--mut);font-size:12px}
 .lf{display:flex;flex-direction:column;font-size:11px;color:var(--mut);flex:0 1 96px;gap:2px}.acts .lf input{flex:none;width:100%}
-.lvi{margin:6px 0}.lvi textarea{margin-top:4px;font-size:12px}.lmsg{font-size:12px;color:var(--mut);min-height:0}
+.lvi{margin:6px 0}.lvi textarea{margin-top:4px;font-size:12px}.lmsg{font-size:12px;color:var(--mut);min-height:0}.pst{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;margin-top:8px;color:var(--ink,#222)}.pst b{font-weight:600}.pst.wait{color:var(--mut)}.pst.warn{color:#b0524f}.pst2{font-size:11.5px;color:var(--mut);margin-top:3px}
 .gate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:200;padding:16px}
 body:not(.locked) #gate{display:none}body.locked .wrap{display:none}
 .gbox{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:20px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:10px}
@@ -239,7 +239,7 @@ function render(){
       it.map(function(x){var el=x.type==='ad'?'clicks':x.type==='video'?'likes':'likes';var rl=x.type==='video'?'views':'reach';
         return '<div class="it"><span class="tag" style="background:'+COL[x.type]+'">'+LBL[x.type]+'</span>'+
         '<div><div>'+esc(x.name||'(no name)')+(x.id===bestId?' <span class="best">Best</span>':'')+'</div>'+
-        '<div class="nums">'+(x.type==='ad'?'$'+fmt(x.spend)+' spend · ':'')+fmt(x.reach)+' '+rl+' · '+fmt(x.eng)+' '+el+' · '+fmt(x.msgs)+' msgs · '+fmt(x.orders)+' orders'+(x.link?' · <a href="'+esc(x.link)+'" target="_blank" rel="noopener">Link</a> · <a href="#" data-pv="'+esc(x.link)+'">Preview</a>':'')+'</div></div><div class="sp">'+spark(x,dl,m)+'</div>'+
+        '<div class="nums">'+(x.type==='ad'?'$'+fmt(x.spend)+' spend · ':'')+fmt(x.reach)+' '+rl+' · '+fmt(x.eng)+' '+el+' · '+fmt(x.msgs)+' msgs · '+fmt(x.orders)+' orders'+(x.link?' · <a href="'+esc(x.link)+'" target="_blank" rel="noopener">Link</a> · <a href="#" data-pv="'+esc(x.link)+'">Preview</a>':'')+'</div>'+(x.link&&x.type!=='ad'?statHTML(x.link):'')+'</div><div class="sp">'+spark(x,dl,m)+'</div>'+
         '<button class="x" data-del="'+x.id+'" title="Delete">✕</button></div>'}).join('')+'</div>'}).join(''):
     '<div class="empty">No results in this range yet.<br><br><button id="demo">Load sample data</button></div>';
   var dm=$('demo');if(dm)dm.onclick=sample;
@@ -353,6 +353,29 @@ function pctDay(d){var tot=0,got=0;TASKS.forEach(function(t){var g=+tg[t.id]||0;
 function ensureRows(d){posts[d]=posts[d]||{};TASKS.forEach(function(t){if(!(posts[d][t.id]||[]).length)posts[d][t.id]=[{id:uid(),products:[]}]})}
 function getRow(t,rid){return rowsOf(tDay,t).filter(function(r){return r.id===rid})[0]}
 function thumb(p,key,k,removable){return '<div class="pth">'+(p.img?'<img src="'+esc(p.img)+'" alt="" loading="lazy">':'<div class="noimg"></div>')+'<div class="pn"><div>'+esc(p.name)+'</div><small>'+(p.price?'$'+p.price:'')+'</small></div>'+(removable?'<b data-unp="'+key+'|'+k+'" title="Remove">✕</b>':'')+'</div>'}
+/* ---------- 6 a.m. Facebook results (job writes marketingDesk/postStats) ---------- */
+var pstat={},pstatAt=0;
+function linkKey(link){var h=0x811c9dc5,x=String(link||'').trim();for(var i=0;i<x.length;i++){h^=x.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0}return 'p'+h.toString(36)}
+function statHTML(link){
+  if(!/^https?:\/\//i.test(link||''))return '';
+  var s=pstat[linkKey(link)];
+  if(!s)return '<div class="pst wait">Results come tomorrow morning (about 6 a.m.).</div>';
+  if(s.status==='notFound')return '<div class="pst warn">'+esc(s.note||'Post not found. Use the post\'s own link (Copy link), not a share link.')+'</div>';
+  var c=function(l,v){return v===undefined||v===null?'':'<span><b>'+fmt(v)+'</b> '+l+'</span>'};
+  var ad=s.boosted?'<div class="pst2">Boost ad: <b>$'+(Math.round((+s.adSpend||0)*100)/100)+'</b> spend · <b>'+fmt(s.adReach||0)+'</b> reach · <b>'+fmt(s.adImpressions||0)+'</b> impressions</div>':'';
+  var up=s.updatedAt?'<div class="pst2">Updated '+new Date(s.updatedAt).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})+'</div>':'';
+  return '<div class="pst">'+c('views',s.views)+c('reach',s.reach)+c('reactions',s.reactions)+c('comments',s.comments)+c('shares',s.shares)+'</div>'+ad+up}
+function onStats(d){pstat=(d.exists&&d.data().posts)||{};if($('viewTasks').style.display!=='none'&&!typing())renderTasks();render()}
+function pushMade(day,t,r){
+  if(!fdb||!auth||!auth.currentUser||!r||!r.link)return;
+  var ref=fdb.collection('marketingDesk').doc('day-'+day);
+  var item={link:String(r.link).trim(),type:t==='photo'?'post':'video',product:(r.products||[]).map(function(p){return p.name}).join(', ')||r.title||'',at:Date.now(),caption:(r.script||'').slice(0,300)};
+  fdb.runTransaction(function(tx){return tx.get(ref).then(function(sn){
+    var made=(sn.exists&&sn.data().made)||[];
+    var k=-1;made.forEach(function(m,i){if(m&&m.link===item.link)k=i});
+    if(k>-1){item.at=made[k].at||item.at;made[k]=item}else made.push(item);
+    tx.set(ref,{made:made,day:day},{merge:true})})}).catch(function(e){try{syncErr(e)}catch(x){}})}
+function backfillMade(){var done={};Object.keys(posts).forEach(function(d){if(d<winStart())return;TASKS.forEach(function(t){(posts[d][t.id]||[]).forEach(function(r){if(r.link&&r.by&&!r.sample&&!done[r.link]){done[r.link]=1;pushMade(d,t.id,r)}})})})}
 function liveRow(t,r,i){
   var P=r.products||[],key='live|'+r.id;
   var items=P.map(function(p,k){return '<div class="lvi">'+thumb(p,key,k,true)+'<textarea rows="2" data-ps="'+key+'|'+k+'" placeholder="No script yet">'+esc(p.script||'')+'</textarea></div>'}).join('');
@@ -363,7 +386,7 @@ function liveRow(t,r,i){
     '<div id="lm-'+r.id+'" class="lmsg"></div>'+items+
     '<div class="lvh" style="margin-top:10px"><b>Result - after the live</b></div>'+
     '<div class="acts"><input data-link="'+key+'" value="'+esc(r.link||'')+'" placeholder="Paste the live link here" inputmode="url"><button data-prev="'+key+'">Preview</button><button data-lget="'+key+'">Get results</button></div>'+
-    '<div id="lg-'+r.id+'" class="lmsg"></div>'+
+    '<div id="lg-'+r.id+'" class="lmsg"></div>'+(r.link?statHTML(r.link):'')+
     '<div class="acts" style="align-items:flex-end;margin-top:6px">'+
     [['views','Views'],['comments','Comments'],['likes','Reactions'],['msgs','Messages'],['orders','Orders']].map(function(f){return '<label class="lf">'+f[1]+'<input type="number" min="0" data-rf="'+key+'|'+f[0]+'" value="'+(r[f[0]]||'')+'"></label>'}).join('')+
     '<button class="pri" data-save="'+key+'">Save result</button></div></div>'}
@@ -379,7 +402,7 @@ function rowHTML(t,r,i){
     '<div class="ths">'+th+'</div>'+
     '<input data-link="'+key+'" value="'+esc(r.link||'')+'" placeholder="Paste the post link here" inputmode="url">'+
     '<button data-prev="'+key+'">Preview</button>'+
-    '<button class="pri" data-save="'+key+'">Save link</button></div></div>'}
+    '<button class="pri" data-save="'+key+'">Save link</button></div>'+(r.by&&r.link?statHTML(r.link):'')+'</div>'}
 function renderTasks(){
   ensureRows(tDay);sv(PKEY,posts);
   $('tDate').value=tDay;$('tUser').value=ld(UKEY,'');
@@ -466,7 +489,7 @@ function saveLink(t,rid){var r=getRow(t,rid);if(!r)return;
   var u=$('tUser').value.trim();if(!u){alert(L('Please type your name first (top right).'));return}
   if(!/^https?:\/\/\S+$/i.test(r.link||'')){alert(L('Please paste the full post link (starts with https://).'));return}
   if(!(r.products||[]).length&&!r.title){alert(L('Please pick the product first.'));return}
-  sv(UKEY,u);r.by=u;r.at=hhmm();sv(PKEY,posts);if(t==='live')upsertLive(r);renderTasks()}
+  sv(UKEY,u);r.by=u;r.at=hhmm();sv(PKEY,posts);if(t==='live')upsertLive(r);pushMade(tDay,t,r);renderTasks()}
 $('tBlocks').addEventListener('click',function(e){var g=function(k){return e.target.getAttribute&&e.target.getAttribute(k)},q;
   if(g('data-prev')){var pq=g('data-prev').split('|'),pr=getRow(pq[0],pq[1]);openPreview(pr&&pr.link);return}
   if(g('data-lget')){liveFetch(g('data-lget').split('|')[1]);return}
@@ -632,14 +655,15 @@ function onTg(d){if(!d.exists)return;var x=d.data();['video','photo','live'].for
 function startSync(){if(SYNC.on||!fdb||!auth||!auth.currentUser)return;SYNC.on=true;SYNC.err='';var st=winStart();
   SYNC.unsubs=[fdb.collection('marketing_rows').where('day','>=',st).onSnapshot(onRows,syncErr),
     fdb.collection('marketing_results').where('date','>=',st).onSnapshot(onRes,syncErr),
-    fdb.collection('marketing_settings').doc('targets').onSnapshot(onTg,syncErr)];
-  syncSay();schedRows();schedRes();schedTg()}
+    fdb.collection('marketing_settings').doc('targets').onSnapshot(onTg,syncErr),
+    fdb.collection('marketingDesk').doc('postStats').onSnapshot(onStats,function(){})];
+  syncSay();schedRows();schedRes();schedTg();setTimeout(backfillMade,4000)}
 function stopSync(){SYNC.unsubs.forEach(function(u){try{u()}catch(e){}});SYNC.unsubs=[];SYNC.on=false;SYNC.remoteRows={};SYNC.remoteRes={};syncSay()}
 syncSay();
 
 /* ---------- LANGUAGE: English / Khmer ---------- */
 var LANG=ld('goatMktLang','en');
-var KM={
+var KM={'Results come tomorrow morning (about 6 a.m.).':'លទ្ធផលនឹងមកនៅព្រឹកស្អែក (ប្រហែលម៉ោង ៦ ព្រឹក)។','views':'ចំនួនមើល','reactions':'ប្រតិកម្ម','comments':'មតិ','shares':'ចែករំលែក','Boost ad:':'ពាណិជ្ជកម្មបូស្ត៖','spend':'ចំណាយ','impressions':'ការបង្ហាញ','Updated':'ធ្វើបច្ចុប្បន្នភាព',
 'Goat Kids – Marketing Summary':'Goat Kids – សង្ខេបទីផ្សារ','+ Add result':'+ បន្ថែមលទ្ធផល','Settings':'ការកំណត់','Theme':'ពណ៌ផ្ទៃ',
 'Summary':'សង្ខេប','Daily Tasks':'កិច្ចការប្រចាំថ្ងៃ','Date':'កាលបរិច្ឆេទ','Type':'ប្រភេទ','Ad':'ពាណិជ្ជកម្ម','Post':'ការផុស','Video':'វីដេអូ','Photo':'រូបភាព','Live':'ឡាយវ៍',
 'Name / product':'ឈ្មោះ / ផលិតផល','e.g. Dress 110 promo':'ឧ. ប្រូម៉ូសិនរ៉ូប 110','Post link':'តំណភ្ជាប់ការផុស','Spend $':'ចំណាយ $','Reach':'ការទៅដល់','Views':'ចំនួនមើល','Clicks':'ចុច','Likes':'ចូលចិត្ត',
