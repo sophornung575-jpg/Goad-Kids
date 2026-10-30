@@ -51,6 +51,14 @@ details.blk summary span{color:var(--mut);font-weight:400;font-size:12px}
 .tk input[type=checkbox]{width:20px;height:20px;accent-color:#10b981;flex:none}
 .tk.done .tn{text-decoration:line-through;color:var(--mut)}.tk .tn{flex:1}.tk small{color:var(--mut);font-size:11px;white-space:nowrap}
 .addt{display:flex;gap:6px;padding:8px 12px;border-top:1px solid var(--bd)}.addt input{flex:1}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:12px;z-index:50}.modal[hidden]{display:none}
+.mbox{background:var(--card);border-radius:14px;max-width:640px;width:100%;max-height:92vh;overflow:auto;padding:16px}
+textarea{font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px;width:100%}
+.row{padding:10px 12px;border-top:1px solid var(--bd)}.rh{display:flex;gap:8px;align-items:center;margin-bottom:6px}.rh .ok{color:#059669;font-size:12px;flex:1}.rh .todo{color:var(--mut);font-size:12px;flex:1}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}.chip{background:var(--bg);border:1px solid var(--bd);border-radius:99px;padding:3px 10px;font-size:12px}.chip b{cursor:pointer;color:var(--mut);margin-left:4px}
+.srch{position:relative;margin-bottom:6px}.srch input{width:100%}.dd{position:absolute;left:0;right:0;top:100%;z-index:20;background:var(--card);border:1px solid var(--bd);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.18);max-height:260px;overflow:auto}
+.dd[hidden]{display:none}.dd div{padding:8px 10px;cursor:pointer;border-top:1px solid var(--bd)}.dd div:first-child{border-top:0}.dd div:hover{background:var(--bg)}.dd small{color:var(--mut)}.dd .typed{color:var(--mut);font-style:italic}
+.acts{display:flex;gap:6px;flex-wrap:wrap}.acts input{flex:1 1 200px}
 .empty{text-align:center;color:var(--mut);padding:30px}
 </style>
 </head>
@@ -60,7 +68,7 @@ details.blk summary span{color:var(--mut);font-weight:400;font-size:12px}
   <h1>📊 Goat Kids – Marketing Summary</h1>
   <div class="seg" id="range"><button data-d="7" class="on">7d</button><button data-d="14">14d</button><button data-d="30">30d</button></div>
   <button id="addBtn" class="pri">+ Add result</button>
-  <button id="theme">🌓</button>
+  <button id="gear" title="Settings">⚙️</button><button id="theme">🌓</button>
 </header>
 
 <div class="tabs"><button id="tabS" class="on">📊 Summary</button><button id="tabT">✅ Daily Tasks</button></div>
@@ -82,6 +90,9 @@ details.blk summary span{color:var(--mut);font-weight:400;font-size:12px}
 
 <div class="kpis" id="kpis"></div>
 
+<div class="card" style="margin-bottom:14px"><h2>🎯 Monthly target <small style="color:var(--mut)">daily target × days in the month</small></h2>
+  <div class="f" style="max-width:420px;margin-bottom:10px"><label>Videos / day<input type="number" id="tgV" min="0"></label><label>Photo posts / day<input type="number" id="tgP" min="0"></label><label>Lives / day<input type="number" id="tgL" min="0"></label></div>
+  <div class="kpis" id="tgTiles"></div><div id="cTgt"></div></div>
 <div class="grid">
   <div class="card"><h2>Trend <select id="metric"></select></h2><div id="cTrend"></div></div>
   <div class="card"><h2>By type per day <small style="color:var(--mut)" id="mName"></small></h2><div id="cStack"></div>
@@ -101,7 +112,7 @@ details.blk summary span{color:var(--mut);font-weight:400;font-size:12px}
   <div class="card" style="margin-bottom:12px">
     <h2>Progress <span id="tPct"></span></h2><div class="bar"><i id="tBar" style="width:0"></i></div>
   </div>
-  <div class="card" style="margin-bottom:12px"><h2>Completion – last 14 days</h2><div id="tChart"></div></div>
+  <div class="card" style="margin-bottom:12px"><h2>Daily target met – last 30 days</h2><div id="tChart"></div></div>
   <div id="tBlocks"></div>
 </div>
 </div>
@@ -246,46 +257,179 @@ function sample(){
       reach:r,eng:Math.round(r*(.02+Math.random()*.05)),msgs:Math.round(r/300*Math.random()*2),orders:Math.round(Math.random()*(t==='ad'?4:3))})})});
   save();render()}
 
-/* ---------- DAILY TASKS: video post, photo post, live ---------- */
-var PKEY='goatDailyPosts',UKEY='goatTaskUser';
-var TASKS=[{id:'video',n:'🎬 Video post',c:COL.video,sum:'video'},{id:'photo',n:'📷 Photo post',c:COL.post,sum:'post'},{id:'live',n:'🔴 Live',c:'#ef4444',sum:'video'}];
-var posts,tDay=iso(new Date());
+/* ---------- HELPERS ---------- */
 function ld(k,d){try{return JSON.parse(localStorage.getItem(k)||'')||d}catch(e){return d}}
 function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
-posts=ld(PKEY,{});
-function dayPosts(d){return posts[d]||{}}
-function nDone(d){var p=dayPosts(d);return TASKS.filter(function(t){return(p[t.id]||[]).length}).length}
 function hhmm(){var t=new Date();return(t.getHours()<10?'0':'')+t.getHours()+':'+(t.getMinutes()<10?'0':'')+t.getMinutes()}
 function short(u){return u.replace(/^https?:\/\/(www\.)?/,'').slice(0,42)+(u.length>50?'…':'')}
+function uid(){return 'r'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36)}
+
+/* ---------- SETTINGS: Firebase products + Gemini ---------- */
+var CKEY='goatMktCfg',PRKEY='goatMktProducts',TGKEY='goatMktTargets',PKEY='goatDailyPosts',UKEY='goatTaskUser';
+var cfg=ld(CKEY,{fb:'',key:'',model:'gemini-2.5-flash',store:'GOAT-1979',email:''});
+var products=ld(PRKEY,[]),fbReady=null,auth=null,fdb=null,statusTxt='';
+var LIBS={app:['https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-app-compat.min.js','https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js'],
+ auth:['https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-auth-compat.min.js','https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js'],
+ fs:['https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-firestore-compat.min.js','https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js']};
+function loadScript(urls){return new Promise(function(res,rej){var i=0;(function next(){if(i>=urls.length)return rej(new Error('Could not load the Firebase library (network blocked?)'));
+  var s=document.createElement('script');s.src=urls[i++];s.onload=function(){res()};s.onerror=function(){s.remove();next()};document.head.appendChild(s)})()})}
+function parseCfg(t){try{return JSON.parse(t)}catch(e){var o={},re=/["']?(\w+)["']?\s*:\s*["']([^"']*)["']/g,m;while((m=re.exec(t)))o[m[1]]=m[2];return o}}
+function setStatus(t){if(t!==undefined)statusTxt=t;var e=$('sStatus');if(e)e.textContent=statusTxt}
+function initFb(){if(fbReady)return fbReady;
+  fbReady=(async function(){var c=parseCfg(cfg.fb||'');if(!c.apiKey||!c.projectId)throw new Error('Firebase config is missing apiKey or projectId');
+    if(!window.firebase)await loadScript(LIBS.app);if(!firebase.auth)await loadScript(LIBS.auth);if(!firebase.firestore)await loadScript(LIBS.fs);
+    if(!firebase.apps.length)firebase.initializeApp(c);auth=firebase.auth();fdb=firebase.firestore();
+    auth.onAuthStateChanged(function(u){if(u){setStatus('✅ Signed in as '+u.email);if(!ld(UKEY,'')&&u.email){sv(UKEY,u.email.split('@')[0])}fetchProducts()}else setStatus('Not signed in')});return true})();
+  fbReady.catch(function(){fbReady=null});return fbReady}
+async function fetchProducts(){
+  try{var snap=await fdb.collection('stores').doc(cfg.store||'GOAT-1979').collection('products').get(),a=[];
+    snap.forEach(function(d){var x=d.data();if(x.active===false)return;
+      a.push({id:d.id,name:x.name||'',price:x.price||0,stock:x.stock||0,category:x.category||'',sizes:(x.sizes||[]).filter(function(z){return z.qty>0}).map(function(z){return z.name})})});
+    a.sort(function(p,q){return p.name.localeCompare(q.name)});products=a;sv(PRKEY,a);setStatus('✅ '+a.length+' products loaded')}
+  catch(e){setStatus('❌ '+e.message)}}
+if(cfg.fb)initFb().catch(function(e){setStatus('❌ '+e.message)});
+
+function openSettings(){
+  var m=$('modal');m.hidden=false;
+  m.innerHTML='<div class="mbox"><h2 style="font-size:16px">⚙️ Settings</h2>'+
+  '<div class="f" style="grid-template-columns:1fr">'+
+  '<label>Firebase config (paste from the store app → Settings)<textarea id="sFb" rows="5" placeholder=\'{"apiKey":"...","projectId":"..."}\'></textarea></label>'+
+  '<label>Store ID<input id="sStore"></label>'+
+  '<label>Staff email<input id="sEmail" type="email" autocomplete="username"></label>'+
+  '<label>Password (not saved)<input id="sPass" type="password" autocomplete="current-password"></label>'+
+  '<label>Gemini API key (free tier)<input id="sKey" type="password" autocomplete="off"></label>'+
+  '<label>Gemini model<input id="sModel"></label></div>'+
+  '<p id="sStatus" style="color:var(--mut);font-size:12px;min-height:16px"></p>'+
+  '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="pri" id="sSave">Save & sign in</button><button id="sReload">Reload products</button><button id="sOut">Sign out</button><button id="sClose" style="margin-left:auto">Close</button></div>'+
+  '<p style="color:var(--mut);font-size:12px">Products loaded: '+products.length+'. The key and config are saved only in this browser.</p></div>';
+  $('sFb').value=cfg.fb||'';$('sStore').value=cfg.store||'GOAT-1979';$('sEmail').value=cfg.email||'';$('sKey').value=cfg.key||'';$('sModel').value=cfg.model||'gemini-2.5-flash';setStatus();
+  $('sClose').onclick=function(){m.hidden=true;renderTasks()};
+  $('sSave').onclick=async function(){
+    cfg={fb:$('sFb').value.trim(),store:$('sStore').value.trim()||'GOAT-1979',email:$('sEmail').value.trim(),key:$('sKey').value.trim(),model:$('sModel').value.trim()||'gemini-2.5-flash'};sv(CKEY,cfg);
+    var pw=$('sPass').value;if(!cfg.fb){setStatus('Saved (no Firebase config yet).');return}
+    try{setStatus('Connecting…');await initFb();if(cfg.email&&pw){await auth.signInWithEmailAndPassword(cfg.email,pw)}else if(auth.currentUser){await fetchProducts()}else setStatus('Saved. Enter email and password to sign in.')}
+    catch(e){setStatus('❌ '+e.message)}};
+  $('sReload').onclick=async function(){try{await initFb();if(!auth.currentUser){setStatus('Sign in first.');return}await fetchProducts()}catch(e){setStatus('❌ '+e.message)}};
+  $('sOut').onclick=async function(){try{if(auth)await auth.signOut()}catch(e){}};
+}
+var modal=document.createElement('div');modal.id='modal';modal.className='modal';modal.hidden=true;document.body.appendChild(modal);
+$('gear').onclick=openSettings;
+
+/* ---------- DAILY TASKS: video post, photo post, live ---------- */
+var TASKS=[{id:'video',n:'🎬 Video post',s:'Video',c:COL.video,sum:'video'},{id:'photo',n:'📷 Photo post',s:'Photo',c:COL.post,sum:'post'},{id:'live',n:'🔴 Live',s:'Live',c:'#ef4444',sum:'video'}];
+var posts=ld(PKEY,{}),tDay=iso(new Date());
+var tg=ld(TGKEY,{video:1,photo:1,live:1});
+function rowsOf(d,t){return((posts[d]||{})[t])||[]}
+function postedN(d,t){return rowsOf(d,t).filter(function(r){return r.link}).length}
+function nDone(d){return TASKS.filter(function(t){return postedN(d,t.id)>0}).length}
+function pctDay(d){var tot=0,got=0;TASKS.forEach(function(t){var g=+tg[t.id]||0;tot+=g;got+=Math.min(postedN(d,t.id),g)});return tot?got/tot:0}
+function ensureRows(d){posts[d]=posts[d]||{};TASKS.forEach(function(t){if(!(posts[d][t.id]||[]).length)posts[d][t.id]=[{id:uid(),products:[]}]})}
+function getRow(t,rid){return rowsOf(tDay,t).filter(function(r){return r.id===rid})[0]}
+function rowHTML(t,r,i){
+  var P=r.products||[],multi=t.id==='live',key=t.id+'|'+r.id;
+  var chips=P.map(function(p,k){return '<span class="chip">'+esc(p.name)+(p.price?' · $'+p.price:'')+' <b data-unp="'+key+'|'+k+'" title="Remove">✕</b></span>'}).join('')+(!P.length&&r.title?'<span class="chip">'+esc(r.title)+'</span>':'');
+  var canSearch=multi||(!P.length&&!r.title);
+  return '<div class="row"><div class="rh"><b>'+t.s+' #'+(i+1)+'</b>'+(r.link?'<span class="ok">✓ '+esc(r.by||'?')+' · '+esc(r.at||'')+'</span>':'<span class="todo">not posted yet</span>')+
+    '<button class="x" data-delrow="'+key+'" title="Delete this row">✕</button></div>'+
+    '<div class="chips">'+chips+'</div>'+
+    (canSearch?'<div class="srch"><input data-s="'+key+'" placeholder="🔍 '+(multi?'Search products (you can add many)':'Search the product')+(products.length?'':' – products not loaded, see ⚙️')+'" autocomplete="off"><div class="dd" hidden></div></div>':'')+
+    '<div class="acts"><button data-gen="'+key+'">✨ Write script'+(r.script?' ✔':'')+'</button>'+
+    '<input data-link="'+key+'" value="'+esc(r.link||'')+'" placeholder="Paste the post link here" inputmode="url">'+
+    '<button class="pri" data-save="'+key+'">Save link</button></div></div>'}
 function renderTasks(){
+  ensureRows(tDay);sv(PKEY,posts);
   $('tDate').value=tDay;$('tUser').value=ld(UKEY,'');
-  var p=dayPosts(tDay),n=nDone(tDay),pc=Math.round(n/TASKS.length*100);
-  $('tPct').textContent=n+'/'+TASKS.length+' · '+pc+'%';$('tBar').style.width=pc+'%';
-  $('tBlocks').innerHTML=TASKS.map(function(t){var e=p[t.id]||[];
-    return '<div class="day"><div class="dh"><span><span class="tag" style="background:'+t.c+';margin-right:8px">'+(e.length?'✓ DONE':'TODO')+'</span>'+t.n+'</span><small>'+e.length+' posted</small></div>'+
-      e.map(function(x,i){return '<div class="tk done"><span class="tn" style="text-decoration:none;color:var(--tx)"><div>'+esc(x.title||t.n)+'</div>'+
-        '<a href="'+esc(x.link)+'" target="_blank" rel="noopener" style="font-size:12px;word-break:break-all">🔗 '+esc(short(x.link))+'</a></span>'+
-        '<small>'+esc(x.by||'?')+' · '+x.at+'</small>'+
-        '<button class="x" data-res="'+t.id+'|'+i+'" title="Enter results in Summary" style="font-size:12px;border:1px solid var(--bd);border-radius:6px">📊 results</button>'+
-        '<button class="x" data-rm="'+t.id+'|'+i+'" title="Delete">✕</button></div>'}).join('')+
-      '<div class="addt" style="flex-wrap:wrap"><input placeholder="Title (optional)" data-title="'+t.id+'" style="flex:1 1 140px"><input placeholder="Paste the post link here" data-link="'+t.id+'" style="flex:2 1 220px" inputmode="url"><button class="pri" data-save="'+t.id+'">Save link</button></div></div>'}).join('');
-  var dl=dayList(14),vals=dl.map(function(x){return Math.round(nDone(x)/TASKS.length*100)});
-  var s='<svg viewBox="0 0 '+W+' '+H+'">'+axes(100,dl),bw=(W-PL-PR)/14*.65;
-  dl.forEach(function(x,i){var h=(H-PT-PB)*vals[i]/100,xx=PL+(W-PL-PR)*(i+.5)/14-bw/2;
-    s+='<rect x="'+xx+'" y="'+(H-PB-h)+'" width="'+bw+'" height="'+h+'" rx="3" fill="'+(vals[i]>=100?'#10b981':vals[i]>=60?'#f59e0b':'#ef4444')+'" opacity="'+(x===tDay?1:.7)+'"><title>'+x+': '+nDone(x)+'/3 posted</title></rect>'});
-  $('tChart').innerHTML=s+'</svg><div class="leg"><span><i style="background:#10b981"></i>all 3 done</span><span><i style="background:#f59e0b"></i>2 of 3</span><span><i style="background:#ef4444"></i>0–1 of 3</span></div>'}
-function saveLink(id){
+  var tot=0,got=0;TASKS.forEach(function(t){var g=+tg[t.id]||0;tot+=g;got+=Math.min(postedN(tDay,t.id),g)});
+  var pc=tot?Math.round(got/tot*100):0;
+  $('tPct').textContent=got+'/'+tot+' posts · '+pc+'%';$('tBar').style.width=pc+'%';
+  $('tBlocks').innerHTML=TASKS.map(function(t){var rs=rowsOf(tDay,t.id),n=postedN(tDay,t.id),g=+tg[t.id]||0;
+    return '<div class="day"><div class="dh"><span><span class="tag" style="background:'+t.c+';margin-right:8px">'+(n?'✓ '+n:'TODO')+'</span>'+t.n+'</span><small>posted '+n+(g?' / target '+g:'')+'</small></div>'+
+      rs.map(function(r,i){return rowHTML(t,r,i)}).join('')+
+      '<div class="addt"><button data-addrow="'+t.id+'">+ Add another '+t.s.toLowerCase()+'</button></div></div>'}).join('');
+  var dl=dayList(30),vals=dl.map(function(x){return Math.round(pctDay(x)*100)});
+  var s='<svg viewBox="0 0 '+W+' '+H+'">'+axes(100,dl),bw=(W-PL-PR)/dl.length*.65;
+  dl.forEach(function(x,i){var h=(H-PT-PB)*vals[i]/100,xx=PL+(W-PL-PR)*(i+.5)/dl.length-bw/2;
+    s+='<rect x="'+xx+'" y="'+(H-PB-h)+'" width="'+bw+'" height="'+h+'" rx="2" fill="'+(vals[i]>=100?'#10b981':vals[i]>=60?'#f59e0b':'#ef4444')+'" opacity="'+(x===tDay?1:.7)+'"><title>'+x+': '+vals[i]+'% of daily target</title></rect>'});
+  $('tChart').innerHTML=s+'</svg><div class="leg"><span><i style="background:#10b981"></i>target met</span><span><i style="background:#f59e0b"></i>60–99%</span><span><i style="background:#ef4444"></i>under 60%</span></div>'}
+
+/* product search */
+function closeDD(){[].forEach.call(document.querySelectorAll('.dd'),function(d){d.hidden=true})}
+document.addEventListener('click',function(e){if(!e.target.closest||!e.target.closest('.srch'))closeDD()});
+$('tBlocks').addEventListener('input',function(e){
+  var el=e.target,sk=el.getAttribute('data-s'),lk=el.getAttribute('data-link');
+  if(lk){var q=lk.split('|'),r=getRow(q[0],q[1]);if(r){r.link=el.value.trim();sv(PKEY,posts)}return}
+  if(!sk)return;var dd=el.parentNode.querySelector('.dd'),v=el.value.trim().toLowerCase();
+  if(!v){dd.hidden=true;return}
+  var m=products.filter(function(p){return(p.name+' '+p.category).toLowerCase().indexOf(v)>-1}).slice(0,8);
+  dd.innerHTML=m.map(function(p){return '<div data-pick="'+sk+'|'+esc(p.id)+'">'+esc(p.name)+' <small>$'+p.price+' · stock '+p.stock+'</small></div>'}).join('')+
+    '<div data-pickt="'+sk+'" class="typed">Use “'+esc(el.value.trim())+'” as typed</div>';
+  dd.hidden=false});
+function pickProduct(t,rid,pid){var r=getRow(t,rid),p=products.filter(function(x){return x.id===pid})[0];if(!r||!p)return;
+  r.products=r.products||[];if(t==='live'){if(!r.products.some(function(x){return x.id===pid}))r.products.push(p)}else r.products=[p];
+  r.title='';sv(PKEY,posts);renderTasks()}
+function saveLink(t,rid){var r=getRow(t,rid);if(!r)return;
   var u=$('tUser').value.trim();if(!u){alert('Please type your name first (top right).');return}
-  var l=document.querySelector('input[data-link="'+id+'"]').value.trim(),t=document.querySelector('input[data-title="'+id+'"]').value.trim();
-  if(!/^https?:\/\/\S+$/i.test(l)){alert('Please paste the full post link (starts with https://).');return}
-  sv(UKEY,u);posts[tDay]=posts[tDay]||{};(posts[tDay][id]=posts[tDay][id]||[]).push({link:l,title:t,by:u,at:hhmm()});
-  sv(PKEY,posts);renderTasks()}
-$('tBlocks').onclick=function(e){var g=function(k){return e.target.getAttribute&&e.target.getAttribute(k)};
-  if(g('data-save'))saveLink(g('data-save'));
-  var r=g('data-rm');if(r){var q=r.split('|');if(confirm('Delete this link?')){posts[tDay][q[0]].splice(+q[1],1);sv(PKEY,posts);renderTasks()}}
-  var rs=g('data-res');if(rs){var q2=rs.split('|'),x=posts[tDay][q2[0]][+q2[1]],tk=TASKS.filter(function(t){return t.id===q2[0]})[0];
-    tab('s');$('fDate').value=tDay;$('fType').value=tk.sum;typeLabels();$('fName').value=x.title||tk.n;$('fLink').value=x.link;$('form').classList.add('show');$('form').scrollIntoView()}};
-$('tBlocks').onkeydown=function(e){var a=e.target.getAttribute&&e.target.getAttribute('data-link');if(a&&e.key==='Enter')saveLink(a)};
+  if(!/^https?:\/\/\S+$/i.test(r.link||'')){alert('Please paste the full post link (starts with https://).');return}
+  if(!(r.products||[]).length&&!r.title){alert('Please pick the product first.');return}
+  sv(UKEY,u);r.by=u;r.at=hhmm();sv(PKEY,posts);renderTasks()}
+$('tBlocks').addEventListener('click',function(e){var g=function(k){return e.target.getAttribute&&e.target.getAttribute(k)},q;
+  if(g('data-pick')){q=g('data-pick').split('|');pickProduct(q[0],q[1],q.slice(2).join('|'));return}
+  if(g('data-pickt')){q=g('data-pickt').split('|');var r=getRow(q[0],q[1]),inp=e.target.parentNode.parentNode.querySelector('input');if(r&&inp.value.trim()){r.title=inp.value.trim();r.products=[];sv(PKEY,posts);renderTasks()}return}
+  if(g('data-unp')){q=g('data-unp').split('|');var r2=getRow(q[0],q[1]);if(r2){r2.products.splice(+q[2],1);sv(PKEY,posts);renderTasks()}return}
+  if(g('data-addrow')){var t=g('data-addrow');posts[tDay][t].push({id:uid(),products:[]});sv(PKEY,posts);renderTasks();return}
+  if(g('data-delrow')){q=g('data-delrow').split('|');if(confirm('Delete this row?')){posts[tDay][q[0]]=rowsOf(tDay,q[0]).filter(function(r){return r.id!==q[1]});sv(PKEY,posts);renderTasks()}return}
+  if(g('data-save')){q=g('data-save').split('|');saveLink(q[0],q[1]);return}
+  if(g('data-gen')){q=g('data-gen').split('|');openScript(q[0],q[1]);return}
+  if(e.target.getAttribute&&e.target.getAttribute('data-res')){q=e.target.getAttribute('data-res').split('|');sendToSummary(q[0],q[1])}});
+$('tBlocks').addEventListener('keydown',function(e){var a=e.target.getAttribute&&e.target.getAttribute('data-link');if(a&&e.key==='Enter'){var q=a.split('|');saveLink(q[0],q[1])}});
+function sendToSummary(t,rid){var r=getRow(t,rid),tk=TASKS.filter(function(x){return x.id===t})[0];if(!r)return;
+  tab('s');$('fDate').value=tDay;$('fType').value=tk.sum;typeLabels();
+  $('fName').value=(r.products||[]).map(function(p){return p.name}).join(', ')||r.title||tk.n;$('fLink').value=r.link||'';$('form').classList.add('show');$('form').scrollIntoView()}
+
+/* ---------- Gemini script pop-up ---------- */
+var OCC={birthday:'birthday gifts and birthday outfits',wedding:'wedding / ceremony outfits for kids',both:'birthday and wedding / ceremony outfits'};
+var HOOK={question:'QUESTION hook (open with a question the parent asks herself)',problem:'PROBLEM hook (open with a common problem, e.g. kids outgrow clothes, nothing nice to wear)',price:'PRICE hook (open with the surprising low price)'};
+function buildPrompt(t,r,o){
+  var P=(r.products||[]).map(function(p){return '- '+p.name+(p.price?' | price $'+p.price:'')+(p.category?' | category: '+p.category:'')+(p.sizes&&p.sizes.length?' | sizes: '+p.sizes.join(', '):'')}).join('\n')||('- '+(r.title||'(product not set)'));
+  var base='You are a social media copywriter for "Goat Kids", a kids clothing shop in Phnom Penh, Cambodia. The audience is Khmer parents. Focus: '+OCC[o.occ]+'. '+(o.concept?'Staff idea / concept: '+o.concept+'. ':'')+'\nProducts:\n'+P+'\n\n';
+  if(t==='video')return base+'Write a short-video script (15-30 seconds). Opening style: '+HOOK[o.hook]+'. Use exactly this format:\nHOOK STYLE: ...\nSHOT 1 (Hook) - Film: ... | Khmer line: ...\nSHOT 2 (Show the product) - Film: ... | Khmer line: ...\nSHOT 3 (Details: size, fabric, price) - Film: ... | Khmer line: ...\nSHOT 4 (Call to action: message us / order now) - Film: ... | Khmer line: ...\nCAPTION: a short Khmer caption with 3 hashtags.\nWrite the filming instructions in English and all spoken lines and the caption in Khmer. Do not use markdown symbols.';
+  if(t==='photo')return base+'Write a Facebook photo-post caption in Khmer: a strong first line, 2-3 short lines about the product with price and sizes, a call to action to message the page, and 3-5 hashtags. Then add "PHOTO TIP:" with one English line on how to shoot the photo. Do not use markdown symbols.';
+  return base+'This is a Facebook Live. For EACH product write one short selling line in Khmer (maximum 20 words) that the host can say, including the price. Number the products. Then add "OPENING LINE:" and "CLOSING LINE:" in Khmer. Do not use markdown symbols.'}
+async function callGemini(prompt){
+  if(!cfg.key)throw new Error('Add your Gemini API key in ⚙️ Settings first.');
+  var res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(cfg.model||'gemini-2.5-flash')+':generateContent?key='+encodeURIComponent(cfg.key),
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})});
+  var j=await res.json();if(!res.ok)throw new Error((j.error&&j.error.message)||('Gemini error '+res.status));
+  var tx=((j.candidates||[])[0]||{}).content;tx=tx&&tx.parts?tx.parts.map(function(p){return p.text||''}).join(''):'';
+  if(!tx)throw new Error('Gemini returned no text. Try again.');return tx.trim()}
+function openScript(t,rid){
+  var r=getRow(t,rid),tk=TASKS.filter(function(x){return x.id===t})[0];if(!r)return;
+  if(!(r.products||[]).length&&!r.title){alert('Please search and pick the product first.');return}
+  var m=$('modal');m.hidden=false;var vid=t==='video';
+  m.innerHTML='<div class="mbox"><h2 style="font-size:16px;display:flex;justify-content:space-between;gap:8px"><span>✨ '+tk.n+' – script</span><button class="x" id="mClose">✕</button></h2>'+
+   '<div class="chips">'+((r.products||[]).map(function(p){return '<span class="chip">'+esc(p.name)+(p.price?' · $'+p.price:'')+'</span>'}).join('')||'<span class="chip">'+esc(r.title)+'</span>')+'</div>'+
+   (vid?'<div class="f" style="margin:10px 0"><label style="grid-column:1/-1">Opening hook<div class="seg" id="mHook"><button data-v="question">Question</button><button data-v="problem">Problem</button><button data-v="price">Price</button></div></label></div>':'')+
+   '<div class="f" style="margin:10px 0"><label>Occasion<select id="mOcc"><option value="birthday">Birthday</option><option value="wedding">Wedding</option><option value="both">Both</option></select></label></div>'+
+   '<label style="font-size:12px;color:var(--mut)">Concept / idea (type or speak)</label><div style="display:flex;gap:6px;margin:4px 0 10px"><textarea id="mConcept" rows="2" style="flex:1" placeholder="e.g. matching outfit for sisters"></textarea><button id="mMic" title="Speak">🎤</button></div>'+
+   '<div style="display:flex;gap:8px;margin-bottom:8px"><button class="pri" id="mGen">✨ Generate</button><span id="mMsg" style="color:var(--mut);font-size:12px;align-self:center"></span></div>'+
+   '<textarea id="mOut" rows="12" style="width:100%" placeholder="The script appears here. You can edit it."></textarea>'+
+   '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button id="mCopy">Copy</button><button class="pri" id="mSave">Save & close</button></div></div>';
+  var o={hook:r.hook||'question',occ:r.occ||'both'};$('mOcc').value=o.occ;$('mConcept').value=r.concept||'';$('mOut').value=r.script||'';
+  function paintHook(){if(vid)[].forEach.call($('mHook').children,function(b){b.classList.toggle('on',b.getAttribute('data-v')===o.hook)})}paintHook();
+  if(vid)$('mHook').onclick=function(e){var v=e.target.getAttribute('data-v');if(v){o.hook=v;paintHook()}};
+  function persist(){r.hook=o.hook;r.occ=$('mOcc').value;r.concept=$('mConcept').value.trim();r.script=$('mOut').value;sv(PKEY,posts)}
+  async function gen(){persist();$('mGen').disabled=true;$('mMsg').textContent='Gemini is writing…';
+    try{$('mOut').value=await callGemini(buildPrompt(t,r,{hook:o.hook,occ:r.occ,concept:r.concept}));$('mMsg').textContent='Done. Edit if you like, or press Regenerate.';persist()}
+    catch(e){$('mMsg').textContent='❌ '+e.message}$('mGen').disabled=false;$('mGen').textContent='🔄 Regenerate'}
+  $('mGen').onclick=gen;if(r.script)$('mGen').textContent='🔄 Regenerate';
+  $('mCopy').onclick=function(){var ta=$('mOut');ta.select();try{navigator.clipboard.writeText(ta.value).catch(function(){document.execCommand('copy')})}catch(e){document.execCommand('copy')}$('mMsg').textContent='Copied ✔'};
+  $('mSave').onclick=function(){persist();m.hidden=true;renderTasks()};$('mClose').onclick=function(){persist();m.hidden=true;renderTasks()};
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR)$('mMic').style.display='none';else $('mMic').onclick=function(){var sr=new SR();sr.lang='km-KH';sr.onresult=function(ev){$('mConcept').value=($('mConcept').value+' '+ev.results[0][0].transcript).trim()};sr.onerror=function(){$('mMsg').textContent='Mic not available'};sr.start();$('mMsg').textContent='Listening…'};
+  if(!r.script&&cfg.key)gen();
+}
+
+/* ---------- date / user / tabs ---------- */
 function shift(n){var d=new Date(tDay+'T00:00');d.setDate(d.getDate()+n);tDay=iso(d);renderTasks()}
 $('dPrev').onclick=function(){shift(-1)};$('dNext').onclick=function(){shift(1)};$('dToday').onclick=function(){tDay=iso(new Date());renderTasks()};
 $('tDate').onchange=function(){if(this.value){tDay=this.value;renderTasks()}};
@@ -294,6 +438,26 @@ function tab(t){var s=t==='s';$('viewSummary').style.display=s?'':'none';$('view
   $('tabS').classList.toggle('on',s);$('tabT').classList.toggle('on',!s);
   ['range','addBtn'].forEach(function(i){$(i).style.display=s?'':'none'});if(!s)renderTasks()}
 $('tabS').onclick=function(){tab('s')};$('tabT').onclick=function(){tab('t')};
+
+/* ---------- monthly target (Summary tab) ---------- */
+function renderTarget(){
+  var now=new Date(),y=now.getFullYear(),mo=now.getMonth(),dim=new Date(y,mo+1,0).getDate(),today=now.getDate();
+  var dates=[];for(var d=1;d<=dim;d++)dates.push(iso(new Date(y,mo,d)));
+  $('tgV').value=tg.video;$('tgP').value=tg.photo;$('tgL').value=tg.live;
+  var perDay=(+tg.video||0)+(+tg.photo||0)+(+tg.live||0),cum=[],c=0;
+  dates.forEach(function(ds,i){if(i<today){TASKS.forEach(function(t){c+=postedN(ds,t.id)});cum.push(c)}});
+  var tcum=dates.map(function(_,i){return perDay*(i+1)}),max=niceMax(Math.max(perDay*dim,c,1));
+  var s='<svg viewBox="0 0 '+W+' '+H+'">'+axes(max,dates),n=dim;
+  function X(i){return PL+(W-PL-PR)*(i+.5)/n}function Y(v){return PT+(H-PT-PB)*(1-v/max)}
+  s+='<path d="'+tcum.map(function(v,i){return(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)}).join(' ')+'" fill="none" stroke="var(--mut)" stroke-width="2" stroke-dasharray="5 4"/>';
+  s+='<path d="'+cum.map(function(v,i){return(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)}).join(' ')+'" fill="none" stroke="#10b981" stroke-width="3" stroke-linejoin="round"/>';
+  cum.forEach(function(v,i){s+='<circle cx="'+X(i)+'" cy="'+Y(v)+'" r="'+(i===cum.length-1?4:2.2)+'" fill="#10b981"><title>'+dates[i]+': '+v+' posted</title></circle>'});
+  $('cTgt').innerHTML=s+'</svg><div class="leg"><span><i style="background:#10b981"></i>Posted so far</span><span><i style="background:var(--mut)"></i>Target pace</span></div>';
+  $('tgTiles').innerHTML=TASKS.map(function(t){var done=0;dates.forEach(function(ds,i){if(i<today)done+=postedN(ds,t.id)});
+    var goal=(+tg[t.id]||0)*dim,pace=(+tg[t.id]||0)*today,diff=done-pace;
+    return '<div class="kpi"><span>'+t.n+' (month)</span><b>'+done+' / '+goal+'</b><i class="'+(diff>=0?'up':'dn')+'">'+(diff>=0?'▲ ahead by ':'▼ behind by ')+Math.abs(diff)+'</i></div>'}).join('')}
+['tgV','tgP','tgL'].forEach(function(id,i){$(id).onchange=function(){tg[['video','photo','live'][i]]=Math.max(0,+this.value||0);sv(TGKEY,tg);renderTarget()}});
+var _render=render;render=function(){_render();renderTarget()};
 render();
 </script>
 </body>
