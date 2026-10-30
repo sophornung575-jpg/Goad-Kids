@@ -96,7 +96,7 @@ async function savedPosts(db){
     const k = addDays(today, -i);
     const s = await db.collection(COL).doc('day-' + k).get();
     if (!s.exists) continue;
-    (s.data().made || []).forEach(m => { if (m && m.link) out.push({ day: k, link: String(m.link).trim(), type: m.type || 'post', product: m.product || '' }); });
+    (s.data().made || []).forEach(m => { if (m && m.link) out.push({ day: k, link: String(m.link).trim(), type: m.type || 'post', product: m.product || '', at: Number(m.at) || 0, caption: m.caption || '' }); });
   }
   const seen = new Set();
   return out.filter(p => !seen.has(p.link) && seen.add(p.link));
@@ -114,12 +114,12 @@ async function indexPage(page, sinceUnix){
   page.token = tok;
   const items = [];
   try {
-    const posts = await graphAll(page.id + '/posts', { fields: 'id,permalink_url,created_time', since: String(sinceUnix), limit: '100' }, tok);
-    posts.forEach(p => items.push({ postId: p.id, permalink: p.permalink_url, created: p.created_time }));
+    const posts = await graphAll(page.id + '/posts', { fields: 'id,permalink_url,created_time,message', since: String(sinceUnix), limit: '100' }, tok);
+    posts.forEach(p => items.push({ postId: p.id, permalink: p.permalink_url, created: p.created_time, message: p.message || '' }));
   } catch (e) { console.warn(`  ${page.name}: could not list posts — ${e.message}`); }
   try {
-    const reels = await graphAll(page.id + '/video_reels', { fields: 'id,post_id,permalink_url,created_time', since: String(sinceUnix), limit: '100' }, tok);
-    reels.forEach(r => items.push({ postId: r.post_id || (page.id + '_' + r.id), videoId: r.id, permalink: r.permalink_url && (r.permalink_url.startsWith('http') ? r.permalink_url : 'https://www.facebook.com' + r.permalink_url), created: r.created_time, reel: true }));
+    const reels = await graphAll(page.id + '/video_reels', { fields: 'id,post_id,permalink_url,created_time,description', since: String(sinceUnix), limit: '100' }, tok);
+    reels.forEach(r => items.push({ postId: r.post_id || (page.id + '_' + r.id), videoId: r.id, permalink: r.permalink_url && (r.permalink_url.startsWith('http') ? r.permalink_url : 'https://www.facebook.com' + r.permalink_url), created: r.created_time, message: r.description || '', reel: true }));
   } catch (e) { console.warn(`  ${page.name}: could not list reels — ${e.message}`); }
   console.log(`  ${page.name}: ${items.length} recent posts/reels found.`);
   return items.map(it => Object.assign(it, { page }));
@@ -136,6 +136,24 @@ function buildIndex(items){
 function matchLink(index, link){
   const hit = index.byUrl.get(normUrl(link)); if (hit) return hit;
   for (const id of idsInUrl(link)){ const h = index.byId.get(id); if (h) return h; }
+  return null;
+}
+// Backup when the link itself can't be read (share links open only for logged-in people):
+// 1) the caption written in the Marketing tool appears in the post text, or
+// 2) exactly one post/reel was published in the 3 hours before the link was saved.
+const squash = t => String(t || '').toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
+function matchByCaptionOrTime(items, p, used){
+  const free = items.filter(it => !used.has(it.postId));
+  const cap = squash(p.caption).slice(0, 40);
+  if (cap.length >= 12){
+    const hits = free.filter(it => squash(it.message).includes(cap));
+    if (hits.length === 1) return { it: hits[0], how: 'caption' };
+  }
+  if (p.at){
+    const near = free.filter(it => { const c = Date.parse(it.created); return c <= p.at + 10 * 60e3 && c >= p.at - 3 * 3600e3; })
+      .filter(it => (p.type === 'video') === !!it.reel || !items.some(x => x.reel));
+    if (near.length === 1) return { it: near[0], how: 'time' };
+  }
   return null;
 }
 
@@ -176,15 +194,16 @@ async function adResultsByPost(sinceKey){
   });
   const byAd = new Map(rows.map(r => [r.ad_id, r]));
   const ids = [...byAd.keys()], byPost = new Map();
-  for (let i = 0; i < ids.length; i += 50){
-    const j = await graph('', { ids: ids.slice(i, i + 50).join(','), fields: 'creative{effective_object_story_id,object_story_id}' });
-    Object.entries(j).forEach(([adId, a]) => {
+  for (const adId of ids){
+    let a;
+    try { a = await graph(adId, { fields: 'creative{effective_object_story_id,object_story_id}' }); } catch (e) { console.warn(`  Ad ${adId}: ${e.message}`); continue; }
+    {
       const story = a.creative && (a.creative.effective_object_story_id || a.creative.object_story_id);
-      if (!story) return;
+      if (!story) continue;
       const r = byAd.get(adId), cur = byPost.get(story) || { adSpend: 0, adReach: 0, adImpressions: 0, ads: 0 };
       cur.adSpend += Number(r.spend) || 0; cur.adReach += Number(r.reach) || 0; cur.adImpressions += Number(r.impressions) || 0; cur.ads++;
       byPost.set(story, cur);
-    });
+    }
   }
   byPost.forEach(v => { v.adSpend = Math.round(v.adSpend * 100) / 100; });
   console.log(`  Ads: ${rows.length} ad(s) with results, linked to ${byPost.size} post(s).`);
@@ -210,17 +229,20 @@ async function adResultsByPost(sinceKey){
   let ads = new Map(), adsErr = '';
   try { ads = await adResultsByPost(sinceKey); } catch (e) { adsErr = e.message; console.warn('  Ads: ' + e.message); }
 
-  const results = {}; let found = 0;
+  const results = {}; let found = 0; const used = new Set();
   for (const p of posts){
     const link = await expandShareLink(p.link);
-    const it = matchLink(index, link);
+    let it = matchLink(index, link), how = 'link';
+    if (!it){ const m = matchByCaptionOrTime(items, p, used); if (m){ it = m.it; how = m.how; } }
+    console.log(`  ${p.day} ${p.link} → ${it ? it.page.name + ' ' + it.postId + ' (by ' + how + ')' : 'NOT FOUND'}`);
+    if (it) used.add(it.postId);
     const rec = { link: p.link, day: p.day, updatedAt: Date.now() };
     if (!it){
       rec.status = 'notFound';
       rec.note = 'Post not found on the Goat Kids Pages. Use the post\'s own link (… → Copy link), not a share link.';
     } else {
       found++;
-      Object.assign(rec, { status: 'ok', postId: it.postId, page: it.page.name }, await postResults(it));
+      Object.assign(rec, { status: 'ok', postId: it.postId, page: it.page.name, matchedBy: how }, await postResults(it));
       const ad = ads.get(it.postId);
       if (ad) Object.assign(rec, ad, { boosted: true });
     }
