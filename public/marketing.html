@@ -91,6 +91,7 @@ try { document.documentElement.dataset.theme = localStorage.getItem('gk_tools_th
   .madeList{ margin:0.5rem 0 0; padding:0; list-style:none; font-size:0.82rem; }
   .madeList li{ padding:0.25rem 0; border-top:1px dashed var(--line); display:flex; gap:0.4rem; align-items:baseline; }
   .madeList a{ word-break:break-all; }
+  .madeList .stats{ margin-top:0.15rem; font-size:0.78rem; line-height:1.5; }
 
   .block{ background:var(--panel); border-radius:var(--radius-lg); box-shadow:var(--shadow); margin-bottom:0.9rem; overflow:hidden; border:1px solid var(--line); }
   .blockHead{ display:flex; align-items:center; gap:0.6rem; padding:0.75rem 1rem; background:var(--soft); cursor:pointer; user-select:none; }
@@ -415,7 +416,8 @@ const TXT = {
     hCaption:'Caption (you can edit it)', hCopy:'Copy', hCopied:'Copied', hPhoto:'Download photo', hHooks:'0–3 s · Hook — choose one',
     hShow:'What to show', hSay:'What to say', hCopyScript:'Copy the video script', hCopyCaption:'Copy the caption',
     hPublishT:'Publish and count it', hLinkPh:'Paste the post link after you publish', hSaveLink:'Save and count',
-    hLinkHint:'Saving the link adds 1 to today\'s target and keeps the post in today\'s list.', hNeedLink:'Paste the link of the post first.',
+    hLinkHint:'Saving the link adds 1 to today\'s target and keeps the post in today\'s list.',
+    stViews:'Views', stReach:'Reach', stReact:'Reactions', stComm:'Comments', stShare:'Shares', stBoost:'Boost', stAdReach:'reach', stWaiting:'Results come in tomorrow morning', stNotFound:'Not found on the Page — save the post\'s own link (… → Copy link)', stUpdated:'updated {time}', hNeedLink:'Paste the link of the post first.',
     hCounted:'Saved. {kind} {n} of {goal} today.', hOutStep:'Check and edit', styleQuestion:'Question', styleProblem:'Problem', styleSurprise:'Surprise / price',
     hMicNo:'Speaking is not supported in this browser. Please type instead.', hMicKh:'Listening… speak now', hKeySaved:'Key saved on this device',
     hPhotoNote:'The product photo is sent to Gemini so it writes about the real item.',
@@ -466,7 +468,8 @@ const TXT = {
     hCaption:'Caption (អាចកែបាន)', hCopy:'ចម្លង', hCopied:'បានចម្លង', hPhoto:'ទាញយករូប', hHooks:'0–3 វិនាទី · Hook — ជ្រើសមួយ',
     hShow:'អ្វីត្រូវបង្ហាញ', hSay:'អ្វីត្រូវនិយាយ', hCopyScript:'ចម្លងស្គ្រីបវីដេអូ', hCopyCaption:'ចម្លង Caption',
     hPublishT:'ប្រកាស ហើយរាប់', hLinkPh:'Paste តំណប្រកាស ក្រោយពេលប្រកាសរួច', hSaveLink:'រក្សាទុក ហើយរាប់',
-    hLinkHint:'ការរក្សាទុកតំណ បន្ថែម 1 ទៅគោលដៅថ្ងៃនេះ ហើយទុកប្រកាសក្នុងបញ្ជីថ្ងៃនេះ។', hNeedLink:'សូម Paste តំណប្រកាសជាមុនសិន។',
+    hLinkHint:'ការរក្សាទុកតំណ បន្ថែម 1 ទៅគោលដៅថ្ងៃនេះ ហើយទុកប្រកាសក្នុងបញ្ជីថ្ងៃនេះ។',
+    stViews:'ចំនួនមើល', stReach:'Reach', stReact:'Reaction', stComm:'Comment', stShare:'Share', stBoost:'Boost', stAdReach:'reach', stWaiting:'លទ្ធផលនឹងមកដល់ព្រឹកស្អែក', stNotFound:'រកមិនឃើញនៅលើ Page — សូមរក្សាទុកតំណផ្ទាល់របស់ប្រកាស (… → Copy link)', stUpdated:'ធ្វើបច្ចុប្បន្នភាព {time}', hNeedLink:'សូម Paste តំណប្រកាសជាមុនសិន។',
     hCounted:'បានរក្សាទុក។ {kind} {n} ក្នុង {goal} ថ្ងៃនេះ។', hOutStep:'ពិនិត្យ និងកែ', styleQuestion:'សំណួរ', styleProblem:'បញ្ហា', styleSurprise:'ភ្ញាក់ផ្អើល / តម្លៃ',
     hMicNo:'Browser នេះមិនអាចនិយាយបញ្ចូលទេ។ សូមវាយជំនួស។', hMicKh:'កំពុងស្ដាប់… និយាយឥឡូវ', hKeySaved:'បានរក្សាទុក key លើឧបករណ៍នេះ',
     hPhotoNote:'រូបផលិតផលត្រូវផ្ញើទៅ Gemini ដើម្បីឲ្យវាសរសេរអំពីទំនិញពិត។',
@@ -592,7 +595,26 @@ let config = clone(DEFAULT_CONFIG);
 let day = {}, serverDay = {};
 let dayKey = todayKey();
 let me = { email:'', label:'', role:'' };
-let unsubDay = null, unsubCfg = null, unsubTypes = null;
+let unsubDay = null, unsubCfg = null, unsubTypes = null, unsubStats = null;
+let postStats = {};   // filled every morning by the "Marketing post results" GitHub job
+// Same hash the GitHub job uses to file each saved link's results.
+function linkKey(link){
+  let h = 0x811c9dc5; const s = String(link || '').trim();
+  for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return 'p' + h.toString(36);
+}
+function statsLine(m){
+  const r = postStats[linkKey(m.link)];
+  if (!r) return '<div class="stats muted">' + esc(t('stWaiting')) + '</div>';
+  if (r.status !== 'ok') return '<div class="stats" style="color:var(--danger)">' + esc(t('stNotFound')) + '</div>';
+  const n = v => Number(v || 0).toLocaleString();
+  const parts = [];
+  if (r.views != null) parts.push('<i class="far fa-eye"></i> ' + n(r.views) + ' ' + esc(t('stViews')));
+  if (r.reach != null) parts.push(n(r.reach) + ' ' + esc(t('stReach')));
+  parts.push('<i class="far fa-thumbs-up"></i> ' + n(r.reactions), '<i class="far fa-comment"></i> ' + n(r.comments), '<i class="fas fa-share"></i> ' + n(r.shares));
+  if (r.boosted) parts.push('<b><i class="fas fa-bullhorn"></i> ' + esc(t('stBoost')) + ' $' + Number(r.adSpend || 0).toFixed(2) + ' · ' + n(r.adReach) + ' ' + esc(t('stAdReach')) + '</b>');
+  return '<div class="stats">' + parts.join(' · ') + ' <span class="muted">(' + esc(t('stUpdated', { time: hm(r.updatedAt) })) + ')</span></div>';
+}
 let draft = null;
 let productTypes = {};
 const collapsed = {};
@@ -668,6 +690,8 @@ function listenConfig(){
   }, e => { console.warn('config listen', e); if (e.code === 'permission-denied') toast(t('errPerm'), true); });
   if (unsubTypes) unsubTypes();
   unsubTypes = typesRef().onSnapshot(s => { productTypes = s.exists ? s.data() : {}; if (H.open) renderHelper(); }, e => console.warn('types listen', e));
+  if (unsubStats) unsubStats();
+  unsubStats = db.collection(COL).doc('postStats').onSnapshot(s => { postStats = (s.exists && s.data().posts) || {}; render(); }, e => console.warn('stats listen', e));
 }
 function listenDay(){
   if (unsubDay) unsubDay();
@@ -975,7 +999,7 @@ function render(){
   });
   document.getElementById('madeList').innerHTML = (day.made || []).slice().sort((a, b) => a.at - b.at).map(m =>
     '<li><i class="fas ' + (m.type === 'video' ? 'fa-film' : 'fa-image') + '" style="color:var(--primary)"></i><span><b>' + esc(t(m.type === 'video' ? 'madeVideo' : 'madePost')) + '</b> · ' + esc(m.product || '') +
-    ' · <span class="muted">' + esc(m.by || '') + ' ' + hm(m.at) + '</span><br><a href="' + esc(m.link) + '" target="_blank" rel="noopener">' + esc(m.link) + '</a></span></li>').join('');
+    ' · <span class="muted">' + esc(m.by || '') + ' ' + hm(m.at) + '</span><br><a href="' + esc(m.link) + '" target="_blank" rel="noopener">' + esc(m.link) + '</a>' + statsLine(m) + '</span></li>').join('');
 
   const ticks = day.ticks || {};
   const nowId = currentBlockId();
