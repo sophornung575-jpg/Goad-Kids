@@ -417,7 +417,7 @@ const TXT = {
     hShow:'What to show', hSay:'What to say', hCopyScript:'Copy the video script', hCopyCaption:'Copy the caption',
     hPublishT:'Publish and count it', hLinkPh:'Paste the post link after you publish', hSaveLink:'Save and count',
     hLinkHint:'Saving the link adds 1 to today\'s target and keeps the post in today\'s list.',
-    stViews:'Views', stReach:'Reach', stReact:'Reactions', stComm:'Comments', stShare:'Shares', stBoost:'Boost', stAdReach:'reach', stWaiting:'Results come in tomorrow morning', stNotFound:'Not found on the Page — save the post\'s own link (… → Copy link)', stUpdated:'updated {time}', hNeedLink:'Paste the link of the post first.',
+    stViews:'Views', stReach:'Reach', stReact:'Reactions', stComm:'Comments', stShare:'Shares', stBoost:'Boost', stAdReach:'reach', stWaiting:'Results come in tomorrow morning', stNotFound:'Not found on the Page — save the post\'s own link (… → Copy link)', stUpdated:'updated {time}', hNeedLink:'Paste the link of the post first.', hBadLink:'That is not a post link. Open the published post on Facebook, tap … → Copy link, and paste that.',
     hCounted:'Saved. {kind} {n} of {goal} today.', hOutStep:'Check and edit', styleQuestion:'Question', styleProblem:'Problem', styleSurprise:'Surprise / price',
     hMicNo:'Speaking is not supported in this browser. Please type instead.', hMicKh:'Listening… speak now', hKeySaved:'Key saved on this device',
     hPhotoNote:'The product photo is sent to Gemini so it writes about the real item.',
@@ -469,7 +469,7 @@ const TXT = {
     hShow:'អ្វីត្រូវបង្ហាញ', hSay:'អ្វីត្រូវនិយាយ', hCopyScript:'ចម្លងស្គ្រីបវីដេអូ', hCopyCaption:'ចម្លង Caption',
     hPublishT:'ប្រកាស ហើយរាប់', hLinkPh:'Paste តំណប្រកាស ក្រោយពេលប្រកាសរួច', hSaveLink:'រក្សាទុក ហើយរាប់',
     hLinkHint:'ការរក្សាទុកតំណ បន្ថែម 1 ទៅគោលដៅថ្ងៃនេះ ហើយទុកប្រកាសក្នុងបញ្ជីថ្ងៃនេះ។',
-    stViews:'ចំនួនមើល', stReach:'Reach', stReact:'Reaction', stComm:'Comment', stShare:'Share', stBoost:'Boost', stAdReach:'reach', stWaiting:'លទ្ធផលនឹងមកដល់ព្រឹកស្អែក', stNotFound:'រកមិនឃើញនៅលើ Page — សូមរក្សាទុកតំណផ្ទាល់របស់ប្រកាស (… → Copy link)', stUpdated:'ធ្វើបច្ចុប្បន្នភាព {time}', hNeedLink:'សូម Paste តំណប្រកាសជាមុនសិន។',
+    stViews:'ចំនួនមើល', stReach:'Reach', stReact:'Reaction', stComm:'Comment', stShare:'Share', stBoost:'Boost', stAdReach:'reach', stWaiting:'លទ្ធផលនឹងមកដល់ព្រឹកស្អែក', stNotFound:'រកមិនឃើញនៅលើ Page — សូមរក្សាទុកតំណផ្ទាល់របស់ប្រកាស (… → Copy link)', stUpdated:'ធ្វើបច្ចុប្បន្នភាព {time}', hNeedLink:'សូម Paste តំណប្រកាសជាមុនសិន។', hBadLink:'នេះមិនមែនជាតំណប្រកាសទេ។ សូមបើកប្រកាសដែលបានប្រកាសរួចនៅលើ Facebook ចុច … → Copy link រួច Paste តំណនោះ។',
     hCounted:'បានរក្សាទុក។ {kind} {n} ក្នុង {goal} ថ្ងៃនេះ។', hOutStep:'ពិនិត្យ និងកែ', styleQuestion:'សំណួរ', styleProblem:'បញ្ហា', styleSurprise:'ភ្ញាក់ផ្អើល / តម្លៃ',
     hMicNo:'Browser នេះមិនអាចនិយាយបញ្ចូលទេ។ សូមវាយជំនួស។', hMicKh:'កំពុងស្ដាប់… និយាយឥឡូវ', hKeySaved:'បានរក្សាទុក key លើឧបករណ៍នេះ',
     hPhotoNote:'រូបផលិតផលត្រូវផ្ញើទៅ Gemini ដើម្បីឲ្យវាសរសេរអំពីទំនិញពិត។',
@@ -1334,9 +1334,19 @@ async function doWrite(){
   catch (e) { H.msg = ''; toast(e.message || String(e), true); }
   H.writing = false; renderHelper();
 }
+// Only real post links: not the Business Suite composer, inbox, insights or a Page's home page.
+function isPostLink(link){
+  let u; try { u = new URL(link); } catch (e) { return false; }
+  const host = u.hostname.replace(/^(www|m|web|mbasic)\./, '');
+  if (host === 'fb.watch') return true;
+  if (host !== 'facebook.com') return false;
+  const p = u.pathname;
+  return /\/(posts|videos|reel|reels|photos|share)\//i.test(p) || /^\/(permalink|story|photo)\.php$/i.test(p) || /^\/watch\/?$/i.test(p) && u.searchParams.has('v');
+}
 function saveMade(){
   const link = document.getElementById('hLink').value.trim();
   if (!/^https?:\/\/\S+$/i.test(link)) { toast(t('hNeedLink'), true); return; }
+  if (!isPostLink(link)) { toast(t('hBadLink'), true); return; }
   if (!confirmOtherDay()) return;
   const p = productById(H.productId);
   const kind = H.mode === 'video' ? 'videos' : 'posts';
