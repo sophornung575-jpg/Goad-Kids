@@ -396,7 +396,7 @@ const TXT = {
     untickQ:'Untick "{task}"? It was ticked by {who} at {time}.', markDone:'Mark as done', save:'Save', saved:'Saved',
     fillFirst:'Fill in the boxes and press Save — this task ticks itself.',
     resFor:'Results for {day}', postReach:'Post reach', adReach:'Ad reach', adSpend:'Ad spend ($)', messages:'New messages',
-    ordersAuto:'Orders (from the Store App)', ordersLoading:'Counting yesterday\'s orders…', ordersLine:'{n} confirmed orders · ${total}',
+    ordersAuto:'Facebook orders (from the Store App)', ordersLoading:'Counting yesterday\'s orders…', ordersLine:'{n} Facebook / Delivery orders · ${total} (walk-in sales not counted)',
     ordersFail:'Could not read orders: {msg}', fillAll:'Fill in all four numbers (0 is fine).', fillBudget:'Write the budget (0 is fine).', savedBy:'Saved by {who} at {time}',
     loadingProducts:'Loading products from the Store App…', productsFail:'Could not load products: {msg}',
     grpLv3:'Promotion Lv3 — oldest stock', grpLv2:'Promotion Lv2', grpNew:'New arrivals (last {n} days)', grpLv1:'Promotion Lv1', grpOther:'Other picks',
@@ -448,7 +448,7 @@ const TXT = {
     untickQ:'ដកធីក "{task}"? វាត្រូវបានធីកដោយ {who} ម៉ោង {time}។', markDone:'សម្គាល់ថារួចរាល់', save:'រក្សាទុក', saved:'បានរក្សាទុក',
     fillFirst:'បំពេញប្រអប់ ហើយចុច រក្សាទុក — ការងារនេះនឹងធីកដោយខ្លួនឯង។',
     resFor:'លទ្ធផលថ្ងៃ {day}', postReach:'Reach ប្រកាស', adReach:'Reach Ads', adSpend:'ចំណាយ Ads ($)', messages:'សារថ្មី',
-    ordersAuto:'ការកម្ម៉ង់ (ពី Store App)', ordersLoading:'កំពុងរាប់ការកម្ម៉ង់ម្សិលមិញ…', ordersLine:'{n} ការកម្ម៉ង់ Confirmed · ${total}',
+    ordersAuto:'ការកម្ម៉ង់ Facebook (ពី Store App)', ordersLoading:'កំពុងរាប់ការកម្ម៉ង់ម្សិលមិញ…', ordersLine:'{n} ការកម្ម៉ង់ Facebook / ដឹកជញ្ជូន · ${total} (មិនរាប់ការលក់នៅហាង)',
     ordersFail:'អានការកម្ម៉ង់មិនបាន៖ {msg}', fillAll:'បំពេញលេខទាំង 4 (0 ក៏បាន)។', fillBudget:'សរសេរថវិកា (0 ក៏បាន)។', savedBy:'រក្សាទុកដោយ {who} ម៉ោង {time}',
     loadingProducts:'កំពុងទាញផលិតផលពី Store App…', productsFail:'ទាញផលិតផលមិនបាន៖ {msg}',
     grpLv3:'Promotion Lv3 — ស្តុកចាស់បំផុត', grpLv2:'Promotion Lv2', grpNew:'ទំនិញថ្មី ({n} ថ្ងៃចុងក្រោយ)', grpLv1:'Promotion Lv1', grpOther:'ផលិតផលផ្សេងដែលបានជ្រើស',
@@ -832,7 +832,10 @@ async function loadOrders(k){
   let n = 0, total = 0;
   for (const sid of ids) {
     const snap = await db.collection('stores').doc(sid).collection('orders').where('confirmedTimestamp', '>=', from).where('confirmedTimestamp', '<', to).get();
-    snap.forEach(d => { const o = d.data(); if (o.status === 'rejected' || o.status === 'pending') return; n++; total += Number(o.total) || 0; });
+    snap.forEach(d => { const o = d.data(); if (o.status === 'rejected' || o.status === 'pending') return;
+      // Facebook only, same rule as the Reports page: walk-in shop sales are "Pickup"; delivery orders come from Facebook.
+      if ((o.shippingMethod || 'Pickup') === 'Pickup') return;
+      n++; total += Number(o.total) || 0; });
   }
   return { n, total: Math.round(total * 100) / 100 };
 }
