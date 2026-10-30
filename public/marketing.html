@@ -575,7 +575,7 @@ async function verifyAdmin(u){
   var d;try{d=await fdb.collection('_admin_').doc('marketingAdmins').get()}catch(e){throw new Error((e&&e.code)==='permission-denied'?'No permission to read the access list. Check the Firestore rules.':(e.message||String(e)))}
   if(!d.exists)throw new Error('Access list not set up yet. In Firebase, create the document _admin_/marketingAdmins with a field emails (array).');
   var list=((d.data()||{}).emails||[]).map(function(x){return String(x).toLowerCase()});
-  if(list.indexOf(String(u.email||'').toLowerCase())<0)throw new Error('This account is not allowed to open the Marketing tool.')}
+  if(list.indexOf(String(u.email||'').toLowerCase())<0)throw new Error('This account is not allowed to open the Marketing tool. (Signed in as '+u.email+'; the list has '+(list.length?list.join(', '):'no emails')+')')}
 async function gateAuth(u){
   if(!u){stopSync();lockUi();setStatus('Not signed in');return}
   try{await verifyAdmin(u)}catch(e){GATEMSG=e.message||String(e);try{await auth.signOut()}catch(x){lockUi()}return}
@@ -703,6 +703,7 @@ var RULES=[
  [/^Not in this store: (.+)$/,function(m){return 'មិនមានក្នុងហាងនេះ៖ '+m[1]}],
  [/^(.+) - script$/,function(m){return trk(m[1])+' – ស្គ្រីប'}],
  [/^Products loaded: (\d+)\. The key and config are saved only in this browser\.$/,function(m){return 'ផលិតផលបានផ្ទុក៖ '+m[1]+'។ key និង config រក្សាទុកតែក្នុងកម្មវិធីរុករកនេះប៉ុណ្ណោះ។'}],
+ [/^This account is not allowed to open the Marketing tool\. (\(.+\))$/,function(m){return 'គណនីនេះមិនមានសិទ្ធិបើកឧបករណ៍ទីផ្សារទេ។ '+m[1]}],
  [/^Sync problem: (.+)$/,function(m){return 'បញ្ហាសមកាលកម្ម៖ '+m[1]}],
  [/^Signed in as (.+)$/,function(m){return 'បានចូលជា '+m[1]}],[/^(\d+) products loaded$/,function(m){return 'បានផ្ទុកផលិតផល '+m[1]}]];
 function trk(s){var o=KM[s];return o===undefined?s:o}
