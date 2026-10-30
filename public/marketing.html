@@ -91,6 +91,7 @@ try { document.documentElement.dataset.theme = localStorage.getItem('gk_tools_th
   .madeList{ margin:0.5rem 0 0; padding:0; list-style:none; font-size:0.82rem; }
   .madeList li{ padding:0.25rem 0; border-top:1px dashed var(--line); display:flex; gap:0.4rem; align-items:baseline; }
   .madeList a{ word-break:break-all; }
+  .madeList .src{ font-size:0.72rem; padding:0 0.35rem; border-radius:999px; background:var(--line); }
   .madeList .stats{ margin-top:0.15rem; font-size:0.78rem; line-height:1.5; }
 
   .block{ background:var(--panel); border-radius:var(--radius-lg); box-shadow:var(--shadow); margin-bottom:0.9rem; overflow:hidden; border:1px solid var(--line); }
@@ -266,6 +267,14 @@ try { document.documentElement.dataset.theme = localStorage.getItem('gk_tools_th
           <button class="btn btn-primary btn-small" id="openPost"><i class="fas fa-pen-nib"></i> <span data-t="makePost">Make a post</span></button>
           <button class="btn btn-primary btn-small" id="openVideo"><i class="fas fa-clapperboard"></i> <span data-t="makeVideo">Make a video</span></button>
         </div>
+        <div class="directAdd">
+          <div class="label" style="margin:0.7rem 0 0.3rem"><i class="fas fa-link"></i> <span data-t="dTitle">Made outside the tool? Paste its link</span></div>
+          <div class="row" style="gap:0.4rem">
+            <select id="dType" aria-label="Type"><option value="post" data-t="madePost">Post</option><option value="video" data-t="madeVideo">Video</option></select>
+            <input type="url" id="dLink" style="flex:1; min-width:180px" data-tp="dLinkPh" placeholder="Post link (… → Copy link)">
+            <button class="btn btn-success btn-small" id="dSave"><i class="fas fa-check"></i> <span data-t="hSaveLink">Save and count</span></button>
+          </div>
+        </div>
         <ul class="madeList" id="madeList"></ul>
       </div>
     </div>
@@ -421,7 +430,7 @@ const TXT = {
     hCounted:'Saved. {kind} {n} of {goal} today.', hOutStep:'Check and edit', styleQuestion:'Question', styleProblem:'Problem', styleSurprise:'Surprise / price',
     hMicNo:'Speaking is not supported in this browser. Please type instead.', hMicKh:'Listening… speak now', hKeySaved:'Key saved on this device',
     hPhotoNote:'The product photo is sent to Gemini so it writes about the real item.',
-    madePost:'Post', madeVideo:'Video',
+    madePost:'Post', madeVideo:'Video', dTitle:'Made outside the tool? Paste its link', dLinkPh:'Post link (… → Copy link)', srcTool:'Made in the tool', srcDirect:'Pasted link', subTotal:'{n} posts · {views} views · {reactions} reactions · {comments} comments · {shares} shares', subBoost:'Boost: ${spend} · {reach} reach', resGrand:'All saved posts',
     setTitle:'Checklist settings', setDesc:'Change the time blocks and tasks for the whole marketing team. Changes apply to every device after you press Save.',
     targetPosts:'Posts per day', targetVideos:'Videos per day', addBlock:'Add time block', addTask:'Add task', setLinks:'Links', setBlocksT:'Time blocks and tasks',
     resetDefault:'Reset to default', liveOnlyHelp:'"Live only" tasks are skipped on days with no live, and do not count in the progress.',
@@ -473,7 +482,7 @@ const TXT = {
     hCounted:'បានរក្សាទុក។ {kind} {n} ក្នុង {goal} ថ្ងៃនេះ។', hOutStep:'ពិនិត្យ និងកែ', styleQuestion:'សំណួរ', styleProblem:'បញ្ហា', styleSurprise:'ភ្ញាក់ផ្អើល / តម្លៃ',
     hMicNo:'Browser នេះមិនអាចនិយាយបញ្ចូលទេ។ សូមវាយជំនួស។', hMicKh:'កំពុងស្ដាប់… និយាយឥឡូវ', hKeySaved:'បានរក្សាទុក key លើឧបករណ៍នេះ',
     hPhotoNote:'រូបផលិតផលត្រូវផ្ញើទៅ Gemini ដើម្បីឲ្យវាសរសេរអំពីទំនិញពិត។',
-    madePost:'ប្រកាស', madeVideo:'វីដេអូ',
+    madePost:'ប្រកាស', madeVideo:'វីដេអូ', dTitle:'ធ្វើនៅក្រៅកម្មវិធី? Paste តំណរបស់វា', dLinkPh:'តំណប្រកាស (… → Copy link)', srcTool:'ធ្វើក្នុងកម្មវិធី', srcDirect:'តំណ Paste ផ្ទាល់', subTotal:'{n} ប្រកាស · {views} មើល · {reactions} reaction · {comments} comment · {shares} share', subBoost:'Boost: ${spend} · {reach} reach', resGrand:'ប្រកាសដែលបានរក្សាទុកទាំងអស់',
     setTitle:'ការកំណត់បញ្ជីការងារ', setDesc:'ប្ដូរពេលវេលា និងការងារសម្រាប់ក្រុមទីផ្សារទាំងមូល។ ការប្ដូរមានប្រសិទ្ធភាពនៅគ្រប់ឧបករណ៍ ក្រោយចុច រក្សាទុក។',
     targetPosts:'ប្រកាសក្នុងមួយថ្ងៃ', targetVideos:'វីដេអូក្នុងមួយថ្ងៃ', addBlock:'បន្ថែមពេលវេលា', addTask:'បន្ថែមការងារ', setLinks:'តំណ', setBlocksT:'ពេលវេលា និងការងារ',
     resetDefault:'ត្រឡប់ទៅលំនាំដើម', liveOnlyHelp:'ការងារ "Live តែប៉ុណ្ណោះ" ត្រូវរំលងនៅថ្ងៃគ្មាន Live ហើយមិនរាប់ក្នុងវឌ្ឍនភាពទេ។',
@@ -599,8 +608,9 @@ let unsubDay = null, unsubCfg = null, unsubTypes = null, unsubStats = null;
 let postStats = {};   // filled every morning by the "Marketing post results" GitHub job
 let postDaily = {};   // whole ad account per day, same job
 const yPostsCache = {};   // day key -> { loading } | { list } | { err }
-function dayTotals(k){
-  const yp = yPostsCache[k], list = (yp && yp.list) || [];
+function dayTotals(k, source){
+  const yp = yPostsCache[k], all = (yp && yp.list) || [];
+  const list = source ? all.filter(m => (m.source === 'direct' ? 'direct' : 'tool') === source) : all;
   const tot = { posts: list.length, views: 0, reactions: 0, comments: 0, shares: 0, boostSpend: 0, boostReach: 0, withResults: 0 };
   list.forEach(m => {
     const r = postStats[linkKey(m.link)]; if (!r || r.status !== 'ok') return;
@@ -908,21 +918,21 @@ function dropHtml(task, ticked){
       const n = v => Number(v || 0).toLocaleString();
       h += '<div class="label" style="margin-bottom:0.3rem">' + esc(t('resFor', { day: niceDay(k, true) })) + '</div>';
       const yp = yPostsCache[k];
-      h += '<div class="autoBox"><b><i class="fas fa-image"></i> ' + esc(t('resPostsTitle')) + '</b>';
-      if (!yp || yp.loading) h += '<div class="muted">' + esc(t('resLoadingPosts')) + '</div>';
-      else if (yp.err) h += '<div style="color:var(--danger)">' + esc(yp.err) + '</div>';
-      else if (!yp.list.length) h += '<div class="muted">' + esc(t('resNoPosts')) + '</div>';
+      const subLine = tot => '<div style="margin-top:0.3rem"><b>' + esc(t('subTotal', { n: tot.posts, views: n(tot.views), reactions: n(tot.reactions), comments: n(tot.comments), shares: n(tot.shares) })) + '</b>' +
+        (tot.boostSpend ? '<br>' + esc(t('subBoost', { spend: tot.boostSpend.toFixed(2), reach: n(tot.boostReach) })) : '') + '</div>';
+      if (!yp || yp.loading) h += '<div class="autoBox muted">' + esc(t('resLoadingPosts')) + '</div>';
+      else if (yp.err) h += '<div class="autoBox" style="color:var(--danger)">' + esc(yp.err) + '</div>';
+      else if (!yp.list.length) h += '<div class="autoBox muted">' + esc(t('resNoPosts')) + '</div>';
       else {
-        h += '<ul class="madeList">' + yp.list.map(m => '<li><i class="fas ' + (m.type === 'video' ? 'fa-film' : 'fa-image') + '" style="color:var(--primary)"></i><span><b>' + esc(m.product || t(m.type === 'video' ? 'madeVideo' : 'madePost')) + '</b> · <a href="' + esc(m.link) + '" target="_blank" rel="noopener">' + esc(t('viewPost')) + '</a>' + statsLine(m) + '</span></li>').join('') + '</ul>';
-        const tot = dayTotals(k);
-        if (tot.withResults) {
-          h += '<div style="margin-top:0.4rem"><b>' + esc(t('resTotals', { n: tot.posts, views: n(tot.views), reactions: n(tot.reactions), comments: n(tot.comments), shares: n(tot.shares) })) + '</b></div>';
-          if (tot.boostSpend) h += '<div>' + esc(t('resBoostTotal', { spend: tot.boostSpend.toFixed(2), reach: n(tot.boostReach) })) + '</div>';
-        }
+        [['tool', 'srcTool', 'fa-pen-nib'], ['direct', 'srcDirect', 'fa-link']].forEach(([src, label, icon]) => {
+          const list = yp.list.filter(m => (m.source === 'direct' ? 'direct' : 'tool') === src);
+          if (!list.length) return;
+          h += '<div class="autoBox"><b><i class="fas ' + icon + '"></i> ' + esc(t(label)) + '</b><ul class="madeList">' +
+            list.map(m => '<li><i class="fas ' + (m.type === 'video' ? 'fa-film' : 'fa-image') + '" style="color:var(--primary)"></i><span><b>' + esc(m.product || t(m.type === 'video' ? 'madeVideo' : 'madePost')) + '</b> · <a href="' + esc(m.link) + '" target="_blank" rel="noopener">' + esc(t('viewPost')) + '</a>' + statsLine(m) + '</span></li>').join('') +
+            '</ul>' + subLine(dayTotals(k, src)) + '</div>';
+        });
+        h += '<div class="autoBox"><b><i class="fas fa-chart-simple"></i> ' + esc(t('resGrand')) + '</b>' + subLine(dayTotals(k)) + '</div>';
       }
-      h += '</div>';
-      const dly = postDaily[k];
-      h += '<div class="autoBox"><i class="fas fa-bullhorn"></i> ' + (dly ? '<b>' + esc(t('resAllAds', { spend: Number(dly.adSpend || 0).toFixed(2), reach: n(dly.adReach) })) + '</b>' : '<span class="muted">' + esc(t('resAdsWaiting')) + '</span>') + '</div>';
       const oc = ordersCache[k];
       h += '<div class="autoBox"><i class="fas fa-cart-shopping"></i> <b>' + esc(t('ordersAuto')) + ':</b> ' +
         (!oc || oc.loading ? esc(t('ordersLoading')) : oc.err ? '<span style="color:var(--danger)">' + esc(t('ordersFail', { msg: oc.err })) + '</span>' : esc(t('ordersLine', { n: oc.n, total: oc.total }))) + '</div>';
@@ -1031,7 +1041,7 @@ function render(){
     el.textContent = n + ' / ' + goal; el.classList.toggle('ok', goal > 0 && n >= goal);
   });
   document.getElementById('madeList').innerHTML = (day.made || []).slice().sort((a, b) => a.at - b.at).map(m =>
-    '<li><i class="fas ' + (m.type === 'video' ? 'fa-film' : 'fa-image') + '" style="color:var(--primary)"></i><span><b>' + esc(t(m.type === 'video' ? 'madeVideo' : 'madePost')) + '</b> · ' + esc(m.product || '') +
+    '<li><i class="fas ' + (m.type === 'video' ? 'fa-film' : 'fa-image') + '" style="color:var(--primary)"></i><span><b>' + esc(t(m.type === 'video' ? 'madeVideo' : 'madePost')) + '</b> · <span class="src">' + esc(t(m.source === 'direct' ? 'srcDirect' : 'srcTool')) + '</span>' + (m.product ? ' · ' + esc(m.product) : '') +
     ' · <span class="muted">' + esc(m.by || '') + ' ' + hm(m.at) + '</span><br><a href="' + esc(m.link) + '" target="_blank" rel="noopener">' + esc(m.link) + '</a>' + (isToday ? '' : statsLine(m)) + '</span></li>').join('');
 
   const ticks = day.ticks || {};
@@ -1132,9 +1142,8 @@ function saveForm(task){
   const st = stamp();
   if (task.kind === 'results') {
     if (!confirmOtherDay()) return;
-    const yk = addDays(dayKey, -1), tot = dayTotals(yk), dly = postDaily[yk] || {};
-    const out = { posts: tot.posts, views: tot.views, reactions: tot.reactions, comments: tot.comments, shares: tot.shares, boostSpend: tot.boostSpend };
-    if (dly.adSpend != null) { out.adSpend = Number(dly.adSpend) || 0; out.adReach = Number(dly.adReach) || 0; }
+    const yk = addDays(dayKey, -1), pick = x => ({ posts: x.posts, views: x.views, reactions: x.reactions, comments: x.comments, shares: x.shares, boostSpend: x.boostSpend, boostReach: x.boostReach });
+    const out = Object.assign(pick(dayTotals(yk)), { tool: pick(dayTotals(yk, 'tool')), direct: pick(dayTotals(yk, 'direct')) });
     const oc = ordersCache[addDays(dayKey, -1)];
     if (oc && !oc.err && !oc.loading) { out.orders = oc.n; out.ordersTotal = oc.total; }
     out.forDay = addDays(dayKey, -1);
@@ -1382,7 +1391,7 @@ function saveMade(){
   const kind = H.mode === 'video' ? 'videos' : 'posts';
   const occ = H.occ || occOf(p);
   const rec = Object.assign(stamp(), { type: H.mode, link, product: p ? p.name : '', productId: p ? p.id : '', code: p ? p.code : '',
-    occasion: occ === 'both' ? H.forOcc : occ, caption: (H.out && H.out.caption) || '' });
+    occasion: occ === 'both' ? H.forOcc : occ, caption: (H.out && H.out.caption) || '', source: 'tool' });
   const cur = (day.counts && day.counts[kind]) || 0;
   day.counts = Object.assign({}, day.counts, { [kind]: cur + 1 });
   day.made = (day.made || []).concat([rec]);
@@ -1395,6 +1404,29 @@ function saveMade(){
   document.getElementById('hLink').value = '';
   H.out = null; H.concept = ''; H.hook = 0; saveHelperDraft(); renderHelper();
 }
+// A post made outside the tool: only its link and type, counted the same way.
+function saveDirect(){
+  const el = document.getElementById('dLink'), link = el.value.trim();
+  if (!/^https?:\/\/\S+$/i.test(link)) { toast(t('hNeedLink'), true); return; }
+  if (!isPostLink(link)) { toast(t('hBadLink'), true); return; }
+  if ((day.made || []).some(m => m.link === link)) { el.value = ''; return; }
+  if (!confirmOtherDay()) return;
+  const type = document.getElementById('dType').value === 'video' ? 'video' : 'post';
+  const kind = type === 'video' ? 'videos' : 'posts';
+  const rec = Object.assign(stamp(), { type, link, product: '', source: 'direct' });
+  const cur = (day.counts && day.counts[kind]) || 0;
+  day.counts = Object.assign({}, day.counts, { [kind]: cur + 1 });
+  day.made = (day.made || []).concat([rec]);
+  render();
+  const goal = +(config.targets || {})[kind] || 0;
+  dayRef(dayKey).set({ date: dayKey, counts: { [kind]: FV().increment(1) }, made: FV().arrayUnion(rec),
+    countLog: FV().arrayUnion(Object.assign(stamp(), { kind, d: 1, link })) }, { merge: true })
+    .then(() => { autoTickTargets(); toast(t('hCounted', { kind: t(type === 'video' ? 'madeVideo' : 'madePost'), n: cur + 1, goal })); })
+    .catch(fail);
+  el.value = '';
+}
+document.getElementById('dSave').addEventListener('click', saveDirect);
+document.getElementById('dLink').addEventListener('keydown', e => { if (e.key === 'Enter') saveDirect(); });
 const helperEl = document.getElementById('helper');
 helperEl.addEventListener('click', e => {
   const hp = e.target.closest('[data-hp]');
