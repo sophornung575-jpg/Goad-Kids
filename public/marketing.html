@@ -64,6 +64,9 @@ textarea{font:inherit;color:var(--tx);background:var(--card);border:1px solid va
 .pth img,.pth .noimg{width:38px;height:38px;border-radius:6px;object-fit:cover;background:var(--bd);flex:none}
 .pn{font-size:12px;line-height:1.25}.pn small{color:var(--mut)}.pth b{cursor:pointer;color:var(--mut)}
 .ths.big{margin-bottom:10px}.ths.big .pth img,.ths.big .pth .noimg{width:64px;height:64px}.ths.big .pn{font-size:13px}
+.lvh{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.lvh b{font-size:13px}.lvh .todo{flex:1;color:var(--mut);font-size:12px}
+.lf{display:flex;flex-direction:column;font-size:11px;color:var(--mut);flex:0 1 96px;gap:2px}.lf input{width:100%}
+.lvi{margin:6px 0}.lvi textarea{margin-top:4px;font-size:12px}.lmsg{font-size:12px;color:var(--mut);min-height:0}
 .empty{text-align:center;color:var(--mut);padding:30px}
 </style>
 </head>
@@ -290,7 +293,8 @@ function initFb(){if(fbReady)return fbReady;
 async function fetchProducts(){
   try{var snap=await fdb.collection('stores').doc(cfg.store||'GOAT-1979').collection('products').get(),a=[];
     snap.forEach(function(d){var x=d.data();if(x.active===false)return;
-      a.push({id:d.id,name:x.name||'',price:x.price||0,stock:x.stock||0,category:x.category||'',img:(x.images&&x.images[0])||'',sizes:(x.sizes||[]).filter(function(z){return z.qty>0}).map(function(z){return z.name})})});
+      var sz=(x.sizes||[]).map(function(z){return{name:String(z.name),qty:+z.qty||0}}),tot=sz.length?sz.reduce(function(t,z){return t+z.qty},0):(+x.stock||0);
+      a.push({id:d.id,name:x.name||'',price:x.price||0,stock:tot,sizeQty:sz.filter(function(z){return z.qty>0}),category:x.category||'',img:(x.images&&x.images[0])||'',sizes:(x.sizes||[]).filter(function(z){return z.qty>0}).map(function(z){return z.name})})});
     a.sort(function(p,q){return p.name.localeCompare(q.name)});products=a;sv(PRKEY,a);setStatus(''+a.length+' products loaded')}
   catch(e){setStatus(''+e.message)}}
 if(cfg.fb)initFb().catch(function(e){setStatus(''+e.message)});
@@ -332,7 +336,22 @@ function pctDay(d){var tot=0,got=0;TASKS.forEach(function(t){var g=+tg[t.id]||0;
 function ensureRows(d){posts[d]=posts[d]||{};TASKS.forEach(function(t){if(!(posts[d][t.id]||[]).length)posts[d][t.id]=[{id:uid(),products:[]}]})}
 function getRow(t,rid){return rowsOf(tDay,t).filter(function(r){return r.id===rid})[0]}
 function thumb(p,key,k,removable){return '<div class="pth">'+(p.img?'<img src="'+esc(p.img)+'" alt="" loading="lazy">':'<div class="noimg"></div>')+'<div class="pn"><div>'+esc(p.name)+'</div><small>'+(p.price?'$'+p.price:'')+'</small></div>'+(removable?'<b data-unp="'+key+'|'+k+'" title="Remove">✕</b>':'')+'</div>'}
+function liveRow(t,r,i){
+  var P=r.products||[],key='live|'+r.id;
+  var items=P.map(function(p,k){return '<div class="lvi">'+thumb(p,key,k,true)+'<textarea rows="2" data-ps="'+key+'|'+k+'" placeholder="No script yet">'+esc(p.script||'')+'</textarea></div>'}).join('');
+  return '<div class="row"><div class="rh"><b>Live #'+(i+1)+'</b>'+(r.link?'<span class="ok">Posted by '+esc(r.by||'?')+' at '+esc(r.at||'')+'</span>':'<span class="todo">Not posted yet</span>')+
+    '<button class="x" data-delrow="'+key+'" title="Delete this row">✕</button></div>'+
+    '<div class="lvh"><b>Plan - before the live</b><span class="todo">'+P.length+' item'+(P.length===1?'':'s')+' planned</span><button data-lload="'+key+'">Load from Live Desk</button></div>'+
+    '<div class="srch"><input data-s="'+key+'" placeholder="Search products (add as many as you need)'+(products.length?'':' - products not loaded, see Settings')+'" autocomplete="off"><div class="dd" hidden></div></div>'+
+    '<div id="lm-'+r.id+'" class="lmsg"></div>'+items+
+    '<div class="lvh" style="margin-top:10px"><b>Result - after the live</b></div>'+
+    '<div class="acts" style="align-items:flex-end"><input data-link="'+key+'" value="'+esc(r.link||'')+'" placeholder="Paste the live link here" inputmode="url">'+
+    '<label class="lf">Views<input type="number" min="0" data-rf="'+key+'|views" value="'+(r.views||'')+'"></label>'+
+    '<label class="lf">Messages<input type="number" min="0" data-rf="'+key+'|msgs" value="'+(r.msgs||'')+'"></label>'+
+    '<label class="lf">Orders<input type="number" min="0" data-rf="'+key+'|orders" value="'+(r.orders||'')+'"></label>'+
+    '<button class="pri" data-save="'+key+'">Save result</button></div></div>'}
 function rowHTML(t,r,i){
+  if(t.id==='live')return liveRow(t,r,i);
   var P=r.products||[],multi=t.id==='live',key=t.id+'|'+r.id;
   var th=P.map(function(p,k){return thumb(p,key,k,true)}).join('')+(!P.length&&r.title?'<div class="pth"><div class="noimg"></div><div class="pn"><div>'+esc(r.title)+'</div><small>typed</small></div></div>':'');
   var canSearch=multi||(!P.length&&!r.title);
@@ -364,22 +383,43 @@ function closeDD(){[].forEach.call(document.querySelectorAll('.dd'),function(d){
 document.addEventListener('click',function(e){if(!e.target.closest||!e.target.closest('.srch'))closeDD()});
 $('tBlocks').addEventListener('input',function(e){
   var el=e.target,sk=el.getAttribute('data-s'),lk=el.getAttribute('data-link');
+  var rf=el.getAttribute('data-rf'),ps=el.getAttribute('data-ps');
+  if(rf){var f=rf.split('|'),rr=getRow(f[0],f[1]);if(rr){rr[f[2]]=+el.value||0;sv(PKEY,posts)}return}
+  if(ps){var g2=ps.split('|'),r3=getRow(g2[0],g2[1]);if(r3&&r3.products[+g2[2]]){r3.products[+g2[2]].script=el.value;sv(PKEY,posts)}return}
   if(lk){var q=lk.split('|'),r=getRow(q[0],q[1]);if(r){r.link=el.value.trim();sv(PKEY,posts)}return}
   if(!sk)return;var dd=el.parentNode.querySelector('.dd'),v=el.value.trim().toLowerCase();
   if(!v){dd.hidden=true;return}
   var m=products.filter(function(p){return(p.name+' '+p.category).toLowerCase().indexOf(v)>-1}).slice(0,8);
-  dd.innerHTML=m.map(function(p){return '<div data-pick="'+sk+'|'+esc(p.id)+'">'+esc(p.name)+' <small>$'+p.price+' · stock '+p.stock+'</small></div>'}).join('')+
+  dd.innerHTML=m.map(function(p){return '<div data-pick="'+sk+'|'+esc(p.id)+'">'+esc(p.name)+' <small>$'+p.price+' · stock '+p.stock+((p.sizeQty||[]).length?' · sizes '+p.sizeQty.map(function(z){return z.name+':'+z.qty}).join(', '):'')+'</small></div>'}).join('')+
     '<div data-pickt="'+sk+'" class="typed">Use “'+esc(el.value.trim())+'” as typed</div>';
   dd.hidden=false});
 function pickProduct(t,rid,pid){var r=getRow(t,rid),p=products.filter(function(x){return x.id===pid})[0];if(!r||!p)return;
   r.products=r.products||[];if(t==='live'){if(!r.products.some(function(x){return x.id===pid}))r.products.push(p)}else r.products=[p];
   r.title='';sv(PKEY,posts);renderTasks()}
+async function liveLoad(rid){
+  var r=getRow('live',rid),box=$('lm-'+rid);if(!r)return;
+  function say(m){if(box)box.textContent=m}
+  try{say('Connecting…');await initFb();if(!auth||!auth.currentUser){say('Sign in first (Settings).');return}
+    var d=await fdb.collection('live_desk').doc('state').get(),x=d.exists?d.data():{},sel=(x.selected||[]).map(String),sc=x.scripts||{};
+    if(!sel.length){say('Nothing selected in Live Desk yet.');return}
+    r.products=r.products||[];var added=0;
+    sel.forEach(function(id){var p=products.filter(function(z){return z.id===id})[0],ex=r.products.filter(function(z){return z.id===id})[0];
+      if(ex){if(!ex.script&&sc[id])ex.script=sc[id];return}
+      var o=p?JSON.parse(JSON.stringify(p)):{id:id,name:'Not in this store: '+id,price:0,img:''};o.script=sc[id]||'';r.products.push(o);added++});
+    sv(PKEY,posts);renderTasks();var b2=$('lm-'+rid);if(b2)b2.textContent='Loaded '+added+' items from Live Desk'}
+  catch(e){say(e.message||String(e))}}
+function upsertLive(r){
+  var names=(r.products||[]).map(function(p){return p.name}).join(', ');
+  data=data.filter(function(x){return x.id!=='lv'+r.id});
+  data.push({id:'lv'+r.id,date:tDay,type:'video',name:('Live: '+names).slice(0,70),link:r.link||'',spend:0,reach:+r.views||0,eng:0,msgs:+r.msgs||0,orders:+r.orders||0});
+  save();render()}
 function saveLink(t,rid){var r=getRow(t,rid);if(!r)return;
   var u=$('tUser').value.trim();if(!u){alert(L('Please type your name first (top right).'));return}
   if(!/^https?:\/\/\S+$/i.test(r.link||'')){alert(L('Please paste the full post link (starts with https://).'));return}
   if(!(r.products||[]).length&&!r.title){alert(L('Please pick the product first.'));return}
-  sv(UKEY,u);r.by=u;r.at=hhmm();sv(PKEY,posts);renderTasks()}
+  sv(UKEY,u);r.by=u;r.at=hhmm();sv(PKEY,posts);if(t==='live')upsertLive(r);renderTasks()}
 $('tBlocks').addEventListener('click',function(e){var g=function(k){return e.target.getAttribute&&e.target.getAttribute(k)},q;
+  if(g('data-lload')){liveLoad(g('data-lload').split('|')[1]);return}
   if(g('data-pick')){q=g('data-pick').split('|');pickProduct(q[0],q[1],q.slice(2).join('|'));return}
   if(g('data-pickt')){q=g('data-pickt').split('|');var r=getRow(q[0],q[1]),inp=e.target.parentNode.parentNode.querySelector('input');if(r&&inp.value.trim()){r.title=inp.value.trim();r.products=[];sv(PKEY,posts);renderTasks()}return}
   if(g('data-unp')){q=g('data-unp').split('|');var r2=getRow(q[0],q[1]);if(r2){r2.products.splice(+q[2],1);sv(PKEY,posts);renderTasks()}return}
@@ -502,6 +542,8 @@ var KM={
 'Firebase config (paste from the store app → Settings)':'Firebase config (ចម្លងពីកម្មវិធីហាង → ការកំណត់)','Store ID':'លេខសម្គាល់ហាង','Staff email':'អ៊ីមែលបុគ្គលិក','Password (not saved)':'ពាក្យសម្ងាត់ (មិនរក្សាទុក)',
 'Gemini API key (free tier)':'Gemini API key (ឥតគិតថ្លៃ)','Gemini model':'ម៉ូដែល Gemini','Save & sign in':'រក្សាទុក និងចូល','Reload products':'ផ្ទុកផលិតផលឡើងវិញ','Sign out':'ចាកចេញ','Close':'បិទ',
 'Connecting…':'កំពុងភ្ជាប់…','Not signed in':'មិនទាន់ចូល','Sign in first.':'សូមចូលជាមុនសិន។','Saved (no Firebase config yet).':'បានរក្សាទុក (មិនទាន់មាន Firebase config)។','Saved. Enter email and password to sign in.':'បានរក្សាទុក។ បញ្ចូលអ៊ីមែល និងពាក្យសម្ងាត់ដើម្បីចូល។'};
+KM['Plan - before the live']='ផែនការ – មុនឡាយវ៍';KM['Result - after the live']='លទ្ធផល – ក្រោយឡាយវ៍';KM['Load from Live Desk']='ទាញពី Live Desk';KM['No script yet']='មិនទាន់មានស្គ្រីប';
+KM['Paste the live link here']='បិទភ្ជាប់តំណឡាយវ៍នៅទីនេះ';KM['Save result']='រក្សាលទ្ធផល';KM['Sign in first (Settings).']='សូមចូលជាមុនសិន (ការកំណត់)។';KM['Nothing selected in Live Desk yet.']='មិនទាន់មានទំនិញត្រូវបានជ្រើសក្នុង Live Desk ទេ។';
 var WORDS={spend:'ចំណាយ',reach:'ការទៅដល់',views:'ចំនួនមើល',clicks:'ចុច',likes:'ចូលចិត្ត',msgs:'សារ',orders:'កុម្ម៉ង់'};
 var SRCH={'Search the product':'ស្វែងរកផលិតផល','Search products (add as many as you need)':'ស្វែងរកផលិតផល (បន្ថែមបានច្រើន)'};
 var NW='(?:spend|reach|views|clicks|likes|msgs|orders)',NUM='\\$?[\\d.,k]+';
@@ -524,8 +566,11 @@ var RULES=[
  [/^Posted by (.+) at (.+)$/,function(m){return 'ផុសដោយ '+m[1]+' នៅម៉ោង '+m[2]}],
  [/^(Search the product|Search products \(add as many as you need\))( - products not loaded, see Settings)?$/,function(m){return SRCH[m[1]]+(m[2]?' - មិនទាន់ផ្ទុកផលិតផល មើលការកំណត់':'')}],
  [/^\+ Add another (video|photo|live)$/,function(m){return '+ បន្ថែម'+trk(m[1].charAt(0).toUpperCase()+m[1].slice(1))+'មួយទៀត'}],
- [/^\$([\d.]+) · stock (\d+)$/,function(m){return '$'+m[1]+' · ស្តុក '+m[2]}],
+ [/^\$([\d.]+) · stock (\d+)(?: · sizes (.+))?$/,function(m){return '$'+m[1]+' · ស្តុក '+m[2]+(m[3]?' · ទំហំ '+m[3]:'')}],
  [/^Use “(.*)” as typed$/,function(m){return 'ប្រើ “'+m[1]+'” ដូចដែលបានវាយ'}],
+ [/^(\d+) items? planned$/,function(m){return 'បានរៀបចំ '+m[1]+' ទំនិញ'}],
+ [/^Loaded (\d+) items from Live Desk$/,function(m){return 'បានទាញ '+m[1]+' ទំនិញពី Live Desk'}],
+ [/^Not in this store: (.+)$/,function(m){return 'មិនមានក្នុងហាងនេះ៖ '+m[1]}],
  [/^(.+) - script$/,function(m){return trk(m[1])+' – ស្គ្រីប'}],
  [/^Products loaded: (\d+)\. The key and config are saved only in this browser\.$/,function(m){return 'ផលិតផលបានផ្ទុក៖ '+m[1]+'។ key និង config រក្សាទុកតែក្នុងកម្មវិធីរុករកនេះប៉ុណ្ណោះ។'}],
  [/^Signed in as (.+)$/,function(m){return 'បានចូលជា '+m[1]}],[/^(\d+) products loaded$/,function(m){return 'បានផ្ទុកផលិតផល '+m[1]}]];
