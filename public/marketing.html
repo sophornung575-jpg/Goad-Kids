@@ -8,7 +8,7 @@
 :root{--bg:#f4f5f7;--card:#fff;--tx:#1b1f27;--mut:#6b7280;--bd:#e5e7eb;--ad:#4f6a94;--post:#2f7d62;--video:#b98a3a;--acc:#111827}
 [data-theme=dark]{--bg:#0f1218;--card:#181c25;--tx:#e8eaf0;--mut:#8b93a3;--bd:#262c38;--acc:#e8eaf0}
 *{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--tx);font-size:14px}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,'Noto Sans Khmer','Khmer OS Battambang','Leelawadee UI',sans-serif;background:var(--bg);color:var(--tx);font-size:14px}
 .wrap{max-width:1000px;margin:0 auto;padding:16px}
 header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 h1{font-size:18px;margin:0;flex:1}
@@ -173,7 +173,7 @@ function hbars(el,rows,unit){
   var max=Math.max.apply(null,rows.map(function(r){return r.v}))||1,h=rows.length*30+6;
   var s='<svg viewBox="0 0 '+W+' '+h+'">';
   rows.forEach(function(r,i){var y=i*30+4,w=(W-210)*r.v/max;
-    s+='<text x="0" y="'+(y+15)+'" font-size="12" fill="var(--tx)">'+esc(r.n.length>22?r.n.slice(0,21)+'…':r.n)+'</text>'+
+    s+='<text x="0" y="'+(y+15)+'" font-size="12" fill="var(--tx)">'+esc((function(n){return n.length>22?n.slice(0,21)+'…':n})(tr(r.n)))+'</text>'+
        '<rect x="160" y="'+y+'" width="'+Math.max(w,2)+'" height="20" rx="4" fill="'+r.c+'"/>'+
        '<text x="'+(166+w)+'" y="'+(y+15)+'" font-size="12" fill="var(--mut)">'+fmt(r.v)+(unit||'')+'</text>'});
   el.innerHTML=s+'</svg>'}
@@ -218,7 +218,7 @@ function render(){
   $('list').innerHTML=ds.length?ds.map(function(d){
     var it=cur.filter(function(x){return x.date===d}),bestId=null,bo=0;
     it.forEach(function(x){if((+x.orders||0)>bo){bo=+x.orders;bestId=x.id}});
-    return '<div class="day"><div class="dh"><span>'+new Date(d+'T00:00').toDateString()+'</span>'+
+    return '<div class="day"><div class="dh"><span>'+dateStr(d)+'</span>'+
       '<small>$'+fmt(sum(it,'spend'))+' · reach '+fmt(sum(it,'reach'))+' · msgs '+fmt(sum(it,'msgs'))+' · orders '+fmt(sum(it,'orders'))+'</small></div>'+
       it.map(function(x){var el=x.type==='ad'?'clicks':x.type==='video'?'likes':'likes';var rl=x.type==='video'?'views':'reach';
         return '<div class="it"><span class="tag" style="background:'+COL[x.type]+'">'+LBL[x.type]+'</span>'+
@@ -244,7 +244,7 @@ $('save').onclick=function(){
   ['fName','fLink','fSpend','fReach','fEng','fMsgs','fOrders'].forEach(function(i){$(i).value=''});
   save();$('form').classList.remove('show');render()};
 $('list').onclick=function(e){var id=e.target.getAttribute&&e.target.getAttribute('data-del');
-  if(id&&confirm('Delete this result?')){data=data.filter(function(x){return x.id!==id});save();render()}};
+  if(id&&confirm(L('Delete this result?'))){data=data.filter(function(x){return x.id!==id});save();render()}};
 
 /* ---------- controls ---------- */
 $('metric').innerHTML=Object.keys(METRICS).map(function(k){return '<option value="'+k+'">'+METRICS[k]+'</option>'}).join('');
@@ -375,16 +375,16 @@ function pickProduct(t,rid,pid){var r=getRow(t,rid),p=products.filter(function(x
   r.products=r.products||[];if(t==='live'){if(!r.products.some(function(x){return x.id===pid}))r.products.push(p)}else r.products=[p];
   r.title='';sv(PKEY,posts);renderTasks()}
 function saveLink(t,rid){var r=getRow(t,rid);if(!r)return;
-  var u=$('tUser').value.trim();if(!u){alert('Please type your name first (top right).');return}
-  if(!/^https?:\/\/\S+$/i.test(r.link||'')){alert('Please paste the full post link (starts with https://).');return}
-  if(!(r.products||[]).length&&!r.title){alert('Please pick the product first.');return}
+  var u=$('tUser').value.trim();if(!u){alert(L('Please type your name first (top right).'));return}
+  if(!/^https?:\/\/\S+$/i.test(r.link||'')){alert(L('Please paste the full post link (starts with https://).'));return}
+  if(!(r.products||[]).length&&!r.title){alert(L('Please pick the product first.'));return}
   sv(UKEY,u);r.by=u;r.at=hhmm();sv(PKEY,posts);renderTasks()}
 $('tBlocks').addEventListener('click',function(e){var g=function(k){return e.target.getAttribute&&e.target.getAttribute(k)},q;
   if(g('data-pick')){q=g('data-pick').split('|');pickProduct(q[0],q[1],q.slice(2).join('|'));return}
   if(g('data-pickt')){q=g('data-pickt').split('|');var r=getRow(q[0],q[1]),inp=e.target.parentNode.parentNode.querySelector('input');if(r&&inp.value.trim()){r.title=inp.value.trim();r.products=[];sv(PKEY,posts);renderTasks()}return}
   if(g('data-unp')){q=g('data-unp').split('|');var r2=getRow(q[0],q[1]);if(r2){r2.products.splice(+q[2],1);sv(PKEY,posts);renderTasks()}return}
   if(g('data-addrow')){var t=g('data-addrow');posts[tDay][t].push({id:uid(),products:[]});sv(PKEY,posts);renderTasks();return}
-  if(g('data-delrow')){q=g('data-delrow').split('|');if(confirm('Delete this row?')){posts[tDay][q[0]]=rowsOf(tDay,q[0]).filter(function(r){return r.id!==q[1]});sv(PKEY,posts);renderTasks()}return}
+  if(g('data-delrow')){q=g('data-delrow').split('|');if(confirm(L('Delete this row?'))){posts[tDay][q[0]]=rowsOf(tDay,q[0]).filter(function(r){return r.id!==q[1]});sv(PKEY,posts);renderTasks()}return}
   if(g('data-save')){q=g('data-save').split('|');saveLink(q[0],q[1]);return}
   if(g('data-gen')){q=g('data-gen').split('|');openScript(q[0],q[1]);return}
   if(e.target.getAttribute&&e.target.getAttribute('data-res')){q=e.target.getAttribute('data-res').split('|');sendToSummary(q[0],q[1])}});
@@ -399,7 +399,7 @@ var HOOK={question:'QUESTION hook (open with a question the parent asks herself)
 function buildPrompt(t,r,o){
   var P=(r.products||[]).map(function(p){return '- '+p.name+(p.price?' | price $'+p.price:'')+(p.category?' | category: '+p.category:'')+(p.sizes&&p.sizes.length?' | sizes: '+p.sizes.join(', '):'')}).join('\n')||('- '+(r.title||'(product not set)'));
   var base='You are a social media copywriter for "Goat Kids", a kids clothing shop in Phnom Penh, Cambodia. The audience is Khmer parents. Focus: '+OCC[o.occ]+'. '+(o.concept?'Staff idea / concept: '+o.concept+'. ':'')+'\nProducts:\n'+P+'\n\n';
-  if(t==='video')return base+'Write a short-video script (15-30 seconds). Opening style: '+HOOK[o.hook]+'. Use exactly this format:\nHOOK STYLE: ...\nSHOT 1 (Hook) - Film: ... | Khmer line: ...\nSHOT 2 (Show the product) - Film: ... | Khmer line: ...\nSHOT 3 (Details: size, fabric, price) - Film: ... | Khmer line: ...\nSHOT 4 (Call to action: message us / order now) - Film: ... | Khmer line: ...\nCAPTION: a short Khmer caption with 3 hashtags.\nWrite the filming instructions in English and all spoken lines and the caption in Khmer. Do not use markdown symbols.';
+  if(t==='video')return base+'Write a short-video script (15-30 seconds) for Facebook. Use exactly this format and keep every part separate:\nHOOK OPTIONS (three different openings for the first 3 seconds):\n1. QUESTION - Khmer: ... | English: ...\n2. PROBLEM - Khmer: ... | English: ...\n3. PRICE - Khmer: ... | English: ...\nSHOT 1 (Hook - use one of the options above) - Film: ... | Khmer line: ... | English: ...\nSHOT 2 (Show the product) - Film: ... | Khmer line: ... | English: ...\nSHOT 3 (Details: size, fabric, price) - Film: ... | Khmer line: ... | English: ...\nSHOT 4 (Call to action: message us / order now) - Film: ... | Khmer line: ... | English: ...\nCAPTION: a short Khmer caption with 3 hashtags | English: ...\nWrite the filming instructions in English. Write every spoken line and the caption in Khmer, each followed by its English translation. Do not use markdown symbols.';
   if(t==='photo')return base+'Write a Facebook photo-post caption in Khmer: a strong first line, 2-3 short lines about the product with price and sizes, a call to action to message the page, and 3-5 hashtags. Then add "PHOTO TIP:" with one English line on how to shoot the photo. Do not use markdown symbols.';
   return base+'This is a Facebook Live. For EACH product write one short selling line in Khmer (maximum 20 words) that the host can say, including the price. Number the products. Then add "OPENING LINE:" and "CLOSING LINE:" in Khmer. Do not use markdown symbols.'}
 async function callGemini(prompt){
@@ -411,19 +411,16 @@ async function callGemini(prompt){
   if(!tx)throw new Error('Gemini returned no text. Try again.');return tx.trim()}
 function openScript(t,rid){
   var r=getRow(t,rid),tk=TASKS.filter(function(x){return x.id===t})[0];if(!r)return;
-  if(!(r.products||[]).length&&!r.title){alert('Please search and pick the product first.');return}
+  if(!(r.products||[]).length&&!r.title){alert(L('Please search and pick the product first.'));return}
   var m=$('modal');m.hidden=false;var vid=t==='video';
   m.innerHTML='<div class="mbox"><h2 style="font-size:16px;display:flex;justify-content:space-between;gap:8px"><span>'+tk.n+' – script</span><button class="x" id="mClose">✕</button></h2>'+
    '<div class="ths big">'+((r.products||[]).map(function(p){return thumb(p,'',0,false)}).join('')||'<div class="pth"><div class="noimg"></div><div class="pn"><div>'+esc(r.title)+'</div></div></div>')+'</div>'+
-   (vid?'<div class="f" style="margin:10px 0"><label style="grid-column:1/-1">Opening hook<div class="seg" id="mHook"><button data-v="question">Question</button><button data-v="problem">Problem</button><button data-v="price">Price</button></div></label></div>':'')+
    '<div class="f" style="margin:10px 0"><label>Occasion<select id="mOcc"><option value="birthday">Birthday</option><option value="wedding">Wedding</option><option value="both">Both</option></select></label></div>'+
    '<label style="font-size:12px;color:var(--mut)">Concept / idea (type or speak)</label><div style="display:flex;gap:6px;margin:4px 0 10px"><textarea id="mConcept" rows="2" style="flex:1" placeholder="e.g. matching outfit for sisters"></textarea><button id="mMic" title="Speak">Speak</button></div>'+
    '<div style="display:flex;gap:8px;margin-bottom:8px"><button class="pri" id="mGen">Generate</button><span id="mMsg" style="color:var(--mut);font-size:12px;align-self:center"></span></div>'+
    '<textarea id="mOut" rows="12" style="width:100%" placeholder="The script appears here. You can edit it."></textarea>'+
    '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button id="mCopy">Copy</button><button class="pri" id="mSave">Save & close</button></div></div>';
   var o={hook:r.hook||'question',occ:r.occ||'both'};$('mOcc').value=o.occ;$('mConcept').value=r.concept||'';$('mOut').value=r.script||'';
-  function paintHook(){if(vid)[].forEach.call($('mHook').children,function(b){b.classList.toggle('on',b.getAttribute('data-v')===o.hook)})}paintHook();
-  if(vid)$('mHook').onclick=function(e){var v=e.target.getAttribute('data-v');if(v){o.hook=v;paintHook()}};
   function persist(){r.hook=o.hook;r.occ=$('mOcc').value;r.concept=$('mConcept').value.trim();r.script=$('mOut').value;sv(PKEY,posts)}
   async function gen(){persist();$('mGen').disabled=true;$('mMsg').textContent='Gemini is writing…';
     try{$('mOut').value=await callGemini(buildPrompt(t,r,{hook:o.hook,occ:r.occ,concept:r.concept}));$('mMsg').textContent='Done. Edit if you like, or press Regenerate.';persist()}
@@ -432,7 +429,19 @@ function openScript(t,rid){
   $('mCopy').onclick=function(){var ta=$('mOut');ta.select();try{navigator.clipboard.writeText(ta.value).catch(function(){document.execCommand('copy')})}catch(e){document.execCommand('copy')}$('mMsg').textContent='Copied '};
   $('mSave').onclick=function(){persist();m.hidden=true;renderTasks()};$('mClose').onclick=function(){persist();m.hidden=true;renderTasks()};
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR)$('mMic').style.display='none';else $('mMic').onclick=function(){var sr=new SR();sr.lang='km-KH';sr.onresult=function(ev){$('mConcept').value=($('mConcept').value+' '+ev.results[0][0].transcript).trim()};sr.onerror=function(){$('mMsg').textContent='Mic not available'};sr.start();$('mMsg').textContent='Listening…'};
+  var MICERR={'not-allowed':'Microphone permission is blocked. Click the lock icon next to the address and allow Microphone.','service-not-allowed':'Microphone permission is blocked. Click the lock icon next to the address and allow Microphone.','audio-capture':'No microphone found on this device.','no-speech':'No speech heard. Try again.','network':'Speech service not reachable. Check the internet connection.','language-not-supported':'This language is not supported by your browser.','aborted':'Stopped.'};
+  if(!SR)$('mMic').style.display='none';else $('mMic').onclick=async function(){
+    var msg=$('mMsg');
+    try{if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){var st=await navigator.mediaDevices.getUserMedia({audio:true});st.getTracks().forEach(function(x){x.stop()})}}
+    catch(e){msg.textContent=(e&&(e.name==='NotFoundError'||e.name==='OverconstrainedError'))?'No microphone found on this device.':MICERR['not-allowed'];return}
+    function run(lang,canFall){var sr=new SR(),got=false;sr.lang=lang;
+      sr.onresult=function(ev){got=true;$('mConcept').value=($('mConcept').value+' '+ev.results[0][0].transcript).trim();msg.textContent='Done.'};
+      sr.onerror=function(ev){var er=ev.error;
+        if(canFall&&(er==='language-not-supported'||er==='network'||er==='service-not-allowed')){msg.textContent='Khmer is not supported here, switching to English…';run('en-US',false);return}
+        msg.textContent=MICERR[er]||('Microphone error: '+er)};
+      sr.onend=function(){if(!got&&listening){listening=false;if(msg.textContent==='Listening…')msg.textContent='No speech heard. Try again.'}};
+      try{listening=true;sr.start();msg.textContent='Listening…'}catch(e){listening=false;msg.textContent='Microphone error: '+e.message}}
+    var listening=false;run(LANG==='km'?'km-KH':'en-US',LANG==='km')};
   if(!r.script&&cfg.key)gen();
 }
 
@@ -465,7 +474,86 @@ function renderTarget(){
     return '<div class="kpi"><span>'+t.n+' (month)</span><b>'+done+' / '+goal+'</b><i class="'+(diff>=0?'up':'dn')+'">'+(diff>=0?'▲ ahead by ':'▼ behind by ')+Math.abs(diff)+'</i></div>'}).join('')}
 ['tgV','tgP','tgL'].forEach(function(id,i){$(id).onchange=function(){tg[['video','photo','live'][i]]=Math.max(0,+this.value||0);sv(TGKEY,tg);renderTarget()}});
 var _render=render;render=function(){_render();renderTarget()};
+/* ---------- LANGUAGE: English / Khmer ---------- */
+var LANG=ld('goatMktLang','en');
+var KM={
+'Goat Kids – Marketing Summary':'Goat Kids – សង្ខេបទីផ្សារ','+ Add result':'+ បន្ថែមលទ្ធផល','Settings':'ការកំណត់','Theme':'ពណ៌ផ្ទៃ',
+'Summary':'សង្ខេប','Daily Tasks':'កិច្ចការប្រចាំថ្ងៃ','Date':'កាលបរិច្ឆេទ','Type':'ប្រភេទ','Ad':'ពាណិជ្ជកម្ម','Post':'ការផុស','Video':'វីដេអូ','Photo':'រូបភាព','Live':'ឡាយវ៍',
+'Name / product':'ឈ្មោះ / ផលិតផល','e.g. Dress 110 promo':'ឧ. ប្រូម៉ូសិនរ៉ូប 110','Post link':'តំណភ្ជាប់ការផុស','Spend $':'ចំណាយ $','Reach':'ការទៅដល់','Views':'ចំនួនមើល','Clicks':'ចុច','Likes':'ចូលចិត្ត',
+'Messages':'សារ','Orders':'ការកុម្ម៉ង់','Save':'រក្សាទុក','Cancel':'បោះបង់','Spend':'ចំណាយ','Reach / views':'ការទៅដល់ / ចំនួនមើល','Clicks / likes':'ចុច / ចូលចិត្ត','Cost per order':'ថ្លៃក្នុងមួយការកុម្ម៉ង់',
+'Monthly target':'គោលដៅប្រចាំខែ','daily target × days in the month':'គោលដៅប្រចាំថ្ងៃ × ចំនួនថ្ងៃក្នុងខែ','Videos / day':'វីដេអូ / ថ្ងៃ','Photo posts / day':'ការផុសរូបភាព / ថ្ងៃ','Lives / day':'ឡាយវ៍ / ថ្ងៃ',
+'Posted so far':'បានផុសរហូតមកដល់ពេលនេះ','Target pace':'ល្បឿនតាមគោលដៅ','Video post':'ផុសវីដេអូ','Photo post':'ផុសរូបភាព','Trend':'និន្នាការ','By type per day':'តាមប្រភេទក្នុងមួយថ្ងៃ',
+'Orders per $1 spent / per 1,000 reach':'ការកុម្ម៉ង់ក្នុង $1 ដែលចំណាយ / ក្នុង 1,000 ការទៅដល់','Top items':'ទំនិញកំពូល','by orders':'តាមការកុម្ម៉ង់','No data':'គ្មានទិន្នន័យ',
+'Daily list':'បញ្ជីប្រចាំថ្ងៃ','No results in this range yet.':'មិនទាន់មានលទ្ធផលក្នុងចន្លោះនេះទេ។','Load sample data':'ផ្ទុកទិន្នន័យគំរូ','Best':'ល្អបំផុត','Link':'តំណ','(no name)':'(គ្មានឈ្មោះ)',
+'AD':'ពាណិជ្ជកម្ម','POST':'ការផុស','VIDEO':'វីដេអូ','Today':'ថ្ងៃនេះ','Your name':'ឈ្មោះរបស់អ្នក','Progress':'វឌ្ឍនភាព',
+'Daily target met – last 30 days':'ការសម្រេចគោលដៅប្រចាំថ្ងៃ – ៣០ ថ្ងៃចុងក្រោយ','target met':'សម្រេចគោលដៅ','under 60%':'ក្រោម 60%',
+'To do':'មិនទាន់ធ្វើ','Not posted yet':'មិនទាន់ផុស','Write script':'សរសេរស្គ្រីប','Write script (saved)':'សរសេរស្គ្រីប (បានរក្សា)','Paste the post link here':'បិទភ្ជាប់តំណភ្ជាប់ការផុសនៅទីនេះ','Save link':'រក្សាតំណ',
+'typed':'វាយដោយដៃ','Delete':'លុប','Remove':'ដកចេញ','Delete this row':'លុបជួរនេះ','Occasion':'ឱកាស','Birthday':'ខួបកំណើត','Wedding':'មង្គលការ','Both':'ទាំងពីរ',
+'Concept / idea (type or speak)':'គំនិត / ការពិពណ៌នា (វាយ ឬនិយាយ)','e.g. matching outfit for sisters':'ឧ. សម្លៀកបំពាក់ដូចគ្នាសម្រាប់បងប្អូនស្រី','Speak':'និយាយ','Generate':'បង្កើត','Regenerate':'បង្កើតឡើងវិញ',
+'Copy':'ចម្លង','Save & close':'រក្សាទុក និងបិទ','The script appears here. You can edit it.':'ស្គ្រីបនឹងបង្ហាញនៅទីនេះ។ អ្នកអាចកែបាន។','Gemini is writing…':'Gemini កំពុងសរសេរ…',
+'Done. Edit if you like, or press Regenerate.':'រួចរាល់។ កែបាន ឬចុចបង្កើតឡើងវិញ។','Copied':'បានចម្លង','Listening…':'កំពុងស្តាប់…','Done.':'រួចរាល់។',
+'No microphone found on this device.':'រកមិនឃើញមីក្រូហ្វូនលើឧបករណ៍នេះទេ។',
+'Microphone permission is blocked. Click the lock icon next to the address and allow Microphone.':'ការអនុញ្ញាតមីក្រូហ្វូនត្រូវបានបិទ។ ចុចរូបចាក់សោក្បែរអាសយដ្ឋាន ហើយអនុញ្ញាតមីក្រូហ្វូន។',
+'Khmer is not supported here, switching to English…':'កម្មវិធីរុករកនេះមិនគាំទ្រភាសាខ្មែរ កំពុងប្តូរទៅភាសាអង់គ្លេស…','No speech heard. Try again.':'មិនឮសំឡេង។ សូមព្យាយាមម្តងទៀត។',
+'Speech service not reachable. Check the internet connection.':'មិនអាចភ្ជាប់សេវាសម្គាល់សំឡេង។ សូមពិនិត្យអ៊ីនធឺណិត។','This language is not supported by your browser.':'ភាសានេះមិនត្រូវបានគាំទ្រដោយកម្មវិធីរុករក។','Stopped.':'បានបញ្ឈប់។',
+'Please type your name first (top right).':'សូមវាយឈ្មោះរបស់អ្នកជាមុនសិន (ខាងលើស្តាំ)។','Please paste the full post link (starts with https://).':'សូមបិទភ្ជាប់តំណភ្ជាប់ពេញលេញ (ចាប់ផ្តើមដោយ https://)។',
+'Please pick the product first.':'សូមជ្រើសរើសផលិតផលជាមុនសិន។','Please search and pick the product first.':'សូមស្វែងរក និងជ្រើសរើសផលិតផលជាមុនសិន។','Delete this result?':'លុបលទ្ធផលនេះ?','Delete this row?':'លុបជួរនេះ?',
+'Add your Gemini API key in Settings first.':'សូមបញ្ចូល Gemini API key ក្នុងការកំណត់ជាមុនសិន។',
+'Firebase config (paste from the store app → Settings)':'Firebase config (ចម្លងពីកម្មវិធីហាង → ការកំណត់)','Store ID':'លេខសម្គាល់ហាង','Staff email':'អ៊ីមែលបុគ្គលិក','Password (not saved)':'ពាក្យសម្ងាត់ (មិនរក្សាទុក)',
+'Gemini API key (free tier)':'Gemini API key (ឥតគិតថ្លៃ)','Gemini model':'ម៉ូដែល Gemini','Save & sign in':'រក្សាទុក និងចូល','Reload products':'ផ្ទុកផលិតផលឡើងវិញ','Sign out':'ចាកចេញ','Close':'បិទ',
+'Connecting…':'កំពុងភ្ជាប់…','Not signed in':'មិនទាន់ចូល','Sign in first.':'សូមចូលជាមុនសិន។','Saved (no Firebase config yet).':'បានរក្សាទុក (មិនទាន់មាន Firebase config)។','Saved. Enter email and password to sign in.':'បានរក្សាទុក។ បញ្ចូលអ៊ីមែល និងពាក្យសម្ងាត់ដើម្បីចូល។'};
+var WORDS={spend:'ចំណាយ',reach:'ការទៅដល់',views:'ចំនួនមើល',clicks:'ចុច',likes:'ចូលចិត្ត',msgs:'សារ',orders:'កុម្ម៉ង់'};
+var SRCH={'Search the product':'ស្វែងរកផលិតផល','Search products (add as many as you need)':'ស្វែងរកផលិតផល (បន្ថែមបានច្រើន)'};
+var NW='(?:spend|reach|views|clicks|likes|msgs|orders)',NUM='\\$?[\\d.,k]+';
+var NUMRE=new RegExp('^'+NUM+' '+NW+'(?: · '+NUM+' '+NW+')*(?: · )?$');
+var RULES=[
+ [/^(.+) \((\d+)d\)$/,function(m){return trk(m[1])+' ('+m[2]+' ថ្ងៃ)'}],
+ [/^(.+) \(month\)$/,function(m){return trk(m[1])+' (ខែនេះ)'}],
+ [/^([▲▼])(\d+)% vs prev$/,function(m){return m[1]+m[2]+'% ធៀបនឹងមុន'}],
+ [/^▲ ahead by (\d+)$/,function(m){return '▲ មុនគោលដៅ '+m[1]}],[/^▼ behind by (\d+)$/,function(m){return '▼ យឺតជាងគោលដៅ '+m[1]}],
+ [/^(AD|POST|VIDEO) orders \/ \$1$/,function(m){return trk(m[1])+' ការកុម្ម៉ង់ / $1'}],
+ [/^(AD|POST|VIDEO) orders \/ 1k reach$/,function(m){return trk(m[1])+' ការកុម្ម៉ង់ / 1k ការទៅដល់'}],
+ [/^(AD|POST|VIDEO) · (.+)$/,function(m){return trk(m[1])+' · '+m[2]}],
+ [/^\$([\d.,k]+) · reach ([\d.,k]+) · msgs ([\d.,k]+) · orders ([\d.,k]+)$/,function(m){return '$'+m[1]+' · ការទៅដល់ '+m[2]+' · សារ '+m[3]+' · កុម្ម៉ង់ '+m[4]}],
+ [NUMRE,function(m){return m[0].replace(/\b(spend|reach|views|clicks|likes|msgs|orders)\b/g,function(w){return WORDS[w]})}],
+ [/^(.+) · (\d+) days?$/,function(m){return trk(m[1])+' · '+m[2]+' ថ្ងៃ'}],
+ [/^(\d+)\/(\d+) posts · (\d+)%$/,function(m){return m[1]+'/'+m[2]+' ការផុស · '+m[3]+'%'}],
+ [/^(\d+) posted$/,function(m){return 'ផុសរួច '+m[1]}],
+ [/^posted (\d+)(?: \/ target (\d+))?$/,function(m){return 'បានផុស '+m[1]+(m[2]!==undefined?' / គោលដៅ '+m[2]:'')}],
+ [/^(Video|Photo|Live) #(\d+)$/,function(m){return trk(m[1])+' #'+m[2]}],
+ [/^Posted by (.+) at (.+)$/,function(m){return 'ផុសដោយ '+m[1]+' នៅម៉ោង '+m[2]}],
+ [/^(Search the product|Search products \(add as many as you need\))( - products not loaded, see Settings)?$/,function(m){return SRCH[m[1]]+(m[2]?' - មិនទាន់ផ្ទុកផលិតផល មើលការកំណត់':'')}],
+ [/^\+ Add another (video|photo|live)$/,function(m){return '+ បន្ថែម'+trk(m[1].charAt(0).toUpperCase()+m[1].slice(1))+'មួយទៀត'}],
+ [/^\$([\d.]+) · stock (\d+)$/,function(m){return '$'+m[1]+' · ស្តុក '+m[2]}],
+ [/^Use “(.*)” as typed$/,function(m){return 'ប្រើ “'+m[1]+'” ដូចដែលបានវាយ'}],
+ [/^(.+) - script$/,function(m){return trk(m[1])+' – ស្គ្រីប'}],
+ [/^Products loaded: (\d+)\. The key and config are saved only in this browser\.$/,function(m){return 'ផលិតផលបានផ្ទុក៖ '+m[1]+'។ key និង config រក្សាទុកតែក្នុងកម្មវិធីរុករកនេះប៉ុណ្ណោះ។'}],
+ [/^Signed in as (.+)$/,function(m){return 'បានចូលជា '+m[1]}],[/^(\d+) products loaded$/,function(m){return 'បានផ្ទុកផលិតផល '+m[1]}]];
+function trk(s){var o=KM[s];return o===undefined?s:o}
+function trRaw(s){var m=s.match(/^(\s*)([\s\S]*?)(\s*)$/),core=m[2];if(!core)return s;
+  var o=KM[core];if(o===undefined)for(var i=0;i<RULES.length;i++){var mm=core.match(RULES[i][0]);if(mm){o=RULES[i][1](mm);break}}
+  return o===undefined?s:m[1]+o+m[3]}
+function tr(s){return LANG==='km'?trRaw(s):s}
+function L(s){return tr(s)}
+function dateStr(d){var x=new Date(d+'T00:00');return LANG==='km'?x.toLocaleDateString('km-KH',{weekday:'short',year:'numeric',month:'short',day:'numeric'}):x.toDateString()}
+
+var busy=false;
+function trText(n){var p=n.parentNode;if(!p||/^(SCRIPT|STYLE|TEXTAREA)$/.test(p.nodeName))return;
+  var orig=(n.__t!==undefined&&n.__t===n.nodeValue)?n.__o:n.nodeValue;n.__o=orig;var out=tr(orig);if(out!==n.nodeValue)n.nodeValue=out;n.__t=out}
+function trAttrs(el){['placeholder','title'].forEach(function(a){var v=el.getAttribute&&el.getAttribute(a);if(v===null||v===undefined)return;
+  var k='__a_'+a,orig=(el[k]&&el[k].t===v)?el[k].o:v,out=tr(orig);if(out!==v)el.setAttribute(a,out);el[k]={o:orig,t:out}})}
+function walk(root){if(root.nodeType===3){trText(root);return}if(root.nodeType!==1)return;trAttrs(root);
+  var w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null,false),n,list=[];while((n=w.nextNode()))list.push(n);list.forEach(trText);
+  [].forEach.call(root.querySelectorAll('[placeholder],[title]'),trAttrs)}
+var obs=new MutationObserver(function(ms){if(busy)return;busy=true;
+  ms.forEach(function(m){if(m.type==='characterData')trText(m.target);else m.addedNodes.forEach(walk)});busy=false;obs.takeRecords()});
+obs.observe(document.body,{childList:true,subtree:true,characterData:true});
+function applyLang(){busy=true;document.documentElement.lang=LANG==='km'?'km':'en';render();if($('viewTasks').style.display!=='none')renderTasks();walk(document.body);busy=false;obs.takeRecords()}
+var ls=document.createElement('select');ls.id='lang';ls.innerHTML='<option value="en">English</option><option value="km">ខ្មែរ</option>';ls.value=LANG;
+ls.onchange=function(){LANG=ls.value;sv('goatMktLang',LANG);applyLang()};
+$('gear').parentNode.insertBefore(ls,$('gear'));
 render();
+if(LANG==='km')walk(document.body);
 </script>
 </body>
 </html>
