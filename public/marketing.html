@@ -404,7 +404,7 @@ function liveRow(t,r,i){
     '<div class="srch"><input data-s="'+key+'" placeholder="Search products (add as many as you need)'+(products.length?'':' - products not loaded, see Settings')+'" autocomplete="off"><div class="dd" hidden></div></div>'+
     '<div id="lm-'+r.id+'" class="lmsg"></div>'+items+
     '<div class="lvh" style="margin-top:10px"><b>Result - after the live</b></div>'+
-    '<div class="acts"><input data-link="'+key+'" value="'+esc(r.link||'')+'" placeholder="Paste the live link here" inputmode="url"><button data-prev="'+key+'">Preview</button><button data-lget="'+key+'">Get results</button></div>'+
+    '<div class="acts"><button class="pri" data-pickpost="'+key+'">Pick live</button><input data-link="'+key+'" value="'+esc(r.link||'')+'" placeholder="Paste the live link here" inputmode="url"><button data-prev="'+key+'">Preview</button><button data-lget="'+key+'">Get results</button></div>'+
     '<div id="lg-'+r.id+'" class="lmsg"></div>'+(r.link?statHTML(r.link):'')+
     '<div class="acts" style="align-items:flex-end;margin-top:6px">'+
     [['views','Views'],['comments','Comments'],['likes','Reactions'],['msgs','Messages'],['orders','Orders']].map(function(f){return '<label class="lf">'+f[1]+'<input type="number" min="0" data-rf="'+key+'|'+f[0]+'" value="'+(r[f[0]]||'')+'"></label>'}).join('')+
@@ -547,16 +547,16 @@ function onRecent(d){recent=(d.exists&&d.data())||{items:[],updatedAt:0}}
 function usedLinks(){var u={};Object.keys(posts).forEach(function(d){TASKS.forEach(function(t){(posts[d][t.id]||[]).forEach(function(r){if(r.link)u[r.postId||r.link]=1})})});return u}
 function openPicker(t,rid){
   var r=getRow(t,rid);if(!r)return;
-  var all=recent.items||[],filt=t==='video'?'video':t==='photo'?'photo':'all';
+  var all=recent.items||[],filt=t==='video'?'video':t==='photo'?'photo':t==='live'?'live':'all';
   var m=$('modal');m.hidden=false;
   function draw(){
-    var used=usedLinks(),list=all.filter(function(it){return filt==='all'||(filt==='video'?it.reel:!it.reel)});
+    var used=usedLinks(),list=all.filter(function(it){return filt==='all'||(filt==='live'?it.live:filt==='video'?(it.reel&&!it.live):(!it.reel&&!it.live))});
     var upd=recent.updatedAt?new Date(recent.updatedAt).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'-';
-    m.innerHTML='<div class="mbox"><h2 style="font-size:16px;display:flex;justify-content:space-between;gap:8px"><span>'+L('Pick your post')+'</span><button class="x" id="pkClose">✕</button></h2>'+
-      '<div class="pkf"><button data-pf="video" class="'+(filt==='video'?'on':'')+'">'+L('Reels / videos')+'</button><button data-pf="photo" class="'+(filt==='photo'?'on':'')+'">'+L('Photo posts')+'</button><button data-pf="all" class="'+(filt==='all'?'on':'')+'">'+L('All')+'</button></div>'+
+    m.innerHTML='<div class="mbox"><h2 style="font-size:16px;display:flex;justify-content:space-between;gap:8px"><span>'+L(t==='live'?'Pick your live':'Pick your post')+'</span><button class="x" id="pkClose">✕</button></h2>'+
+      '<div class="pkf"><button data-pf="live" class="'+(filt==='live'?'on':'')+'">'+L('Lives')+'</button><button data-pf="video" class="'+(filt==='video'?'on':'')+'">'+L('Reels / videos')+'</button><button data-pf="photo" class="'+(filt==='photo'?'on':'')+'">'+L('Photo posts')+'</button><button data-pf="all" class="'+(filt==='all'?'on':'')+'">'+L('All')+'</button></div>'+
       '<div class="pkl">'+(list.length?list.map(function(it,i){var u=used[it.postId]||used[it.link];
         return '<button class="pki'+(u?' used':'')+'" data-pk="'+all.indexOf(it)+'">'+(it.img?'<img src="'+esc(it.img)+'" alt="" loading="lazy">':'<div class="noimg"></div>')+
-        '<div class="pkt"><div class="pkm">'+esc(it.page)+' · '+(it.reel?L('Reel'):L('Post'))+' · '+new Date(it.created).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})+(u?' · '+L('already saved'):'')+'</div><div class="pkx">'+esc(it.text||L('(no caption)'))+'</div></div></button>'}).join('')
+        '<div class="pkt"><div class="pkm">'+esc(it.page)+' · '+(it.live?L('Live'):it.reel?L('Reel'):L('Post'))+' · '+new Date(it.created).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})+(u?' · '+L('already saved'):'')+'</div><div class="pkx">'+esc(it.text||L('(no caption)'))+'</div></div></button>'}).join('')
         :'<p style="color:var(--mut)">'+L('No posts found yet. New posts appear here within about an hour after publishing.')+'</p>')+'</div>'+
       '<p style="color:var(--mut);font-size:12px;margin-top:10px">'+L('List updated')+': '+upd+'. '+L('Not in the list? Wait up to an hour, or paste the link instead.')+'</p></div>';
     $('pkClose').onclick=function(){m.hidden=true;m.innerHTML=''};
@@ -759,7 +759,7 @@ KM['Sign in with the Super Admin account.']='ចូលជាមួយគណន�
 KM['Paste the Firebase config to begin.']='សូមបិទភ្ជាប់ Firebase config ដើម្បីចាប់ផ្តើម។';KM['Enter your email and password.']='សូមបញ្ចូលអ៊ីមែល និងពាក្យសម្ងាត់។';KM['Signing in…']='កំពុងចូល…';KM['Wrong email or password.']='អ៊ីមែល ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ។';
 KM['This account is not allowed to open the Marketing tool.']='គណនីនេះមិនមានសិទ្ធិបើកឧបករណ៍ទីផ្សារទេ។';KM['Access list not set up yet. In Firebase, create the document _admin_/marketingAdmins with a field emails (array).']='មិនទាន់បង្កើតបញ្ជីអ្នកមានសិទ្ធិ។ ក្នុង Firebase សូមបង្កើតឯកសារ _admin_/marketingAdmins ដែលមានវាល emails (array)។';
 KM['No permission to read the access list. Check the Firestore rules.']='គ្មានសិទ្ធិអានបញ្ជីអ្នកមានសិទ្ធិ។ សូមពិនិត្យ Firestore rules។';KM['Sign out']='ចាកចេញ';
-KM['Pick post']='ជ្រើសការផុស';KM['Pick your post']='ជ្រើសការផុសរបស់អ្នក';KM['Reels / videos']='រីល / វីដេអូ';KM['Photo posts']='ការផុសរូបភាព';KM['All']='ទាំងអស់';KM['Reel']='រីល';KM['Post']='ការផុស';
+KM['Pick post']='ជ្រើសការផុស';KM['Pick live']='ជ្រើសឡាយវ៍';KM['Pick your live']='ជ្រើសឡាយវ៍របស់អ្នក';KM['Lives']='ឡាយវ៍';KM['Pick your post']='ជ្រើសការផុសរបស់អ្នក';KM['Reels / videos']='រីល / វីដេអូ';KM['Photo posts']='ការផុសរូបភាព';KM['All']='ទាំងអស់';KM['Reel']='រីល';KM['Post']='ការផុស';
 KM['already saved']='បានរក្សារួច';KM['(no caption)']='(គ្មានចំណងជើង)';KM['List updated']='បញ្ជីធ្វើបច្ចុប្បន្នភាព';KM['Results come within about an hour.']='លទ្ធផលនឹងមកក្នុងរយៈពេលប្រហែលមួយម៉ោង។';
 KM['No posts found yet. New posts appear here within about an hour after publishing.']='មិនទាន់មានការផុសទេ។ ការផុសថ្មីនឹងបង្ហាញនៅទីនេះក្នុងរយៈពេលប្រហែលមួយម៉ោងក្រោយផុស។';
 KM['Not in the list? Wait up to an hour, or paste the link instead.']='មិនឃើញក្នុងបញ្ជី? សូមរង់ចាំរហូតដល់មួយម៉ោង ឬបិទភ្ជាប់តំណជំនួសវិញ។';
