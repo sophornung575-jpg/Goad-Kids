@@ -68,6 +68,7 @@ textarea{font:inherit;color:var(--tx);background:var(--card);border:1px solid va
 .lvh{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.lvh b{font-size:13px}.lvh .todo{flex:1;color:var(--mut);font-size:12px}
 .lf{display:flex;flex-direction:column;font-size:11px;color:var(--mut);flex:0 1 96px;gap:2px}.acts .lf input{flex:none;width:100%}
 .lvi{margin:6px 0}.lvi textarea{margin-top:4px;font-size:12px}.lmsg{font-size:12px;color:var(--mut);min-height:0}.pst{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;margin-top:8px;color:var(--ink,#222)}.pst b{font-weight:600}.pst.wait{color:var(--mut)}.pst.warn{color:#b0524f}.pst2{font-size:11.5px;color:var(--mut);margin-top:3px}
+.auto{font-size:10.5px;color:var(--mut);border:1px solid var(--line,#ddd);border-radius:4px;padding:1px 5px;align-self:flex-start}
 .pkl{display:flex;flex-direction:column;gap:8px}.pki{display:flex;gap:10px;align-items:flex-start;text-align:left;width:100%;padding:8px;border:1px solid var(--line,#ddd);border-radius:8px;background:var(--card);cursor:pointer;font:inherit;color:inherit}
 .pki:hover{border-color:#2f7d62}.pki img,.pki .noimg{width:64px;height:64px;object-fit:cover;border-radius:6px;flex:none;background:var(--bg)}.pki .pkt{flex:1;min-width:0;font-size:12.5px}
 .pki .pkm{font-size:11.5px;color:var(--mut);margin-bottom:3px}.pki .pkx{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.pki.used{opacity:.5}.pkf{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}.pkf button.on{background:#2f7d62;color:#fff;border-color:#2f7d62}
@@ -208,7 +209,22 @@ function spark(x,dl,m){
   pts.forEach(function(p){var on=p[2]===cur;s+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+(on?4:2.2)+'" fill="'+(on?c:'var(--card)')+'" stroke="'+c+'" stroke-width="1.5"><title>'+dl[p[2]]+': '+vals[p[2]]+'</title></circle>'});
   return s+'</svg><div>'+METRICS[m]+' · '+pts.length+' day'+(pts.length>1?'s':'')+'</div>'}
 /* ---------- render ---------- */
-function inRange(list){return data.filter(function(x){return list.indexOf(x.date)>-1})}
+/* Facebook results the hourly job collected, shown in the Summary without typing them in.
+   POST / VIDEO = each post saved in Daily Tasks (views or reach + reactions/comments/shares).
+   AD = the whole ad account's spend and reach per day. Rows typed by hand for the same link or day win. */
+function autoRows(){
+  if(typeof posts==='undefined'||!posts||!pstat||!pdaily)return [];
+  var out=[],typed={},typedAd={};
+  data.forEach(function(x){if(x.link)typed[String(x.link).trim()]=1;if(x.type==='ad')typedAd[x.date]=1});
+  Object.keys(posts).forEach(function(d){['video','photo'].forEach(function(t){(posts[d][t]||[]).forEach(function(r){
+    if(!r.link||!r.by||r.sample||typed[String(r.link).trim()])return;var st=pstat[linkKey(r.link)];
+    if(!st||st.status!=='ok')return;
+    out.push({id:'auto-'+r.id,auto:1,date:d,type:t==='photo'?'post':'video',name:(r.products||[]).map(function(p){return p.name}).join(', ')||r.title||'',link:r.link,
+      spend:0,reach:+(st.views!=null?st.views:st.reach)||0,eng:(+st.reactions||0)+(+st.comments||0)+(+st.shares||0),msgs:0,orders:0})})})});
+  Object.keys(pdaily).forEach(function(d){var a=pdaily[d];if(typedAd[d]||!a||!(+a.adSpend||+a.adReach))return;
+    out.push({id:'auto-ad-'+d,auto:1,date:d,type:'ad',name:'All ads (Facebook)',spend:+a.adSpend||0,reach:+a.adReach||0,eng:0,msgs:0,orders:0})});
+  return out}
+function inRange(list){return data.concat(autoRows()).filter(function(x){return list.indexOf(x.date)>-1})}
 function render(){
   var dl=dayList(days),prev=dayList(days,days),cur=inRange(dl),old=inRange(prev);
   /* KPIs */
@@ -243,7 +259,7 @@ function render(){
         return '<div class="it"><span class="tag" style="background:'+COL[x.type]+'">'+LBL[x.type]+'</span>'+
         '<div><div>'+esc(x.name||'(no name)')+(x.id===bestId?' <span class="best">Best</span>':'')+'</div>'+
         '<div class="nums">'+(x.type==='ad'?'$'+fmt(x.spend)+' spend · ':'')+fmt(x.reach)+' '+rl+' · '+fmt(x.eng)+' '+el+' · '+fmt(x.msgs)+' msgs · '+fmt(x.orders)+' orders'+(x.link?' · <a href="'+esc(x.link)+'" target="_blank" rel="noopener">Link</a> · <a href="#" data-pv="'+esc(x.link)+'">Preview</a>':'')+'</div>'+(x.link&&x.type!=='ad'?statHTML(x.link):'')+'</div><div class="sp">'+spark(x,dl,m)+'</div>'+
-        '<button class="x" data-del="'+x.id+'" title="Delete">✕</button></div>'}).join('')+'</div>'}).join(''):
+        (x.auto?'<span class="auto" title="Collected from Facebook every hour">auto</span>':'<button class="x" data-del="'+x.id+'" title="Delete">✕</button>')+'</div>'}).join('')+'</div>'}).join(''):
     '<div class="empty">No results in this range yet.<br><br><button id="demo">Load sample data</button></div>';
   var dm=$('demo');if(dm)dm.onclick=sample;
 }
@@ -357,7 +373,7 @@ function ensureRows(d){posts[d]=posts[d]||{};TASKS.forEach(function(t){if(!(post
 function getRow(t,rid){return rowsOf(tDay,t).filter(function(r){return r.id===rid})[0]}
 function thumb(p,key,k,removable){return '<div class="pth">'+(p.img?'<img src="'+esc(p.img)+'" alt="" loading="lazy">':'<div class="noimg"></div>')+'<div class="pn"><div>'+esc(p.name)+'</div><small>'+(p.price?'$'+p.price:'')+'</small></div>'+(removable?'<b data-unp="'+key+'|'+k+'" title="Remove">✕</b>':'')+'</div>'}
 /* ---------- 6 a.m. Facebook results (job writes marketingDesk/postStats) ---------- */
-var pstat={},pstatAt=0;
+var pstat={},pdaily={},pstatAt=0;
 function linkKey(link){var h=0x811c9dc5,x=String(link||'').trim();for(var i=0;i<x.length;i++){h^=x.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0}return 'p'+h.toString(36)}
 function statHTML(link){
   if(!/^https?:\/\//i.test(link||''))return '';
@@ -368,7 +384,7 @@ function statHTML(link){
   var ad=s.boosted?'<div class="pst2">Boost ad: <b>$'+(Math.round((+s.adSpend||0)*100)/100)+'</b> spend · <b>'+fmt(s.adReach||0)+'</b> reach · <b>'+fmt(s.adImpressions||0)+'</b> impressions</div>':'';
   var up=s.updatedAt?'<div class="pst2">Updated '+new Date(s.updatedAt).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})+'</div>':'';
   return '<div class="pst">'+c('views',s.views)+c('reach',s.reach)+c('reactions',s.reactions)+c('comments',s.comments)+c('shares',s.shares)+'</div>'+ad+up}
-function onStats(d){pstat=(d.exists&&d.data().posts)||{};if($('viewTasks').style.display!=='none'&&!typing())renderTasks();render()}
+function onStats(d){pstat=(d.exists&&d.data().posts)||{};pdaily=(d.exists&&d.data().daily)||{};if($('viewTasks').style.display!=='none'&&!typing())renderTasks();render()}
 function pushMade(day,t,r){
   if(!fdb||!auth||!auth.currentUser||!r||!r.link)return;
   var ref=fdb.collection('marketingDesk').doc('day-'+day);
