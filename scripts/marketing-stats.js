@@ -124,7 +124,16 @@ async function indexPage(page, sinceUnix){
     const reels = await graphAll(page.id + '/video_reels', { fields: 'id,post_id,permalink_url,created_time,description,picture', since: String(sinceUnix), limit: '100' }, tok);
     reels.forEach(r => items.push({ postId: r.post_id || (page.id + '_' + r.id), videoId: r.id, permalink: r.permalink_url && (r.permalink_url.startsWith('http') ? r.permalink_url : 'https://www.facebook.com' + r.permalink_url), created: r.created_time, message: r.description || '', img: r.picture || '', reel: true }));
   } catch (e) { console.warn(`  ${page.name}: could not list reels — ${e.message}`); }
-  console.log(`  ${page.name}: ${items.length} recent posts/reels found.`);
+  try {
+    // Finished Facebook Lives (shown under "Live" in the Pick list). No 'since' on this edge, so filter here.
+    const j = await graph(page.id + '/live_videos', { fields: 'id,title,description,permalink_url,creation_time,status,video{id,picture}', limit: '25' }, tok);
+    (j.data || []).filter(v => v.status !== 'LIVE' && v.status !== 'SCHEDULED_UNPUBLISHED' && v.video && Date.parse(v.creation_time) / 1000 >= sinceUnix).forEach(v => {
+      const vid = v.video.id, link = v.permalink_url ? (v.permalink_url.startsWith('http') ? v.permalink_url : 'https://www.facebook.com' + v.permalink_url) : 'https://www.facebook.com/' + page.id + '/videos/' + vid + '/';
+      if (items.some(x => String(x.videoId || '') === vid || String(x.postId).endsWith('_' + vid))){ items.filter(x => String(x.postId).endsWith('_' + vid)).forEach(x => { x.live = true; }); return; }
+      items.push({ postId: page.id + '_' + vid, videoId: vid, permalink: link, created: v.creation_time, message: v.title || v.description || '', img: v.video.picture || '', live: true });
+    });
+  } catch (e) { console.warn(`  ${page.name}: could not list lives — ${e.message}`); }
+  console.log(`  ${page.name}: ${items.length} recent posts/reels/lives found.`);
   return items.map(it => Object.assign(it, { page }));
 }
 function buildIndex(items){
@@ -242,7 +251,7 @@ async function adResultsByPost(sinceKey){
   const pickSince = Date.now() - PICK_DAYS * 86400e3, seenPick = new Set();
   const pick = items.filter(it => Date.parse(it.created) >= pickSince && it.permalink && !seenPick.has(it.postId) && seenPick.add(it.postId))
     .sort((a, b) => Date.parse(b.created) - Date.parse(a.created)).slice(0, 60)
-    .map(it => ({ postId: it.postId, page: it.page.name, link: it.permalink, created: Date.parse(it.created), text: String(it.message || '').slice(0, 160), img: it.img || '', reel: !!it.reel }));
+    .map(it => ({ postId: it.postId, page: it.page.name, link: it.permalink, created: Date.parse(it.created), text: String(it.message || '').slice(0, 160), img: it.img || '', reel: !!it.reel, live: !!it.live }));
   await db.collection(COL).doc('recentPosts').set({ updatedAt: Date.now(), items: pick });
   console.log(`  Pick list: ${pick.length} post(s)/reel(s) from the last ${PICK_DAYS} days saved.`);
   if (!posts.length) return;
