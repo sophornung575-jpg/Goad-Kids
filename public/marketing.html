@@ -328,7 +328,7 @@ async function fetchProducts(){
   try{var snap=await fdb.collection('stores').doc(cfg.store||'GOAT-1979').collection('products').get(),a=[];
     snap.forEach(function(d){var x=d.data();if(x.active===false)return;
       var sz=(x.sizes||[]).map(function(z){return{name:String(z.name),qty:+z.qty||0}}),tot=sz.length?sz.reduce(function(t,z){return t+z.qty},0):(+x.stock||0);
-      a.push({id:d.id,name:x.name||'',price:x.price||0,stock:tot,sizeQty:sz.filter(function(z){return z.qty>0}),category:x.category||'',img:(x.images&&x.images[0])||'',sizes:(x.sizes||[]).filter(function(z){return z.qty>0}).map(function(z){return z.name})})});
+      a.push({id:d.id,pid:x.id!=null?String(x.id):'',name:x.name||'',price:x.price||0,stock:tot,sizeQty:sz.filter(function(z){return z.qty>0}),category:x.category||'',img:firstImg(x),sizes:(x.sizes||[]).filter(function(z){return z.qty>0}).map(function(z){return z.name})})});
     a.sort(function(p,q){return p.name.localeCompare(q.name)});products=a;sv(PRKEY,a);setStatus(''+a.length+' products loaded')}
   catch(e){setStatus(''+e.message)}}
 if(cfg.fb)initFb().catch(function(e){setStatus(e.message);GATEMSG=e.message;if(typeof lockUi==='function')lockUi()});
@@ -468,6 +468,7 @@ function openPreview(url){
    '<p style="color:var(--mut);font-size:12px">If the box stays blank, the post is not public or Facebook blocked the preview. Use Open in new tab.</p>'+
    '<div style="display:flex;gap:8px"><a class="pvbtn" href="'+esc(url)+'" target="_blank" rel="noopener">Open in new tab</a><button id="pvClose2" style="margin-left:auto">Close</button></div></div>';
   $('pvClose').onclick=$('pvClose2').onclick=function(){m.hidden=true;m.innerHTML=''}}
+function firstImg(d){var im=d&&(d.images!=null?d.images:d.image!=null?d.image:d.imageUrl!=null?d.imageUrl:d.photo),one=Array.isArray(im)?im[0]:im;return !one?'':typeof one==='string'?one:(one.url||one.src||'')}
 var LIVE_STORES=['GOAT-GOAT-KIDS-271-0889','GOAT-GOAT-KIDS-PH-6012','GOAT-1979'];
 async function liveLoad(rid){
   var r=getRow('live',rid),box=$('lm-'+rid);if(!r)return;
@@ -477,15 +478,19 @@ async function liveLoad(rid){
     if(!sel.length){say('Nothing selected in Live Desk yet.');return}
     r.products=r.products||[];var added=0,fixed=0;
     // Live Desk uses the 271 / PH product IDs, which may not be in this tool's product list — look those up directly.
-    var miss=sel.filter(function(id){return !products.some(function(z){return z.id===id})}),extra={};
+    var same=function(z,id){return z.id===id||z.pid===id},miss=sel.filter(function(id){return !products.some(function(z){return same(z,id)})}),extra={};
     if(miss.length){say('Loading '+miss.length+' item photos…');
+      // Live Desk keys products by their "id" field (not always the document name), so try both.
       await Promise.all(miss.map(async function(id){for(var i=0;i<LIVE_STORES.length;i++){try{
-        var d2=await fdb.collection('stores').doc(LIVE_STORES[i]).collection('products').doc(id).get();
-        if(d2.exists){var y=d2.data();extra[id]={id:id,name:y.name||id,price:y.price||0,img:(y.images&&y.images[0])||y.image||'',category:y.category||''};return}}catch(e){}}}))}
-    sel.forEach(function(id){var p=products.filter(function(z){return z.id===id})[0]||extra[id],ex=r.products.filter(function(z){return z.id===id})[0];
+        var col=fdb.collection('stores').doc(LIVE_STORES[i]).collection('products'),y=null,d2=await col.doc(id).get();
+        if(d2.exists)y=d2.data();
+        else{var q=await col.where('id','==',id).limit(1).get();if(!q.empty)y=q.docs[0].data();
+          else if(/^\d+$/.test(id)){q=await col.where('id','==',+id).limit(1).get();if(!q.empty)y=q.docs[0].data()}}
+        if(y){extra[id]={id:id,name:y.name||id,price:y.price||0,img:firstImg(y),category:y.category||''};return}}catch(e){}}}))}
+    sel.forEach(function(id){var p=products.filter(function(z){return same(z,id)})[0]||extra[id],ex=r.products.filter(function(z){return z.id===id})[0];
       if(ex){if(!ex.script&&sc[id])ex.script=sc[id];
         if(p&&(!ex.img||/^Not in this store:/.test(ex.name||''))){ex.name=p.name;ex.price=p.price;ex.img=p.img;fixed++}return}
-      var o=p?JSON.parse(JSON.stringify(p)):{id:id,name:'Not in this store: '+id,price:0,img:''};o.script=sc[id]||'';r.products.push(o);added++});
+      var o=p?JSON.parse(JSON.stringify(p)):{id:id,name:'Not in this store: '+id,price:0,img:''};o.id=id;o.script=sc[id]||'';r.products.push(o);added++});
     sv(PKEY,posts);renderTasks();var b2=$('lm-'+rid);if(b2)b2.textContent='Loaded '+added+' items from Live Desk'+(fixed?' · '+fixed+' photos added':'')}
   catch(e){say(e.message||String(e))}}
 var GRAPH='https://graph.facebook.com/v26.0/';
