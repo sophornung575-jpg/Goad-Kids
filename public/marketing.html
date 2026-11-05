@@ -68,6 +68,9 @@ textarea{font:inherit;color:var(--tx);background:var(--card);border:1px solid va
 .lvh{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.lvh b{font-size:13px}.lvh .todo{flex:1;color:var(--mut);font-size:12px}
 .lf{display:flex;flex-direction:column;font-size:11px;color:var(--mut);flex:0 1 96px;gap:2px}.acts .lf input{flex:none;width:100%}
 .lvi{margin:6px 0}.lvi textarea{margin-top:4px;font-size:12px}.lmsg{font-size:12px;color:var(--mut);min-height:0}.pst{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;margin-top:8px;color:var(--ink,#222)}.pst b{font-weight:600}.pst.wait{color:var(--mut)}.pst.warn{color:#b0524f}.pst2{font-size:11.5px;color:var(--mut);margin-top:3px}
+.pkl{display:flex;flex-direction:column;gap:8px}.pki{display:flex;gap:10px;align-items:flex-start;text-align:left;width:100%;padding:8px;border:1px solid var(--line,#ddd);border-radius:8px;background:var(--card);cursor:pointer;font:inherit;color:inherit}
+.pki:hover{border-color:#2f7d62}.pki img,.pki .noimg{width:64px;height:64px;object-fit:cover;border-radius:6px;flex:none;background:var(--bg)}.pki .pkt{flex:1;min-width:0;font-size:12.5px}
+.pki .pkm{font-size:11.5px;color:var(--mut);margin-bottom:3px}.pki .pkx{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.pki.used{opacity:.5}.pkf{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}.pkf button.on{background:#2f7d62;color:#fff;border-color:#2f7d62}
 .gate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:200;padding:16px}
 body:not(.locked) #gate{display:none}body.locked .wrap{display:none}
 .gbox{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:20px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:10px}
@@ -359,7 +362,7 @@ function linkKey(link){var h=0x811c9dc5,x=String(link||'').trim();for(var i=0;i<
 function statHTML(link){
   if(!/^https?:\/\//i.test(link||''))return '';
   var s=pstat[linkKey(link)];
-  if(!s)return '<div class="pst wait">Results come tomorrow morning (about 6 a.m.).</div>';
+  if(!s)return '<div class="pst wait">Results come within about an hour.</div>';
   if(s.status==='notFound')return '<div class="pst warn">'+esc(s.note||'Post not found. Use the post\'s own link (Copy link), not a share link.')+'</div>';
   var c=function(l,v){return v===undefined||v===null?'':'<span><b>'+fmt(v)+'</b> '+l+'</span>'};
   var ad=s.boosted?'<div class="pst2">Boost ad: <b>$'+(Math.round((+s.adSpend||0)*100)/100)+'</b> spend · <b>'+fmt(s.adReach||0)+'</b> reach · <b>'+fmt(s.adImpressions||0)+'</b> impressions</div>':'';
@@ -369,7 +372,7 @@ function onStats(d){pstat=(d.exists&&d.data().posts)||{};if($('viewTasks').style
 function pushMade(day,t,r){
   if(!fdb||!auth||!auth.currentUser||!r||!r.link)return;
   var ref=fdb.collection('marketingDesk').doc('day-'+day);
-  var item={link:String(r.link).trim(),type:t==='photo'?'post':'video',product:(r.products||[]).map(function(p){return p.name}).join(', ')||r.title||'',at:Date.now(),caption:(r.script||'').slice(0,300)};
+  var item={link:String(r.link).trim(),postId:r.postId||'',type:t==='photo'?'post':'video',product:(r.products||[]).map(function(p){return p.name}).join(', ')||r.title||'',at:Date.now(),caption:(r.script||r.pickedText||'').slice(0,300)};
   fdb.runTransaction(function(tx){return tx.get(ref).then(function(sn){
     var made=(sn.exists&&sn.data().made)||[];
     var k=-1;made.forEach(function(m,i){if(m&&m.link===item.link)k=i});
@@ -400,6 +403,7 @@ function rowHTML(t,r,i){
     (canSearch?'<div class="srch"><input data-s="'+key+'" placeholder="'+(multi?'Search products (add as many as you need)':'Search the product')+(products.length?'':' - products not loaded, see Settings')+'" autocomplete="off"><div class="dd" hidden></div></div>':'')+
     '<div class="acts"><button data-gen="'+key+'">Write script'+(r.script?' (saved)':'')+'</button>'+
     '<div class="ths">'+th+'</div>'+
+    '<button class="pri" data-pickpost="'+key+'">Pick post</button>'+
     '<input data-link="'+key+'" value="'+esc(r.link||'')+'" placeholder="Paste the post link here" inputmode="url">'+
     '<button data-prev="'+key+'">Preview</button>'+
     '<button class="pri" data-save="'+key+'">Save link</button></div>'+(r.by&&r.link?statHTML(r.link):'')+'</div>'}
@@ -427,7 +431,7 @@ $('tBlocks').addEventListener('input',function(e){
   var rf=el.getAttribute('data-rf'),ps=el.getAttribute('data-ps');
   if(rf){var f=rf.split('|'),rr=getRow(f[0],f[1]);if(rr){rr[f[2]]=+el.value||0;sv(PKEY,posts)}return}
   if(ps){var g2=ps.split('|'),r3=getRow(g2[0],g2[1]);if(r3&&r3.products[+g2[2]]){r3.products[+g2[2]].script=el.value;sv(PKEY,posts)}return}
-  if(lk){var q=lk.split('|'),r=getRow(q[0],q[1]);if(r){r.link=el.value.trim();sv(PKEY,posts)}return}
+  if(lk){var q=lk.split('|'),r=getRow(q[0],q[1]);if(r){r.link=el.value.trim();r.postId='';sv(PKEY,posts)}return}
   if(!sk)return;var dd=el.parentNode.querySelector('.dd'),v=el.value.trim().toLowerCase();
   if(!v){dd.hidden=true;return}
   var m=products.filter(function(p){return(p.name+' '+p.category).toLowerCase().indexOf(v)>-1}).slice(0,8);
@@ -500,12 +504,39 @@ $('tBlocks').addEventListener('click',function(e){var g=function(k){return e.tar
   if(g('data-addrow')){var t=g('data-addrow');posts[tDay][t].push({id:uid(),products:[]});sv(PKEY,posts);renderTasks();return}
   if(g('data-delrow')){q=g('data-delrow').split('|');if(confirm(L('Delete this row?'))){posts[tDay][q[0]]=rowsOf(tDay,q[0]).filter(function(r){return r.id!==q[1]});sv(PKEY,posts);renderTasks()}return}
   if(g('data-save')){q=g('data-save').split('|');saveLink(q[0],q[1]);return}
+  if(g('data-pickpost')){q=g('data-pickpost').split('|');openPicker(q[0],q[1]);return}
   if(g('data-gen')){q=g('data-gen').split('|');openScript(q[0],q[1]);return}
   if(e.target.getAttribute&&e.target.getAttribute('data-res')){q=e.target.getAttribute('data-res').split('|');sendToSummary(q[0],q[1])}});
 $('tBlocks').addEventListener('keydown',function(e){var a=e.target.getAttribute&&e.target.getAttribute('data-link');if(a&&e.key==='Enter'){var q=a.split('|');saveLink(q[0],q[1])}});
 function sendToSummary(t,rid){var r=getRow(t,rid),tk=TASKS.filter(function(x){return x.id===t})[0];if(!r)return;
   tab('s');$('fDate').value=tDay;$('fType').value=tk.sum;typeLabels();
   $('fName').value=(r.products||[]).map(function(p){return p.name}).join(', ')||r.title||tk.n;$('fLink').value=r.link||'';$('form').classList.add('show');$('form').scrollIntoView()}
+
+/* ---------- Pick post: choose the published post from a list (job writes marketingDesk/recentPosts) ---------- */
+var recent={items:[],updatedAt:0};
+function onRecent(d){recent=(d.exists&&d.data())||{items:[],updatedAt:0}}
+function usedLinks(){var u={};Object.keys(posts).forEach(function(d){TASKS.forEach(function(t){(posts[d][t.id]||[]).forEach(function(r){if(r.link)u[r.postId||r.link]=1})})});return u}
+function openPicker(t,rid){
+  var r=getRow(t,rid);if(!r)return;
+  var all=recent.items||[],filt=t==='video'?'video':t==='photo'?'photo':'all';
+  var m=$('modal');m.hidden=false;
+  function draw(){
+    var used=usedLinks(),list=all.filter(function(it){return filt==='all'||(filt==='video'?it.reel:!it.reel)});
+    var upd=recent.updatedAt?new Date(recent.updatedAt).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'-';
+    m.innerHTML='<div class="mbox"><h2 style="font-size:16px;display:flex;justify-content:space-between;gap:8px"><span>'+L('Pick your post')+'</span><button class="x" id="pkClose">✕</button></h2>'+
+      '<div class="pkf"><button data-pf="video" class="'+(filt==='video'?'on':'')+'">'+L('Reels / videos')+'</button><button data-pf="photo" class="'+(filt==='photo'?'on':'')+'">'+L('Photo posts')+'</button><button data-pf="all" class="'+(filt==='all'?'on':'')+'">'+L('All')+'</button></div>'+
+      '<div class="pkl">'+(list.length?list.map(function(it,i){var u=used[it.postId]||used[it.link];
+        return '<button class="pki'+(u?' used':'')+'" data-pk="'+all.indexOf(it)+'">'+(it.img?'<img src="'+esc(it.img)+'" alt="" loading="lazy">':'<div class="noimg"></div>')+
+        '<div class="pkt"><div class="pkm">'+esc(it.page)+' · '+(it.reel?L('Reel'):L('Post'))+' · '+new Date(it.created).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})+(u?' · '+L('already saved'):'')+'</div><div class="pkx">'+esc(it.text||L('(no caption)'))+'</div></div></button>'}).join('')
+        :'<p style="color:var(--mut)">'+L('No posts found yet. New posts appear here within about an hour after publishing.')+'</p>')+'</div>'+
+      '<p style="color:var(--mut);font-size:12px;margin-top:10px">'+L('List updated')+': '+upd+'. '+L('Not in the list? Wait up to an hour, or paste the link instead.')+'</p></div>';
+    $('pkClose').onclick=function(){m.hidden=true;m.innerHTML=''};
+    [].forEach.call(m.querySelectorAll('[data-pf]'),function(b){b.onclick=function(){filt=b.getAttribute('data-pf');draw()}});
+    [].forEach.call(m.querySelectorAll('[data-pk]'),function(b){b.onclick=function(){
+      var it=all[+b.getAttribute('data-pk')];if(!it)return;
+      r.link=it.link;r.postId=it.postId;if(!r.script&&it.text)r.pickedText=it.text;sv(PKEY,posts);
+      m.hidden=true;m.innerHTML='';saveLink(t,rid);renderTasks()}})}
+  draw()}
 
 /* ---------- Gemini script pop-up ---------- */
 var OCC={birthday:'birthday gifts and birthday outfits',wedding:'wedding / ceremony outfits for kids',both:'birthday and wedding / ceremony outfits'};
@@ -656,7 +687,8 @@ function startSync(){if(SYNC.on||!fdb||!auth||!auth.currentUser)return;SYNC.on=t
   SYNC.unsubs=[fdb.collection('marketing_rows').where('day','>=',st).onSnapshot(onRows,syncErr),
     fdb.collection('marketing_results').where('date','>=',st).onSnapshot(onRes,syncErr),
     fdb.collection('marketing_settings').doc('targets').onSnapshot(onTg,syncErr),
-    fdb.collection('marketingDesk').doc('postStats').onSnapshot(onStats,function(){})];
+    fdb.collection('marketingDesk').doc('postStats').onSnapshot(onStats,function(){}),
+    fdb.collection('marketingDesk').doc('recentPosts').onSnapshot(onRecent,function(){})];
   syncSay();schedRows();schedRes();schedTg();setTimeout(backfillMade,4000)}
 function stopSync(){SYNC.unsubs.forEach(function(u){try{u()}catch(e){}});SYNC.unsubs=[];SYNC.on=false;SYNC.remoteRows={};SYNC.remoteRes={};syncSay()}
 syncSay();
@@ -698,6 +730,10 @@ KM['Sign in with the Super Admin account.']='ចូលជាមួយគណន�
 KM['Paste the Firebase config to begin.']='សូមបិទភ្ជាប់ Firebase config ដើម្បីចាប់ផ្តើម។';KM['Enter your email and password.']='សូមបញ្ចូលអ៊ីមែល និងពាក្យសម្ងាត់។';KM['Signing in…']='កំពុងចូល…';KM['Wrong email or password.']='អ៊ីមែល ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ។';
 KM['This account is not allowed to open the Marketing tool.']='គណនីនេះមិនមានសិទ្ធិបើកឧបករណ៍ទីផ្សារទេ។';KM['Access list not set up yet. In Firebase, create the document _admin_/marketingAdmins with a field emails (array).']='មិនទាន់បង្កើតបញ្ជីអ្នកមានសិទ្ធិ។ ក្នុង Firebase សូមបង្កើតឯកសារ _admin_/marketingAdmins ដែលមានវាល emails (array)។';
 KM['No permission to read the access list. Check the Firestore rules.']='គ្មានសិទ្ធិអានបញ្ជីអ្នកមានសិទ្ធិ។ សូមពិនិត្យ Firestore rules។';KM['Sign out']='ចាកចេញ';
+KM['Pick post']='ជ្រើសការផុស';KM['Pick your post']='ជ្រើសការផុសរបស់អ្នក';KM['Reels / videos']='រីល / វីដេអូ';KM['Photo posts']='ការផុសរូបភាព';KM['All']='ទាំងអស់';KM['Reel']='រីល';KM['Post']='ការផុស';
+KM['already saved']='បានរក្សារួច';KM['(no caption)']='(គ្មានចំណងជើង)';KM['List updated']='បញ្ជីធ្វើបច្ចុប្បន្នភាព';KM['Results come within about an hour.']='លទ្ធផលនឹងមកក្នុងរយៈពេលប្រហែលមួយម៉ោង។';
+KM['No posts found yet. New posts appear here within about an hour after publishing.']='មិនទាន់មានការផុសទេ។ ការផុសថ្មីនឹងបង្ហាញនៅទីនេះក្នុងរយៈពេលប្រហែលមួយម៉ោងក្រោយផុស។';
+KM['Not in the list? Wait up to an hour, or paste the link instead.']='មិនឃើញក្នុងបញ្ជី? សូមរង់ចាំរហូតដល់មួយម៉ោង ឬបិទភ្ជាប់តំណជំនួសវិញ។';
 var WORDS={spend:'ចំណាយ',reach:'ការទៅដល់',views:'ចំនួនមើល',clicks:'ចុច',likes:'ចូលចិត្ត',msgs:'សារ',orders:'កុម្ម៉ង់'};
 var SRCH={'Search the product':'ស្វែងរកផលិតផល','Search products (add as many as you need)':'ស្វែងរកផលិតផល (បន្ថែមបានច្រើន)'};
 var NW='(?:spend|reach|views|clicks|likes|msgs|orders)',NUM='\\$?[\\d.,k]+';
