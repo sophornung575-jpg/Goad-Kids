@@ -3,6 +3,8 @@
 // finds each post on the two Goat Kids Pages, pulls its results from Meta (views/reach, reactions,
 // comments, shares) and, if the post was boosted, the ad results from the UNG ad account.
 // Writes everything to marketingDesk/postStats, which the Marketing tool shows under each post.
+// Also writes marketingDesk/recentPosts: the last few days of posts/reels on both Pages, so staff can
+// pick their post from a list in the Marketing tool instead of pasting a link.
 //
 // Secrets (GitHub → Settings → Secrets and variables → Actions):
 //   META_TOKEN                 System user token (livedeskbot): ads_read, read_insights, pages_read_engagement
@@ -20,7 +22,8 @@ const PAGES = [
 ];
 const COL = 'marketingDesk';
 const LOOKBACK_DAYS = Number(process.env.LOOKBACK_DAYS || 30);   // posts saved in the last N days keep updating
-const TZ_OFFSET_H = 7;                                   // Phnom Penh
+const TZ_OFFSET_H = 7;
+const PICK_DAYS = 3;                                     // how many days of posts staff can pick from                                   // Phnom Penh
 
 // ---------- small helpers ----------
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -96,7 +99,7 @@ async function savedPosts(db){
     const k = addDays(today, -i);
     const s = await db.collection(COL).doc('day-' + k).get();
     if (!s.exists) continue;
-    (s.data().made || []).forEach(m => { if (m && m.link) out.push({ day: k, link: String(m.link).trim(), type: m.type || 'post', product: m.product || '', at: Number(m.at) || 0, caption: m.caption || '' }); });
+    (s.data().made || []).forEach(m => { if (m && m.link) out.push({ day: k, link: String(m.link).trim(), postId: m.postId || '', type: m.type || 'post', product: m.product || '', at: Number(m.at) || 0, caption: m.caption || '' }); });
   }
   const seen = new Set();
   return out.filter(p => !seen.has(p.link) && seen.add(p.link));
@@ -114,12 +117,12 @@ async function indexPage(page, sinceUnix){
   page.token = tok;
   const items = [];
   try {
-    const posts = await graphAll(page.id + '/posts', { fields: 'id,permalink_url,created_time,message', since: String(sinceUnix), limit: '100' }, tok);
-    posts.forEach(p => items.push({ postId: p.id, permalink: p.permalink_url, created: p.created_time, message: p.message || '' }));
+    const posts = await graphAll(page.id + '/posts', { fields: 'id,permalink_url,created_time,message,full_picture', since: String(sinceUnix), limit: '100' }, tok);
+    posts.forEach(p => items.push({ postId: p.id, permalink: p.permalink_url, created: p.created_time, message: p.message || '', img: p.full_picture || '' }));
   } catch (e) { console.warn(`  ${page.name}: could not list posts — ${e.message}`); }
   try {
-    const reels = await graphAll(page.id + '/video_reels', { fields: 'id,post_id,permalink_url,created_time,description', since: String(sinceUnix), limit: '100' }, tok);
-    reels.forEach(r => items.push({ postId: r.post_id || (page.id + '_' + r.id), videoId: r.id, permalink: r.permalink_url && (r.permalink_url.startsWith('http') ? r.permalink_url : 'https://www.facebook.com' + r.permalink_url), created: r.created_time, message: r.description || '', reel: true }));
+    const reels = await graphAll(page.id + '/video_reels', { fields: 'id,post_id,permalink_url,created_time,description,picture', since: String(sinceUnix), limit: '100' }, tok);
+    reels.forEach(r => items.push({ postId: r.post_id || (page.id + '_' + r.id), videoId: r.id, permalink: r.permalink_url && (r.permalink_url.startsWith('http') ? r.permalink_url : 'https://www.facebook.com' + r.permalink_url), created: r.created_time, message: r.description || '', img: r.picture || '', reel: true }));
   } catch (e) { console.warn(`  ${page.name}: could not list reels — ${e.message}`); }
   console.log(`  ${page.name}: ${items.length} recent posts/reels found.`);
   return items.map(it => Object.assign(it, { page }));
@@ -226,9 +229,8 @@ async function adResultsByPost(sinceKey){
 
   const posts = await savedPosts(db);
   console.log(`Saved post links in the last ${LOOKBACK_DAYS} days: ${posts.length}`);
-  if (!posts.length) return;
 
-  const oldestKey = posts.reduce((a, p) => p.day < a ? p.day : a, dayKeyOf(new Date()));
+  const oldestKey = posts.reduce((a, p) => p.day < a ? p.day : a, addDays(dayKeyOf(new Date()), -PICK_DAYS));
   const sinceKey = addDays(oldestKey, -3);
   const sinceUnix = Math.floor(new Date(sinceKey + 'T00:00:00Z').getTime() / 1000);
 
@@ -236,13 +238,24 @@ async function adResultsByPost(sinceKey){
   for (const page of PAGES) items = items.concat(await indexPage(page, sinceUnix));
   const index = buildIndex(items);
 
+  // List for the "Pick post" button in the Marketing tool (newest first, no tokens or secrets).
+  const pickSince = Date.now() - PICK_DAYS * 86400e3, seenPick = new Set();
+  const pick = items.filter(it => Date.parse(it.created) >= pickSince && it.permalink && !seenPick.has(it.postId) && seenPick.add(it.postId))
+    .sort((a, b) => Date.parse(b.created) - Date.parse(a.created)).slice(0, 60)
+    .map(it => ({ postId: it.postId, page: it.page.name, link: it.permalink, created: Date.parse(it.created), text: String(it.message || '').slice(0, 160), img: it.img || '', reel: !!it.reel }));
+  await db.collection(COL).doc('recentPosts').set({ updatedAt: Date.now(), items: pick });
+  console.log(`  Pick list: ${pick.length} post(s)/reel(s) from the last ${PICK_DAYS} days saved.`);
+  if (!posts.length) return;
+  const byPostId = new Map(items.map(it => [it.postId, it]));
+
   let ads = new Map(), adsErr = '';
   try { ads = await adResultsByPost(sinceKey); } catch (e) { adsErr = e.message; console.warn('  Ads: ' + e.message); }
 
   const results = {}; let found = 0; const used = new Set();
   for (const p of posts){
     const link = await expandShareLink(p.link);
-    let it = matchLink(index, link), how = 'link';
+    let it = (p.postId && byPostId.get(p.postId)) || null, how = 'picked';
+    if (!it){ it = matchLink(index, link); how = 'link'; }
     if (!it){ const m = matchByCaptionOrTime(items, p, used); if (m){ it = m.it; how = m.how; } }
     console.log(`  ${p.day} ${p.link} → ${it ? it.page.name + ' ' + it.postId + ' (by ' + how + ')' : 'NOT FOUND'}`);
     if (it) used.add(it.postId);
