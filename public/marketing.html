@@ -90,6 +90,8 @@ body:not(.locked) #gate{display:none}body.locked .wrap{display:none}
 .sgi .sgb{display:flex;gap:4px;flex-wrap:wrap}.sgi .sgb button{padding:3px 8px;font-size:11.5px}.sgi.usedtoday{opacity:.55}
 .lsw{display:inline-flex;align-items:center;gap:6px;font-weight:400;font-size:12px;cursor:pointer}.lsw input{width:18px;height:18px;accent-color:#2f7d62}
 .lvd{border:1px solid var(--bd);border-radius:8px;margin:6px 0;padding:0 8px}.lvd summary{cursor:pointer;padding:8px 0;font-size:13px;font-weight:600;color:#2f7d62}.lvd[open] summary{border-bottom:1px solid var(--bd);margin-bottom:4px}
+.lvb{font-size:10.5px;font-weight:700;border-radius:99px;padding:1px 7px;border:1px solid var(--bd)}.lv1{background:#2f7d62;color:#fff;border-color:#2f7d62}.lv2{background:#e8f1ec;color:#2f7d62}.lv3{color:var(--mut)}
+.rule.off{opacity:.6}.rnum{display:inline-flex;width:22px;height:22px;border-radius:99px;background:var(--acc);color:var(--bg);align-items:center;justify-content:center;font-size:12px}.rule h2 button{padding:3px 9px}
 .offmsg{padding:12px;color:var(--mut);font-size:13px}
 </style>
 </head>
@@ -109,7 +111,7 @@ body:not(.locked) #gate{display:none}body.locked .wrap{display:none}
 </header>
 
 <div id="syncTxt" style="font-size:12px;color:var(--mut);margin:-6px 0 10px"></div>
-<div class="tabs"><button id="tabS" class="on">Summary</button><button id="tabT">Daily Tasks</button></div>
+<div class="tabs"><button id="tabS" class="on">Summary</button><button id="tabT">Daily Tasks</button><button id="tabR">Rules</button></div>
 <div id="viewSummary">
 <div id="form" class="card">
   <div class="f">
@@ -143,6 +145,7 @@ body:not(.locked) #gate{display:none}body.locked .wrap{display:none}
 <h2 style="font-size:15px;margin:18px 0 8px">Daily list</h2>
 <div id="list"></div>
 </div>
+<div id="viewRules" style="display:none"></div>
 <div id="viewTasks" style="display:none">
   <div class="tools">
     <button id="dPrev">◀</button><input type="date" id="tDate" style="width:150px"><button id="dNext">▶</button><button id="dToday">Today</button>
@@ -151,7 +154,6 @@ body:not(.locked) #gate{display:none}body.locked .wrap{display:none}
   <div class="card" style="margin-bottom:12px">
     <h2>Progress <span id="tPct"></span></h2><div class="bar"><i id="tBar" style="width:0"></i></div>
   </div>
-  <div class="card" style="margin-bottom:12px"><h2>Daily target met – last 30 days</h2><div id="tChart"></div></div>
   <div class="card" style="margin-bottom:12px"><h2>Suggested products to post today <button id="sgRefresh">Refresh</button></h2><div id="sgInfo" class="mut" style="margin-bottom:8px"></div><div id="tSuggest" class="sug"></div></div>
   <div id="tBlocks"></div>
 </div>
@@ -345,7 +347,7 @@ async function fetchProducts(){
     snap.forEach(function(d){var x=d.data();if(x.active===false)return;
       var sz=(x.sizes||[]).map(function(z){return{name:String(z.name),qty:+z.qty||0}}),tot=sz.length?sz.reduce(function(t,z){return t+z.qty},0):(+x.stock||0);
       var ad=x.createdAt||x.receivedAt||x.dateAdded||x.created||x.addedAt||x.stockInAt||x.updatedAt;a.push({added:toMs(ad),id:d.id,pid:x.id!=null?String(x.id):'',name:x.name||'',price:x.price||0,stock:tot,sizeQty:sz.filter(function(z){return z.qty>0}),category:x.category||'',img:firstImg(x),sizes:(x.sizes||[]).filter(function(z){return z.qty>0}).map(function(z){return z.name})})});
-    a.sort(function(p,q){return p.name.localeCompare(q.name)});products=a;sv(PRKEY,a);setStatus(''+a.length+' products loaded');loadSales()}
+    a.sort(function(p,q){return p.name.localeCompare(q.name)});products=a;sv(PRKEY,a);setStatus(''+a.length+' products loaded');loadSugData()}
   catch(e){setStatus(''+e.message)}}
 if(cfg.fb)initFb().catch(function(e){setStatus(e.message);GATEMSG=e.message;if(typeof lockUi==='function')lockUi()});
 
@@ -504,12 +506,7 @@ function renderTasks(){
     return '<div class="day"><div class="dh"><span><span class="tag" style="background:'+t.c+';margin-right:8px">'+(n?n+' posted':'To do')+'</span>'+t.n+'</span><span style="display:flex;gap:12px;align-items:center">'+sw+'<small>posted '+n+(g?' / target '+g:'')+'</small></span></div>'+
       rs.map(function(r,i){return rowHTML(t,r,i)}).join('')+
       '<div class="addt"><button data-addrow="'+t.id+'">+ Add another '+t.s.toLowerCase()+'</button></div></div>'}).join('');
-  renderSuggest();
-  var dl=dayList(30),vals=dl.map(function(x){return Math.round(pctDay(x)*100)});
-  var s='<svg viewBox="0 0 '+W+' '+H+'">'+axes(100,dl),bw=(W-PL-PR)/dl.length*.65;
-  dl.forEach(function(x,i){var h=(H-PT-PB)*vals[i]/100,xx=PL+(W-PL-PR)*(i+.5)/dl.length-bw/2;
-    s+='<rect x="'+xx+'" y="'+(H-PB-h)+'" width="'+bw+'" height="'+h+'" rx="2" fill="'+(vals[i]>=100?'#2f7d62':vals[i]>=60?'#b98a3a':'#b0524f')+'" opacity="'+(x===tDay?1:.7)+'"><title>'+x+': '+vals[i]+'% of daily target</title></rect>'});
-  $('tChart').innerHTML=s+'</svg><div class="leg"><span><i style="background:#2f7d62"></i>target met</span><span><i style="background:#b98a3a"></i>60–99%</span><span><i style="background:#b0524f"></i>under 60%</span></div>'}
+  renderSuggest()}
 
 /* product search */
 function closeDD(){[].forEach.call(document.querySelectorAll('.dd'),function(d){d.hidden=true})}
@@ -526,7 +523,7 @@ $('tBlocks').addEventListener('input',function(e){
   dd.innerHTML=m.map(function(p){return '<div data-pick="'+sk+'|'+esc(p.id)+'">'+esc(p.name)+' <small>$'+p.price+' · stock '+p.stock+((p.sizeQty||[]).length?' · sizes '+p.sizeQty.map(function(z){return z.name+':'+z.qty}).join(', '):'')+'</small></div>'}).join('')+
     '<div data-pickt="'+sk+'" class="typed">Use “'+esc(el.value.trim())+'” as typed</div>';
   dd.hidden=false});
-function pickProduct(t,rid,pid){var r=getRow(t,rid),p=products.filter(function(x){return x.id===pid})[0];if(!r||!p)return;
+function pickProduct(t,rid,pid){var r=getRow(t,rid),p=products.filter(function(x){return x.id===pid})[0]||sugP.filter(function(x){return x.id===pid}).map(function(x){return{id:x.id,pid:x.pid,name:x.name,price:x.price,img:x.img,category:x.category,sizes:x.sizes,stock:x.stock}})[0];if(!r||!p)return;
   r.products=r.products||[];if(t==='live'){if(!r.products.some(function(x){return x.id===pid}))r.products.push(p)}else r.products=[p];
   r.title='';sv(PKEY,posts);renderTasks()}
 function openPreview(url){
@@ -700,56 +697,122 @@ function openScript(t,rid){
   if(!r.script&&cfg.key)gen();
 }
 
-/* ---------- SUGGESTED PRODUCTS: from sales (last 30 days) and stock receiving ---------- */
-var sales={byId:{},orders:0,src:'',err:''};
+/* ---------- SUGGESTED PRODUCTS: rules + levels, from the PH and 271 stores (1979 is only the master list) ---------- */
+var SUG_STORES=[['GOAT-GOAT-KIDS-PH-6012','PH'],['GOAT-GOAT-KIDS-271-0889','271']];
+var RULE_DEF={
+ newArrival:{n:'New arrival',c:'#2f7d62',m:'Came in within the last few days. Tell customers something new is here.',p:{days:14,minStock:1}},
+ fast:{n:'Fast moving',c:'#4f6a94',m:'Sells fastest (per day, PH + 271). Push what customers already love.',p:{maxLevel:2,minStock:2}},
+ slow:{n:'Slow stock',c:'#b98a3a',m:'Lots of stock that would take the longest to sell. Promote it before it gets old.',p:{maxLevel:2,minStock:10,minAge:30}},
+ low:{n:'Low stock - last chance',c:'#b0524f',m:'Popular items with only a few left. Use urgency: almost sold out.',p:{maxStock:3,maxLevel:2}},
+ restock:{n:'Restocked',c:'#7a5ea8',m:'Sold out before and came back. Tell the people who missed it.',p:{days:14,minStock:2}},
+ occasion:{n:'Occasion / season',c:'#2b8a9a',m:'Items from categories you choose (e.g. birthday, wedding), during the dates you set.',p:{words:'',from:'',to:''}}};
+var RULE_P={days:'Within days',minStock:'Stock at least',maxStock:'Stock at most',maxLevel:'Use levels up to (1-3)',minAge:'Older than days',words:'Category / name words (comma)',from:'From date',to:'To date'};
+var rules=ld('goatMktRules',null);
+function defRules(){return{order:['newArrival','fast','low','restock','occasion','slow'],l1:10,l2:20,noRepeat:3,
+  on:{newArrival:true,fast:true,slow:true,low:true,restock:true,occasion:false},picks:{newArrival:2,fast:2,slow:1,low:1,restock:1,occasion:1},
+  p:JSON.parse(JSON.stringify(Object.keys(RULE_DEF).reduce(function(o,k){o[k]=RULE_DEF[k].p;return o},{})))}}
+function fixRules(){var d=defRules();if(!rules||!rules.order)rules=d;Object.keys(d).forEach(function(k){if(rules[k]===undefined)rules[k]=d[k]});
+  Object.keys(RULE_DEF).forEach(function(k){if(rules.order.indexOf(k)<0)rules.order.push(k);rules.p[k]=Object.assign({},RULE_DEF[k].p,rules.p[k]||{});
+    if(rules.on[k]===undefined)rules.on[k]=d.on[k];if(rules.picks[k]===undefined)rules.picks[k]=d.picks[k]})}
+fixRules();
+function saveRules(){sv('goatMktRules',rules);if(SYNC.on)fdb.collection('marketing_settings').doc('rules').set(JSON.parse(JSON.stringify(rules))).catch(syncErr);renderSuggest();renderRules()}
+function onRules(d){if(!d.exists)return;rules=d.data();fixRules();sv('goatMktRules',rules);renderSuggest();if($('viewRules').style.display!=='none'&&!rulesTyping())renderRules()}
+function rulesTyping(){var a=document.activeElement;return !!(a&&a.closest&&a.closest('#viewRules')&&/input|select/i.test(a.tagName))}
+
+var sugP=ld('goatSugProducts',[]),sugInfo={orders:0,stores:[],err:''},zeroSeen={};
 function oDate(o){return toMs(o.createdAt||o.date||o.created||o.orderDate||o.timestamp||o.time)}
-async function loadSales(){
-  if(!fdb||!auth||!auth.currentUser)return;var since=Date.now()-30*864e5,by={},cnt=0,src='';
-  var tries=[['stores/'+(cfg.store||'GOAT-1979')+'/orders',function(){return fdb.collection('stores').doc(cfg.store||'GOAT-1979').collection('orders').orderBy('createdAt','desc').limit(800).get()}],
-    ['stores/'+(cfg.store||'GOAT-1979')+'/orders',function(){return fdb.collection('stores').doc(cfg.store||'GOAT-1979').collection('orders').limit(800).get()}],
-    ['orders',function(){return fdb.collection('orders').orderBy('createdAt','desc').limit(800).get()}]];
-  var lastErr='';
-  for(var i=0;i<tries.length;i++){try{var sn=await tries[i][1]();if(sn.empty)continue;src=tries[i][0];
-    sn.forEach(function(d){var o=d.data(),t=oDate(o);if(t&&t<since)return;if(/cancel|refund|void/i.test(o.status||''))return;cnt++;
-      (o.items||o.cart||o.products||o.lines||[]).forEach(function(it){var id=String(it.productId||it.pid||it.id||it.docId||''),q=+(it.qty||it.quantity||it.count||1)||1;
-        var k=id||('n:'+(it.name||''));by[k]=(by[k]||0)+q;if(it.name)by['n:'+it.name]=(by['n:'+it.name]||0)+q})});break}catch(e){lastErr=e.message||String(e)}}
-  sales={byId:by,orders:cnt,src:src,err:src?'':lastErr};renderSuggest()}
-function soldOf(p){return Math.max(sales.byId[p.id]||0,sales.byId[p.pid]||0,sales.byId['n:'+p.name]||0)}
+function pkey(x){var id=x.id!=null&&x.id!==''?String(x.id):'';return id?'i:'+id:'n:'+String(x.name||'').trim().toLowerCase()}
+async function loadSugData(){
+  if(!fdb||!auth||!auth.currentUser)return;var since=Date.now()-30*864e5,map={},errs=[],orders=0,okStores=[];
+  for(var s=0;s<SUG_STORES.length;s++){var sid=SUG_STORES[s][0],nm=SUG_STORES[s][1],ref=fdb.collection('stores').doc(sid);
+    try{var ps=await ref.collection('products').get();ps.forEach(function(d){var x=d.data();if(x.active===false)return;
+      var sz=x.sizes||[],stock=sz.length?sz.reduce(function(t,z){return t+(+z.qty||0)},0):(+x.stock||0),k=pkey(x),o=map[k];
+      if(!o)o=map[k]={id:'sg:'+k,key:k,pid:x.id!=null?String(x.id):'',name:x.name||'',price:x.price||0,category:x.category||'',img:firstImg(x),stock:0,sold:0,added:0,restockAt:0,by:{},sizes:[]};
+      o.stock+=stock;o.by[nm]=stock;if(!o.img)o.img=firstImg(x);
+      var ad=toMs(x.createdAt||x.receivedAt||x.dateAdded||x.created||x.addedAt||x.stockInAt);if(ad&&(!o.added||ad<o.added))o.added=ad;
+      var rs=toMs(x.restockedAt||x.lastStockIn||x.lastReceivedAt||x.stockInAt);if(rs>o.restockAt)o.restockAt=rs;
+      sz.forEach(function(z){if(+z.qty>0&&o.sizes.indexOf(z.name)<0)o.sizes.push(z.name)})});okStores.push(nm)}
+    catch(e){errs.push(nm+' products: '+(e.message||e));continue}
+    try{var os;try{os=await ref.collection('orders').orderBy('createdAt','desc').limit(1000).get()}catch(e1){os=await ref.collection('orders').limit(1000).get()}
+      os.forEach(function(d){var o=d.data(),t=oDate(o);if(t&&t<since)return;if(/cancel|refund|void/i.test(o.status||''))return;orders++;
+        (o.items||o.cart||o.products||o.lines||[]).forEach(function(it){var q=+(it.qty||it.quantity||it.count||1)||1,
+          k1=it.productId||it.pid||it.id?'i:'+String(it.productId||it.pid||it.id):'',k2='n:'+String(it.name||'').trim().toLowerCase(),p=map[k1]||map[k2];if(p)p.sold+=q})})}
+    catch(e){errs.push(nm+' orders: '+(e.message||e))}}
+  var arr=Object.keys(map).map(function(k){return map[k]});
+  // remember which products hit zero stock, so "Restocked" can find them when they come back
+  try{var zd=await fdb.collection('marketing_settings').doc('stockZero').get();zeroSeen=(zd.exists&&zd.data().z)||{}}catch(e){}
+  var today=iso(new Date()),zu={},zn=0;arr.forEach(function(p){if(p.stock<=0&&zeroSeen[p.key]!==today){zu[p.key]=today;zeroSeen[p.key]=today;zn++}});
+  if(zn)fdb.collection('marketing_settings').doc('stockZero').set({z:zu},{merge:true}).catch(function(){});
+  sugP=arr;sv('goatSugProducts',arr);sugInfo={orders:orders,stores:okStores,err:errs.join('; ')};renderSuggest();if($('viewRules').style.display!=='none')renderRules()}
+/* Levels: rank items, Level 1 = top l1%, Level 2 = next l2%, Level 3 = the rest */
+function levelize(list,val){var a=list.slice().sort(function(x,y){return val(y)-val(x)}),n=a.length,c1=Math.max(1,Math.ceil(n*rules.l1/100)),c2=c1+Math.ceil(n*rules.l2/100),out={};
+  a.forEach(function(p,i){out[p.key]=i<c1?1:i<c2?2:3});return out}
+function analyse(){var now=Date.now(),P=sugP.map(function(p){var sp=p.sold/30;return Object.assign({},p,{speed:sp,cover:sp>0?p.stock/sp:Infinity,age:p.added?(now-p.added)/864e5:null})});
+  var sellers=P.filter(function(p){return p.sold>0}),lvFast=levelize(sellers,function(p){return p.speed});
+  var big=P.filter(function(p){return p.stock>=rules.p.slow.minStock}),lvSlow=levelize(big,function(p){return p.cover===Infinity?1e9+p.stock:p.cover});
+  var recent=P.filter(function(p){return p.age!=null}),lvNew=levelize(recent,function(p){return -p.age});
+  var R={};
+  R.newArrival=P.filter(function(p){var q=rules.p.newArrival;return p.age!=null&&p.age<=q.days&&p.stock>=q.minStock}).map(function(p){return{p:p,lv:lvNew[p.key]||3,sc:-p.age,info:L('arrived')+' '+Math.round(p.age)+' '+L('days ago')}});
+  R.fast=P.filter(function(p){var q=rules.p.fast;return lvFast[p.key]&&lvFast[p.key]<=q.maxLevel&&p.stock>=q.minStock}).map(function(p){return{p:p,lv:lvFast[p.key],sc:p.speed,info:(Math.round(p.speed*10)/10)+' '+L('sold / day')}});
+  R.slow=P.filter(function(p){var q=rules.p.slow;return lvSlow[p.key]&&lvSlow[p.key]<=q.maxLevel&&(p.age==null||p.age>=q.minAge)}).map(function(p){return{p:p,lv:lvSlow[p.key],sc:p.cover===Infinity?1e9+p.stock:p.cover,info:p.cover===Infinity?L('no sales in 30 days'):Math.round(p.cover)+' '+L('days of stock left')}});
+  R.low=P.filter(function(p){var q=rules.p.low;return p.stock>0&&p.stock<=q.maxStock&&lvFast[p.key]&&lvFast[p.key]<=q.maxLevel}).map(function(p){return{p:p,lv:lvFast[p.key],sc:p.speed,info:L('only')+' '+p.stock+' '+L('left')}});
+  R.restock=P.filter(function(p){var q=rules.p.restock,z=zeroSeen[p.key],lim=now-q.days*864e5;return p.stock>=q.minStock&&((z&&Date.parse(z)>=lim)||(p.restockAt&&p.restockAt>=lim))}).map(function(p){return{p:p,lv:lvFast[p.key]||3,sc:p.speed,info:L('back in stock')}});
+  var oq=rules.p.occasion,words=String(oq.words||'').toLowerCase().split(',').map(function(w){return w.trim()}).filter(Boolean),td=iso(new Date()),inDate=(!oq.from||td>=oq.from)&&(!oq.to||td<=oq.to);
+  R.occasion=!words.length||!inDate?[]:P.filter(function(p){var t=(p.name+' '+p.category).toLowerCase();return p.stock>0&&words.some(function(w){return t.indexOf(w)>-1})}).map(function(p){return{p:p,lv:lvFast[p.key]||3,sc:p.speed,info:p.category||''}});
+  Object.keys(R).forEach(function(k){R[k].sort(function(a,b){return a.lv-b.lv||b.sc-a.sc})});return R}
 function usedToday(pid){var u=false;TASKS.forEach(function(t){rowsOf(tDay,t.id).forEach(function(r){(r.products||[]).forEach(function(p){if(p.id===pid)u=true})})});return u}
-function recentlyPosted(pid,nDays){var from=iso(new Date(Date.now()-nDays*864e5)),hit=false;Object.keys(posts).forEach(function(d){if(d<from||d>=tDay)return;TASKS.forEach(function(t){(posts[d][t.id]||[]).forEach(function(r){if(r.link&&(r.products||[]).some(function(p){return p.id===pid}))hit=true})})});return hit}
-function suggestions(){
-  var now=Date.now(),out=[];
-  products.forEach(function(p){if(!(p.stock>0))return;var sold=soldOf(p),age=p.added?(now-p.added)/864e5:null,sc=0,why='',c='';
-    if(age!=null&&age<=14){sc=100-age*3+Math.min(p.stock,20);why='New arrival';c='#2f7d62'}
-    else if(sold>=3&&p.stock>=3){sc=60+sold*4;why='Selling fast';c='#4f6a94'}
-    else if(sales.orders&&sold===0&&p.stock>=10&&(age==null||age>30)){sc=40+Math.min(p.stock,40);why='Slow stock - promote';c='#b98a3a'}
-    if(!sc)return;if(recentlyPosted(p.id,3))sc-=50;out.push({p:p,sc:sc,why:why,c:c,sold:sold,age:age})});
-  out.sort(function(a,b){return b.sc-a.sc});
-  // mix the reasons so the list is not all one kind
-  var pick=[],per={};out.forEach(function(x){if(pick.length>=8)return;per[x.why]=(per[x.why]||0)+1;if(per[x.why]<=4)pick.push(x)});return pick}
+function recentlyPosted(pid,nDays){if(!nDays)return false;var from=iso(new Date(Date.now()-nDays*864e5)),hit=false;Object.keys(posts).forEach(function(d){if(d<from||d>=tDay)return;TASKS.forEach(function(t){(posts[d][t.id]||[]).forEach(function(r){if(r.link&&(r.products||[]).some(function(p){return p.id===pid}))hit=true})})});return hit}
+/* fill the day's slots from the top-priority rule first */
+function suggestions(){var R=analyse(),out=[],taken={};
+  rules.order.forEach(function(k){if(!rules.on[k])return;var need=+rules.picks[k]||0;
+    (R[k]||[]).forEach(function(x){if(need<=0||taken[x.p.key]||recentlyPosted(x.p.id,rules.noRepeat))return;taken[x.p.key]=1;need--;out.push({p:x.p,rule:k,lv:x.lv,info:x.info})})});return out}
 function renderSuggest(){var el=$('tSuggest');if(!el)return;
-  var info=products.length?(sales.orders?L('Using')+' '+sales.orders+' '+L('orders from the last 30 days')+' ('+sales.src+') + '+L('stock and arrival date'):L('No sales data found')+(sales.err?' ('+esc(sales.err)+')':'')+' - '+L('using stock and arrival date only')):L('Products not loaded yet (Settings).');
-  $('sgInfo').textContent=info;
+  $('sgInfo').textContent=sugP.length?L('Stores')+': '+sugInfo.stores.join(' + ')+' · '+sugP.length+' '+L('products')+' · '+sugInfo.orders+' '+L('orders in 30 days')+(sugInfo.err?' · '+sugInfo.err:''):L('Loading store data…');
   var S=suggestions();if(!S.length){el.innerHTML='<div class="mut">'+L('No suggestions yet.')+'</div>';return}
-  el.innerHTML=S.map(function(x){var p=x.p,u=usedToday(p.id);
-    return '<div class="sgi'+(u?' usedtoday':'')+'">'+(p.img?'<img src="'+esc(p.img)+'" alt="" loading="lazy">':'<div class="noimg"></div>')+'<div class="sgt"><span class="why" style="background:'+x.c+'">'+L(x.why)+'</span><div>'+esc(p.name)+'</div>'+
-      '<div class="sgn">$'+p.price+' · '+L('stock')+' '+p.stock+' · '+L('sold 30d')+' '+x.sold+(x.age!=null?' · '+L('arrived')+' '+Math.round(x.age)+' '+L('days ago'):'')+(u?' · '+L('in today\'s plan'):'')+'</div>'+
+  el.innerHTML=S.map(function(x){var p=x.p,u=usedToday(p.id),d=RULE_DEF[x.rule];
+    return '<div class="sgi'+(u?' usedtoday':'')+'">'+(p.img?'<img src="'+esc(p.img)+'" alt="" loading="lazy">':'<div class="noimg"></div>')+'<div class="sgt"><span class="why" style="background:'+d.c+'">'+L(d.n)+'</span> <span class="lvb lv'+x.lv+'">'+L('Level')+' '+x.lv+'</span><div>'+esc(p.name)+'</div>'+
+      '<div class="sgn">$'+p.price+' · '+L('stock')+' '+p.stock+' ('+Object.keys(p.by).map(function(s){return s+' '+p.by[s]}).join(', ')+') · '+L('sold 30d')+' '+p.sold+' · '+esc(x.info)+(u?' · '+L('in today\'s plan'):'')+'</div>'+
       '<div class="sgb"><button data-sg="video|'+esc(p.id)+'">+ '+L('Video')+'</button><button data-sg="photo|'+esc(p.id)+'">+ '+L('Photo')+'</button><button data-sg="live|'+esc(p.id)+'">+ '+L('Live')+'</button></div></div></div>'}).join('')}
 $('tSuggest').addEventListener('click',function(e){var a=e.target.getAttribute&&e.target.getAttribute('data-sg');if(!a)return;var q=a.split('|'),t=q[0],pid=q.slice(1).join('|');
   if(t==='live'&&isOff(tDay,'live')){toast(L('Live is off today'),false);return}
   ensureRows(tDay);var rs=posts[tDay][t],r=t==='live'?rs[0]:rs.filter(function(x){return !x.link&&!(x.products||[]).length&&!x.title})[0];
   if(!r){r={id:uid(),products:[]};rs.push(r)}pickProduct(t,r.id,pid);renderSuggest();toast(L('Added to plan')+' ✓',true)});
-$('sgRefresh').onclick=function(){fetchProducts()};
+$('sgRefresh').onclick=function(){loadSugData()};
+
+/* ---------- RULES tab ---------- */
+function renderRules(){var el=$('viewRules');if(!el)return;var R=analyse();
+  el.innerHTML='<div class="card" style="margin-bottom:12px"><h2>'+L('How suggestions are picked')+'</h2><p class="mut">'+L('Rules are used from top to bottom. Each rule fills its number of items per day, then the next rule. Items are ranked into levels from PH + 271 data, and Level 1 is suggested first.')+'</p>'+
+   '<div class="f" style="max-width:520px;margin-top:8px"><label>'+L('Level 1 = top %')+'<input type="number" min="1" max="90" data-rg="l1" value="'+rules.l1+'"></label><label>'+L('Level 2 = next %')+'<input type="number" min="1" max="90" data-rg="l2" value="'+rules.l2+'"></label><label>'+L('Don\'t repeat within days')+'<input type="number" min="0" data-rg="noRepeat" value="'+rules.noRepeat+'"></label></div>'+
+   '<p class="mut" style="margin-top:6px">'+L('Total items suggested per day')+': <b>'+rules.order.reduce(function(a,k){return a+(rules.on[k]?+rules.picks[k]||0:0)},0)+'</b> · '+sugP.length+' '+L('products')+' · '+sugInfo.orders+' '+L('orders in 30 days')+'</p></div>'+
+   rules.order.map(function(k,i){var d=RULE_DEF[k],m=R[k]||[],lv=[1,2,3].map(function(n){return m.filter(function(x){return x.lv===n}).length});
+    return '<div class="card rule'+(rules.on[k]?'':' off')+'" style="margin-bottom:10px"><h2><span><span class="rnum">'+(i+1)+'</span> <span class="why" style="background:'+d.c+'">'+L(d.n)+'</span></span>'+
+     '<span style="display:flex;gap:6px;align-items:center"><button data-rmv="'+k+'|-1"'+(i?'':' disabled')+' title="'+L('Higher priority')+'">▲</button><button data-rmv="'+k+'|1"'+(i<rules.order.length-1?'':' disabled')+' title="'+L('Lower priority')+'">▼</button>'+
+     '<label class="lsw"><input type="checkbox" data-ron="'+k+'"'+(rules.on[k]?' checked':'')+'>'+L(rules.on[k]?'On':'Off')+'</label></span></h2>'+
+     '<p class="mut" style="margin-bottom:8px">'+L(d.m)+'</p><div class="f"><label>'+L('Items per day')+'<input type="number" min="0" data-rpk="'+k+'" value="'+rules.picks[k]+'"></label>'+
+     Object.keys(d.p).map(function(f){var v=rules.p[k][f],ty=f==='words'?'text':(f==='from'||f==='to')?'date':'number';return '<label'+(f==='words'?' style="grid-column:span 2"':'')+'>'+L(RULE_P[f])+'<input type="'+ty+'" data-rp="'+k+'|'+f+'" value="'+esc(v)+'"'+(ty==='number'?' min="0"':'')+(f==='words'?' placeholder="birthday, wedding"':'')+'></label>'}).join('')+'</div>'+
+     '<p class="mut" style="margin-top:8px">'+L('Matching now')+': <b>'+m.length+'</b> · '+L('Level')+' 1: '+lv[0]+' · '+L('Level')+' 2: '+lv[1]+' · '+L('Level')+' 3: '+lv[2]+(m.length?' · '+L('Top')+': '+m.slice(0,3).map(function(x){return esc(x.p.name)}).join(', '):'')+'</p></div>'}).join('')+
+   '<div style="display:flex;gap:8px"><button id="rReset">'+L('Reset to default')+'</button><button id="rReload">'+L('Reload store data')+'</button></div>'}
+$('viewRules').addEventListener('change',function(e){var t=e.target,a;
+  if((a=t.getAttribute('data-rg'))){rules[a]=Math.max(0,+t.value||0)}
+  else if((a=t.getAttribute('data-rpk'))){rules.picks[a]=Math.max(0,+t.value||0)}
+  else if((a=t.getAttribute('data-ron'))){rules.on[a]=t.checked}
+  else if((a=t.getAttribute('data-rp'))){var q=a.split('|'),num=typeof RULE_DEF[q[0]].p[q[1]]==='number';rules.p[q[0]][q[1]]=num?Math.max(0,+t.value||0):t.value.trim()}
+  else return;saveRules()});
+$('viewRules').addEventListener('click',function(e){var a=e.target.getAttribute&&e.target.getAttribute('data-rmv');
+  if(a){var q=a.split('|'),i=rules.order.indexOf(q[0]),j=i+(+q[1]);if(j<0||j>=rules.order.length)return;rules.order.splice(i,1);rules.order.splice(j,0,q[0]);saveRules();return}
+  if(e.target.id==='rReset'&&confirm(L('Reset all rules to default?'))){rules=defRules();saveRules()}
+  if(e.target.id==='rReload')loadSugData()});
+
 
 /* ---------- date / user / tabs ---------- */
 function shift(n){var d=new Date(tDay+'T00:00');d.setDate(d.getDate()+n);tDay=iso(d);renderTasks()}
 $('dPrev').onclick=function(){shift(-1)};$('dNext').onclick=function(){shift(1)};$('dToday').onclick=function(){tDay=iso(new Date());renderTasks()};
 $('tDate').onchange=function(){if(this.value){tDay=this.value;renderTasks()}};
 $('tUser').onchange=function(){sv(UKEY,this.value.trim())};
-function tab(t){var s=t==='s';$('viewSummary').style.display=s?'':'none';$('viewTasks').style.display=s?'none':'';
-  $('tabS').classList.toggle('on',s);$('tabT').classList.toggle('on',!s);
-  ['range','addBtn'].forEach(function(i){$(i).style.display=s?'':'none'});if(!s)renderTasks()}
-$('tabS').onclick=function(){tab('s')};$('tabT').onclick=function(){tab('t')};
+function tab(t){var s=t==='s';$('viewSummary').style.display=s?'':'none';$('viewTasks').style.display=t==='t'?'':'none';$('viewRules').style.display=t==='r'?'':'none';
+  $('tabS').classList.toggle('on',s);$('tabT').classList.toggle('on',t==='t');$('tabR').classList.toggle('on',t==='r');
+  ['range','addBtn'].forEach(function(i){$(i).style.display=s?'':'none'});if(t==='t')renderTasks();if(t==='r')renderRules()}
+$('tabS').onclick=function(){tab('s')};$('tabT').onclick=function(){tab('t')};$('tabR').onclick=function(){tab('r')};
 
 /* ---------- monthly target (Summary tab) ---------- */
 function renderTarget(){
@@ -840,6 +903,7 @@ function startSync(){if(SYNC.on||!fdb||!auth||!auth.currentUser)return;SYNC.on=t
     fdb.collection('marketing_results').where('date','>=',st).onSnapshot(onRes,syncErr),
     fdb.collection('marketing_settings').doc('targets').onSnapshot(onTg,syncErr),
     fdb.collection('marketing_settings').doc('liveOff').onSnapshot(onLiveOff,function(){}),
+    fdb.collection('marketing_settings').doc('rules').onSnapshot(onRules,function(){}),
     fdb.collection('marketing_settings').doc('statHistory').onSnapshot(onHist,function(){}),
     fdb.collection('marketingDesk').doc('postStats').onSnapshot(onStats,function(){}),
     fdb.collection('marketingDesk').doc('recentPosts').onSnapshot(onRecent,function(){})];
@@ -890,6 +954,7 @@ KM['No posts found yet. New posts appear here within about an hour after publish
 KM['Not in the list? Wait up to an hour, or paste the link instead.']='មិនឃើញក្នុងបញ្ជី? សូមរង់ចាំរហូតដល់មួយម៉ោង ឬបិទភ្ជាប់តំណជំនួសវិញ។';
 KM['No live today']='គ្មានឡាយវ៍ថ្ងៃនេះ';KM['Live today']='មានឡាយវ៍ថ្ងៃនេះ';KM['Off']='បិទ';KM['Live is turned off for this day. It does not count in the target.']='ឡាយវ៍ត្រូវបានបិទសម្រាប់ថ្ងៃនេះ។ មិនរាប់ក្នុងគោលដៅទេ។';KM['Per-post breakdown']='លទ្ធផលតាមការផុសនីមួយៗ';KM['one row per saved post link']='មួយជួរសម្រាប់តំណនីមួយៗ';KM['No saved post links in this range yet.']='មិនទាន់មានតំណការផុសក្នុងចន្លោះនេះទេ។';KM['Per day']='ក្នុងមួយថ្ងៃ';KM['gain each day']='កើនឡើងរៀងរាល់ថ្ងៃ';KM['Total']='សរុប';KM['posts']='ការផុស';KM['paid reach']='ការទៅដល់ដោយបង់ប្រាក់';KM['Not boosted']='មិនបានបូស្ត';KM['Open']='បើក';KM['History starts today']='ប្រវត្តិចាប់ផ្តើមថ្ងៃនេះ';KM['Waiting for Facebook']='កំពុងរង់ចាំ Facebook';KM['typed by hand']='វាយដោយដៃ';KM['views / reach']='ចំនួនមើល / ការទៅដល់';KM['engagement']='អន្តរកម្ម';KM['Whole ad account spend in this range']='ចំណាយគណនីពាណិជ្ជកម្មទាំងមូលក្នុងចន្លោះនេះ';KM['is from ads not linked to a saved post']='មកពីពាណិជ្ជកម្មដែលមិនភ្ជាប់នឹងការផុសដែលបានរក្សា';KM['Suggested products to post today']='ផលិតផលណែនាំសម្រាប់ផុសថ្ងៃនេះ';KM['Refresh']='ផ្ទុកឡើងវិញ';KM['New arrival']='ទំនិញមកថ្មី';KM['Selling fast']='លក់ដាច់';KM['Slow stock - promote']='ស្តុកលក់យឺត – ប្រូម៉ូសិន';KM['stock']='ស្តុក';KM['sold 30d']='លក់ ៣០ថ្ងៃ';KM['arrived']='មកដល់';KM['days ago']='ថ្ងៃមុន';KM["in today's plan"]='មានក្នុងផែនការថ្ងៃនេះ';KM['Added to plan']='បានបន្ថែមក្នុងផែនការ';KM['Live is off today']='ឡាយវ៍បិទថ្ងៃនេះ';KM['Using']='ប្រើ';KM['orders from the last 30 days']='ការកុម្ម៉ង់ក្នុង ៣០ ថ្ងៃចុងក្រោយ';KM['stock and arrival date']='ស្តុក និងថ្ងៃមកដល់';KM['No sales data found']='រកមិនឃើញទិន្នន័យលក់';KM['using stock and arrival date only']='ប្រើតែស្តុក និងថ្ងៃមកដល់';KM['Products not loaded yet (Settings).']='មិនទាន់ផ្ទុកផលិតផល (ការកំណត់)។';KM['No suggestions yet.']='មិនទាន់មានការណែនាំ។';
 KM['Show items']='បង្ហាញទំនិញ';
+KM['Rules']='ច្បាប់';KM['New arrival']='ទំនិញមកថ្មី';KM['Fast moving']='លក់ដាច់លឿន';KM['Slow stock']='ស្តុកលក់យឺត';KM['Low stock - last chance']='ស្តុកតិច – ឱកាសចុងក្រោយ';KM['Restocked']='មកដល់ម្តងទៀត';KM['Occasion / season']='ឱកាស / រដូវ';KM['Level']='កម្រិត';KM['Stores']='ហាង';KM['products']='ផលិតផល';KM['orders in 30 days']='ការកុម្ម៉ង់ក្នុង ៣០ ថ្ងៃ';KM['Loading store data…']='កំពុងទាញទិន្នន័យហាង…';KM['sold / day']='លក់ / ថ្ងៃ';KM['no sales in 30 days']='មិនបានលក់ ៣០ ថ្ងៃ';KM['days of stock left']='ថ្ងៃស្តុកនៅសល់';KM['only']='នៅសល់តែ';KM['back in stock']='មានស្តុកវិញ';KM['How suggestions are picked']='របៀបជ្រើសការណែនាំ';KM['Rules are used from top to bottom. Each rule fills its number of items per day, then the next rule. Items are ranked into levels from PH + 271 data, and Level 1 is suggested first.']='ច្បាប់ត្រូវប្រើពីលើចុះក្រោម។ ច្បាប់នីមួយៗជ្រើសចំនួនទំនិញក្នុងមួយថ្ងៃ បន្ទាប់មកច្បាប់បន្ទាប់។ ទំនិញត្រូវចាត់កម្រិតពីទិន្នន័យ PH + 271 ហើយកម្រិត 1 ត្រូវណែនាំមុន។';KM['Level 1 = top %']='កម្រិត 1 = កំពូល %';KM['Level 2 = next %']='កម្រិត 2 = បន្ទាប់ %';KM["Don't repeat within days"]='មិនផុសម្តងទៀតក្នុងរយៈ (ថ្ងៃ)';KM['Total items suggested per day']='ចំនួនទំនិញណែនាំសរុបក្នុងមួយថ្ងៃ';KM['Higher priority']='អាទិភាពខ្ពស់ជាង';KM['Lower priority']='អាទិភាពទាបជាង';KM['On']='បើក';KM['Items per day']='ទំនិញក្នុងមួយថ្ងៃ';KM['Matching now']='ត្រូវលក្ខខណ្ឌឥឡូវ';KM['Top']='កំពូល';KM['Reset to default']='កំណត់ឡើងវិញ';KM['Reload store data']='ទាញទិន្នន័យហាងឡើងវិញ';KM['Reset all rules to default?']='កំណត់ច្បាប់ទាំងអស់ឡើងវិញ?';KM['Within days']='ក្នុងរយៈ (ថ្ងៃ)';KM['Stock at least']='ស្តុកយ៉ាងតិច';KM['Stock at most']='ស្តុកច្រើនបំផុត';KM['Use levels up to (1-3)']='ប្រើកម្រិតរហូតដល់ (1-3)';KM['Older than days']='ចាស់ជាង (ថ្ងៃ)';KM['Category / name words (comma)']='ពាក្យប្រភេទ / ឈ្មោះ (ក្បៀស)';KM['From date']='ពីថ្ងៃ';KM['To date']='ដល់ថ្ងៃ';KM['Came in within the last few days. Tell customers something new is here.']='ទំនិញទើបមកដល់។ ប្រាប់អតិថិជនថាមានទំនិញថ្មី។';KM['Sells fastest (per day, PH + 271). Push what customers already love.']='លក់លឿនបំផុត (ក្នុងមួយថ្ងៃ PH + 271)។ ផ្សព្វផ្សាយអ្វីដែលអតិថិជនចូលចិត្ត។';KM['Lots of stock that would take the longest to sell. Promote it before it gets old.']='ស្តុកច្រើនដែលត្រូវការពេលយូរដើម្បីលក់អស់។ ធ្វើប្រូម៉ូសិនមុនពេលចាស់។';KM['Popular items with only a few left. Use urgency: almost sold out.']='ទំនិញពេញនិយមដែលនៅសល់តិច។ ប្រើភាពបន្ទាន់៖ ជិតអស់ហើយ។';KM['Sold out before and came back. Tell the people who missed it.']='ធ្លាប់អស់ ហើយមកដល់វិញ។ ប្រាប់អ្នកដែលខកខាន។';KM['Items from categories you choose (e.g. birthday, wedding), during the dates you set.']='ទំនិញពីប្រភេទដែលអ្នកជ្រើស (ឧ. ខួបកំណើត មង្គលការ) ក្នុងកាលបរិច្ឆេទដែលអ្នកកំណត់។';
 var WORDS={spend:'ចំណាយ',reach:'ការទៅដល់',views:'ចំនួនមើល',clicks:'ចុច',likes:'ចូលចិត្ត',msgs:'សារ',orders:'កុម្ម៉ង់'};
 var SRCH={'Search the product':'ស្វែងរកផលិតផល','Search products (add as many as you need)':'ស្វែងរកផលិតផល (បន្ថែមបានច្រើន)'};
 var NW='(?:spend|reach|views|clicks|likes|msgs|orders)',NUM='\\$?[\\d.,k]+';
