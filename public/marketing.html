@@ -468,17 +468,25 @@ function openPreview(url){
    '<p style="color:var(--mut);font-size:12px">If the box stays blank, the post is not public or Facebook blocked the preview. Use Open in new tab.</p>'+
    '<div style="display:flex;gap:8px"><a class="pvbtn" href="'+esc(url)+'" target="_blank" rel="noopener">Open in new tab</a><button id="pvClose2" style="margin-left:auto">Close</button></div></div>';
   $('pvClose').onclick=$('pvClose2').onclick=function(){m.hidden=true;m.innerHTML=''}}
+var LIVE_STORES=['GOAT-GOAT-KIDS-271-0889','GOAT-GOAT-KIDS-PH-6012','GOAT-1979'];
 async function liveLoad(rid){
   var r=getRow('live',rid),box=$('lm-'+rid);if(!r)return;
   function say(m){if(box)box.textContent=m}
   try{say('Connecting…');await initFb();if(!auth||!auth.currentUser){say('Sign in first (Settings).');return}
     var d=await fdb.collection('live_desk').doc('state').get(),x=d.exists?d.data():{},sel=(x.selected||[]).map(String),sc=x.scripts||{};
     if(!sel.length){say('Nothing selected in Live Desk yet.');return}
-    r.products=r.products||[];var added=0;
-    sel.forEach(function(id){var p=products.filter(function(z){return z.id===id})[0],ex=r.products.filter(function(z){return z.id===id})[0];
-      if(ex){if(!ex.script&&sc[id])ex.script=sc[id];return}
+    r.products=r.products||[];var added=0,fixed=0;
+    // Live Desk uses the 271 / PH product IDs, which may not be in this tool's product list — look those up directly.
+    var miss=sel.filter(function(id){return !products.some(function(z){return z.id===id})}),extra={};
+    if(miss.length){say('Loading '+miss.length+' item photos…');
+      await Promise.all(miss.map(async function(id){for(var i=0;i<LIVE_STORES.length;i++){try{
+        var d2=await fdb.collection('stores').doc(LIVE_STORES[i]).collection('products').doc(id).get();
+        if(d2.exists){var y=d2.data();extra[id]={id:id,name:y.name||id,price:y.price||0,img:(y.images&&y.images[0])||y.image||'',category:y.category||''};return}}catch(e){}}}))}
+    sel.forEach(function(id){var p=products.filter(function(z){return z.id===id})[0]||extra[id],ex=r.products.filter(function(z){return z.id===id})[0];
+      if(ex){if(!ex.script&&sc[id])ex.script=sc[id];
+        if(p&&(!ex.img||/^Not in this store:/.test(ex.name||''))){ex.name=p.name;ex.price=p.price;ex.img=p.img;fixed++}return}
       var o=p?JSON.parse(JSON.stringify(p)):{id:id,name:'Not in this store: '+id,price:0,img:''};o.script=sc[id]||'';r.products.push(o);added++});
-    sv(PKEY,posts);renderTasks();var b2=$('lm-'+rid);if(b2)b2.textContent='Loaded '+added+' items from Live Desk'}
+    sv(PKEY,posts);renderTasks();var b2=$('lm-'+rid);if(b2)b2.textContent='Loaded '+added+' items from Live Desk'+(fixed?' · '+fixed+' photos added':'')}
   catch(e){say(e.message||String(e))}}
 var GRAPH='https://graph.facebook.com/v26.0/';
 async function gget(path,token){var res=await fetch(GRAPH+path+(path.indexOf('?')>-1?'&':'?')+'access_token='+encodeURIComponent(token)),d=await res.json();if(d.error)throw new Error(d.error.message);return d}
@@ -775,7 +783,8 @@ var RULES=[
  [/^\$([\d.]+) · stock (\d+)(?: · sizes (.+))?$/,function(m){return '$'+m[1]+' · ស្តុក '+m[2]+(m[3]?' · ទំហំ '+m[3]:'')}],
  [/^Use “(.*)” as typed$/,function(m){return 'ប្រើ “'+m[1]+'” ដូចដែលបានវាយ'}],
  [/^(\d+) items? planned$/,function(m){return 'បានរៀបចំ '+m[1]+' ទំនិញ'}],
- [/^Loaded (\d+) items from Live Desk$/,function(m){return 'បានទាញ '+m[1]+' ទំនិញពី Live Desk'}],
+ [/^Loaded (\d+) items from Live Desk(?: · (\d+) photos added)?$/,function(m){return 'បានទាញ '+m[1]+' ទំនិញពី Live Desk'+(m[2]?' · បានបន្ថែមរូបភាព '+m[2]:'')}],
+ [/^Loading (\d+) item photos…$/,function(m){return 'កំពុងទាញរូបភាព '+m[1]+' ទំនិញ…'}],
  [/^Not in this store: (.+)$/,function(m){return 'មិនមានក្នុងហាងនេះ៖ '+m[1]}],
  [/^(.+) - script$/,function(m){return trk(m[1])+' – ស្គ្រីប'}],
  [/^Products loaded: (\d+)\. The key and config are saved only in this browser\.$/,function(m){return 'ផលិតផលបានផ្ទុក៖ '+m[1]+'។ key និង config រក្សាទុកតែក្នុងកម្មវិធីរុករកនេះប៉ុណ្ណោះ។'}],
