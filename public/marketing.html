@@ -78,6 +78,19 @@ body:not(.locked) #gate{display:none}body.locked .wrap{display:none}
 .gbox h2{margin:0;font-size:18px}.gbox label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mut)}.gbox a{font-size:12px;color:var(--mut)}
 .mut{color:var(--mut);font-size:12px;margin:0}#gMsg{min-height:16px}
 .empty{text-align:center;color:var(--mut);padding:30px}
+.ptab{width:100%;border-collapse:collapse;font-size:12.5px}.ptab th{text-align:left;color:var(--mut);font-weight:600;font-size:11.5px;padding:6px 8px;border-bottom:1px solid var(--bd)}
+.ptab td{padding:8px;border-top:1px solid var(--bd);vertical-align:top}.ptab tfoot td{font-weight:700;border-top:2px solid var(--bd)}
+.ppost{display:flex;gap:8px;align-items:flex-start;min-width:180px}.ppost img,.ppost .noimg{width:44px;height:44px;border-radius:6px;object-fit:cover;background:var(--bd);flex:none}
+.ppost small{color:var(--mut);display:block}.ptrend svg{width:150px;height:40px}.pday{display:flex;flex-wrap:wrap;gap:3px 6px;max-width:260px}.pday span{background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;font-size:11px;white-space:nowrap}
+.pnote{font-size:12px;color:var(--mut);margin-top:8px}
+@media(max-width:720px){.ptab thead{display:none}.ptab tr{display:block;border-top:1px solid var(--bd);padding:6px 0}.ptab td{display:block;border:0;padding:4px 8px}.ptab td[data-h]:before{content:attr(data-h);display:block;font-size:11px;color:var(--mut)}}
+.sug{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}.sgi{display:flex;gap:8px;border:1px solid var(--bd);border-radius:8px;padding:8px;background:var(--card)}
+.sgi img,.sgi .noimg{width:60px;height:60px;border-radius:6px;object-fit:cover;background:var(--bd);flex:none}.sgi .sgt{flex:1;min-width:0;font-size:12.5px}
+.sgi .why{display:inline-block;font-size:10.5px;font-weight:700;color:#fff;border-radius:99px;padding:1px 8px;margin-bottom:3px}.sgi .sgn{color:var(--mut);font-size:11px;margin:2px 0 5px}
+.sgi .sgb{display:flex;gap:4px;flex-wrap:wrap}.sgi .sgb button{padding:3px 8px;font-size:11.5px}.sgi.usedtoday{opacity:.55}
+.lsw{display:inline-flex;align-items:center;gap:6px;font-weight:400;font-size:12px;cursor:pointer}.lsw input{width:18px;height:18px;accent-color:#2f7d62}
+.lvd{border:1px solid var(--bd);border-radius:8px;margin:6px 0;padding:0 8px}.lvd summary{cursor:pointer;padding:8px 0;font-size:13px;font-weight:600;color:#2f7d62}.lvd[open] summary{border-bottom:1px solid var(--bd);margin-bottom:4px}
+.offmsg{padding:12px;color:var(--mut);font-size:13px}
 </style>
 </head>
 <body class="locked">
@@ -126,6 +139,7 @@ body:not(.locked) #gate{display:none}body.locked .wrap{display:none}
   <div class="card"><h2>Top items <small style="color:var(--mut)">by orders</small></h2><div id="cTop"></div></div>
 </div>
 
+<div class="card" style="margin-bottom:14px"><h2>Per-post breakdown <small style="color:var(--mut)">one row per saved post link</small></h2><div id="cPosts"></div></div>
 <h2 style="font-size:15px;margin:18px 0 8px">Daily list</h2>
 <div id="list"></div>
 </div>
@@ -138,6 +152,7 @@ body:not(.locked) #gate{display:none}body.locked .wrap{display:none}
     <h2>Progress <span id="tPct"></span></h2><div class="bar"><i id="tBar" style="width:0"></i></div>
   </div>
   <div class="card" style="margin-bottom:12px"><h2>Daily target met – last 30 days</h2><div id="tChart"></div></div>
+  <div class="card" style="margin-bottom:12px"><h2>Suggested products to post today <button id="sgRefresh">Refresh</button></h2><div id="sgInfo" class="mut" style="margin-bottom:8px"></div><div id="tSuggest" class="sug"></div></div>
   <div id="tBlocks"></div>
 </div>
 </div>
@@ -324,12 +339,13 @@ function initFb(){if(fbReady)return fbReady;
     if(!firebase.apps.length)firebase.initializeApp(c);auth=firebase.auth();fdb=firebase.firestore();
     auth.onAuthStateChanged(function(u){gateAuth(u)});return true})();
   fbReady.catch(function(){fbReady=null});return fbReady}
+function toMs(v){if(!v)return 0;if(typeof v.toMillis==='function')return v.toMillis();if(v.seconds!=null)return v.seconds*1000;if(typeof v==='number')return v<1e12?v*1000:v;var t=Date.parse(v);return isNaN(t)?0:t}
 async function fetchProducts(){
   try{var snap=await fdb.collection('stores').doc(cfg.store||'GOAT-1979').collection('products').get(),a=[];
     snap.forEach(function(d){var x=d.data();if(x.active===false)return;
       var sz=(x.sizes||[]).map(function(z){return{name:String(z.name),qty:+z.qty||0}}),tot=sz.length?sz.reduce(function(t,z){return t+z.qty},0):(+x.stock||0);
-      a.push({id:d.id,pid:x.id!=null?String(x.id):'',name:x.name||'',price:x.price||0,stock:tot,sizeQty:sz.filter(function(z){return z.qty>0}),category:x.category||'',img:firstImg(x),sizes:(x.sizes||[]).filter(function(z){return z.qty>0}).map(function(z){return z.name})})});
-    a.sort(function(p,q){return p.name.localeCompare(q.name)});products=a;sv(PRKEY,a);setStatus(''+a.length+' products loaded')}
+      var ad=x.createdAt||x.receivedAt||x.dateAdded||x.created||x.addedAt||x.stockInAt||x.updatedAt;a.push({added:toMs(ad),id:d.id,pid:x.id!=null?String(x.id):'',name:x.name||'',price:x.price||0,stock:tot,sizeQty:sz.filter(function(z){return z.qty>0}),category:x.category||'',img:firstImg(x),sizes:(x.sizes||[]).filter(function(z){return z.qty>0}).map(function(z){return z.name})})});
+    a.sort(function(p,q){return p.name.localeCompare(q.name)});products=a;sv(PRKEY,a);setStatus(''+a.length+' products loaded');loadSales()}
   catch(e){setStatus(''+e.message)}}
 if(cfg.fb)initFb().catch(function(e){setStatus(e.message);GATEMSG=e.message;if(typeof lockUi==='function')lockUi()});
 
@@ -368,7 +384,14 @@ var tg=ld(TGKEY,{video:1,photo:1,live:1});
 function rowsOf(d,t){return((posts[d]||{})[t])||[]}
 function postedN(d,t){return rowsOf(d,t).filter(function(r){return r.link}).length}
 function nDone(d){return TASKS.filter(function(t){return postedN(d,t.id)>0}).length}
-function pctDay(d){var tot=0,got=0;TASKS.forEach(function(t){var g=+tg[t.id]||0;tot+=g;got+=Math.min(postedN(d,t.id),g)});return tot?got/tot:0}
+var liveOff=ld('goatLiveOff',{});
+function isOff(d,t){return t==='live'&&!!liveOff[d]}
+function tgOn(d,t){return isOff(d,t)?0:(+tg[t]||0)}
+function setLiveOff(d,off){if(off)liveOff[d]=true;else delete liveOff[d];sv('goatLiveOff',liveOff);
+  if(SYNC.on){var o={};o[d]=off?true:firebase.firestore.FieldValue.delete();fdb.collection('marketing_settings').doc('liveOff').set({days:o},{merge:true}).catch(syncErr)}
+  renderTasks();renderTarget()}
+function onLiveOff(d){liveOff=(d.exists&&d.data().days)||{};sv('goatLiveOff',liveOff);renderTarget();if($('viewTasks').style.display!=='none'&&!typing())renderTasks()}
+function pctDay(d){var tot=0,got=0;TASKS.forEach(function(t){var g=tgOn(d,t.id);tot+=g;got+=Math.min(postedN(d,t.id),g)});return tot?got/tot:0}
 function ensureRows(d){posts[d]=posts[d]||{};TASKS.forEach(function(t){if(!(posts[d][t.id]||[]).length)posts[d][t.id]=[{id:uid(),products:[]}]})}
 function getRow(t,rid){return rowsOf(tDay,t).filter(function(r){return r.id===rid})[0]}
 function thumb(p,key,k,removable){return '<div class="pth">'+(p.img?'<img src="'+esc(p.img)+'" alt="" loading="lazy">':'<div class="noimg"></div>')+'<div class="pn"><div>'+esc(p.name)+'</div><small>'+(p.price?'$'+p.price:'')+'</small></div>'+(removable?'<b data-unp="'+key+'|'+k+'" title="Remove">✕</b>':'')+'</div>'}
@@ -384,7 +407,52 @@ function statHTML(link){
   var ad=s.boosted?'<div class="pst2">Boost ad: <b>$'+(Math.round((+s.adSpend||0)*100)/100)+'</b> spend · <b>'+fmt(s.adReach||0)+'</b> reach · <b>'+fmt(s.adImpressions||0)+'</b> impressions</div>':'';
   var up=s.updatedAt?'<div class="pst2">Updated '+new Date(s.updatedAt).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})+'</div>':'';
   return '<div class="pst">'+c('views',s.views)+c('reach',s.reach)+c('reactions',s.reactions)+c('comments',s.comments)+c('shares',s.shares)+'</div>'+ad+up}
-function onStats(d){pstat=(d.exists&&d.data().posts)||{};pdaily=(d.exists&&d.data().daily)||{};if($('viewTasks').style.display!=='none'&&!typing())renderTasks();render()}
+/* Daily snapshots of each post's Facebook totals, so we can show a trend and per-day numbers.
+   Stored in marketing_settings/statHistory as p.<postKey>.<date> = [views, reach, engagement, adSpend]. */
+var hist=ld('goatStatHist',{});
+function onHist(d){hist=(d.exists&&d.data().p)||{};sv('goatStatHist',hist);render()}
+function snapNum(st){return[+(st.views!=null?st.views:st.reach)||0,+st.reach||0,(+st.reactions||0)+(+st.comments||0)+(+st.shares||0),Math.round((+st.adSpend||0)*100)/100]}
+function savedPosts(from){var out=[],seen={};Object.keys(posts).forEach(function(d){if(from&&d<from)return;TASKS.forEach(function(t){(posts[d][t.id]||[]).forEach(function(r){
+  if(!r.link||!r.by||r.sample||seen[r.link])return;seen[r.link]=1;out.push({day:d,type:t.id,r:r,key:linkKey(r.link)})})})});return out}
+function snapshotStats(){if(!SYNC.on||!fdb)return;var today=iso(new Date()),upd={},n=0;
+  savedPosts(winStart()).forEach(function(x){var st=pstat[x.key];if(!st||st.status!=='ok')return;var v=snapNum(st),h=(hist[x.key]||{})[today];
+    if(h&&h.join()===v.join())return;upd[x.key]={};upd[x.key][today]=v;n++;hist[x.key]=hist[x.key]||{};hist[x.key][today]=v});
+  if(n)fdb.collection('marketing_settings').doc('statHistory').set({p:upd},{merge:true}).catch(function(){})}
+function postBreakdown(){
+  var el=$('cPosts');if(!el)return;var dl=dayList(days),from=dl[0],m=$('metric').value;
+  var useM={reach:1,views:1,eng:2,spend:3}[m];if(useM===undefined)useM=0;var mLbl=useM===3?'spend':useM===2?'engagement':'views / reach';
+  var list=savedPosts(from).filter(function(x){return dl.indexOf(x.day)>-1});
+  // hand-typed results that have a link but were not saved in Daily Tasks
+  var typedL=data.filter(function(x){return x.link&&x.type!=='ad'&&dl.indexOf(x.date)>-1&&!list.some(function(y){return y.r.link===x.link})});
+  if(!list.length&&!typedL.length){el.innerHTML='<div class="empty">'+L('No saved post links in this range yet.')+'</div>';return}
+  var T={views:0,eng:0,spend:0,adReach:0};
+  var rows=list.map(function(x){var r=x.r,st=pstat[x.key]||{},h=hist[x.key]||{},P=r.products||[],img=P[0]&&P[0].img;
+    var name=P.map(function(p){return p.name}).join(', ')||r.title||'(no name)';
+    var hd=Object.keys(h).sort(),cum=dl.map(function(d){var k=hd.filter(function(z){return z<=d}).pop();return k?h[k][useM]:null});
+    var gains=[],prev=null;dl.forEach(function(d,i){var v=h[d]?h[d][useM]:null;if(v!=null){gains.push([d,prev==null?v:v-prev]);prev=v}else if(cum[i]!=null)prev=cum[i]});
+    var vw=+(st.views!=null?st.views:st.reach)||0,eg=(+st.reactions||0)+(+st.comments||0)+(+st.shares||0),sp=+st.adSpend||0;
+    T.views+=vw;T.eng+=eg;T.spend+=sp;T.adReach+=+st.adReach||0;
+    var ok=st.status==='ok';
+    var trend=ok&&cum.some(function(v){return v!=null})?miniLine(cum,COL[x.type==='photo'?'post':'video']):'<span class="mut">'+L(ok?'History starts today':'Waiting for Facebook')+'</span>';
+    var per=gains.length?gains.slice(-10).map(function(g){return '<span>'+g[0].slice(5).replace('-','/')+' '+(g[1]>=0?'+':'')+fmt(g[1])+'</span>'}).join(''):'<span class="mut" style="border:0;background:none">–</span>';
+    var spH=st.boosted?'<b>$'+(Math.round(sp*100)/100)+'</b><small class="mut" style="display:block">'+fmt(st.adReach||0)+' '+L('paid reach')+'</small>':'<span class="mut">'+L('Not boosted')+'</span>';
+    return '<tr><td data-h="'+L('Post')+'"><div class="ppost">'+(img?'<img src="'+esc(img)+'" alt="" loading="lazy">':'<div class="noimg"></div>')+'<div><span class="tag" style="background:'+(TASKS.filter(function(t){return t.id===x.type})[0].c)+'">'+L(x.type==='photo'?'Photo':x.type==='live'?'Live':'Video')+'</span> '+esc(name)+
+      '<small>'+dateStr(x.day)+' · '+esc(r.by||'')+' · <a href="'+esc(r.link)+'" target="_blank" rel="noopener">'+L('Open')+'</a></small>'+
+      (ok?'<small>'+fmt(vw)+' '+L('views')+' · '+fmt(eg)+' '+L('reactions')+'</small>':'')+'</div></div></td>'+
+      '<td data-h="'+L('Trend')+'" class="ptrend">'+trend+'</td><td data-h="'+L('Per day')+'"><div class="pday">'+per+'</div></td><td data-h="'+L('Spend')+'">'+spH+'</td></tr>'});
+  rows=rows.concat(typedL.map(function(x){T.views+=+x.reach||0;T.eng+=+x.eng||0;T.spend+=+x.spend||0;
+    return '<tr><td data-h="'+L('Post')+'"><div class="ppost"><div class="noimg"></div><div><span class="tag" style="background:'+COL[x.type]+'">'+LBL[x.type]+'</span> '+esc(x.name||'(no name)')+'<small>'+dateStr(x.date)+' · '+L('typed by hand')+' · <a href="'+esc(x.link)+'" target="_blank" rel="noopener">'+L('Open')+'</a></small></div></div></td>'+
+      '<td data-h="'+L('Trend')+'" class="ptrend"><span class="mut">–</span></td><td data-h="'+L('Per day')+'"><div class="pday"><span>'+x.date.slice(5).replace('-','/')+' '+fmt(x.reach)+'</span></div></td><td data-h="'+L('Spend')+'">'+(x.spend?'<b>$'+x.spend+'</b>':'<span class="mut">–</span>')+'</td></tr>'}));
+  var acct=0;dl.forEach(function(d){var a=pdaily[d];if(a)acct+=+a.adSpend||0});
+  el.innerHTML='<div style="overflow-x:auto"><table class="ptab"><thead><tr><th>'+L('Post')+'</th><th>'+L('Trend')+' <small>('+L(mLbl)+')</small></th><th>'+L('Per day')+' <small>('+L('gain each day')+')</small></th><th>'+L('Spend')+'</th></tr></thead><tbody>'+rows.join('')+'</tbody>'+
+    '<tfoot><tr><td>'+L('Total')+' · '+(list.length+typedL.length)+' '+L('posts')+'</td><td colspan="2">'+fmt(T.views)+' '+L('views')+' · '+fmt(T.eng)+' '+L('reactions')+'</td><td>$'+(Math.round(T.spend*100)/100)+'</td></tr></tfoot></table></div>'+
+    '<div class="pnote">'+L('Whole ad account spend in this range')+': <b>$'+(Math.round(acct*100)/100)+'</b>'+(acct>T.spend+0.01?' · $'+(Math.round((acct-T.spend)*100)/100)+' '+L('is from ads not linked to a saved post'):'')+'</div>'}
+function miniLine(vals,c){var w=150,h=40,pts=[],n=vals.length,mx=Math.max.apply(null,vals.map(function(v){return v||0}))||1;
+  vals.forEach(function(v,i){if(v!=null)pts.push([4+(w-8)*(n>1?i/(n-1):.5),h-5-(h-10)*v/mx,v])});
+  var s='<svg viewBox="0 0 '+w+' '+h+'"><line x1="4" x2="'+(w-4)+'" y1="'+(h-5)+'" y2="'+(h-5)+'" stroke="var(--bd)"/>';
+  if(pts.length>1)s+='<path d="'+pts.map(function(p,i){return(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)}).join(' ')+'" fill="none" stroke="'+c+'" stroke-width="2"/>';
+  pts.forEach(function(p,i){s+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+(i===pts.length-1?3.5:2)+'" fill="'+c+'"><title>'+fmt(p[2])+'</title></circle>'});return s+'</svg>'}
+function onStats(d){pstat=(d.exists&&d.data().posts)||{};pdaily=(d.exists&&d.data().daily)||{};snapshotStats();if($('viewTasks').style.display!=='none'&&!typing())renderTasks();render()}
 function pushMade(day,t,r){
   if(!fdb||!auth||!auth.currentUser||!r||!r.link)return;
   var ref=fdb.collection('marketingDesk').doc('day-'+day);
@@ -395,6 +463,7 @@ function pushMade(day,t,r){
     if(k>-1){item.at=made[k].at||item.at;made[k]=item}else made.push(item);
     tx.set(ref,{made:made,day:day},{merge:true})})}).catch(function(e){try{syncErr(e)}catch(x){}})}
 function backfillMade(){var done={};Object.keys(posts).forEach(function(d){if(d<winStart())return;TASKS.forEach(function(t){(posts[d][t.id]||[]).forEach(function(r){if(r.link&&r.by&&!r.sample&&!done[r.link]){done[r.link]=1;pushMade(d,t.id,r)}})})})}
+var liveOpen={};
 function liveRow(t,r,i){
   var P=r.products||[],key='live|'+r.id;
   var items=P.map(function(p,k){return '<div class="lvi">'+thumb(p,key,k,true)+'<textarea rows="2" data-ps="'+key+'|'+k+'" placeholder="No script yet">'+esc(p.script||'')+'</textarea></div>'}).join('');
@@ -402,7 +471,7 @@ function liveRow(t,r,i){
     '<button class="x" data-delrow="'+key+'" title="Delete this row">✕</button></div>'+
     '<div class="lvh"><b>Plan - before the live</b><span class="todo">'+P.length+' item'+(P.length===1?'':'s')+' planned</span><button data-lload="'+key+'">Load from Live Desk</button></div>'+
     '<div class="srch"><input data-s="'+key+'" placeholder="Search products (add as many as you need)'+(products.length?'':' - products not loaded, see Settings')+'" autocomplete="off"><div class="dd" hidden></div></div>'+
-    '<div id="lm-'+r.id+'" class="lmsg"></div>'+items+
+    '<div id="lm-'+r.id+'" class="lmsg"></div>'+(P.length?'<details class="lvd" data-lvd="'+r.id+'"'+(liveOpen[r.id]?' open':'')+'><summary>'+L('Show items')+' ('+P.length+')</summary>'+items+'</details>':'')+
     '<div class="lvh" style="margin-top:10px"><b>Result - after the live</b></div>'+
     '<div class="acts"><button class="pri" data-pickpost="'+key+'">Pick live</button><input data-link="'+key+'" value="'+esc(r.link||'')+'" placeholder="Paste the live link here" inputmode="url"><button data-prev="'+key+'">Preview</button><button data-lget="'+key+'">Get results</button></div>'+
     '<div id="lg-'+r.id+'" class="lmsg"></div>'+(r.link?statHTML(r.link):'')+
@@ -426,13 +495,16 @@ function rowHTML(t,r,i){
 function renderTasks(){
   ensureRows(tDay);sv(PKEY,posts);
   $('tDate').value=tDay;$('tUser').value=ld(UKEY,'');
-  var tot=0,got=0;TASKS.forEach(function(t){var g=+tg[t.id]||0;tot+=g;got+=Math.min(postedN(tDay,t.id),g)});
+  var tot=0,got=0;TASKS.forEach(function(t){var g=tgOn(tDay,t.id);tot+=g;got+=Math.min(postedN(tDay,t.id),g)});
   var pc=tot?Math.round(got/tot*100):0;
   $('tPct').textContent=got+'/'+tot+' posts · '+pc+'%';$('tBar').style.width=pc+'%';
-  $('tBlocks').innerHTML=TASKS.map(function(t){var rs=rowsOf(tDay,t.id),n=postedN(tDay,t.id),g=+tg[t.id]||0;
-    return '<div class="day"><div class="dh"><span><span class="tag" style="background:'+t.c+';margin-right:8px">'+(n?n+' posted':'To do')+'</span>'+t.n+'</span><small>posted '+n+(g?' / target '+g:'')+'</small></div>'+
+  $('tBlocks').innerHTML=TASKS.map(function(t){var rs=rowsOf(tDay,t.id),n=postedN(tDay,t.id),g=tgOn(tDay,t.id),off=isOff(tDay,t.id);
+    var sw=t.id==='live'?'<label class="lsw"><input type="checkbox" data-liveon="1"'+(off?'':' checked')+'>'+L(off?'No live today':'Live today')+'</label>':'';
+    if(off)return '<div class="day"><div class="dh"><span><span class="tag" style="background:var(--mut);margin-right:8px">'+L('Off')+'</span>'+t.n+'</span>'+sw+'</div><div class="offmsg">'+L('Live is turned off for this day. It does not count in the target.')+'</div></div>';
+    return '<div class="day"><div class="dh"><span><span class="tag" style="background:'+t.c+';margin-right:8px">'+(n?n+' posted':'To do')+'</span>'+t.n+'</span><span style="display:flex;gap:12px;align-items:center">'+sw+'<small>posted '+n+(g?' / target '+g:'')+'</small></span></div>'+
       rs.map(function(r,i){return rowHTML(t,r,i)}).join('')+
       '<div class="addt"><button data-addrow="'+t.id+'">+ Add another '+t.s.toLowerCase()+'</button></div></div>'}).join('');
+  renderSuggest();
   var dl=dayList(30),vals=dl.map(function(x){return Math.round(pctDay(x)*100)});
   var s='<svg viewBox="0 0 '+W+' '+H+'">'+axes(100,dl),bw=(W-PL-PR)/dl.length*.65;
   dl.forEach(function(x,i){var h=(H-PT-PB)*vals[i]/100,xx=PL+(W-PL-PR)*(i+.5)/dl.length-bw/2;
@@ -525,6 +597,7 @@ function saveLink(t,rid){var r=getRow(t,rid);if(!r)return;
   sv(UKEY,u);r.by=u;r.at=hhmm();sv(PKEY,posts);if(t==='live')upsertLive(r);pushMade(tDay,t,r);renderTasks();toast(L('Saved ✓')+' '+r.by+' · '+r.at,true)}
 function toast(msg,ok){var d=document.createElement('div');d.textContent=msg;d.style.cssText='position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:300;padding:12px 20px;border-radius:10px;font-weight:600;color:#fff;box-shadow:0 6px 20px rgba(0,0,0,.25);background:'+(ok?'#2f7d62':'#b0524f');document.body.appendChild(d);setTimeout(function(){d.remove()},2600)}
 $('tBlocks').addEventListener('click',function(e){var g=function(k){return e.target.getAttribute&&e.target.getAttribute(k)},q;
+  if(g('data-liveon')){setLiveOff(tDay,!e.target.checked);return}
   if(g('data-prev')){var pq=g('data-prev').split('|'),pr=getRow(pq[0],pq[1]);openPreview(pr&&pr.link);return}
   if(g('data-lget')){liveFetch(g('data-lget').split('|')[1]);return}
   if(g('data-lload')){liveLoad(g('data-lload').split('|')[1]);return}
@@ -627,6 +700,47 @@ function openScript(t,rid){
   if(!r.script&&cfg.key)gen();
 }
 
+/* ---------- SUGGESTED PRODUCTS: from sales (last 30 days) and stock receiving ---------- */
+var sales={byId:{},orders:0,src:'',err:''};
+function oDate(o){return toMs(o.createdAt||o.date||o.created||o.orderDate||o.timestamp||o.time)}
+async function loadSales(){
+  if(!fdb||!auth||!auth.currentUser)return;var since=Date.now()-30*864e5,by={},cnt=0,src='';
+  var tries=[['stores/'+(cfg.store||'GOAT-1979')+'/orders',function(){return fdb.collection('stores').doc(cfg.store||'GOAT-1979').collection('orders').orderBy('createdAt','desc').limit(800).get()}],
+    ['stores/'+(cfg.store||'GOAT-1979')+'/orders',function(){return fdb.collection('stores').doc(cfg.store||'GOAT-1979').collection('orders').limit(800).get()}],
+    ['orders',function(){return fdb.collection('orders').orderBy('createdAt','desc').limit(800).get()}]];
+  var lastErr='';
+  for(var i=0;i<tries.length;i++){try{var sn=await tries[i][1]();if(sn.empty)continue;src=tries[i][0];
+    sn.forEach(function(d){var o=d.data(),t=oDate(o);if(t&&t<since)return;if(/cancel|refund|void/i.test(o.status||''))return;cnt++;
+      (o.items||o.cart||o.products||o.lines||[]).forEach(function(it){var id=String(it.productId||it.pid||it.id||it.docId||''),q=+(it.qty||it.quantity||it.count||1)||1;
+        var k=id||('n:'+(it.name||''));by[k]=(by[k]||0)+q;if(it.name)by['n:'+it.name]=(by['n:'+it.name]||0)+q})});break}catch(e){lastErr=e.message||String(e)}}
+  sales={byId:by,orders:cnt,src:src,err:src?'':lastErr};renderSuggest()}
+function soldOf(p){return Math.max(sales.byId[p.id]||0,sales.byId[p.pid]||0,sales.byId['n:'+p.name]||0)}
+function usedToday(pid){var u=false;TASKS.forEach(function(t){rowsOf(tDay,t.id).forEach(function(r){(r.products||[]).forEach(function(p){if(p.id===pid)u=true})})});return u}
+function recentlyPosted(pid,nDays){var from=iso(new Date(Date.now()-nDays*864e5)),hit=false;Object.keys(posts).forEach(function(d){if(d<from||d>=tDay)return;TASKS.forEach(function(t){(posts[d][t.id]||[]).forEach(function(r){if(r.link&&(r.products||[]).some(function(p){return p.id===pid}))hit=true})})});return hit}
+function suggestions(){
+  var now=Date.now(),out=[];
+  products.forEach(function(p){if(!(p.stock>0))return;var sold=soldOf(p),age=p.added?(now-p.added)/864e5:null,sc=0,why='',c='';
+    if(age!=null&&age<=14){sc=100-age*3+Math.min(p.stock,20);why='New arrival';c='#2f7d62'}
+    else if(sold>=3&&p.stock>=3){sc=60+sold*4;why='Selling fast';c='#4f6a94'}
+    else if(sales.orders&&sold===0&&p.stock>=10&&(age==null||age>30)){sc=40+Math.min(p.stock,40);why='Slow stock - promote';c='#b98a3a'}
+    if(!sc)return;if(recentlyPosted(p.id,3))sc-=50;out.push({p:p,sc:sc,why:why,c:c,sold:sold,age:age})});
+  out.sort(function(a,b){return b.sc-a.sc});
+  // mix the reasons so the list is not all one kind
+  var pick=[],per={};out.forEach(function(x){if(pick.length>=8)return;per[x.why]=(per[x.why]||0)+1;if(per[x.why]<=4)pick.push(x)});return pick}
+function renderSuggest(){var el=$('tSuggest');if(!el)return;
+  var info=products.length?(sales.orders?L('Using')+' '+sales.orders+' '+L('orders from the last 30 days')+' ('+sales.src+') + '+L('stock and arrival date'):L('No sales data found')+(sales.err?' ('+esc(sales.err)+')':'')+' - '+L('using stock and arrival date only')):L('Products not loaded yet (Settings).');
+  $('sgInfo').textContent=info;
+  var S=suggestions();if(!S.length){el.innerHTML='<div class="mut">'+L('No suggestions yet.')+'</div>';return}
+  el.innerHTML=S.map(function(x){var p=x.p,u=usedToday(p.id);
+    return '<div class="sgi'+(u?' usedtoday':'')+'">'+(p.img?'<img src="'+esc(p.img)+'" alt="" loading="lazy">':'<div class="noimg"></div>')+'<div class="sgt"><span class="why" style="background:'+x.c+'">'+L(x.why)+'</span><div>'+esc(p.name)+'</div>'+
+      '<div class="sgn">$'+p.price+' · '+L('stock')+' '+p.stock+' · '+L('sold 30d')+' '+x.sold+(x.age!=null?' · '+L('arrived')+' '+Math.round(x.age)+' '+L('days ago'):'')+(u?' · '+L('in today\'s plan'):'')+'</div>'+
+      '<div class="sgb"><button data-sg="video|'+esc(p.id)+'">+ '+L('Video')+'</button><button data-sg="photo|'+esc(p.id)+'">+ '+L('Photo')+'</button><button data-sg="live|'+esc(p.id)+'">+ '+L('Live')+'</button></div></div></div>'}).join('')}
+$('tSuggest').addEventListener('click',function(e){var a=e.target.getAttribute&&e.target.getAttribute('data-sg');if(!a)return;var q=a.split('|'),t=q[0],pid=q.slice(1).join('|');
+  if(t==='live'&&isOff(tDay,'live')){toast(L('Live is off today'),false);return}
+  ensureRows(tDay);var rs=posts[tDay][t],r=t==='live'?rs[0]:rs.filter(function(x){return !x.link&&!(x.products||[]).length&&!x.title})[0];
+  if(!r){r={id:uid(),products:[]};rs.push(r)}pickProduct(t,r.id,pid);renderSuggest();toast(L('Added to plan')+' ✓',true)});
+$('sgRefresh').onclick=function(){fetchProducts()};
+
 /* ---------- date / user / tabs ---------- */
 function shift(n){var d=new Date(tDay+'T00:00');d.setDate(d.getDate()+n);tDay=iso(d);renderTasks()}
 $('dPrev').onclick=function(){shift(-1)};$('dNext').onclick=function(){shift(1)};$('dToday').onclick=function(){tDay=iso(new Date());renderTasks()};
@@ -642,9 +756,9 @@ function renderTarget(){
   var now=new Date(),y=now.getFullYear(),mo=now.getMonth(),dim=new Date(y,mo+1,0).getDate(),today=now.getDate();
   var dates=[];for(var d=1;d<=dim;d++)dates.push(iso(new Date(y,mo,d)));
   $('tgV').value=tg.video;$('tgP').value=tg.photo;$('tgL').value=tg.live;
-  var perDay=(+tg.video||0)+(+tg.photo||0)+(+tg.live||0),cum=[],c=0;
+  var perDay=(+tg.video||0)+(+tg.photo||0)+(+tg.live||0),cum=[],c=0,dayT=dates.map(function(ds){return TASKS.reduce(function(a,t){return a+tgOn(ds,t.id)},0)});
   dates.forEach(function(ds,i){if(i<today){TASKS.forEach(function(t){c+=postedN(ds,t.id)});cum.push(c)}});
-  var tcum=dates.map(function(_,i){return perDay*(i+1)}),max=niceMax(Math.max(perDay*dim,c,1));
+  var acc=0,tcum=dates.map(function(_,i){acc+=dayT[i];return acc}),max=niceMax(Math.max(acc,c,1));
   var s='<svg viewBox="0 0 '+W+' '+H+'">'+axes(max,dates),n=dim;
   function X(i){return PL+(W-PL-PR)*(i+.5)/n}function Y(v){return PT+(H-PT-PB)*(1-v/max)}
   s+='<path d="'+tcum.map(function(v,i){return(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)}).join(' ')+'" fill="none" stroke="var(--mut)" stroke-width="2" stroke-dasharray="5 4"/>';
@@ -652,10 +766,10 @@ function renderTarget(){
   cum.forEach(function(v,i){s+='<circle cx="'+X(i)+'" cy="'+Y(v)+'" r="'+(i===cum.length-1?4:2.2)+'" fill="#2f7d62"><title>'+dates[i]+': '+v+' posted</title></circle>'});
   $('cTgt').innerHTML=s+'</svg><div class="leg"><span><i style="background:#2f7d62"></i>Posted so far</span><span><i style="background:var(--mut)"></i>Target pace</span></div>';
   $('tgTiles').innerHTML=TASKS.map(function(t){var done=0;dates.forEach(function(ds,i){if(i<today)done+=postedN(ds,t.id)});
-    var goal=(+tg[t.id]||0)*dim,pace=(+tg[t.id]||0)*today,diff=done-pace;
+    var goal=0,pace=0;dates.forEach(function(ds,i){var v=tgOn(ds,t.id);goal+=v;if(i<today)pace+=v});var diff=done-pace;
     return '<div class="kpi"><span>'+t.n+' (month)</span><b>'+done+' / '+goal+'</b><i class="'+(diff>=0?'up':'dn')+'">'+(diff>=0?'▲ ahead by ':'▼ behind by ')+Math.abs(diff)+'</i></div>'}).join('')}
 ['tgV','tgP','tgL'].forEach(function(id,i){$(id).onchange=function(){tg[['video','photo','live'][i]]=Math.max(0,+this.value||0);sv(TGKEY,tg);renderTarget()}});
-var _render=render;render=function(){_render();renderTarget()};
+var _render=render;render=function(){_render();renderTarget();postBreakdown()};
 /* ---------- ACCESS GATE: only accounts listed in _admin_/marketingAdmins (emails) ---------- */
 var GATEMSG='',GATE_DOMAIN='@staff.goatkids.app';
 function gmsg(m){$('gMsg').textContent=m}
@@ -706,6 +820,7 @@ function pushRows(){if(SYNC.on)pushGeneric('marketing_rows',currentRows(),SYNC.r
 function pushRes(){if(!SYNC.on)return;var m={};data.forEach(function(x){if(!x.sample)m[x.id]=clone(x)});pushGeneric('marketing_results',m,SYNC.remoteRes,SYNC.pendRes)}
 function typing(){var a=document.activeElement;return !!(a&&a.closest&&a.closest('#tBlocks')&&/textarea|input/i.test(a.tagName))}
 function uiRefresh(){render();renderTarget();if($('viewTasks').style.display!=='none'){if(typing())SYNC.pendingUi=true;else renderTasks()}}
+$('tBlocks').addEventListener('toggle',function(e){var id=e.target.getAttribute&&e.target.getAttribute('data-lvd');if(id)liveOpen[id]=e.target.open},true);
 $('tBlocks').addEventListener('focusout',function(){setTimeout(function(){if(SYNC.pendingUi&&!typing()){SYNC.pendingUi=false;renderTasks()}},400)});
 function onRows(snap){var ch=false;
   snap.docChanges().forEach(function(c){var id=c.doc.id,x=c.doc.data();if(SYNC.pendRows[id])return;ch=true;
@@ -724,6 +839,8 @@ function startSync(){if(SYNC.on||!fdb||!auth||!auth.currentUser)return;SYNC.on=t
   SYNC.unsubs=[fdb.collection('marketing_rows').where('day','>=',st).onSnapshot(onRows,syncErr),
     fdb.collection('marketing_results').where('date','>=',st).onSnapshot(onRes,syncErr),
     fdb.collection('marketing_settings').doc('targets').onSnapshot(onTg,syncErr),
+    fdb.collection('marketing_settings').doc('liveOff').onSnapshot(onLiveOff,function(){}),
+    fdb.collection('marketing_settings').doc('statHistory').onSnapshot(onHist,function(){}),
     fdb.collection('marketingDesk').doc('postStats').onSnapshot(onStats,function(){}),
     fdb.collection('marketingDesk').doc('recentPosts').onSnapshot(onRecent,function(){})];
   syncSay();schedRows();schedRes();schedTg();setTimeout(backfillMade,4000)}
@@ -771,6 +888,8 @@ KM['Pick post']='ជ្រើសការផុស';KM['Pick live']='ជ្រ�
 KM['Saved ✓']='បានរក្សាទុក ✓';KM['Photo']='រូបភាព';KM['already saved']='បានរក្សារួច';KM['(no caption)']='(គ្មានចំណងជើង)';KM['List updated']='បញ្ជីធ្វើបច្ចុប្បន្នភាព';KM['Results come within about an hour.']='លទ្ធផលនឹងមកក្នុងរយៈពេលប្រហែលមួយម៉ោង។';
 KM['No posts found yet. New posts appear here within about an hour after publishing.']='មិនទាន់មានការផុសទេ។ ការផុសថ្មីនឹងបង្ហាញនៅទីនេះក្នុងរយៈពេលប្រហែលមួយម៉ោងក្រោយផុស។';
 KM['Not in the list? Wait up to an hour, or paste the link instead.']='មិនឃើញក្នុងបញ្ជី? សូមរង់ចាំរហូតដល់មួយម៉ោង ឬបិទភ្ជាប់តំណជំនួសវិញ។';
+KM['No live today']='គ្មានឡាយវ៍ថ្ងៃនេះ';KM['Live today']='មានឡាយវ៍ថ្ងៃនេះ';KM['Off']='បិទ';KM['Live is turned off for this day. It does not count in the target.']='ឡាយវ៍ត្រូវបានបិទសម្រាប់ថ្ងៃនេះ។ មិនរាប់ក្នុងគោលដៅទេ។';KM['Per-post breakdown']='លទ្ធផលតាមការផុសនីមួយៗ';KM['one row per saved post link']='មួយជួរសម្រាប់តំណនីមួយៗ';KM['No saved post links in this range yet.']='មិនទាន់មានតំណការផុសក្នុងចន្លោះនេះទេ។';KM['Per day']='ក្នុងមួយថ្ងៃ';KM['gain each day']='កើនឡើងរៀងរាល់ថ្ងៃ';KM['Total']='សរុប';KM['posts']='ការផុស';KM['paid reach']='ការទៅដល់ដោយបង់ប្រាក់';KM['Not boosted']='មិនបានបូស្ត';KM['Open']='បើក';KM['History starts today']='ប្រវត្តិចាប់ផ្តើមថ្ងៃនេះ';KM['Waiting for Facebook']='កំពុងរង់ចាំ Facebook';KM['typed by hand']='វាយដោយដៃ';KM['views / reach']='ចំនួនមើល / ការទៅដល់';KM['engagement']='អន្តរកម្ម';KM['Whole ad account spend in this range']='ចំណាយគណនីពាណិជ្ជកម្មទាំងមូលក្នុងចន្លោះនេះ';KM['is from ads not linked to a saved post']='មកពីពាណិជ្ជកម្មដែលមិនភ្ជាប់នឹងការផុសដែលបានរក្សា';KM['Suggested products to post today']='ផលិតផលណែនាំសម្រាប់ផុសថ្ងៃនេះ';KM['Refresh']='ផ្ទុកឡើងវិញ';KM['New arrival']='ទំនិញមកថ្មី';KM['Selling fast']='លក់ដាច់';KM['Slow stock - promote']='ស្តុកលក់យឺត – ប្រូម៉ូសិន';KM['stock']='ស្តុក';KM['sold 30d']='លក់ ៣០ថ្ងៃ';KM['arrived']='មកដល់';KM['days ago']='ថ្ងៃមុន';KM["in today's plan"]='មានក្នុងផែនការថ្ងៃនេះ';KM['Added to plan']='បានបន្ថែមក្នុងផែនការ';KM['Live is off today']='ឡាយវ៍បិទថ្ងៃនេះ';KM['Using']='ប្រើ';KM['orders from the last 30 days']='ការកុម្ម៉ង់ក្នុង ៣០ ថ្ងៃចុងក្រោយ';KM['stock and arrival date']='ស្តុក និងថ្ងៃមកដល់';KM['No sales data found']='រកមិនឃើញទិន្នន័យលក់';KM['using stock and arrival date only']='ប្រើតែស្តុក និងថ្ងៃមកដល់';KM['Products not loaded yet (Settings).']='មិនទាន់ផ្ទុកផលិតផល (ការកំណត់)។';KM['No suggestions yet.']='មិនទាន់មានការណែនាំ។';
+KM['Show items']='បង្ហាញទំនិញ';
 var WORDS={spend:'ចំណាយ',reach:'ការទៅដល់',views:'ចំនួនមើល',clicks:'ចុច',likes:'ចូលចិត្ត',msgs:'សារ',orders:'កុម្ម៉ង់'};
 var SRCH={'Search the product':'ស្វែងរកផលិតផល','Search products (add as many as you need)':'ស្វែងរកផលិតផល (បន្ថែមបានច្រើន)'};
 var NW='(?:spend|reach|views|clicks|likes|msgs|orders)',NUM='\\$?[\\d.,k]+';
