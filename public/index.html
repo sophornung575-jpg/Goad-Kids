@@ -109,6 +109,9 @@
             var u = auth && auth.currentUser;
             return !!(u && u.email && u.email.toLowerCase() === staffEmail('super', 'global'));
         }
+        function applyMasterView() {
+            try { document.body.classList.toggle('gk-master', isMasterUser()); } catch (e) {}
+        }
         function isStaffUser() {
             var u = auth && auth.currentUser;
             return !!(u && u.email && u.email.toLowerCase().slice(-(STAFF_DOMAIN.length + 1)) === '@' + STAFF_DOMAIN);
@@ -468,6 +471,8 @@
         #transferRequestCard{overflow:visible}
         #transferRequestCard>.admin-card-header{border-radius:var(--radius-lg) var(--radius-lg) 0 0}
         #transferProductPicker{max-height:min(320px,55vh)!important;overscroll-behavior:contain}
+    /* Cost, profit and margin: only the master account (Super Admin) sees these */
+    body:not(.gk-master) .master-only{ display:none !important; }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
@@ -895,7 +900,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                             <div class="add-product-grid">
                                 <div class="form-group"><label data-translate="productName">Product Name</label><input type="text" id="productName" class="form-control" data-translate="enterProductName" placeholder="Enter product name"></div>
                                 <div class="form-group"><label data-translate="priceUsd">Price ($)</label><input type="number" id="productPrice" class="form-control" placeholder="0.00" step="0.01"></div>
-                                <div class="form-group"><label data-translate="costPriceUsd">Cost of Production ($)</label><input type="number" id="productCostPrice" class="form-control" placeholder="0.00" step="0.01" min="0"><small style="color:var(--gray);font-size:0.72rem" data-translate="costPriceHint">What it costs you to make/stock this item (optional)</small></div>
+                                <div class="form-group master-only"><label data-translate="costPriceUsd">Cost of Production ($)</label><input type="number" id="productCostPrice" class="form-control" placeholder="0.00" step="0.01" min="0"><small style="color:var(--gray);font-size:0.72rem" data-translate="costPriceHint">What it costs you to make/stock this item (optional)</small></div>
                                 <div class="form-group"><label>Promotion Price ($)</label><input type="number" id="productPromoPrice" class="form-control" placeholder="Leave empty = no promotion" step="0.01" min="0"><small style="color:var(--gray);font-size:0.72rem">Shown as <s>normal price</s> + promotion price</small></div>
                                 <div class="form-group"><label data-translate="category">Category</label>
                                     <select id="productCategory" class="form-control">
@@ -1282,7 +1287,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                             </div>
                         </div>
                         <!-- Store pricing rule (Main Store only) -->
-                        <div class="admin-card" id="pricingRuleCard" style="display:none">
+                        <div class="admin-card master-only" id="pricingRuleCard" style="display:none">
                             <div class="admin-card-header"><div class="admin-card-title"><i class="fas fa-tags" style="color:var(--primary)"></i> Store Pricing Rule</div></div>
                             <div class="admin-card-body">
                                 <p style="font-size:0.8rem;color:var(--gray);margin-bottom:0.75rem">Cost and sell price for items created by the 1688 import in the Restock tool. Cost = the 1688 price converted to dollars. The extra cost and markup only go into the sell price.</p>
@@ -1500,7 +1505,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                     </div>
 
                     <!-- FINANCIAL ANALYSIS -->
-                    <div class="chart-card" style="margin-top:1.5rem">
+                    <div class="chart-card master-only" style="margin-top:1.5rem">
                         <h3><i class="fas fa-coins" style="color:#48bb78"></i> Financial Analysis</h3>
                         <div class="reports-grid" style="margin-bottom:1rem">
                             <div class="stat-card" style="border-left:4px solid #ed8936"><div class="stat-icon" style="background:rgba(237,137,54,0.1)"><i class="fas fa-industry" style="color:#ed8936"></i></div><div class="stat-info"><h3 id="reportCOGS" style="color:#ed8936">$0.00</h3><p>Cost of Goods Sold</p></div></div>
@@ -1525,7 +1530,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                     </div>
 
                     <!-- FINANCIAL TREND BY DAY -->
-                    <div class="chart-card" style="margin-top:1.5rem">
+                    <div class="chart-card master-only" style="margin-top:1.5rem">
                         <h3><i class="fas fa-chart-line" style="color:var(--info)"></i> Revenue, Expenses & Net Profit — By Day</h3>
                         <div class="chart-container"><canvas id="netProfitTrendChart"></canvas></div>
                         <p style="font-size:0.72rem;color:var(--gray);margin-top:0.5rem"><i class="fas fa-circle-info"></i> Expenses are only entered per-month, so each month's total is divided evenly across its calendar days to give a daily figure to compare against that day's Revenue and resulting Net Profit.</p>
@@ -1948,7 +1953,7 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                 </select>
             </div>
             <div class="form-group"><label>Price ($)</label><input type="number" id="editProductPrice" class="form-control" step="0.01"></div>
-            <div class="form-group"><label>Cost of Production ($)</label><input type="number" id="editProductCostPrice" class="form-control" step="0.01" min="0" placeholder="0.00"><small style="color:var(--gray);font-size:0.72rem">What it costs you to make/stock this item (optional)</small></div>
+            <div class="form-group master-only"><label>Cost of Production ($)</label><input type="number" id="editProductCostPrice" class="form-control" step="0.01" min="0" placeholder="0.00"><small style="color:var(--gray);font-size:0.72rem">What it costs you to make/stock this item (optional)</small></div>
             <div class="form-group"><label>Promotion Price ($)</label><input type="number" id="editProductPromoPrice" class="form-control" step="0.01" min="0" placeholder="Leave empty = no promotion"><small style="color:var(--gray);font-size:0.72rem">Shown as <s>normal price</s> + promotion price. Clear it to end the promotion.</small></div>
             <div class="form-group"><label>Images</label>
                 <div class="image-preview-container" id="editImagePreviewContainer"></div>
@@ -4296,6 +4301,7 @@ function sendToTelegram(order, callback) {
             startLiveProducts();
         }
         addLoginRecord(name, role, true);
+        applyMasterView();
         renderPending(); renderHistory(); renderInventory(); updateAdminBadges();
         updateDiscountPanelVisibility(); // also re-renders cart if items present
         document.getElementById('adminBadge').classList.remove('hidden');
@@ -8785,7 +8791,7 @@ function sendToTelegram(order, callback) {
                 '</td>' +
                 '<td><span class="product-category ' + getCategoryDisplay(p.category) + '" style="font-size:0.65rem;padding:0.1rem 0.4rem">' + p.category + '</span></td>' +
                 '<td style="font-weight:600;font-size:0.78rem">' + priceHtml(p) +
-                (p.costPrice != null ? '<br><span style="font-weight:400;font-size:0.68rem;color:var(--gray)">Cost $' + Number(p.costPrice).toFixed(2) + '</span>' +
+                (p.costPrice != null && isMasterUser() ? '<br><span style="font-weight:400;font-size:0.68rem;color:var(--gray)">Cost $' + Number(p.costPrice).toFixed(2) + '</span>' +
                     (isMasterUser() ? '<br><span style="font-weight:600;font-size:0.68rem;color:' + ((salePriceOf(p) - p.costPrice) >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + (salePriceOf(p) > 0 ? (((salePriceOf(p) - p.costPrice) / salePriceOf(p)) * 100).toFixed(0) : '0') + '% margin</span>' : '') : '') +
                 '</td>' +
                 '<td>' + sizeHtml + '</td>' +
@@ -8813,10 +8819,11 @@ function sendToTelegram(order, callback) {
         }
         var money = function(n){ return '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
         var box = function(label, val, color){ return '<div style="background:var(--light);border-radius:8px;padding:0.5rem 0.7rem;border-left:4px solid ' + color + '"><div style="font-size:0.68rem;color:var(--gray-dark);text-transform:uppercase;letter-spacing:0.4px">' + label + '</div><div style="font-size:1.05rem;font-weight:700;color:var(--dark)">' + val + '</div></div>'; };
+        var mst = isMasterUser();
         el.innerHTML = box('Total Stock (pcs)', qty.toLocaleString('en-US'), 'var(--primary)') +
-            box('Total Cost of Stock', money(cost), 'var(--warning)') +
+            (mst ? box('Total Cost of Stock', money(cost), 'var(--warning)') : '') +
             box('Total Price of Stock', money(value), 'var(--success)') +
-            box('Potential Profit', money(value - cost), (value - cost) >= 0 ? 'var(--success)' : 'var(--danger)') +
+            (mst ? box('Potential Profit', money(value - cost), (value - cost) >= 0 ? 'var(--success)' : 'var(--danger)') : '') +
             (noCost ? '<div style="grid-column:1/-1;font-size:0.72rem;color:var(--danger)"><i class="fas fa-triangle-exclamation"></i> ' + noCost + ' in-stock product(s) have no Cost of Production — counted as $0 cost.</div>' : '');
     }
 
@@ -9716,10 +9723,11 @@ function sendToTelegram(order, callback) {
         if (sumEl) {
             var profit = tot.value - tot.cost;
             var box = function(label, val, color){ return '<div style="background:var(--light);border-radius:10px;padding:0.7rem 0.8rem;border-left:4px solid ' + color + '"><div style="font-size:0.72rem;color:var(--gray-dark);text-transform:uppercase;letter-spacing:0.4px">' + label + '</div><div style="font-size:1.15rem;font-weight:700;color:var(--dark)">' + val + '</div></div>'; };
+            var mst2 = isMasterUser();
             sumEl.innerHTML = box('Units in Stock', tot.qty.toLocaleString('en-US'), 'var(--primary)') +
-                box('Total Cost of Stock', money(tot.cost), 'var(--warning)') +
+                (mst2 ? box('Total Cost of Stock', money(tot.cost), 'var(--warning)') : '') +
                 box('Total Price of Stock', money(tot.value), 'var(--success)') +
-                box('Potential Gross Profit', money(profit), profit >= 0 ? 'var(--success)' : 'var(--danger)') +
+                (mst2 ? box('Potential Gross Profit', money(profit), profit >= 0 ? 'var(--success)' : 'var(--danger)') : '') +
                 (tot.noCost ? '<div style="grid-column:1/-1;font-size:0.75rem;color:var(--danger)"><i class="fas fa-triangle-exclamation"></i> ' + tot.noCost + ' in-stock product(s) have no Cost of Production set — their cost is counted as $0.</div>' : '') +
                 (failedStores.length ? '<div style="grid-column:1/-1;font-size:0.75rem;color:var(--danger)"><i class="fas fa-triangle-exclamation"></i> Could not load stock for: ' + failedStores.map(escapeStockCat).join(', ') + ' — not included in these totals.</div>' : '');
             sumEl.insertAdjacentHTML('afterbegin', '<div style="grid-column:1/-1;font-size:0.78rem;color:var(--gray-dark)"><i class="fas fa-store-alt"></i> ' + (multiStore ? (reportIsAllMode() ? 'All Branches Combined (' + sources.length + ' store' + (sources.length === 1 ? '' : 's') + ')' : escapeStockCat((sources[0] && sources[0].name) || 'Selected store') + ' only') : 'This store only') + ' — current stock</div>');
@@ -9755,6 +9763,9 @@ function sendToTelegram(order, callback) {
             }
         }
 
+        if (tblEl && !isMasterUser()) {
+            tblEl.querySelectorAll('table tr').forEach(function(tr){ var c = tr.children; if (c.length >= 5) { c[4].remove(); c[2].remove(); } });
+        }
         STATE.charts.stockChart = new Chart(ctx, { type: 'bar', data: { labels: cats.length ? cats : ['No Data'], datasets: [{ label: 'In Stock', data: cats.length ? vals : [0], backgroundColor: ['rgba(72,187,120,0.7)','rgba(66,153,225,0.7)','rgba(237,100,166,0.7)','rgba(236,201,75,0.7)','rgba(245,101,101,0.7)','rgba(128,90,213,0.7)'], borderColor: '#fff', borderWidth: 2, borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { afterLabel: function(item){ var r = sc[item.label]; return r ? ['Cost: ' + money(r.cost), 'Price: ' + money(r.value)] : ''; } } } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 5 } } } } });
     }
 
@@ -11695,9 +11706,9 @@ function sendToTelegram(order, callback) {
             var p = STATE.products[i], img = (p.images && p.images.length > 0) ? p.images[0] : '';
             var ts = getTotalStock(p);
             var hasCost = p.costPrice != null && p.costPrice !== '';
-            var costStr = hasCost ? Number(p.costPrice).toFixed(2) : '';
+            var costStr = (hasCost && isMasterUser()) ? Number(p.costPrice).toFixed(2) : '';
             var marginStr = (hasCost && p.price > 0 && isMasterUser()) ? (((p.price - p.costPrice) / p.price) * 100).toFixed(1) : '';
-            var stockValueStr = hasCost ? (Number(p.costPrice) * ts).toFixed(2) : '';
+            var stockValueStr = (hasCost && isMasterUser()) ? (Number(p.costPrice) * ts).toFixed(2) : '';
             if (p.sizes && p.sizes.length > 0) { for (var j = 0; j < p.sizes.length; j++) { csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), costStr, marginStr, ts, stockValueStr, escCSV(p.sizes[j].name), p.sizes[j].qty, escCSV(img)].join(',') + '\n'; } }
             else { csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), costStr, marginStr, ts, stockValueStr, 'No sizes', 0, escCSV(img)].join(',') + '\n'; }
         }
@@ -14592,6 +14603,8 @@ function sendToTelegram(order, callback) {
         authReady.then(function() {
             if (!auth) return;
             auth.onAuthStateChanged(function(u) {
+                applyMasterView();
+                try { if (typeof renderInventory === 'function' && STATE.isAdmin) renderInventory(); } catch (e) {}
                 if (!u && STATE.isAdmin) {
                     adminLogout();
                     setTimeout(function() { showToast('Your admin login ended. Please log in again.', 'info'); }, 600);
