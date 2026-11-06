@@ -92,6 +92,9 @@ body:not(.locked) #gate{display:none}body.locked .wrap{display:none}
 .lvd{border:1px solid var(--bd);border-radius:8px;margin:6px 0;padding:0 8px}.lvd summary{cursor:pointer;padding:8px 0;font-size:13px;font-weight:600;color:#2f7d62}.lvd[open] summary{border-bottom:1px solid var(--bd);margin-bottom:4px}
 .lvb{font-size:10.5px;font-weight:700;border-radius:99px;padding:1px 7px;border:1px solid var(--bd)}.lv1{background:#2f7d62;color:#fff;border-color:#2f7d62}.lv2{background:#e8f1ec;color:#2f7d62}.lv3{color:var(--mut)}
 .rule.off{opacity:.6}.rnum{display:inline-flex;width:22px;height:22px;border-radius:99px;background:var(--acc);color:var(--bg);align-items:center;justify-content:center;font-size:12px}.rule h2 button{padding:3px 9px}
+.rguide{border:1px solid var(--bd);border-radius:8px;padding:0 10px;margin:6px 0;background:var(--bg)}.rguide summary{cursor:pointer;padding:8px 0;font-weight:600;font-size:13px;color:#2f7d62}.rguide div{margin:0 0 8px}.rguide b{font-size:12.5px}.rguide p{margin:2px 0 0;font-size:12.5px;line-height:1.5}
+.rlist{display:flex;flex-direction:column;gap:6px;margin-top:8px}.ritem{display:flex;gap:8px;align-items:center;border:1px solid var(--bd);border-radius:8px;padding:6px 8px;font-size:12.5px}.ritem img,.ritem .noimg{width:44px;height:44px;border-radius:6px;object-fit:cover;background:var(--bd);flex:none}
+.ritem .rit{flex:1;min-width:0}.ritem .mut{font-size:11.5px}.ritem.rx{opacity:.45}.ritem.rx .rit>div:nth-child(2){text-decoration:line-through}.rmore{margin-top:6px;font-size:12px}
 .offmsg{padding:12px;color:var(--mut);font-size:13px}
 </style>
 </head>
@@ -708,10 +711,10 @@ var RULE_DEF={
  occasion:{n:'Occasion / season',c:'#2b8a9a',m:'Items from categories you choose (e.g. birthday, wedding), during the dates you set.',p:{words:'',from:'',to:''}}};
 var RULE_P={days:'Within days',minStock:'Stock at least',maxStock:'Stock at most',maxLevel:'Use levels up to (1-3)',minAge:'Older than days',words:'Category / name words (comma)',from:'From date',to:'To date'};
 var rules=ld('goatMktRules',null);
-function defRules(){return{order:['newArrival','fast','low','restock','occasion','slow'],l1:10,l2:20,noRepeat:3,
+function defRules(){return{excl:{},show:5,order:['newArrival','fast','low','restock','occasion','slow'],l1:10,l2:20,noRepeat:3,
   on:{newArrival:true,fast:true,slow:true,low:true,restock:true,occasion:false},picks:{newArrival:2,fast:2,slow:1,low:1,restock:1,occasion:1},
   p:JSON.parse(JSON.stringify(Object.keys(RULE_DEF).reduce(function(o,k){o[k]=RULE_DEF[k].p;return o},{})))}}
-function fixRules(){var d=defRules();if(!rules||!rules.order)rules=d;Object.keys(d).forEach(function(k){if(rules[k]===undefined)rules[k]=d[k]});
+function fixRules(){var d=defRules();if(rules&&!rules.excl)rules.excl={};if(!rules||!rules.order)rules=d;Object.keys(d).forEach(function(k){if(rules[k]===undefined)rules[k]=d[k]});
   Object.keys(RULE_DEF).forEach(function(k){if(rules.order.indexOf(k)<0)rules.order.push(k);rules.p[k]=Object.assign({},RULE_DEF[k].p,rules.p[k]||{});
     if(rules.on[k]===undefined)rules.on[k]=d.on[k];if(rules.picks[k]===undefined)rules.picks[k]=d.picks[k]})}
 fixRules();
@@ -754,26 +757,27 @@ async function loadSugData(){
   sugP=arr;sv('goatSugProducts',arr.map(function(p){var c=Object.assign({},p);c.img='';return c}));sugInfo={orders:orders,stores:okStores,err:errs.join('; ')};renderSuggest();if($('viewRules').style.display!=='none')renderRules()}
 /* Levels: rank items, Level 1 = top l1%, Level 2 = next l2%, Level 3 = the rest */
 function levelize(list,val){var a=list.slice().sort(function(x,y){return val(y)-val(x)}),n=a.length,c1=Math.max(1,Math.ceil(n*rules.l1/100)),c2=c1+Math.ceil(n*rules.l2/100),out={};
-  a.forEach(function(p,i){out[p.key]=i<c1?1:i<c2?2:3});return out}
+  out._rank={};out._n=n;a.forEach(function(p,i){out[p.key]=i<c1?1:i<c2?2:3;out._rank[p.key]=i+1});return out}
+function rk(lv,key,what){var r=lv._rank[key];return r?{rank:r,n:lv._n,pct:Math.max(1,Math.round(r/lv._n*100)),of:what}:null}
 function analyse(){var now=Date.now(),P=sugP.map(function(p){var sp=p.sold/30;return Object.assign({},p,{speed:sp,cover:sp>0?p.stock/sp:Infinity,age:p.added?(now-p.added)/864e5:null})});
   var sellers=P.filter(function(p){return p.sold>0}),lvFast=levelize(sellers,function(p){return p.speed});
   var big=P.filter(function(p){return p.stock>=rules.p.slow.minStock}),lvSlow=levelize(big,function(p){return p.cover===Infinity?1e9+p.stock:p.cover});
   var recent=P.filter(function(p){return p.firstAdded}),lvNew=levelize(recent,function(p){return p.firstAdded});
   var R={};
-  R.newArrival=P.filter(function(p){var q=rules.p.newArrival;return p.firstAdded&&(now-p.firstAdded)/864e5<=q.days&&p.stock>=q.minStock}).map(function(p){return{p:p,lv:lvNew[p.key]||3,sc:-p.age,info:L('arrived')+' '+Math.round((now-p.firstAdded)/864e5)+' '+L('days ago')}});
-  R.fast=P.filter(function(p){var q=rules.p.fast;return lvFast[p.key]&&lvFast[p.key]<=q.maxLevel&&p.stock>=q.minStock}).map(function(p){return{p:p,lv:lvFast[p.key],sc:p.speed,info:(Math.round(p.speed*10)/10)+' '+L('sold / day')}});
-  R.slow=P.filter(function(p){var q=rules.p.slow;return lvSlow[p.key]&&lvSlow[p.key]<=q.maxLevel&&(p.age==null||p.age>=q.minAge)}).map(function(p){return{p:p,lv:lvSlow[p.key],sc:p.cover===Infinity?1e9+p.stock:p.cover,info:(p.cover===Infinity?L('no sales in 30 days'):Math.round(p.cover)+' '+L('days of stock left'))+' · '+L('stock age')+' '+(p.age==null?L('unknown'):Math.round(p.age)+' '+L('days'))}});
-  R.low=P.filter(function(p){var q=rules.p.low;return p.stock>0&&p.stock<=q.maxStock&&lvFast[p.key]&&lvFast[p.key]<=q.maxLevel}).map(function(p){return{p:p,lv:lvFast[p.key],sc:p.speed,info:L('only')+' '+p.stock+' '+L('left')}});
-  R.restock=P.filter(function(p){var q=rules.p.restock,z=zeroSeen[p.key],lim=now-q.days*864e5;return p.stock>=q.minStock&&((z&&Date.parse(z)>=lim)||(p.restockAt&&p.restockAt>=lim&&p.firstAdded&&p.firstAdded<p.restockAt-864e5))}).map(function(p){return{p:p,lv:lvFast[p.key]||3,sc:p.speed,info:L('back in stock')+(p.restockAt?' '+Math.round((now-p.restockAt)/864e5)+' '+L('days ago'):'')}});
+  R.newArrival=P.filter(function(p){var q=rules.p.newArrival;return p.firstAdded&&(now-p.firstAdded)/864e5<=q.days&&p.stock>=q.minStock}).map(function(p){return{p:p,lv:lvNew[p.key]||3,sc:-p.age,info:L('arrived')+' '+Math.round((now-p.firstAdded)/864e5)+' '+L('days ago'),r:rk(lvNew,p.key,'items with an arrival date')}});
+  R.fast=P.filter(function(p){var q=rules.p.fast;return lvFast[p.key]&&lvFast[p.key]<=q.maxLevel&&p.stock>=q.minStock}).map(function(p){return{p:p,lv:lvFast[p.key],sc:p.speed,info:(Math.round(p.speed*10)/10)+' '+L('sold / day'),r:rk(lvFast,p.key,'items that sold')}});
+  R.slow=P.filter(function(p){var q=rules.p.slow;return lvSlow[p.key]&&lvSlow[p.key]<=q.maxLevel&&(p.age==null||p.age>=q.minAge)}).map(function(p){return{p:p,lv:lvSlow[p.key],sc:p.cover===Infinity?1e9+p.stock:p.cover,info:(p.cover===Infinity?L('no sales in 30 days'):Math.round(p.cover)+' '+L('days of stock left'))+' · '+L('stock age')+' '+(p.age==null?L('unknown'):Math.round(p.age)+' '+L('days')),r:rk(lvSlow,p.key,'items with big stock')}});
+  R.low=P.filter(function(p){var q=rules.p.low;return p.stock>0&&p.stock<=q.maxStock&&lvFast[p.key]&&lvFast[p.key]<=q.maxLevel}).map(function(p){return{p:p,lv:lvFast[p.key],sc:p.speed,info:L('only')+' '+p.stock+' '+L('left'),r:rk(lvFast,p.key,'items that sold')}});
+  R.restock=P.filter(function(p){var q=rules.p.restock,z=zeroSeen[p.key],lim=now-q.days*864e5;return p.stock>=q.minStock&&((z&&Date.parse(z)>=lim)||(p.restockAt&&p.restockAt>=lim&&p.firstAdded&&p.firstAdded<p.restockAt-864e5))}).map(function(p){return{p:p,lv:lvFast[p.key]||3,sc:p.speed,info:L('back in stock')+(p.restockAt?' '+Math.round((now-p.restockAt)/864e5)+' '+L('days ago'):''),r:rk(lvFast,p.key,'items that sold')}});
   var oq=rules.p.occasion,words=String(oq.words||'').toLowerCase().split(',').map(function(w){return w.trim()}).filter(Boolean),td=iso(new Date()),inDate=(!oq.from||td>=oq.from)&&(!oq.to||td<=oq.to);
-  R.occasion=!words.length||!inDate?[]:P.filter(function(p){var t=(p.name+' '+p.category).toLowerCase();return p.stock>0&&words.some(function(w){return t.indexOf(w)>-1})}).map(function(p){return{p:p,lv:lvFast[p.key]||3,sc:p.speed,info:p.category||''}});
+  R.occasion=!words.length||!inDate?[]:P.filter(function(p){var t=(p.name+' '+p.category).toLowerCase();return p.stock>0&&words.some(function(w){return t.indexOf(w)>-1})}).map(function(p){return{p:p,lv:lvFast[p.key]||3,sc:p.speed,info:p.category||'',r:rk(lvFast,p.key,'items that sold')}});
   Object.keys(R).forEach(function(k){R[k].sort(function(a,b){return a.lv-b.lv||b.sc-a.sc})});return R}
 function usedToday(pid){var u=false;TASKS.forEach(function(t){rowsOf(tDay,t.id).forEach(function(r){(r.products||[]).forEach(function(p){if(p.id===pid)u=true})})});return u}
 function recentlyPosted(pid,nDays){if(!nDays)return false;var from=iso(new Date(Date.now()-nDays*864e5)),hit=false;Object.keys(posts).forEach(function(d){if(d<from||d>=tDay)return;TASKS.forEach(function(t){(posts[d][t.id]||[]).forEach(function(r){if(r.link&&(r.products||[]).some(function(p){return p.id===pid}))hit=true})})});return hit}
 /* fill the day's slots from the top-priority rule first */
 function suggestions(){var R=analyse(),out=[],taken={};
   rules.order.forEach(function(k){if(!rules.on[k])return;var need=+rules.picks[k]||0;
-    (R[k]||[]).forEach(function(x){if(need<=0||taken[x.p.key]||recentlyPosted(x.p.id,rules.noRepeat))return;taken[x.p.key]=1;need--;out.push({p:x.p,rule:k,lv:x.lv,info:x.info})})});return out}
+    (R[k]||[]).forEach(function(x){if(need<=0||taken[x.p.key]||(rules.excl[k]||{})[x.p.key]||recentlyPosted(x.p.id,rules.noRepeat))return;taken[x.p.key]=1;need--;out.push({p:x.p,rule:k,lv:x.lv,info:x.info})})});return out}
 function renderSuggest(){var el=$('tSuggest');if(!el)return;
   $('sgInfo').textContent=sugP.length?L('Stores')+': '+sugInfo.stores.join(' + ')+' · '+sugP.length+' '+L('products')+' · '+sugInfo.orders+' '+L('orders in 30 days')+(sugInfo.err?' · '+sugInfo.err:''):L('Loading store data…');
   var S=suggestions();if(!S.length){el.innerHTML='<div class="mut">'+L('No suggestions yet.')+'</div>';return}
@@ -788,9 +792,67 @@ $('tSuggest').addEventListener('click',function(e){var a=e.target.getAttribute&&
 $('sgRefresh').onclick=function(){loadSugData()};
 
 /* ---------- RULES tab ---------- */
+var RULE_GUIDE={
+ newArrival:{en:[['What it means','Products that were received into PH or 271 for the first time recently. Restocks of old items do not count here (they go to "Restocked").'],
+   ['How it is calculated','Uses the store app\'s first-arrival date (addedAt). Editing a product or a correction transfer does not change it. An item must arrive within "Within days" and have at least "Stock at least" pieces.'],
+   ['How levels work','All items with an arrival date are ranked from newest to oldest. Level 1 = newest top %, Level 2 = the next %, Level 3 = the rest.'],
+   ['How staff should promote','Post as "New in" or "Just arrived". Use clear photos of the full outfit, show sizes and price. Video try-on works well. Post Level 1 first.']],
+  km:[['អត្ថន័យ','ផលិតផលដែលទើបទទួលចូល PH ឬ 271 ជាលើកដំបូង។ ការបំពេញស្តុកទំនិញចាស់មិនរាប់នៅទីនេះទេ (វាទៅ "មកដល់ម្តងទៀត")។'],
+   ['របៀបគណនា','ប្រើថ្ងៃមកដល់ដំបូង (addedAt) ពីកម្មវិធីហាង។ ការកែផលិតផល ឬការផ្ទេរកែតម្រូវ មិនប្តូរថ្ងៃនេះទេ។ ទំនិញត្រូវមកដល់ក្នុង "ក្នុងរយៈ (ថ្ងៃ)" ហើយមានស្តុកយ៉ាងតិចតាមកំណត់។'],
+   ['កម្រិត','ទំនិញទាំងអស់ដែលមានថ្ងៃមកដល់ ត្រូវរៀបពីថ្មីបំផុតទៅចាស់។ កម្រិត 1 = ថ្មីបំផុត % កំពូល, កម្រិត 2 = % បន្ទាប់, កម្រិត 3 = ផ្សេងទៀត។'],
+   ['របៀបផ្សព្វផ្សាយ','ផុសថា "ទំនិញថ្មី" ឬ "ទើបមកដល់"។ ប្រើរូបច្បាស់ បង្ហាញទំហំ និងតម្លៃ។ វីដេអូសាកពាក់ល្អណាស់។ ផុសកម្រិត 1 មុន។']]},
+ fast:{en:[['What it means','Products customers are buying the most right now, across PH + 271.'],
+   ['How it is calculated','Sales speed = pieces sold in the last 30 days ÷ 30 (confirmed orders, incl. archived; rejected and refunded orders do not count). Needs at least "Stock at least" pieces left.'],
+   ['How levels work','All items that sold at least 1 are ranked from fastest to slowest. Only levels up to "Use levels up to" are used.'],
+   ['How staff should promote','Use social proof: "Best seller", "Customers love this". Show it on a child, show colours and sizes still available. Good for boosting.']],
+  km:[['អត្ថន័យ','ផលិតផលដែលអតិថិជនទិញច្រើនបំផុតឥឡូវនេះ នៅ PH + 271។'],
+   ['របៀបគណនា','ល្បឿនលក់ = ចំនួនលក់ក្នុង ៣០ ថ្ងៃ ÷ ៣០ (ការកុម្ម៉ង់ដែលបានបញ្ជាក់ រួមទាំងទុកក្នុងបណ្ណសារ មិនរាប់ការកុម្ម៉ង់បដិសេធ ឬសងប្រាក់)។ ត្រូវមានស្តុកនៅសល់យ៉ាងតិចតាមកំណត់។'],
+   ['កម្រិត','ទំនិញដែលលក់បានយ៉ាងតិច 1 ត្រូវរៀបពីលឿនបំផុតទៅយឺត។ ប្រើតែកម្រិតរហូតដល់លេខដែលកំណត់។'],
+   ['របៀបផ្សព្វផ្សាយ','ប្រើពាក្យ "លក់ដាច់បំផុត" "អតិថិជនចូលចិត្ត"។ បង្ហាញលើក្មេងពាក់ បង្ហាញពណ៌ និងទំហំដែលនៅសល់។ ល្អសម្រាប់បូស្ត។']]},
+ slow:{en:[['What it means','Products with a lot of stock that would take a long time to sell. Promote them before they get old.'],
+   ['How it is calculated','Days of stock left = stock ÷ sales per day. Items with no sales in 30 days come first. Needs at least "Stock at least" pieces and a stock age older than "Older than days" (same age clock as Promotion Due in the store app).'],
+   ['How levels work','Items with big stock are ranked from slowest (most days of stock) to fastest. Only levels up to "Use levels up to" are used.'],
+   ['How staff should promote','Use an offer: discount, bundle (buy 2), or free gift. Show the deal clearly in the first line and photo. Good for live sales.']],
+  km:[['អត្ថន័យ','ផលិតផលមានស្តុកច្រើន ដែលត្រូវការពេលយូរដើម្បីលក់អស់។ ផ្សព្វផ្សាយមុនពេលវាចាស់។'],
+   ['របៀបគណនា','ថ្ងៃស្តុកនៅសល់ = ស្តុក ÷ ចំនួនលក់ក្នុងមួយថ្ងៃ។ ទំនិញមិនបានលក់ ៣០ ថ្ងៃ មកមុនគេ។ ត្រូវមានស្តុកយ៉ាងតិចតាមកំណត់ ហើយអាយុស្តុកចាស់ជាង "ចាស់ជាង (ថ្ងៃ)" (ប្រើនាឡិកាដូច Promotion Due ក្នុងកម្មវិធីហាង)។'],
+   ['កម្រិត','ទំនិញស្តុកច្រើនត្រូវរៀបពីយឺតបំផុតទៅលឿន។ ប្រើតែកម្រិតរហូតដល់លេខដែលកំណត់។'],
+   ['របៀបផ្សព្វផ្សាយ','ប្រើការផ្តល់ជូន៖ បញ្ចុះតម្លៃ ទិញ 2 ឬកាដូ។ បង្ហាញការផ្តល់ជូនច្បាស់ក្នុងបន្ទាត់ដំបូង និងរូប។ ល្អសម្រាប់ឡាយវ៍។']]},
+ low:{en:[['What it means','Popular products with only a few pieces left.'],
+   ['How it is calculated','Total stock in PH + 271 is between 1 and "Stock at most", and the item is a good seller (inside the allowed sales levels).'],
+   ['How levels work','Uses the same sales-speed ranking as Fast moving. Level 1 = fastest sellers.'],
+   ['How staff should promote','Create urgency: "Almost sold out", "Only 2 left". Say which sizes remain. Post early in the day.']],
+  km:[['អត្ថន័យ','ផលិតផលពេញនិយមដែលនៅសល់តិច។'],
+   ['របៀបគណនា','ស្តុកសរុប PH + 271 ចន្លោះ 1 និង "ស្តុកច្រើនបំផុត" ហើយជាទំនិញលក់ដាច់ (ក្នុងកម្រិតដែលអនុញ្ញាត)។'],
+   ['កម្រិត','ប្រើការរៀបតាមល្បឿនលក់ដូច "លក់ដាច់លឿន"។ កម្រិត 1 = លក់លឿនបំផុត។'],
+   ['របៀបផ្សព្វផ្សាយ','បង្កើតភាពបន្ទាន់៖ "ជិតអស់ហើយ" "នៅសល់តែ 2"។ ប្រាប់ទំហំដែលនៅសល់។ ផុសពេលព្រឹក។']]},
+ restock:{en:[['What it means','Older products that sold out or ran low and just got genuine new stock.'],
+   ['How it is calculated','Uses the store app\'s restock date (lastRestockDate), set only by "New stock received" or a "New Stock" transfer - never by edits or corrections. The restock must be within "Within days", and the item must have existed before.'],
+   ['How levels work','Ranked by sales speed, so popular items that came back are suggested first.'],
+   ['How staff should promote','"Back in stock!" Tell people who missed it. Show all sizes now available. Good to reply in comments of the old post too.']],
+  km:[['អត្ថន័យ','ផលិតផលចាស់ដែលធ្លាប់អស់ ឬនៅតិច ហើយទើបទទួលស្តុកថ្មីពិតប្រាកដ។'],
+   ['របៀបគណនា','ប្រើថ្ងៃបំពេញស្តុក (lastRestockDate) ពីកម្មវិធីហាង ដែលកំណត់តែដោយ "New stock received" ឬការផ្ទេរ "New Stock" ប៉ុណ្ណោះ មិនមែនការកែ ឬកែតម្រូវទេ។ ត្រូវបំពេញក្នុង "ក្នុងរយៈ (ថ្ងៃ)" ហើយទំនិញធ្លាប់មានពីមុន។'],
+   ['កម្រិត','រៀបតាមល្បឿនលក់ ដូច្នេះទំនិញពេញនិយមដែលមកវិញ ត្រូវណែនាំមុន។'],
+   ['របៀបផ្សព្វផ្សាយ','"មានស្តុកវិញហើយ!" ប្រាប់អ្នកដែលខកខាន។ បង្ហាញទំហំទាំងអស់។ ល្អក្នុងការឆ្លើយក្នុងមតិនៃការផុសចាស់ផងដែរ។']]},
+ occasion:{en:[['What it means','Products for a special time you choose, like birthdays, weddings, Khmer New Year or school.'],
+   ['How it is calculated','Matches the words you type against the product name and category, only between "From date" and "To date", and only items in stock.'],
+   ['How levels work','Ranked by sales speed, so the best-selling occasion items come first.'],
+   ['How staff should promote','Tie the post to the event: "Ready for Khmer New Year", "Birthday outfit". Post 1-2 weeks before the date.']],
+  km:[['អត្ថន័យ','ផលិតផលសម្រាប់ពេលពិសេសដែលអ្នកជ្រើស ដូចជា ខួបកំណើត មង្គលការ ចូលឆ្នាំខ្មែរ ឬចូលរៀន។'],
+   ['របៀបគណនា','ផ្គូផ្គងពាក្យដែលអ្នកវាយ ជាមួយឈ្មោះ និងប្រភេទផលិតផល តែចន្លោះ "ពីថ្ងៃ" និង "ដល់ថ្ងៃ" ហើយមានស្តុកប៉ុណ្ណោះ។'],
+   ['កម្រិត','រៀបតាមល្បឿនលក់ ដូច្នេះទំនិញលក់ដាច់បំផុតមកមុន។'],
+   ['របៀបផ្សព្វផ្សាយ','ភ្ជាប់ការផុសនឹងព្រឹត្តិការណ៍៖ "ត្រៀមចូលឆ្នាំខ្មែរ" "សម្លៀកបំពាក់ខួបកំណើត"។ ផុស 1-2 សប្តាហ៍មុនថ្ងៃ។']]}};
+function guideHTML(k){var g=RULE_GUIDE[k];if(!g)return '';var a=g[LANG==='km'?'km':'en'];
+  return '<details class="rguide"><summary>'+L('Rule details')+'</summary>'+a.map(function(x){return '<div><b>'+esc(x[0])+'</b><p>'+esc(x[1])+'</p></div>'}).join('')+'</details>'}
+function itemRow(k,x){var p=x.p,off=!!(rules.excl[k]||{})[p.key],r=x.r;
+  return '<div class="ritem'+(off?' rx':'')+'"><label class="lsw" title="'+L('Use for marketing')+'"><input type="checkbox" data-rex="'+k+'|'+esc(p.key)+'"'+(off?'':' checked')+'></label>'+
+   (p.img?'<img src="'+esc(p.img)+'" alt="" loading="lazy">':'<div class="noimg"></div>')+
+   '<div class="rit"><div><span class="lvb lv'+x.lv+'">'+L('Level')+' '+x.lv+'</span> '+(r?'<b>'+L('top')+' '+r.pct+'%</b> <span class="mut">· '+L('rank')+' '+r.rank+' '+L('of')+' '+r.n+' '+L(r.of)+'</span>':'')+'</div>'+
+   '<div>'+esc(p.name)+'</div><div class="mut">'+esc(x.info)+' · '+L('stock')+' '+p.stock+' ('+Object.keys(p.by).map(function(s){return s+' '+p.by[s]}).join(', ')+') · '+L('sold 30d')+' '+p.sold+'</div></div></div>'}
+
+var openAll={};
 function renderRules(){var el=$('viewRules');if(!el)return;var R=analyse();
   el.innerHTML='<div class="card" style="margin-bottom:12px"><h2>'+L('How suggestions are picked')+'</h2><p class="mut">'+L('Rules are used from top to bottom. Each rule fills its number of items per day, then the next rule. Items are ranked into levels from PH + 271 data, and Level 1 is suggested first.')+'</p>'+
-   '<div class="f" style="max-width:520px;margin-top:8px"><label>'+L('Level 1 = top %')+'<input type="number" min="1" max="90" data-rg="l1" value="'+rules.l1+'"></label><label>'+L('Level 2 = next %')+'<input type="number" min="1" max="90" data-rg="l2" value="'+rules.l2+'"></label><label>'+L('Don\'t repeat within days')+'<input type="number" min="0" data-rg="noRepeat" value="'+rules.noRepeat+'"></label></div>'+
+   '<div class="f" style="max-width:520px;margin-top:8px"><label>'+L('Level 1 = top %')+'<input type="number" min="1" max="90" data-rg="l1" value="'+rules.l1+'"></label><label>'+L('Level 2 = next %')+'<input type="number" min="1" max="90" data-rg="l2" value="'+rules.l2+'"></label><label>'+L('Don\'t repeat within days')+'<input type="number" min="0" data-rg="noRepeat" value="'+rules.noRepeat+'"></label><label>'+L('Items to show per rule')+'<input type="number" min="1" data-rg="show" value="'+rules.show+'"></label></div>'+
    '<p class="mut" style="margin-top:6px">'+L('Total items suggested per day')+': <b>'+rules.order.reduce(function(a,k){return a+(rules.on[k]?+rules.picks[k]||0:0)},0)+'</b> · '+sugP.length+' '+L('products')+' · '+sugInfo.orders+' '+L('orders in 30 days')+'</p></div>'+
    rules.order.map(function(k,i){var d=RULE_DEF[k],m=R[k]||[],lv=[1,2,3].map(function(n){return m.filter(function(x){return x.lv===n}).length});
     return '<div class="card rule'+(rules.on[k]?'':' off')+'" style="margin-bottom:10px"><h2><span><span class="rnum">'+(i+1)+'</span> <span class="why" style="background:'+d.c+'">'+L(d.n)+'</span></span>'+
@@ -798,15 +860,18 @@ function renderRules(){var el=$('viewRules');if(!el)return;var R=analyse();
      '<label class="lsw"><input type="checkbox" data-ron="'+k+'"'+(rules.on[k]?' checked':'')+'>'+L(rules.on[k]?'On':'Off')+'</label></span></h2>'+
      '<p class="mut" style="margin-bottom:8px">'+L(d.m)+'</p><div class="f"><label>'+L('Items per day')+'<input type="number" min="0" data-rpk="'+k+'" value="'+rules.picks[k]+'"></label>'+
      Object.keys(d.p).map(function(f){var v=rules.p[k][f],ty=f==='words'?'text':(f==='from'||f==='to')?'date':'number';return '<label'+(f==='words'?' style="grid-column:span 2"':'')+'>'+L(RULE_P[f])+'<input type="'+ty+'" data-rp="'+k+'|'+f+'" value="'+esc(v)+'"'+(ty==='number'?' min="0"':'')+(f==='words'?' placeholder="birthday, wedding"':'')+'></label>'}).join('')+'</div>'+
-     '<p class="mut" style="margin-top:8px">'+L('Matching now')+': <b>'+m.length+'</b> · '+L('Level')+' 1: '+lv[0]+' · '+L('Level')+' 2: '+lv[1]+' · '+L('Level')+' 3: '+lv[2]+(m.length?' · '+L('Top')+': '+m.slice(0,3).map(function(x){return esc(x.p.name)}).join(', '):'')+'</p></div>'}).join('')+
+     guideHTML(k)+'<p class="mut" style="margin-top:8px">'+L('Matching now')+': <b>'+m.length+'</b> · '+L('Level')+' 1: '+lv[0]+' · '+L('Level')+' 2: '+lv[1]+' · '+L('Level')+' 3: '+lv[2]+' · '+L('turned off')+': '+m.filter(function(x){return (rules.excl[k]||{})[x.p.key]}).length+'</p>'+
+     (m.length?'<div class="rlist">'+m.slice(0,openAll[k]?m.length:rules.show).map(function(x){return itemRow(k,x)}).join('')+'</div>'+(m.length>rules.show?'<button class="rmore" data-rall="'+k+'">'+(openAll[k]?L('Show top')+' '+rules.show:L('Show all')+' ('+m.length+')')+'</button>':''):'')+'</div>'}).join('')+
    '<div style="display:flex;gap:8px"><button id="rReset">'+L('Reset to default')+'</button><button id="rReload">'+L('Reload store data')+'</button></div>'}
 $('viewRules').addEventListener('change',function(e){var t=e.target,a;
   if((a=t.getAttribute('data-rg'))){rules[a]=Math.max(0,+t.value||0)}
   else if((a=t.getAttribute('data-rpk'))){rules.picks[a]=Math.max(0,+t.value||0)}
   else if((a=t.getAttribute('data-ron'))){rules.on[a]=t.checked}
+  else if((a=t.getAttribute('data-rex'))){var q=a.split('|'),rk0=q[0],key=q.slice(1).join('|');rules.excl[rk0]=rules.excl[rk0]||{};if(t.checked)delete rules.excl[rk0][key];else rules.excl[rk0][key]=true}
   else if((a=t.getAttribute('data-rp'))){var q=a.split('|'),num=typeof RULE_DEF[q[0]].p[q[1]]==='number';rules.p[q[0]][q[1]]=num?Math.max(0,+t.value||0):t.value.trim()}
   else return;saveRules()});
-$('viewRules').addEventListener('click',function(e){var a=e.target.getAttribute&&e.target.getAttribute('data-rmv');
+$('viewRules').addEventListener('click',function(e){var ra=e.target.getAttribute&&e.target.getAttribute('data-rall');if(ra){openAll[ra]=!openAll[ra];renderRules();return}
+  var a=e.target.getAttribute&&e.target.getAttribute('data-rmv');
   if(a){var q=a.split('|'),i=rules.order.indexOf(q[0]),j=i+(+q[1]);if(j<0||j>=rules.order.length)return;rules.order.splice(i,1);rules.order.splice(j,0,q[0]);saveRules();return}
   if(e.target.id==='rReset'&&confirm(L('Reset all rules to default?'))){rules=defRules();saveRules()}
   if(e.target.id==='rReload')loadSugData()});
@@ -966,6 +1031,7 @@ KM['Show items']='បង្ហាញទំនិញ';
 KM['Rules']='ច្បាប់';KM['New arrival']='ទំនិញមកថ្មី';KM['Fast moving']='លក់ដាច់លឿន';KM['Slow stock']='ស្តុកលក់យឺត';KM['Low stock - last chance']='ស្តុកតិច – ឱកាសចុងក្រោយ';KM['Restocked']='មកដល់ម្តងទៀត';KM['Occasion / season']='ឱកាស / រដូវ';KM['Level']='កម្រិត';KM['Stores']='ហាង';KM['products']='ផលិតផល';KM['orders in 30 days']='ការកុម្ម៉ង់ក្នុង ៣០ ថ្ងៃ';KM['Loading store data…']='កំពុងទាញទិន្នន័យហាង…';KM['sold / day']='លក់ / ថ្ងៃ';KM['no sales in 30 days']='មិនបានលក់ ៣០ ថ្ងៃ';KM['days of stock left']='ថ្ងៃស្តុកនៅសល់';KM['only']='នៅសល់តែ';KM['back in stock']='មានស្តុកវិញ';KM['How suggestions are picked']='របៀបជ្រើសការណែនាំ';KM['Rules are used from top to bottom. Each rule fills its number of items per day, then the next rule. Items are ranked into levels from PH + 271 data, and Level 1 is suggested first.']='ច្បាប់ត្រូវប្រើពីលើចុះក្រោម។ ច្បាប់នីមួយៗជ្រើសចំនួនទំនិញក្នុងមួយថ្ងៃ បន្ទាប់មកច្បាប់បន្ទាប់។ ទំនិញត្រូវចាត់កម្រិតពីទិន្នន័យ PH + 271 ហើយកម្រិត 1 ត្រូវណែនាំមុន។';KM['Level 1 = top %']='កម្រិត 1 = កំពូល %';KM['Level 2 = next %']='កម្រិត 2 = បន្ទាប់ %';KM["Don't repeat within days"]='មិនផុសម្តងទៀតក្នុងរយៈ (ថ្ងៃ)';KM['Total items suggested per day']='ចំនួនទំនិញណែនាំសរុបក្នុងមួយថ្ងៃ';KM['Higher priority']='អាទិភាពខ្ពស់ជាង';KM['Lower priority']='អាទិភាពទាបជាង';KM['On']='បើក';KM['Items per day']='ទំនិញក្នុងមួយថ្ងៃ';KM['Matching now']='ត្រូវលក្ខខណ្ឌឥឡូវ';KM['Top']='កំពូល';KM['Reset to default']='កំណត់ឡើងវិញ';KM['Reload store data']='ទាញទិន្នន័យហាងឡើងវិញ';KM['Reset all rules to default?']='កំណត់ច្បាប់ទាំងអស់ឡើងវិញ?';KM['Within days']='ក្នុងរយៈ (ថ្ងៃ)';KM['Stock at least']='ស្តុកយ៉ាងតិច';KM['Stock at most']='ស្តុកច្រើនបំផុត';KM['Use levels up to (1-3)']='ប្រើកម្រិតរហូតដល់ (1-3)';KM['Older than days']='ចាស់ជាង (ថ្ងៃ)';KM['Category / name words (comma)']='ពាក្យប្រភេទ / ឈ្មោះ (ក្បៀស)';KM['From date']='ពីថ្ងៃ';KM['To date']='ដល់ថ្ងៃ';KM['Came in within the last few days. Tell customers something new is here.']='ទំនិញទើបមកដល់។ ប្រាប់អតិថិជនថាមានទំនិញថ្មី។';KM['Sells fastest (per day, PH + 271). Push what customers already love.']='លក់លឿនបំផុត (ក្នុងមួយថ្ងៃ PH + 271)។ ផ្សព្វផ្សាយអ្វីដែលអតិថិជនចូលចិត្ត។';KM['Lots of stock that would take the longest to sell. Promote it before it gets old.']='ស្តុកច្រើនដែលត្រូវការពេលយូរដើម្បីលក់អស់។ ធ្វើប្រូម៉ូសិនមុនពេលចាស់។';KM['Popular items with only a few left. Use urgency: almost sold out.']='ទំនិញពេញនិយមដែលនៅសល់តិច។ ប្រើភាពបន្ទាន់៖ ជិតអស់ហើយ។';KM['Sold out before and came back. Tell the people who missed it.']='ធ្លាប់អស់ ហើយមកដល់វិញ។ ប្រាប់អ្នកដែលខកខាន។';KM['Items from categories you choose (e.g. birthday, wedding), during the dates you set.']='ទំនិញពីប្រភេទដែលអ្នកជ្រើស (ឧ. ខួបកំណើត មង្គលការ) ក្នុងកាលបរិច្ឆេទដែលអ្នកកំណត់។';
 KM['stock age']='អាយុស្តុក';KM['unknown']='មិនដឹង';KM['days']='ថ្ងៃ';
 KM['Only the master account can change rules']='មានតែគណនីមេប៉ុណ្ណោះដែលអាចប្តូរច្បាប់';
+KM['Rule details']='ព័ត៌មានលម្អិតនៃច្បាប់';KM['Use for marketing']='ប្រើសម្រាប់ទីផ្សារ';KM['top']='កំពូល';KM['rank']='លំដាប់';KM['of']='ក្នុងចំណោម';KM['items with an arrival date']='ទំនិញមានថ្ងៃមកដល់';KM['items that sold']='ទំនិញដែលបានលក់';KM['items with big stock']='ទំនិញស្តុកច្រើន';KM['turned off']='បានបិទ';KM['Show top']='បង្ហាញកំពូល';KM['Show all']='បង្ហាញទាំងអស់';KM['Items to show per rule']='ចំនួនទំនិញបង្ហាញក្នុងមួយច្បាប់';
 var WORDS={spend:'ចំណាយ',reach:'ការទៅដល់',views:'ចំនួនមើល',clicks:'ចុច',likes:'ចូលចិត្ត',msgs:'សារ',orders:'កុម្ម៉ង់'};
 var SRCH={'Search the product':'ស្វែងរកផលិតផល','Search products (add as many as you need)':'ស្វែងរកផលិតផល (បន្ថែមបានច្រើន)'};
 var NW='(?:spend|reach|views|clicks|likes|msgs|orders)',NUM='\\$?[\\d.,k]+';
