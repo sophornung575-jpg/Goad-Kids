@@ -104,6 +104,11 @@
         function staffEmail(role, storeId) {
             return (String(role) + '.' + String(storeId || 'global')).toLowerCase().replace(/[^a-z0-9.-]/g, '-') + '@' + STAFF_DOMAIN;
         }
+        // Margin % is only for the master account (Super Admin = super.global).
+        function isMasterUser() {
+            var u = auth && auth.currentUser;
+            return !!(u && u.email && u.email.toLowerCase() === staffEmail('super', 'global'));
+        }
         function isStaffUser() {
             var u = auth && auth.currentUser;
             return !!(u && u.email && u.email.toLowerCase().slice(-(STAFF_DOMAIN.length + 1)) === '@' + STAFF_DOMAIN);
@@ -8781,7 +8786,7 @@ function sendToTelegram(order, callback) {
                 '<td><span class="product-category ' + getCategoryDisplay(p.category) + '" style="font-size:0.65rem;padding:0.1rem 0.4rem">' + p.category + '</span></td>' +
                 '<td style="font-weight:600;font-size:0.78rem">' + priceHtml(p) +
                 (p.costPrice != null ? '<br><span style="font-weight:400;font-size:0.68rem;color:var(--gray)">Cost $' + Number(p.costPrice).toFixed(2) + '</span>' +
-                    '<br><span style="font-weight:600;font-size:0.68rem;color:' + ((salePriceOf(p) - p.costPrice) >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + (salePriceOf(p) > 0 ? (((salePriceOf(p) - p.costPrice) / salePriceOf(p)) * 100).toFixed(0) : '0') + '% margin</span>' : '') +
+                    (isMasterUser() ? '<br><span style="font-weight:600;font-size:0.68rem;color:' + ((salePriceOf(p) - p.costPrice) >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + (salePriceOf(p) > 0 ? (((salePriceOf(p) - p.costPrice) / salePriceOf(p)) * 100).toFixed(0) : '0') + '% margin</span>' : '') : '') +
                 '</td>' +
                 '<td>' + sizeHtml + '</td>' +
                 '<td><strong style="color:' + stockColor + ';font-size:0.78rem">' + totalStock + '</strong></td>' +
@@ -9992,10 +9997,10 @@ function sendToTelegram(order, callback) {
 
         var elC = document.getElementById('reportCOGS'); if (elC) elC.textContent = '$' + cogs.toFixed(2);
         var elG = document.getElementById('reportGrossProfit'); if (elG) elG.textContent = '$' + grossProfit.toFixed(2);
-        var elGM = document.getElementById('reportGrossMargin'); if (elGM) elGM.textContent = revenue > 0 ? '(' + ((grossProfit/revenue)*100).toFixed(1) + '%)' : '';
+        var elGM = document.getElementById('reportGrossMargin'); if (elGM) elGM.textContent = (revenue > 0 && isMasterUser()) ? '(' + ((grossProfit/revenue)*100).toFixed(1) + '%)' : '';
         var npEl = document.getElementById('reportNetProfit');
         if (npEl) { npEl.textContent = '$' + netProfit.toFixed(2); npEl.style.color = netProfit >= 0 ? '#667eea' : 'var(--danger)'; }
-        var elNM = document.getElementById('reportNetMargin'); if (elNM) elNM.textContent = revenue > 0 ? '(' + ((netProfit/revenue)*100).toFixed(1) + '%)' : '';
+        var elNM = document.getElementById('reportNetMargin'); if (elNM) elNM.textContent = (revenue > 0 && isMasterUser()) ? '(' + ((netProfit/revenue)*100).toFixed(1) + '%)' : '';
 
         if (!tbody) return;
         if (!days.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--gray);padding:1rem">No data for this period</td></tr>'; return; }
@@ -11691,7 +11696,7 @@ function sendToTelegram(order, callback) {
             var ts = getTotalStock(p);
             var hasCost = p.costPrice != null && p.costPrice !== '';
             var costStr = hasCost ? Number(p.costPrice).toFixed(2) : '';
-            var marginStr = (hasCost && p.price > 0) ? (((p.price - p.costPrice) / p.price) * 100).toFixed(1) : '';
+            var marginStr = (hasCost && p.price > 0 && isMasterUser()) ? (((p.price - p.costPrice) / p.price) * 100).toFixed(1) : '';
             var stockValueStr = hasCost ? (Number(p.costPrice) * ts).toFixed(2) : '';
             if (p.sizes && p.sizes.length > 0) { for (var j = 0; j < p.sizes.length; j++) { csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), costStr, marginStr, ts, stockValueStr, escCSV(p.sizes[j].name), p.sizes[j].qty, escCSV(img)].join(',') + '\n'; } }
             else { csv += [escCSV(p.id), escCSV(p.name), escCSV(p.category), p.price.toFixed(2), costStr, marginStr, ts, stockValueStr, 'No sizes', 0, escCSV(img)].join(',') + '\n'; }
