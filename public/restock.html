@@ -101,6 +101,11 @@
   .rcv-thumb img{ width:100%; height:100%; object-fit:cover; }
   .rcv-colour{ font-size:0.7rem; font-weight:600; color:var(--gray-dark); background:var(--light); padding:1px 7px; border-radius:999px; margin-left:4px; }
   .rcv-name{ font-size:0.85rem; font-weight:600; }
+  .mt-bar{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:8px 0 6px; padding:8px 10px; border:1px dashed var(--info); border-radius:8px; font-size:0.78rem; }
+  .mt-bar b{ margin-right:4px; } .mt-bar .btn{ padding:4px 10px; font-size:0.74rem; } .mt-bar label{ display:flex; align-items:center; gap:5px; cursor:pointer; margin-right:6px; }
+  .mt-chk{ width:18px; height:18px; flex:none; accent-color:var(--primary); cursor:pointer; }
+  .mt-tag{ font-size:0.66rem; font-weight:700; padding:2px 8px; border-radius:999px; color:#fff; margin-left:6px; white-space:nowrap; }
+  .mt-birthday{ background:#d0567a; } .mt-wedding{ background:#7a5ea8; } .mt-both{ background:#2b8a9a; } .mt-none{ background:none; color:var(--gray-dark); border:1px dashed var(--gray-dark); }
   .rcv-pill{ font-size:0.68rem; font-weight:700; padding:3px 9px; border-radius:999px; background:var(--light); color:var(--gray-dark); white-space:nowrap; }
   .rcv-pill.part{ background:#fefcbf; color:#975a16; }
   .rcv-body{ padding:6px 0 4px 54px; }
@@ -1248,6 +1253,7 @@ function initFirestoreListeners(){
     renderRestock();
   });
 
+  mtListen();
   db.collection('restockTool_history').orderBy('savedAt', 'desc').onSnapshot(snap => {
     historyCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderHistory();
@@ -2822,6 +2828,49 @@ async function incomingQueue(entries, orderKey){
   return { queued, pieces, already };
 }
 
+// ---------- Marketing type (Birthday / Wedding / Both) ----------
+// Saved only in marketing_settings/productTypes — NOT on the product — so the
+// store app never shows it. Only the Marketing tool reads it.
+const MT_LABEL = { birthday: '🎂 Birthday', wedding: '💐 Wedding', both: '✨ Both' };
+let mtTypes = {};
+const mtSel = new Set();   // ticked waiting items: "bid|histId"
+function mtListen(){
+  if(!db || mtListen.on) return; mtListen.on = true;
+  db.collection('marketing_settings').doc('productTypes').onSnapshot(d => {
+    mtTypes = (d.exists && d.data().types) || {}; try { renderIncoming(); } catch(e){}
+  }, err => console.warn('Marketing type load failed:', err.message));
+}
+function mtOf(x){ const t = mtTypes['d:' + x.productId] || mtTypes['n:' + String(x.productName || '').trim().toLowerCase()]; return t || ''; }
+function mtTagHtml(x){ const t = mtOf(x); return t ? `<span class="mt-tag mt-${t}">${MT_LABEL[t]}</span>` : `<span class="mt-tag mt-none">No marketing type</span>`; }
+function mtTick(el, ev){ ev.stopPropagation(); const k = el.dataset.k; if(el.checked) mtSel.add(k); else mtSel.delete(k); mtSyncAll(el.closest('.rcv-order')); }
+function mtSyncAll(order){ if(!order) return; const boxes = [...order.querySelectorAll('.mt-chk[data-k]')]; const all = order.querySelector('.mt-all');
+  const n = boxes.filter(b => b.checked).length; if(all){ all.checked = n && n === boxes.length; all.indeterminate = n > 0 && n < boxes.length; }
+  const c = order.querySelector('.mt-count'); if(c) c.textContent = n ? n + ' selected' : 'none selected'; }
+function mtAll(el){ const order = el.closest('.rcv-order'); order.querySelectorAll('.mt-chk[data-k]').forEach(b => { b.checked = el.checked; if(el.checked) mtSel.add(b.dataset.k); else mtSel.delete(b.dataset.k); }); mtSyncAll(order); }
+async function mtApply(btn, type){
+  const order = btn.closest('.rcv-order'), bid = order.dataset.bid;
+  const g = incomingGroups().find(x => x.batchId === bid); if(!g) return;
+  const items = g.items.filter(x => mtSel.has(bid + '|' + x.histId));
+  if(!items.length){ alert('Tick the items first (or use Select all).'); return; }
+  btn.disabled = true;
+  try{
+    const ref = db.collection('stores').doc(STORE_MAIN_ID).collection('products');
+    const docs = await Promise.all(items.map(x => ref.doc(x.productId).get().catch(() => null)));
+    const types = {}, del = firebase.firestore.FieldValue.delete();
+    items.forEach((x, i) => {
+      const pd = docs[i] && docs[i].exists ? docs[i].data() : {};
+      const keys = ['d:' + x.productId, 'n:' + String(pd.name || x.productName || '').trim().toLowerCase()];
+      if(pd.id != null && pd.id !== '') keys.push('i:' + String(pd.id));
+      keys.forEach(k => { types[k] = type || del; });
+    });
+    await db.collection('marketing_settings').doc('productTypes').set({ types, updatedAt: Date.now() }, { merge: true });
+    items.forEach(x => mtSel.delete(bid + '|' + x.histId));
+    if(typeof showToast === 'function') showToast(items.length + ' item(s) set to ' + (type ? MT_LABEL[type] : 'no type'), 'success');
+    renderIncoming(true);
+  }catch(e){ alert('Could not save the marketing type: ' + e.message); }
+  finally{ btn.disabled = false; }
+}
+
 // ---------- Receiving (partial / reject / not received) ----------
 // Each waiting item keeps per-size lines: qty (ordered), got (good, added to
 // stock), rej (rejected — damaged / wrong, never added to stock) and miss
@@ -2888,9 +2937,10 @@ function rcvItemHtml(bid, x){
   const notes = (x.notes || []).map(n => `<div class="rcv-prev-note">📝 ${escapeHtml(n)}</div>`).join('');
   return `<details class="rcv-item" data-bid="${escapeHtml(bid)}" data-hid="${escapeHtml(x.histId)}" data-k="${escapeHtml(openKey)}" ontoggle="rcvToggle(this)"${rcvOpen.has(openKey) ? ' open' : ''}>
     <summary>
+      <input type="checkbox" class="mt-chk" data-k="${escapeHtml(bid + '|' + x.histId)}"${mtSel.has(bid + '|' + x.histId) ? ' checked' : ''} onclick="mtTick(this, event)" title="Select for marketing type">
       <div class="rcv-thumb">${img ? `<img src="${escapeHtml(img)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>
       <div style="flex:1;min-width:0">
-        <div class="rcv-name">${escapeHtml(x.productName || '')}${x.colour ? ` <span class="rcv-colour" title="${escapeHtml(x.colour)}">${escapeHtml(zhLabel(x.colour))}</span>` : ''}</div>
+        <div class="rcv-name">${escapeHtml(x.productName || '')}${x.colour ? ` <span class="rcv-colour" title="${escapeHtml(x.colour)}">${escapeHtml(zhLabel(x.colour))}</span>` : ''}${mtTagHtml(x)}</div>
         <div class="rcv-stats">${lines.length} size${lines.length === 1 ? '' : 's'} · ${rcvSum(lines, 'qty')} ordered${done ? ' · ' + rcvStats(lines) : ''}</div>
       </div>
       <span class="rcv-pill ${done ? 'part' : ''}">${done ? 'Partly done' : 'Waiting'} · ${left}</span>
@@ -2950,10 +3000,17 @@ function renderIncoming(force){
           <button class="btn btn-outline btn-small" type="button" onclick="rcvOrder(this,'close')"><i class="fas fa-flag-checkered"></i> Close order</button>
         </div>
       </div>
+      <div class="mt-bar"><label><input type="checkbox" class="mt-chk mt-all" onclick="mtAll(this)"> Select all</label><span class="mt-count">none selected</span>
+        <span style="flex:1"></span><b>Marketing type:</b>
+        <button class="btn btn-outline btn-small" type="button" onclick="mtApply(this,'birthday')">🎂 Birthday</button>
+        <button class="btn btn-outline btn-small" type="button" onclick="mtApply(this,'wedding')">💐 Wedding</button>
+        <button class="btn btn-outline btn-small" type="button" onclick="mtApply(this,'both')">✨ Both</button>
+        <button class="btn btn-outline btn-small" type="button" onclick="mtApply(this,'')" title="Remove the marketing type">Clear</button></div>
       <div class="rcv-hint">Tap an item to check it. Good ✔ is added to stock, Reject ✖ is recorded but not added. "Receive all" uses the numbers shown on every item (full quantity unless you changed them).</div>
       ${g.items.map(x => rcvItemHtml(g.batchId, x)).join('')}
     </div>`;
   }).join('');
+  wrap.querySelectorAll('.rcv-order').forEach(mtSyncAll);
   renderReceived();
 }
 

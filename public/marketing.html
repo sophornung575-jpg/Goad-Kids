@@ -95,6 +95,7 @@ body:not(.locked) #gate{display:none}body.locked .wrap{display:none}
 .rguide{border:1px solid var(--bd);border-radius:8px;padding:0 10px;margin:6px 0;background:var(--bg)}.rguide summary{cursor:pointer;padding:8px 0;font-weight:600;font-size:13px;color:#2f7d62}.rguide div{margin:0 0 8px}.rguide b{font-size:12.5px}.rguide p{margin:2px 0 0;font-size:12.5px;line-height:1.5}
 .rlist{display:flex;flex-direction:column;gap:6px;margin-top:8px}.ritem{display:flex;gap:8px;align-items:center;border:1px solid var(--bd);border-radius:8px;padding:6px 8px;font-size:12.5px}.ritem img,.ritem .noimg{width:44px;height:44px;border-radius:6px;object-fit:cover;background:var(--bd);flex:none}
 .ritem .rit{flex:1;min-width:0}.ritem .mut{font-size:11.5px}.ritem.rx{opacity:.45}.ritem.rx .rit>div:nth-child(2){text-decoration:line-through}.rmore{margin-top:6px;font-size:12px}
+.mt-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0;padding:8px;border:1px dashed var(--bd);border-radius:8px;font-size:12.5px}.mt-bar label{display:flex;gap:5px;align-items:center}.mt-bar button{padding:4px 10px;font-size:12px}.mtc{width:18px;height:18px;flex:none;accent-color:#2f7d62}
 .offmsg{padding:12px;color:var(--mut);font-size:13px}
 </style>
 </head>
@@ -708,13 +709,14 @@ var RULE_DEF={
  slow:{n:'Slow stock',c:'#b98a3a',m:'Lots of stock that would take the longest to sell. Promote it before it gets old.',p:{maxLevel:2,minStock:10,minAge:30}},
  low:{n:'Low stock - last chance',c:'#b0524f',m:'Popular items with only a few left. Use urgency: almost sold out.',p:{maxStock:3,maxLevel:2}},
  restock:{n:'Restocked',c:'#7a5ea8',m:'Sold out before and came back. Tell the people who missed it.',p:{days:14,minStock:2}},
- occasion:{n:'Occasion / season',c:'#2b8a9a',m:'Items from categories you choose (e.g. birthday, wedding), during the dates you set.',p:{words:'',from:'',to:''}}};
-var RULE_P={days:'Within days',minStock:'Stock at least',maxStock:'Stock at most',maxLevel:'Use levels up to (1-3)',minAge:'Older than days',words:'Category / name words (comma)',from:'From date',to:'To date'};
+ evBirthday:{n:'Event: Birthday party',c:'#d0567a',m:'Items tagged Birthday or Both, during the birthday dates you set (same every year).',p:{from:'01-01',to:'12-31',minStock:1}},
+ evWedding:{n:'Event: Wedding party',c:'#7a5ea8',m:'Items tagged Wedding or Both, during the wedding season you set (same every year).',p:{from:'11-01',to:'02-28',minStock:1}}};
+var RULE_P={days:'Within days',minStock:'Stock at least',maxStock:'Stock at most',maxLevel:'Use levels up to (1-3)',minAge:'Older than days',words:'Category / name words (comma)',from:'From (MM-DD, every year)',to:'To (MM-DD, every year)'};
 var rules=ld('goatMktRules',null);
-function defRules(){return{excl:{},show:5,order:['newArrival','fast','low','restock','occasion','slow'],l1:10,l2:20,noRepeat:3,
-  on:{newArrival:true,fast:true,slow:true,low:true,restock:true,occasion:false},picks:{newArrival:2,fast:2,slow:1,low:1,restock:1,occasion:1},
+function defRules(){return{excl:{},show:5,order:['newArrival','evWedding','evBirthday','fast','low','restock','slow'],l1:10,l2:20,noRepeat:3,
+  on:{newArrival:true,fast:true,slow:true,low:true,restock:true,evBirthday:true,evWedding:true},picks:{newArrival:2,fast:2,slow:1,low:1,restock:1,evBirthday:1,evWedding:1},
   p:JSON.parse(JSON.stringify(Object.keys(RULE_DEF).reduce(function(o,k){o[k]=RULE_DEF[k].p;return o},{})))}}
-function fixRules(){var d=defRules();if(rules&&!rules.excl)rules.excl={};if(!rules||!rules.order)rules=d;Object.keys(d).forEach(function(k){if(rules[k]===undefined)rules[k]=d[k]});
+function fixRules(){var d=defRules();if(!rules||!rules.order)rules=d;if(!rules.excl)rules.excl={};rules.order=rules.order.filter(function(k){return RULE_DEF[k]});Object.keys(d).forEach(function(k){if(rules[k]===undefined)rules[k]=d[k]});
   Object.keys(RULE_DEF).forEach(function(k){if(rules.order.indexOf(k)<0)rules.order.push(k);rules.p[k]=Object.assign({},RULE_DEF[k].p,rules.p[k]||{});
     if(rules.on[k]===undefined)rules.on[k]=d.on[k];if(rules.picks[k]===undefined)rules.picks[k]=d.picks[k]})}
 fixRules();
@@ -725,6 +727,11 @@ function onRules(d){if(!d.exists)return;rules=d.data();fixRules();sv('goatMktRul
 function rulesTyping(){var a=document.activeElement;return !!(a&&a.closest&&a.closest('#viewRules')&&/input|select/i.test(a.tagName))}
 
 var sugP=ld('goatSugProducts',[]),sugInfo={orders:0,stores:[],err:''},zeroSeen={};
+var mtTypes=ld('goatMtTypes',{});
+function mtOf(p){return mtTypes['i:'+p.pid]||mtTypes['n:'+String(p.name||'').trim().toLowerCase()]||''}
+function onMtTypes(d){mtTypes=(d.exists&&d.data().types)||{};sv('goatMtTypes',mtTypes);renderSuggest();if($('viewRules').style.display!=='none'&&!rulesTyping())renderRules()}
+function mmdd(v){v=String(v||'').trim();return /^\d\d-\d\d$/.test(v)?v:''}
+function inSeason(f,t){f=mmdd(f);t=mmdd(t);if(!f||!t)return false;var n=new Date(),c=('0'+(n.getMonth()+1)).slice(-2)+'-'+('0'+n.getDate()).slice(-2);return f<=t?(c>=f&&c<=t):(c>=f||c<=t)}
 function oDate(o){return toMs(o.createdAt||o.date||o.created||o.orderDate||o.timestamp||o.time)}
 function pkey(x){var id=x.id!=null&&x.id!==''?String(x.id):'';return id?'i:'+id:'n:'+String(x.name||'').trim().toLowerCase()}
 async function loadSugData(){
@@ -769,8 +776,10 @@ function analyse(){var now=Date.now(),P=sugP.map(function(p){var sp=p.sold/30;re
   R.slow=P.filter(function(p){var q=rules.p.slow;return lvSlow[p.key]&&lvSlow[p.key]<=q.maxLevel&&(p.age==null||p.age>=q.minAge)}).map(function(p){return{p:p,lv:lvSlow[p.key],sc:p.cover===Infinity?1e9+p.stock:p.cover,info:(p.cover===Infinity?L('no sales in 30 days'):Math.round(p.cover)+' '+L('days of stock left'))+' · '+L('stock age')+' '+(p.age==null?L('unknown'):Math.round(p.age)+' '+L('days')),r:rk(lvSlow,p.key,'items with big stock')}});
   R.low=P.filter(function(p){var q=rules.p.low;return p.stock>0&&p.stock<=q.maxStock&&lvFast[p.key]&&lvFast[p.key]<=q.maxLevel}).map(function(p){return{p:p,lv:lvFast[p.key],sc:p.speed,info:L('only')+' '+p.stock+' '+L('left'),r:rk(lvFast,p.key,'items that sold')}});
   R.restock=P.filter(function(p){var q=rules.p.restock,z=zeroSeen[p.key],lim=now-q.days*864e5;return p.stock>=q.minStock&&((z&&Date.parse(z)>=lim)||(p.restockAt&&p.restockAt>=lim&&p.firstAdded&&p.firstAdded<p.restockAt-864e5))}).map(function(p){return{p:p,lv:lvFast[p.key]||3,sc:p.speed,info:L('back in stock')+(p.restockAt?' '+Math.round((now-p.restockAt)/864e5)+' '+L('days ago'):''),r:rk(lvFast,p.key,'items that sold')}});
-  var oq=rules.p.occasion,words=String(oq.words||'').toLowerCase().split(',').map(function(w){return w.trim()}).filter(Boolean),td=iso(new Date()),inDate=(!oq.from||td>=oq.from)&&(!oq.to||td<=oq.to);
-  R.occasion=!words.length||!inDate?[]:P.filter(function(p){var t=(p.name+' '+p.category).toLowerCase();return p.stock>0&&words.some(function(w){return t.indexOf(w)>-1})}).map(function(p){return{p:p,lv:lvFast[p.key]||3,sc:p.speed,info:p.category||'',r:rk(lvFast,p.key,'items that sold')}});
+  ['evBirthday','evWedding'].forEach(function(k){var q=rules.p[k],want=k==='evBirthday'?'birthday':'wedding';
+    var tagged=P.filter(function(p){var t=mtOf(p);return t===want||t==='both'}),lvE=levelize(tagged,function(p){return p.speed+p.stock/1e4});
+    R[k]=!inSeason(q.from,q.to)?[]:tagged.filter(function(p){return p.stock>=(+q.minStock||1)}).map(function(p){var t=mtOf(p);
+      return{p:p,lv:lvE[p.key]||3,sc:p.speed,info:(t==='both'?L('Both'):L(want==='birthday'?'Birthday':'Wedding'))+' · '+(Math.round(p.speed*10)/10)+' '+L('sold / day'),r:rk(lvE,p.key,'tagged items')}})});
   Object.keys(R).forEach(function(k){R[k].sort(function(a,b){return a.lv-b.lv||b.sc-a.sc})});return R}
 function usedToday(pid){var u=false;TASKS.forEach(function(t){rowsOf(tDay,t.id).forEach(function(r){(r.products||[]).forEach(function(p){if(p.id===pid)u=true})})});return u}
 function recentlyPosted(pid,nDays){if(!nDays)return false;var from=iso(new Date(Date.now()-nDays*864e5)),hit=false;Object.keys(posts).forEach(function(d){if(d<from||d>=tDay)return;TASKS.forEach(function(t){(posts[d][t.id]||[]).forEach(function(r){if(r.link&&(r.products||[]).some(function(p){return p.id===pid}))hit=true})})});return hit}
@@ -833,7 +842,24 @@ var RULE_GUIDE={
    ['របៀបគណនា','ប្រើថ្ងៃបំពេញស្តុក (lastRestockDate) ពីកម្មវិធីហាង ដែលកំណត់តែដោយ "New stock received" ឬការផ្ទេរ "New Stock" ប៉ុណ្ណោះ មិនមែនការកែ ឬកែតម្រូវទេ។ ត្រូវបំពេញក្នុង "ក្នុងរយៈ (ថ្ងៃ)" ហើយទំនិញធ្លាប់មានពីមុន។'],
    ['កម្រិត','រៀបតាមល្បឿនលក់ ដូច្នេះទំនិញពេញនិយមដែលមកវិញ ត្រូវណែនាំមុន។'],
    ['របៀបផ្សព្វផ្សាយ','"មានស្តុកវិញហើយ!" ប្រាប់អ្នកដែលខកខាន។ បង្ហាញទំហំទាំងអស់។ ល្អក្នុងការឆ្លើយក្នុងមតិនៃការផុសចាស់ផងដែរ។']]},
- occasion:{en:[['What it means','Products for a special time you choose, like birthdays, weddings, Khmer New Year or school.'],
+
+ evBirthday:{en:[['What it means','Outfits for birthday parties. Uses the marketing type chosen at receiving: items tagged Birthday or Both.'],
+   ['How it is calculated','Only works between the From and To dates, every year (MM-DD). Birthdays happen all year, so the default is 01-01 to 12-31. Items need at least "Stock at least" pieces in PH + 271.'],
+   ['How levels work','Tagged items are ranked by sales speed. Level 1 = the best-selling birthday outfits.'],
+   ['How staff should promote','1. Film 15 seconds of the outfit with party props (balloons, cake). 2. Hook: "Her birthday is coming - is her outfit ready?" 3. Show price, sizes and a close-up. 4. "Message us to reserve her size."']],
+  km:[['អត្ថន័យ','សម្លៀកបំពាក់សម្រាប់ពិធីខួបកំណើត។ ប្រើប្រភេទទីផ្សារដែលជ្រើសពេលទទួលទំនិញ៖ ទំនិញដាក់ថា ខួបកំណើត ឬ ទាំងពីរ។'],
+   ['របៀបគណនា','ដំណើរការតែចន្លោះថ្ងៃ ពី និង ដល់ រៀងរាល់ឆ្នាំ (ខែ-ថ្ងៃ)។ ខួបកំណើតមានពេញមួយឆ្នាំ ដូច្នេះលំនាំដើមគឺ 01-01 ដល់ 12-31។ ត្រូវមានស្តុកយ៉ាងតិចតាមកំណត់នៅ PH + 271។'],
+   ['កម្រិត','ទំនិញដែលបានដាក់ប្រភេទ ត្រូវរៀបតាមល្បឿនលក់។ កម្រិត 1 = សម្លៀកបំពាក់ខួបកំណើតលក់ដាច់បំផុត។'],
+   ['របៀបផ្សព្វផ្សាយ','1. ថតវីដេអូ 15 វិនាទី ជាមួយគ្រឿងតុបតែងពិធី (បាឡុង នំខេក)។ 2. ចាប់ផ្តើម៖ "ខួបកំណើតកូនជិតមកដល់ហើយ - សម្លៀកបំពាក់ត្រៀមហើយឬនៅ?" 3. បង្ហាញតម្លៃ ទំហំ និងរូបជិត។ 4. "ផ្ញើសារមកកក់ទំហំកូន"។']]},
+ evWedding:{en:[['What it means','Outfits for weddings - flower girl, page boy, family photos. Uses items tagged Wedding or Both at receiving.'],
+   ['How it is calculated','Only works between the From and To dates, every year (MM-DD). The season can cross the new year (e.g. 11-01 to 02-28). Items need at least "Stock at least" pieces in PH + 271.'],
+   ['How levels work','Tagged items are ranked by sales speed. Level 1 = the best-selling wedding outfits.'],
+   ['How staff should promote','1. Photo or video as a flower-girl / family-photo look. 2. Hook: "Going to a wedding? Make her the cutest guest." 3. Show matching sibling outfits if you have them. 4. "Order early - sizes sell fast in wedding season."']],
+  km:[['អត្ថន័យ','សម្លៀកបំពាក់សម្រាប់មង្គលការ - កូនកំលោះកូនក្រមុំ រូបថតគ្រួសារ។ ប្រើទំនិញដាក់ប្រភេទ មង្គលការ ឬ ទាំងពីរ ពេលទទួលទំនិញ។'],
+   ['របៀបគណនា','ដំណើរការតែចន្លោះថ្ងៃ ពី និង ដល់ រៀងរាល់ឆ្នាំ (ខែ-ថ្ងៃ)។ រដូវអាចឆ្លងឆ្នាំ (ឧ. 11-01 ដល់ 02-28)។ ត្រូវមានស្តុកយ៉ាងតិចតាមកំណត់នៅ PH + 271។'],
+   ['កម្រិត','ទំនិញដែលបានដាក់ប្រភេទ ត្រូវរៀបតាមល្បឿនលក់។ កម្រិត 1 = សម្លៀកបំពាក់មង្គលការលក់ដាច់បំផុត។'],
+   ['របៀបផ្សព្វផ្សាយ','1. ថតរូប ឬវីដេអូ ជាស្ទីលកូនកំលោះកូនក្រមុំ / រូបថតគ្រួសារ។ 2. ចាប់ផ្តើម៖ "ទៅមង្គលការ? ឱ្យកូនស្អាតជាងគេ"។ 3. បង្ហាញឈុតបងប្អូនដូចគ្នា បើមាន។ 4. "កុម្ម៉ង់មុន - រដូវមង្គលការទំហំអស់លឿន"។']]},
+ occasion_old:{en:[['What it means','Products for a special time you choose, like birthdays, weddings, Khmer New Year or school.'],
    ['How it is calculated','Matches the words you type against the product name and category, only between "From date" and "To date", and only items in stock.'],
    ['How levels work','Ranked by sales speed, so the best-selling occasion items come first.'],
    ['How staff should promote','Tie the post to the event: "Ready for Khmer New Year", "Birthday outfit". Post 1-2 weeks before the date.']],
@@ -849,7 +875,26 @@ function itemRow(k,x){var p=x.p,off=!!(rules.excl[k]||{})[p.key],r=x.r;
    '<div class="rit"><div><span class="lvb lv'+x.lv+'">'+L('Level')+' '+x.lv+'</span> '+(r?'<b>'+L('top')+' '+r.pct+'%</b> <span class="mut">· '+L('rank')+' '+r.rank+' '+L('of')+' '+r.n+' '+L(r.of)+'</span>':'')+'</div>'+
    '<div>'+esc(p.name)+'</div><div class="mut">'+esc(x.info)+' · '+L('stock')+' '+p.stock+' ('+Object.keys(p.by).map(function(s){return s+' '+p.by[s]}).join(', ')+') · '+L('sold 30d')+' '+p.sold+'</div></div></div>'}
 
-var openAll={};
+var openAll={},mtF={f:'all',q:''},mtSelR={};
+function mtCount(t){return sugP.filter(function(p){return mtOf(p)===t||(t!=='both'&&mtOf(p)==='both')}).length}
+function mtCardHTML(){var c={birthday:0,wedding:0,both:0,'':0};sugP.forEach(function(p){c[mtOf(p)]=(c[mtOf(p)]||0)+1});
+  var q=mtF.q.toLowerCase(),list=sugP.filter(function(p){var t=mtOf(p);return(mtF.f==='all'||(mtF.f==='none'?!t:t===mtF.f))&&(!q||p.name.toLowerCase().indexOf(q)>-1)}).sort(function(a,b){return a.name.localeCompare(b.name)});
+  var shown=list.slice(0,60),lbl={birthday:'🎂 '+L('Birthday'),wedding:'💐 '+L('Wedding'),both:'✨ '+L('Both')};
+  return '<div class="card" style="margin-bottom:12px"><h2>'+L('Marketing types')+' <small class="mut">'+L('only shown here, never in the store app')+'</small></h2>'+
+   '<p class="mut">'+L('Staff set the type at receiving (restock tool). Use this list to tag older items.')+'</p>'+
+   '<p style="margin:6px 0;font-size:13px">🎂 '+L('Birthday')+' <b>'+c.birthday+'</b> · 💐 '+L('Wedding')+' <b>'+c.wedding+'</b> · ✨ '+L('Both')+' <b>'+c.both+'</b> · '+L('No type')+' <b>'+c['']+'</b></p>'+
+   '<div class="f" style="max-width:520px"><label>'+L('Show')+'<select data-mtf="f">'+[['all','All'],['none','No type'],['birthday','Birthday'],['wedding','Wedding'],['both','Both']].map(function(o){return '<option value="'+o[0]+'"'+(mtF.f===o[0]?' selected':'')+'>'+L(o[1])+'</option>'}).join('')+'</select></label>'+
+   '<label>'+L('Search')+'<input type="text" data-mtf="q" value="'+esc(mtF.q)+'"></label></div>'+
+   '<div class="mt-bar"><label><input type="checkbox" data-mtall="1"'+(shown.length&&shown.every(function(p){return mtSelR[p.key]})?' checked':'')+'> '+L('Select all')+'</label><span class="mut">'+Object.keys(mtSelR).length+' '+L('selected')+'</span><span style="flex:1"></span>'+
+   '<button data-mtset="birthday">🎂 '+L('Birthday')+'</button><button data-mtset="wedding">💐 '+L('Wedding')+'</button><button data-mtset="both">✨ '+L('Both')+'</button><button data-mtset="">'+L('Clear')+'</button></div>'+
+   '<div class="rlist">'+shown.map(function(p){var t=mtOf(p);return '<div class="ritem"><input type="checkbox" class="mtc" data-mtk="'+esc(p.key)+'"'+(mtSelR[p.key]?' checked':'')+'>'+(p.img?'<img src="'+esc(p.img)+'" alt="" loading="lazy">':'<div class="noimg"></div>')+
+     '<div class="rit"><div>'+esc(p.name)+'</div><div class="mut">'+(t?lbl[t]:L('No type'))+' · '+L('stock')+' '+p.stock+'</div></div></div>'}).join('')+'</div>'+
+   (list.length>shown.length?'<p class="mut" style="margin-top:6px">'+L('Showing')+' 60 '+L('of')+' '+list.length+' - '+L('use Search or Show to narrow it')+'</p>':'')+'</div>'}
+function mtSave(type){var keys=Object.keys(mtSelR);if(!keys.length){toast(L('Tick the items first'),false);return}if(!isMaster())return;
+  var upd={},del=firebase.firestore.FieldValue.delete();keys.forEach(function(k){var p=sugP.filter(function(x){return x.key===k})[0];if(!p)return;
+    var ks=['n:'+String(p.name||'').trim().toLowerCase()];if(p.pid)ks.push('i:'+p.pid);ks.forEach(function(z){upd[z]=type||del;if(type)mtTypes[z]=type;else delete mtTypes[z]})});
+  fdb.collection('marketing_settings').doc('productTypes').set({types:upd,updatedAt:Date.now()},{merge:true}).then(function(){toast(keys.length+' '+L('items saved')+' ✓',true)}).catch(syncErr);
+  mtSelR={};sv('goatMtTypes',mtTypes);renderRules();renderSuggest()}
 function renderRules(){var el=$('viewRules');if(!el)return;var R=analyse();
   el.innerHTML='<div class="card" style="margin-bottom:12px"><h2>'+L('How suggestions are picked')+'</h2><p class="mut">'+L('Rules are used from top to bottom. Each rule fills its number of items per day, then the next rule. Items are ranked into levels from PH + 271 data, and Level 1 is suggested first.')+'</p>'+
    '<div class="f" style="max-width:520px;margin-top:8px"><label>'+L('Level 1 = top %')+'<input type="number" min="1" max="90" data-rg="l1" value="'+rules.l1+'"></label><label>'+L('Level 2 = next %')+'<input type="number" min="1" max="90" data-rg="l2" value="'+rules.l2+'"></label><label>'+L('Don\'t repeat within days')+'<input type="number" min="0" data-rg="noRepeat" value="'+rules.noRepeat+'"></label><label>'+L('Items to show per rule')+'<input type="number" min="1" data-rg="show" value="'+rules.show+'"></label></div>'+
@@ -859,18 +904,22 @@ function renderRules(){var el=$('viewRules');if(!el)return;var R=analyse();
      '<span style="display:flex;gap:6px;align-items:center"><button data-rmv="'+k+'|-1"'+(i?'':' disabled')+' title="'+L('Higher priority')+'">▲</button><button data-rmv="'+k+'|1"'+(i<rules.order.length-1?'':' disabled')+' title="'+L('Lower priority')+'">▼</button>'+
      '<label class="lsw"><input type="checkbox" data-ron="'+k+'"'+(rules.on[k]?' checked':'')+'>'+L(rules.on[k]?'On':'Off')+'</label></span></h2>'+
      '<p class="mut" style="margin-bottom:8px">'+L(d.m)+'</p><div class="f"><label>'+L('Items per day')+'<input type="number" min="0" data-rpk="'+k+'" value="'+rules.picks[k]+'"></label>'+
-     Object.keys(d.p).map(function(f){var v=rules.p[k][f],ty=f==='words'?'text':(f==='from'||f==='to')?'date':'number';return '<label'+(f==='words'?' style="grid-column:span 2"':'')+'>'+L(RULE_P[f])+'<input type="'+ty+'" data-rp="'+k+'|'+f+'" value="'+esc(v)+'"'+(ty==='number'?' min="0"':'')+(f==='words'?' placeholder="birthday, wedding"':'')+'></label>'}).join('')+'</div>'+
-     guideHTML(k)+'<p class="mut" style="margin-top:8px">'+L('Matching now')+': <b>'+m.length+'</b> · '+L('Level')+' 1: '+lv[0]+' · '+L('Level')+' 2: '+lv[1]+' · '+L('Level')+' 3: '+lv[2]+' · '+L('turned off')+': '+m.filter(function(x){return (rules.excl[k]||{})[x.p.key]}).length+'</p>'+
+     Object.keys(d.p).map(function(f){var v=rules.p[k][f],ty=(f==='words'||f==='from'||f==='to')?'text':'number';return '<label'+(f==='words'?' style="grid-column:span 2"':'')+'>'+L(RULE_P[f])+'<input type="'+ty+'" data-rp="'+k+'|'+f+'" value="'+esc(v)+'"'+(ty==='number'?' min="0"':'')+(f==='from'||f==='to'?' placeholder="MM-DD" maxlength="5" style="max-width:110px"':'')+'></label>'}).join('')+'</div>'+
+     (rules.p[k]&&rules.p[k].from!==undefined&&rules.p[k].to!==undefined&&RULE_DEF[k].p.from!==undefined?'<p style="margin-top:6px;font-size:12.5px">'+(inSeason(rules.p[k].from,rules.p[k].to)?'<b style="color:#2f7d62">● '+L('In season now')+'</b>':'<b style="color:var(--mut)">○ '+L('Not in season now')+'</b>')+' · '+esc(rules.p[k].from)+' → '+esc(rules.p[k].to)+' · '+mtCount(k==='evBirthday'?'birthday':'wedding')+' '+L('tagged items')+'</p>':'')+guideHTML(k)+'<p class="mut" style="margin-top:8px">'+L('Matching now')+': <b>'+m.length+'</b> · '+L('Level')+' 1: '+lv[0]+' · '+L('Level')+' 2: '+lv[1]+' · '+L('Level')+' 3: '+lv[2]+' · '+L('turned off')+': '+m.filter(function(x){return (rules.excl[k]||{})[x.p.key]}).length+'</p>'+
      (m.length?'<div class="rlist">'+m.slice(0,openAll[k]?m.length:rules.show).map(function(x){return itemRow(k,x)}).join('')+'</div>'+(m.length>rules.show?'<button class="rmore" data-rall="'+k+'">'+(openAll[k]?L('Show top')+' '+rules.show:L('Show all')+' ('+m.length+')')+'</button>':''):'')+'</div>'}).join('')+
-   '<div style="display:flex;gap:8px"><button id="rReset">'+L('Reset to default')+'</button><button id="rReload">'+L('Reload store data')+'</button></div>'}
+   mtCardHTML()+'<div style="display:flex;gap:8px"><button id="rReset">'+L('Reset to default')+'</button><button id="rReload">'+L('Reload store data')+'</button></div>'}
 $('viewRules').addEventListener('change',function(e){var t=e.target,a;
+  if((a=t.getAttribute('data-mtf'))){mtF[a]=t.value;renderRules();return}
+  if(t.getAttribute('data-mtk')){if(t.checked)mtSelR[t.getAttribute('data-mtk')]=1;else delete mtSelR[t.getAttribute('data-mtk')];renderRules();return}
+  if(t.getAttribute('data-mtall')){document.querySelectorAll('#viewRules [data-mtk]').forEach(function(b){if(t.checked)mtSelR[b.getAttribute('data-mtk')]=1;else delete mtSelR[b.getAttribute('data-mtk')]});renderRules();return}
   if((a=t.getAttribute('data-rg'))){rules[a]=Math.max(0,+t.value||0)}
   else if((a=t.getAttribute('data-rpk'))){rules.picks[a]=Math.max(0,+t.value||0)}
   else if((a=t.getAttribute('data-ron'))){rules.on[a]=t.checked}
   else if((a=t.getAttribute('data-rex'))){var q=a.split('|'),rk0=q[0],key=q.slice(1).join('|');rules.excl[rk0]=rules.excl[rk0]||{};if(t.checked)delete rules.excl[rk0][key];else rules.excl[rk0][key]=true}
-  else if((a=t.getAttribute('data-rp'))){var q=a.split('|'),num=typeof RULE_DEF[q[0]].p[q[1]]==='number';rules.p[q[0]][q[1]]=num?Math.max(0,+t.value||0):t.value.trim()}
+  else if((a=t.getAttribute('data-rp'))){var q=a.split('|'),num=typeof RULE_DEF[q[0]].p[q[1]]==='number';var v=t.value.trim();if((q[1]==='from'||q[1]==='to')&&!mmdd(v)){toast(L('Use MM-DD, e.g. 11-01'),false);renderRules();return}rules.p[q[0]][q[1]]=num?Math.max(0,+v||0):v}
   else return;saveRules()});
-$('viewRules').addEventListener('click',function(e){var ra=e.target.getAttribute&&e.target.getAttribute('data-rall');if(ra){openAll[ra]=!openAll[ra];renderRules();return}
+$('viewRules').addEventListener('click',function(e){var ms=e.target.getAttribute&&e.target.getAttribute('data-mtset');if(ms!==null&&ms!==undefined){mtSave(ms);return}
+  var ra=e.target.getAttribute&&e.target.getAttribute('data-rall');if(ra){openAll[ra]=!openAll[ra];renderRules();return}
   var a=e.target.getAttribute&&e.target.getAttribute('data-rmv');
   if(a){var q=a.split('|'),i=rules.order.indexOf(q[0]),j=i+(+q[1]);if(j<0||j>=rules.order.length)return;rules.order.splice(i,1);rules.order.splice(j,0,q[0]);saveRules();return}
   if(e.target.id==='rReset'&&confirm(L('Reset all rules to default?'))){rules=defRules();saveRules()}
@@ -978,6 +1027,7 @@ function startSync(){if(SYNC.on||!fdb||!auth||!auth.currentUser)return;SYNC.on=t
     fdb.collection('marketing_settings').doc('targets').onSnapshot(onTg,syncErr),
     fdb.collection('marketing_settings').doc('liveOff').onSnapshot(onLiveOff,function(){}),
     fdb.collection('marketing_settings').doc('rules').onSnapshot(onRules,function(){}),
+    fdb.collection('marketing_settings').doc('productTypes').onSnapshot(onMtTypes,function(){}),
     fdb.collection('marketing_settings').doc('statHistory').onSnapshot(onHist,function(){}),
     fdb.collection('marketingDesk').doc('postStats').onSnapshot(onStats,function(){}),
     fdb.collection('marketingDesk').doc('recentPosts').onSnapshot(onRecent,function(){})];
@@ -1032,6 +1082,7 @@ KM['Rules']='ច្បាប់';KM['New arrival']='ទំនិញមកថ្�
 KM['stock age']='អាយុស្តុក';KM['unknown']='មិនដឹង';KM['days']='ថ្ងៃ';
 KM['Only the master account can change rules']='មានតែគណនីមេប៉ុណ្ណោះដែលអាចប្តូរច្បាប់';
 KM['Rule details']='ព័ត៌មានលម្អិតនៃច្បាប់';KM['Use for marketing']='ប្រើសម្រាប់ទីផ្សារ';KM['top']='កំពូល';KM['rank']='លំដាប់';KM['of']='ក្នុងចំណោម';KM['items with an arrival date']='ទំនិញមានថ្ងៃមកដល់';KM['items that sold']='ទំនិញដែលបានលក់';KM['items with big stock']='ទំនិញស្តុកច្រើន';KM['turned off']='បានបិទ';KM['Show top']='បង្ហាញកំពូល';KM['Show all']='បង្ហាញទាំងអស់';KM['Items to show per rule']='ចំនួនទំនិញបង្ហាញក្នុងមួយច្បាប់';
+KM['Event: Birthday party']='ព្រឹត្តិការណ៍៖ ពិធីខួបកំណើត';KM['Event: Wedding party']='ព្រឹត្តិការណ៍៖ មង្គលការ';KM['Items tagged Birthday or Both, during the birthday dates you set (same every year).']='ទំនិញដាក់ប្រភេទ ខួបកំណើត ឬ ទាំងពីរ ក្នុងថ្ងៃដែលអ្នកកំណត់ (ដូចគ្នារៀងរាល់ឆ្នាំ)។';KM['Items tagged Wedding or Both, during the wedding season you set (same every year).']='ទំនិញដាក់ប្រភេទ មង្គលការ ឬ ទាំងពីរ ក្នុងរដូវដែលអ្នកកំណត់ (ដូចគ្នារៀងរាល់ឆ្នាំ)។';KM['From (MM-DD, every year)']='ពី (ខែ-ថ្ងៃ រៀងរាល់ឆ្នាំ)';KM['To (MM-DD, every year)']='ដល់ (ខែ-ថ្ងៃ រៀងរាល់ឆ្នាំ)';KM['In season now']='កំពុងក្នុងរដូវ';KM['Not in season now']='មិនទាន់ដល់រដូវ';KM['tagged items']='ទំនិញដាក់ប្រភេទ';KM['Birthday']='ខួបកំណើត';KM['Wedding']='មង្គលការ';KM['Both']='ទាំងពីរ';KM['No type']='គ្មានប្រភេទ';KM['Marketing types']='ប្រភេទទីផ្សារ';KM['only shown here, never in the store app']='បង្ហាញតែទីនេះ មិនបង្ហាញក្នុងកម្មវិធីហាងទេ';KM['Staff set the type at receiving (restock tool). Use this list to tag older items.']='បុគ្គលិកកំណត់ប្រភេទពេលទទួលទំនិញ (Restock tool)។ ប្រើបញ្ជីនេះដើម្បីដាក់ប្រភេទទំនិញចាស់។';KM['Show']='បង្ហាញ';KM['Search']='ស្វែងរក';KM['All']='ទាំងអស់';KM['Select all']='ជ្រើសទាំងអស់';KM['selected']='បានជ្រើស';KM['Clear']='លុប';KM['Showing']='បង្ហាញ';KM['use Search or Show to narrow it']='ប្រើ ស្វែងរក ឬ បង្ហាញ ដើម្បីបង្រួម';KM['Tick the items first']='សូមជ្រើសទំនិញជាមុន';KM['items saved']='ទំនិញបានរក្សាទុក';KM['Use MM-DD, e.g. 11-01']='សូមប្រើ ខែ-ថ្ងៃ ឧ. 11-01';
 var WORDS={spend:'ចំណាយ',reach:'ការទៅដល់',views:'ចំនួនមើល',clicks:'ចុច',likes:'ចូលចិត្ត',msgs:'សារ',orders:'កុម្ម៉ង់'};
 var SRCH={'Search the product':'ស្វែងរកផលិតផល','Search products (add as many as you need)':'ស្វែងរកផលិតផល (បន្ថែមបានច្រើន)'};
 var NW='(?:spend|reach|views|clicks|likes|msgs|orders)',NUM='\\$?[\\d.,k]+';
