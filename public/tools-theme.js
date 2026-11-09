@@ -28,15 +28,20 @@
   // Grey and Black both use the colour flip. Grey then adds a full-screen layer
   // (blend "darken" before the flip = "lighten" after it), so pure black becomes
   // #262624 grey while text, buttons and photos stay the same.
-  var DARK = 'html[data-theme="dark"],html[data-theme="grey"]';
+  // Grey uses the same colour flip as Black, plus a little extra contrast and colour
+  // so text (also light-blue text) stays sharp. A full-screen layer then lifts the pure
+  // black background to grey (#232323); text, buttons and photos are not faded by it.
   var MEDIA = ['img', 'video', 'canvas', 'iframe', 'picture', '[data-keep-colour]'];
+  function under(theme) { return MEDIA.map(function (m) { return 'html[data-theme="' + theme + '"] ' + m; }).join(','); }
   var css =
-    'html[data-theme="dark"],html[data-theme="grey"]{background:#fff;filter:invert(1) hue-rotate(180deg)}' +
-    MEDIA.map(function (m) { return 'html[data-theme="dark"] ' + m + ',html[data-theme="grey"] ' + m; }).join(',') +
-    '{filter:invert(1) hue-rotate(180deg)}' +
+    'html[data-theme="dark"]{background:#fff;filter:invert(1) hue-rotate(180deg)}' +
+    under('dark') + '{filter:invert(1) hue-rotate(180deg)}' +
+    'html[data-theme="grey"]{background:#fff;filter:invert(1) hue-rotate(180deg) contrast(1.15) saturate(1.25)}' +
+    // exact reverse of the page filter, so photos keep their real colours
+    under('grey') + '{filter:saturate(0.8) contrast(0.8696) hue-rotate(180deg) invert(1)}' +
     'html[data-theme="dark"] picture img,html[data-theme="grey"] picture img{filter:none}' +
     '#gk-grey-layer{display:none}' +
-    'html[data-theme="grey"] #gk-grey-layer{display:block;position:fixed;inset:0;background:#d9d9db;' +
+    'html[data-theme="grey"] #gk-grey-layer{display:block;position:fixed;inset:0;background:#d0d0d1;' +
     'mix-blend-mode:darken;pointer-events:none;z-index:2147483647}' +
     '.gk-theme-btn{display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(100,116,139,.45);background:transparent;color:inherit;' +
     'border-radius:8px;padding:5px 10px;font:inherit;font-size:.82rem;font-weight:600;cursor:pointer;white-space:nowrap;flex:0 0 auto}' +
