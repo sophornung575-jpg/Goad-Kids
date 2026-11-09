@@ -1258,7 +1258,7 @@ function initFirestoreListeners(){
     renderRestock();
   });
 
-  mtListen();
+  // mtListen(); — marketing type is set in the Marketing tool only
   db.collection('restockTool_history').orderBy('savedAt', 'desc').onSnapshot(snap => {
     historyCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderHistory();
@@ -2942,10 +2942,9 @@ function rcvItemHtml(bid, x){
   const notes = (x.notes || []).map(n => `<div class="rcv-prev-note">📝 ${escapeHtml(n)}</div>`).join('');
   return `<details class="rcv-item" data-bid="${escapeHtml(bid)}" data-hid="${escapeHtml(x.histId)}" data-k="${escapeHtml(openKey)}" ontoggle="rcvToggle(this)"${rcvOpen.has(openKey) ? ' open' : ''}>
     <summary>
-      <input type="checkbox" class="mt-chk" data-k="${escapeHtml(bid + '|' + x.histId)}"${mtSel.has(bid + '|' + x.histId) ? ' checked' : ''} onclick="mtTick(this, event)" title="Select for marketing type">
       <div class="rcv-thumb">${img ? `<img src="${escapeHtml(img)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</div>
       <div style="flex:1;min-width:0">
-        <div class="rcv-name">${escapeHtml(x.productName || '')}${x.colour ? ` <span class="rcv-colour" title="${escapeHtml(x.colour)}">${escapeHtml(zhLabel(x.colour))}</span>` : ''}${mtTagHtml(x)}</div>
+        <div class="rcv-name">${escapeHtml(x.productName || '')}${x.colour ? ` <span class="rcv-colour" title="${escapeHtml(x.colour)}">${escapeHtml(zhLabel(x.colour))}</span>` : ''}</div>
         <div class="rcv-stats">${lines.length} size${lines.length === 1 ? '' : 's'} · ${rcvSum(lines, 'qty')} ordered${done ? ' · ' + rcvStats(lines) : ''}</div>
       </div>
       <span class="rcv-pill ${done ? 'part' : ''}">${done ? 'Partly done' : 'Waiting'} · ${left}</span>
@@ -3005,17 +3004,10 @@ function renderIncoming(force){
           <button class="btn btn-outline btn-small" type="button" onclick="rcvOrder(this,'close')"><i class="fas fa-flag-checkered"></i> Close order</button>
         </div>
       </div>
-      <div class="mt-bar"><label><input type="checkbox" class="mt-chk mt-all" onclick="mtAll(this)"> Select all</label><span class="mt-count">none selected</span>
-        <span style="flex:1"></span><b>Marketing type:</b>
-        <button class="btn btn-outline btn-small" type="button" onclick="mtApply(this,'birthday')">🎂 Birthday</button>
-        <button class="btn btn-outline btn-small" type="button" onclick="mtApply(this,'wedding')">💐 Wedding</button>
-        <button class="btn btn-outline btn-small" type="button" onclick="mtApply(this,'both')">✨ Both</button>
-        <button class="btn btn-outline btn-small" type="button" onclick="mtApply(this,'')" title="Remove the marketing type">Clear</button></div>
       <div class="rcv-hint">Tap an item to check it. Good ✔ is added to stock, Reject ✖ is recorded but not added. "Receive all" uses the numbers shown on every item (full quantity unless you changed them).</div>
       ${g.items.map(x => rcvItemHtml(g.batchId, x)).join('')}
     </div>`;
   }).join('');
-  wrap.querySelectorAll('.rcv-order').forEach(mtSyncAll);
   renderReceived();
 }
 
