@@ -9151,78 +9151,89 @@ function sendToTelegram(order, callback) {
     // so restock.html can show that as its own column. Only fires once per
     // product+store while a not-yet-received auto-flagged entry for it is still
     // sitting on the list, so this can run on every data load without duplicating.
+    // Pushes fast-selling, low-stock products into restock.html's shared list.
+    // An item is NOT pushed again while:
+    //  - this store already has an alert for it that isn't received yet, or
+    //  - any store's alert for the same product is already moved to Receiving / ordered.
+    // After it's received, removed or marked dead, it only comes back when NEW sales
+    // (made after that moment) reach the trigger again and stock is low again.
+    // If another store already has an open alert for the same product, this store's
+    // lines are added and restock.html shows them on the same row.
+    function _rsNameKey(t) { return String(t || '').toLowerCase().replace(/[\s_\-]+/g, ' ').trim(); }
+    function _rsMs(v) { return v ? (typeof v.toMillis === 'function' ? v.toMillis() : (Number(v) || 0)) : 0; }
+    function getSalesSince(productId, sinceTs) {
+        var bySize = {}, order = [], total = 0;
+        (STATE.confirmedOrders || []).forEach(function(o) {
+            var ts = o.confirmedTimestamp || o.timestamp || 0;
+            if (ts <= sinceTs) return;
+            (o.cart || []).forEach(function(c) {
+                if (c.productId !== productId) return;
+                var sz = c.size || 'One Size', q = c.quantity || 0;
+                if (!(sz in bySize)) { bySize[sz] = 0; order.push(sz); }
+                bySize[sz] += q; total += q;
+            });
+        });
+        return { total: total, sizes: order.map(function(sz) { return { size: sz, qty: bySize[sz] }; })
+            .filter(function(x) { return x.qty > 0; }).sort(function(a, b) { return b.qty - a.qty; }) };
+    }
     async function checkAndPushRestockAlerts() {
         if (!db || !STATE.firebaseOnline) return;
         try {
+            var rules = STATE.inventoryRules;
+            var windowDays = rules.fastSellWindowDays || 7;
+            var minUnits = rules.fastSellMinUnits || 5;
+            var lowLimit = rules.lowStockThreshold != null ? rules.lowStockThreshold : 3;
+            var cfgSnap = await db.collection('restockTool_config').doc('settings').get();
+            var handled = (cfgSnap.exists && cfgSnap.data().alertHandled) || {};
             var existingSnap = await db.collection('restockTool_items').where('autoFlagged', '==', true).get();
-            var alreadyFlagged = {};
-            // Old-style alerts (written before size-split alerts existed) have no alertBatchId
-            // and only one size-less line. If still Pending/Sent, they get replaced below with
-            // a size-split alert. Ordered ones are left alone — the order is already placed.
-            var oldStyleRefs = {};
+            var openHere = {}, orderedAnywhere = {}, lastHandled = {};
             existingSnap.forEach(function(d) {
                 var it = d.data();
-                if (it.status === 'received') return; // safe to flag again once it's been restocked
                 if (!it.sourceProductId || !it.sourceStoreId) return;
-                var k = it.sourceStoreId + '|' + it.sourceProductId;
+                var mine = it.sourceStoreId === STATE.storeId;
                 var st = it.status || 'pending';
-                if (!it.alertBatchId && it.sourceStoreId === STATE.storeId && (st === 'pending' || st === 'sent')) {
-                    (oldStyleRefs[k] = oldStyleRefs[k] || []).push(d.ref);
-                    return;
+                var nk = _rsNameKey(it.title);
+                if (mine) {
+                    var t = Math.max(_rsMs(it.addedAt), _rsMs(it.receivedAt), _rsMs(it.deadAt));
+                    lastHandled[it.sourceProductId] = Math.max(lastHandled[it.sourceProductId] || 0, t);
+                    if (st !== 'received') openHere[it.sourceProductId] = true; // pending, sent, ordered or dead
                 }
-                alreadyFlagged[k] = true;
+                if (st !== 'received' && st !== 'dead' && (it.queuedBatch || st === 'ordered')) orderedAnywhere[nk] = true;
             });
             for (var i = 0; i < STATE.products.length; i++) {
                 var p = STATE.products[i];
-                var flagKey = STATE.storeId + '|' + p.id;
-                if (alreadyFlagged[flagKey]) continue;
-                // Old alert but product no longer qualifies: keep the old alert as it is.
-                if (oldStyleRefs[flagKey] && (!p.active || !isRestockDue(p))) continue;
-                if (!p.active || !isRestockDue(p)) continue;
-                // One restock line per size that customers bought in the trigger window,
-                // qty = how many of that size sold (so the reorder replaces what sold).
-                // All lines of one alert share alertBatchId so restock.html groups them as one item.
-                var windowDays = STATE.inventoryRules.fastSellWindowDays || 7;
-                var soldSizes = getSizesSoldInWindow(p.id, windowDays);
-                var totalSold = soldSizes.reduce(function(t, x) { return t + x.qty; }, 0);
+                if (!p.active || openHere[p.id] || orderedAnywhere[_rsNameKey(p.name)]) continue;
+                var stockLeft = getTotalStock(p);
+                if (stockLeft > lowLimit) continue;
+                var since = Math.max(Date.now() - windowDays * 86400000, lastHandled[p.id] || 0, Number(handled[STATE.storeId + '__' + p.id]) || 0);
+                var sold = getSalesSince(p.id, since);
+                if (sold.total < minUnits) continue;
                 var batchId = STATE.storeId + '_' + p.id + '_' + Date.now();
                 var base = {
-                    title: p.name,
-                    image: (p.images && p.images[0]) || '',
-                    images: p.images || [],
+                    title: p.name, image: (p.images && p.images[0]) || '', images: p.images || [],
                     supplier: 'Auto-flagged — fast seller, low stock',
-                    sourceProductId: p.id,
-                    sourceStoreId: STATE.storeId,
-                    sourceStoreName: STATE.storeName || STATE.storeId,
-                    sourceApp: 'goat-kids-store',
-                    autoFlagged: true,
-                    alertBatchId: batchId,
-                    alertWindowDays: windowDays,
-                    alertTotalSold: totalSold,
-                    alertStockLeft: getTotalStock(p)
+                    sourceProductId: p.id, sourceStoreId: STATE.storeId, sourceStoreName: STATE.storeName || STATE.storeId,
+                    sourceApp: 'goat-kids-store', autoFlagged: true, alertBatchId: batchId,
+                    alertWindowDays: windowDays, alertTotalSold: sold.total, alertStockLeft: stockLeft
                 };
-                var lines = soldSizes.length ? soldSizes : [{ size: null, qty: STATE.inventoryRules.fastSellMinUnits || 5 }];
+                var lines = sold.sizes.length ? sold.sizes : [{ size: null, qty: minUnits }];
                 var wb = db.batch();
-                // Remove the old size-less alert in the same batch, so it's swapped atomically.
-                (oldStyleRefs[flagKey] || []).forEach(function(ref) { wb.delete(ref); });
                 lines.forEach(function(ln) {
                     wb.set(db.collection('restockTool_items').doc(), Object.assign({}, base, {
-                        size: ln.size,
-                        qty: ln.qty,
+                        size: ln.size, qty: ln.qty,
                         soldQty: ln.size != null ? ln.qty : null,
-                        stockLeft: ln.size != null ? getSizeStockLeft(p, ln.size) : getTotalStock(p),
+                        stockLeft: ln.size != null ? getSizeStockLeft(p, ln.size) : stockLeft,
                         addedAt: firebase.firestore.FieldValue.serverTimestamp()
                     }));
                 });
-                await wb.commit(); // all sizes land together, so the list never shows a half-built alert
-                alreadyFlagged[flagKey] = true;
+                var hk = {}; hk[STATE.storeId + '__' + p.id] = Date.now();
+                wb.set(db.collection('restockTool_config').doc('settings'), { alertHandled: hk }, { merge: true });
+                await wb.commit();
+                openHere[p.id] = true;
             }
         } catch (e) { console.warn('Auto restock push failed:', e.message); }
     }
 
-    // =============================================
-    // REPORTS
-    // =============================================
     function setDateFilter(filter, btn) {
         STATE.dateFilter = filter; STATE.customStartDate = null; STATE.customEndDate = null;
         document.querySelectorAll('.date-filter-btn').forEach(function(b) { b.classList.remove('active'); });
