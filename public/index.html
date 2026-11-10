@@ -2711,6 +2711,8 @@ function sendToTelegram(order, callback) {
         });
         var _shipMsg = document.getElementById('shippingRequiredTxt');
         if (_shipMsg) _shipMsg.textContent = STATE.language === 'kh' ? 'សូមជ្រើសរើសសេវាដឹកជញ្ជូន' : 'Please choose a delivery option';
+        // After-order popup: redraw it in the newly chosen language if it's open
+        try { var _pop = document.getElementById('gkMsgrPop'); if (_pop && _pop.classList.contains('show') && _gkPendingOrder) showMessengerPopup(_gkPendingOrder); } catch (e) {}
         renderProducts(); renderCart(); renderPending(); renderHistory(); renderRefunds();
         if (document.getElementById('adminInventoryTab') && document.getElementById('adminInventoryTab').classList.contains('active')) renderInventory();
     }
@@ -3326,7 +3328,7 @@ function sendToTelegram(order, callback) {
     // To change the page, put its username (e.g. 'goatkids271') or page ID here.
     // =============================================
     var GK_MESSENGER_PAGE = '1178775641976170'; // Goat Kids 271
-    var _gkMsgrText = '';
+    var _gkMsgrText = '', _gkMsgrShort = '';
 
     function _gkOrderMessage(o) {
         var kh = STATE.language === 'kh';
@@ -3382,6 +3384,8 @@ function sendToTelegram(order, callback) {
             '#gkMsgrPop .gkm-n.done{background:#16a34a}' +
             '#gkMsgrPop .gkm-logo{font-size:1.9rem;line-height:1}' +
             '#gkMsgrPop .gkm-btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;border:0;border-radius:12px;padding:14px;font-size:1rem;font-weight:700;cursor:pointer;text-decoration:none;background:linear-gradient(135deg,#00b2ff,#006aff);color:#fff}' +
+            '#gkMsgrPop .gkm-btn.gkm-tg{background:linear-gradient(135deg,#37aee2,#1e96c8);margin-bottom:10px}' +
+            '#gkMsgrPop .gkm-hint{font-size:.8rem;color:#6b7280;text-align:center;margin:-4px 0 6px}' +
             '#gkMsgrPop .gkm-sub{display:flex;gap:8px;margin-top:8px}' +
             '#gkMsgrPop .gkm-sub button{flex:1;border:1px solid #e5e7eb;background:#fff;border-radius:10px;padding:10px;font-size:.88rem;cursor:pointer;color:#374151}' +
             '#gkMsgrPop .gkm-note{font-size:.8rem;color:#16a34a;text-align:center;min-height:1.1em;margin-top:6px}';
@@ -3391,7 +3395,9 @@ function sendToTelegram(order, callback) {
         d.innerHTML = '<div class="gkm-card">' +
             '<div class="gkm-head"><div class="gkm-ok"><i class="fas fa-check"></i></div><div><h3 id="gkmTitle"></h3><div class="gkm-id" id="gkmId"></div></div></div>' +
             '<div class="gkm-items" id="gkmItems"></div>' +
+            '<a class="gkm-btn gkm-tg" id="gkmTg" href="#" rel="noopener"><i class="fab fa-telegram-plane gkm-logo" aria-hidden="true"></i><span id="gkmTgTxt"></span></a>' +
             '<a class="gkm-btn" id="gkmGo" target="_blank" rel="noopener"><i class="fab fa-facebook-messenger gkm-logo" aria-hidden="true"></i><span id="gkmGoTxt"></span></a>' +
+            '<div class="gkm-hint" id="gkmHint"></div>' +
             '<div class="gkm-note" id="gkmNote"></div>' +
             '<div class="gkm-sub"><button type="button" id="gkmCopy"></button><button type="button" id="gkmClose"></button></div>' +
             '</div>';
@@ -3403,9 +3409,19 @@ function sendToTelegram(order, callback) {
             _gkCopy(_gkMsgrText);
             document.getElementById('gkmNote').textContent = kh ? '✅ បានចម្លងម្តងទៀត' : '✅ Copied again';
         };
+        document.getElementById('gkmTg').addEventListener('click', function(e) {
+            e.preventDefault();
+            var kh = STATE.language === 'kh';
+            _gkCopy(_gkMsgrText); // full order, in case Telegram doesn't pre-fill it
+            _gkKeepOrderSafe();
+            document.getElementById('gkmNote').textContent = kh ? '✅ កំពុងបើក Telegram — ចុច Send' : '✅ Opening Telegram — just tap Send';
+            try { if (typeof fbq !== 'undefined') fbq('track', 'Contact'); } catch (er) {}
+            _gkOpenTelegram(_gkMsgrText);
+        });
         document.getElementById('gkmGo').addEventListener('click', function(e) {
             var kh = STATE.language === 'kh';
-            _gkCopy(_gkMsgrText); // step 1 happens right here, before Messenger opens
+            _gkCopy(_gkMsgrShort); // just the phone number (+ order no.) — enough for staff to find the order
+            _gkKeepOrderSafe();
             document.getElementById('gkmNote').textContent = kh ? '✅ បានចម្លងរួច — Paste ហើយ Send' : '✅ Copied — just Paste & Send';
             try { if (typeof fbq !== 'undefined') fbq('track', 'Contact'); } catch (e) {}
             // On phones, open the Messenger app straight away instead of the m.me web page
@@ -3448,41 +3464,40 @@ function sendToTelegram(order, callback) {
     // =============================================
     var GK_TELEGRAM_USER = 'Sophorn_Goatkids';
 
+    // After an order the customer picks Telegram or Messenger (no automatic jump).
+    var _gkPendingOrder = null, _gkOrderSaved = true;
     function _gkContactAfterOrder(order, saveP) {
+        _gkPendingOrder = order;
+        _gkOrderSaved = !saveP; // no save in flight → nothing to wait for
+        if (saveP && saveP.then) saveP.then(function() { _gkOrderSaved = true; }, function() { _gkOrderSaved = true; });
+        showMessengerPopup(order);
+    }
+    // Leaving for another app can pause this page; if the order is still saving, keep it in the retry queue.
+    function _gkKeepOrderSafe() {
+        var order = _gkPendingOrder;
+        if (!order || _gkOrderSaved) return;
+        try {
+            var q = JSON.parse(localStorage.getItem('goatNewOrderQueue') || '[]');
+            if (!q.some(function(x){ return x.orderId === order.orderId; })) q.push(order);
+            localStorage.setItem('goatNewOrderQueue', JSON.stringify(q));
+        } catch (e) {}
+    }
+    function _gkOpenTelegram(text) {
+        var user = encodeURIComponent(GK_TELEGRAM_USER);
+        var webUrl = 'https://t.me/' + user + '?text=' + encodeURIComponent(text);
         var ua = navigator.userAgent || '';
         var isPhone = /Android|iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        // Computers: no reliable way to open the Telegram app, keep the Messenger popup.
-        if (!isPhone || !GK_TELEGRAM_USER) { showMessengerPopup(order); return; }
-
-        var text = _gkOrderMessage(order);
-        _gkCopy(text); // also on the clipboard, in case the pre-filled text doesn't come through
-
-        var launched = false;
-        function launch() {
-            if (launched) return; launched = true;
-            var left = false;
-            var onHide = function() { if (document.hidden) left = true; };
-            document.addEventListener('visibilitychange', onHide);
-            window.addEventListener('pagehide', function() { left = true; }, { once: true });
-            try { if (typeof fbq !== 'undefined') fbq('track', 'Contact'); } catch (e) {}
-            window.location.href = 'tg://resolve?domain=' + encodeURIComponent(GK_TELEGRAM_USER) + '&text=' + encodeURIComponent(text);
-            // Still on the page after a moment → Telegram isn't installed (or was blocked) → Messenger instead.
-            setTimeout(function() {
-                document.removeEventListener('visibilitychange', onHide);
-                if (!left && !document.hidden) showMessengerPopup(order);
-            }, 2000);
-        }
-        // Leaving for Telegram can pause this page, so wait for the order to finish saving first
-        // (at most ~2.5s). If it isn't saved by then, keep it in the retry queue so it's never lost.
-        var timer = setTimeout(function() {
-            try {
-                var q = JSON.parse(localStorage.getItem('goatNewOrderQueue') || '[]');
-                if (!q.some(function(x){ return x.orderId === order.orderId; })) q.push(order);
-                localStorage.setItem('goatNewOrderQueue', JSON.stringify(q));
-            } catch (e) {}
-            launch();
-        }, 2500);
-        if (saveP && saveP.then) saveP.then(function() { clearTimeout(timer); launch(); }, function() { clearTimeout(timer); launch(); });
+        if (!isPhone) { window.open(webUrl, '_blank', 'noopener'); return; }
+        // Phone: open the Telegram app; if it isn't installed, go to the t.me page instead.
+        var left = false;
+        var onHide = function() { if (document.hidden) left = true; };
+        document.addEventListener('visibilitychange', onHide);
+        window.addEventListener('pagehide', function() { left = true; }, { once: true });
+        window.location.href = 'tg://resolve?domain=' + user + '&text=' + encodeURIComponent(text);
+        setTimeout(function() {
+            document.removeEventListener('visibilitychange', onHide);
+            if (!left && !document.hidden) window.location.href = webUrl;
+        }, 1800);
     }
 
     function showMessengerPopup(o) {
@@ -3499,7 +3514,11 @@ function sendToTelegram(order, callback) {
         rows += '<div class="gkm-row"><span>' + (kh ? 'ដឹកជញ្ជូន' : 'Delivery') + '</span><span>$' + Number(o.shipping || 0).toFixed(2) + '</span></div>';
         rows += '<div class="gkm-row gkm-total"><span>' + (kh ? 'សរុប' : 'Total') + '</span><span>$' + Number(o.total || 0).toFixed(2) + '</span></div>';
         document.getElementById('gkmItems').innerHTML = rows;
+        document.getElementById('gkmTgTxt').textContent = kh ? 'ផ្ញើតាម Telegram' : 'Send on Telegram';
         document.getElementById('gkmGoTxt').textContent = kh ? 'ផ្ញើតាម Messenger' : 'Send on Messenger';
+        document.getElementById('gkmHint').textContent = kh ? 'Messenger៖ គ្រាន់តែផ្ញើលេខទូរស័ព្ទរបស់អ្នក' : 'Messenger: just send us your phone number';
+        _gkMsgrShort = (kh ? 'សួស្តី Goat Kids! លេខទូរស័ព្ទខ្ញុំ៖ ' : 'Hi Goat Kids! My phone number: ') + (o.customerPhone || '') +
+            ' (' + (kh ? 'លេខកុម្ម៉ង់ ' : 'order ') + o.orderId + ')';
         document.getElementById('gkmCopy').textContent = kh ? 'ចម្លងម្តងទៀត' : 'Copy again';
         document.getElementById('gkmClose').textContent = kh ? 'បិទ' : 'Close';
         document.getElementById('gkmNote').textContent = '';
