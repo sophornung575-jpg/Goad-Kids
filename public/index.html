@@ -706,13 +706,14 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         </div>
                         <h3 style="margin-top:1.5rem"><i class="fas fa-map-marker-alt"></i> <span data-translate="deliveryInfo">Delivery Information</span></h3>
                         <div class="form-group">
-                            <select id="shippingLocation" class="form-control" onchange="updateShipping()" style="font-weight:600">
-                                <option value="">-- Select Delivery Service --</option>
+                            <select id="shippingLocation" class="form-control" onchange="updateShipping()" style="font-weight:600" required>
+                                <option value="">-- Select Delivery Service * --</option>
                                 <option value="pickup">Pickup from Shop - FREE ($0.00)</option>
                                 <option value="phnompenh">Phnom Penh - $1.50</option>
                                 <option value="province">Province - $2.00</option>
                             </select>
                             <!-- Staff only: change the delivery fee for this order (e.g. far address, free delivery promo) -->
+                            <div id="shippingRequiredMsg" class="hidden" style="color:#e53e3e;font-size:0.85rem;margin-top:0.35rem"><i class="fas fa-circle-exclamation"></i> <span id="shippingRequiredTxt">Please choose a delivery option</span></div>
                             <div id="customFeeRow" class="hidden" style="display:flex;align-items:center;gap:0.5rem;margin-top:0.5rem">
                                 <label for="shippingFeeInput" style="margin:0;font-size:0.85rem;white-space:nowrap"><i class="fas fa-pen"></i> Delivery fee ($)</label>
                                 <input type="number" id="shippingFeeInput" class="form-control" min="0" step="0.25" inputmode="decimal" oninput="onCustomShippingFee()" style="max-width:120px">
@@ -3071,6 +3072,7 @@ function sendToTelegram(order, callback) {
     function updateShipping() {
         var locEl = document.getElementById('shippingLocation');
         var loc = locEl ? locEl.value : '';
+        if (loc) _gkShowShippingRequired(false);
         var def = DEFAULT_SHIPPING_FEES[loc] || 0;
         // A typed fee belongs to the delivery area it was typed for; changing the area goes back to its standard price.
         if (STATE.shippingFeeLoc !== loc) { STATE.shippingFeeLoc = loc; STATE.shippingCustom = null; }
@@ -3082,6 +3084,17 @@ function sendToTelegram(order, callback) {
         if (inp && document.activeElement !== inp) inp.value = sh.toFixed(2);
         STATE.shippingFee = sh;
         recalcCartTotals();
+    }
+    // Delivery must be chosen before an order can be sent: red outline + short message under the box.
+    function _gkShowShippingRequired(show) {
+        var el = document.getElementById('shippingLocation');
+        var msg = document.getElementById('shippingRequiredMsg');
+        if (el) { el.style.borderColor = show ? '#e53e3e' : ''; el.style.boxShadow = show ? '0 0 0 3px rgba(229,62,62,0.2)' : ''; }
+        if (msg) {
+            var t = document.getElementById('shippingRequiredTxt');
+            if (t) t.textContent = STATE.language === 'kh' ? 'សូមជ្រើសរើសសេវាដឹកជញ្ជូន' : 'Please choose a delivery option';
+            msg.classList.toggle('hidden', !show);
+        }
     }
     function onCustomShippingFee() {
         var v = parseFloat(document.getElementById('shippingFeeInput').value);
@@ -3148,8 +3161,15 @@ function sendToTelegram(order, callback) {
         var ph = document.getElementById('customerPhone').value.trim();
         var ad = document.getElementById('customerAddress').value.trim();
         var ci = document.getElementById('customerCity').value.trim();
-        if (!n || !ph || !ad) { showToast('Fill Name, Phone & Address', 'error'); return; }
         if (!STATE.cart || STATE.cart.length === 0) { showToast('Cart is empty!', 'error'); return; }
+        var _locEl = document.getElementById('shippingLocation');
+        if (!_locEl || !_locEl.value) {
+            _gkShowShippingRequired(true);
+            if (_locEl) { _locEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); try { _locEl.focus(); } catch (e) {} }
+            showToast(STATE.language === 'kh' ? 'សូមជ្រើសរើសសេវាដឹកជញ្ជូនជាមុនសិន' : 'Please choose a delivery option first', 'error');
+            return;
+        }
+        if (!n || !ph || !ad) { showToast('Fill Name, Phone & Address', 'error'); return; }
 
         // ── DOUBLE-SUBMIT LOCK ──
         if (_placingOrder) { showToast('Order is being sent, please wait...', 'warning'); return; }
@@ -3376,12 +3396,43 @@ function sendToTelegram(order, callback) {
             _gkCopy(_gkMsgrText);
             document.getElementById('gkmNote').textContent = kh ? '✅ បានចម្លងម្តងទៀត' : '✅ Copied again';
         };
-        document.getElementById('gkmGo').addEventListener('click', function() {
+        document.getElementById('gkmGo').addEventListener('click', function(e) {
             var kh = STATE.language === 'kh';
             _gkCopy(_gkMsgrText); // step 1 happens right here, before Messenger opens
             document.getElementById('gkmNote').textContent = kh ? '✅ បានចម្លងរួច — Paste ហើយ Send' : '✅ Copied — just Paste & Send';
             try { if (typeof fbq !== 'undefined') fbq('track', 'Contact'); } catch (e) {}
+            // On phones, open the Messenger app straight away instead of the m.me web page
+            // (the one with the blue "Open in app" button). Order details are already copied,
+            // and the message contains the order ID, so the auto-reply still finds the order.
+            if (_gkOpenMessengerApp(this.href)) e.preventDefault();
         });
+    }
+
+    // Returns true if it took over the click (phone), false to let the normal m.me link open (computer).
+    function _gkOpenMessengerApp(webUrl) {
+        var ua = navigator.userAgent || '';
+        var isAndroid = /Android/i.test(ua);
+        var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if (!isAndroid && !isIOS) return false;
+        var page = encodeURIComponent(GK_MESSENGER_PAGE);
+        if (isAndroid) {
+            // Android: open Messenger; if it isn't installed, Android itself falls back to the m.me page.
+            window.location.href = 'intent://user-thread/' + page +
+                '#Intent;scheme=fb-messenger;package=com.facebook.orca;S.browser_fallback_url=' +
+                encodeURIComponent(webUrl) + ';end';
+            return true;
+        }
+        // iPhone: try the Messenger app; if the page is still showing after a moment, open m.me instead.
+        var left = false;
+        var onHide = function() { if (document.hidden) left = true; };
+        document.addEventListener('visibilitychange', onHide);
+        window.addEventListener('pagehide', function() { left = true; }, { once: true });
+        window.location.href = 'fb-messenger://user-thread/' + page;
+        setTimeout(function() {
+            document.removeEventListener('visibilitychange', onHide);
+            if (!left && !document.hidden) window.location.href = webUrl;
+        }, 1800);
+        return true;
     }
 
     function showMessengerPopup(o) {
