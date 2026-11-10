@@ -2901,6 +2901,14 @@ const rcvKey = (bid, hid, i, k) => [bid, hid, i, k].join('|');
 function rcvVal(key, def){ return Object.prototype.hasOwnProperty.call(rcvDraft, key) ? rcvDraft[key] : def; }
 function rcvNum(v){ if(v === '' || v === null || v === undefined) return 0; const n = Number(v); return Number.isInteger(n) && n >= 0 ? n : null; }
 function rcvSet(el){ rcvDraft[el.dataset.k] = el.value; }
+// After a receive / close / add-size is saved: leave any number box and redraw the
+// Waiting list now. (The list waits while a box is active so typing isn't wiped —
+// without this, a received item could keep showing as "Waiting" on screen.)
+function rcvRefreshNow(){
+  const a = document.activeElement;
+  if(a && a !== document.body && typeof a.blur === 'function') a.blur();
+  renderIncoming(true);
+}
 function rcvToggle(el){ const k = el.dataset.k; if(el.open) rcvOpen.add(k); else rcvOpen.delete(k); }
 
 function incomingGroups(){
@@ -3050,6 +3058,7 @@ async function rcvAddSize(btn){
       ['incoming.' + bid + '.total']: lines.reduce((a, l) => a + l.qty, 0)
     });
     rcvOpen.add(bid + '|' + hid);
+    rcvRefreshNow();
   }catch(err){
     alert('Could not add the size: ' + err.message);
   }
@@ -3141,9 +3150,8 @@ async function rcvApply(bid, hids, mode, btn){
   if(!db){ alert('Not connected to the database.'); return; }
   if(rcvBusy) return;
   const g = incomingGroups().find(x => x.batchId === bid);
-  if(!g) return;
-  const items = g.items.filter(x => hids.includes(x.histId) && rcvSum(incomingLines(x), 'left') > 0);
-  if(!items.length){ alert('Nothing is waiting on ' + (hids.length > 1 ? 'this order.' : 'this item.')); return; }
+  const items = g ? g.items.filter(x => hids.includes(x.histId) && rcvSum(incomingLines(x), 'left') > 0) : [];
+  if(!items.length){ rcvRefreshNow(); alert('Nothing is waiting on ' + (hids.length > 1 ? 'this order' : 'this item') + ' — it was already received. The list has been refreshed.'); return; }
 
   const errs = [];
   const plan = items.map(x => {
@@ -3276,6 +3284,7 @@ async function rcvApply(bid, hids, mode, btn){
       writes.slice(i, i + 450).forEach(w => w(b));
       await b.commit();
     }
+    rcvRefreshNow();
     plan.forEach(p => Object.keys(rcvDraft).forEach(k => { if(k.startsWith(bid + '|' + p.x.histId + '|')) delete rcvDraft[k]; }));
     // Items that came from the Restock List: mark their lines received once nothing is left waiting.
     plan.forEach(p => {
