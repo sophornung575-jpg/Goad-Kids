@@ -707,10 +707,10 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                         <h3 style="margin-top:1.5rem"><i class="fas fa-map-marker-alt"></i> <span data-translate="deliveryInfo">Delivery Information</span></h3>
                         <div class="form-group">
                             <select id="shippingLocation" class="form-control" onchange="updateShipping()" style="font-weight:600" required>
-                                <option value="">-- Select Delivery Service * --</option>
-                                <option value="pickup">Pickup from Shop - FREE ($0.00)</option>
-                                <option value="phnompenh">Phnom Penh - $1.50</option>
-                                <option value="province">Province - $2.00</option>
+                                <option value="" data-translate="selectDelivery">-- Select Delivery Service * --</option>
+                                <option value="pickup" data-translate="deliveryPickup">Pickup from Shop - FREE ($0.00)</option>
+                                <option value="phnompenh" data-translate="deliveryPhnomPenh">Phnom Penh - $1.50</option>
+                                <option value="province" data-translate="deliveryProvince">Province - $2.00</option>
                             </select>
                             <!-- Staff only: change the delivery fee for this order (e.g. far address, free delivery promo) -->
                             <div id="shippingRequiredMsg" class="hidden" style="color:#e53e3e;font-size:0.85rem;margin-top:0.35rem"><i class="fas fa-circle-exclamation"></i> <span id="shippingRequiredTxt">Please choose a delivery option</span></div>
@@ -2561,6 +2561,7 @@ function sendToTelegram(order, callback) {
             store:'Store',admin:'Admin',login:'Login',sync:'Sync',cart:'Shopping Cart',
             emptyCart:'Your cart is empty',browseStore:'Browse Store',subtotal:'Subtotal',
             shipping:'Shipping',total:'Total',deliveryInfo:'Delivery Information',
+            selectDelivery:'-- Select Delivery Service * --',deliveryPickup:'Pickup from Shop - FREE ($0.00)',deliveryPhnomPenh:'Phnom Penh - $1.50',deliveryProvince:'Province - $2.00',
             fullName:'Full Name *',phoneNumber:'Phone Number *',city:'City / Province',
             address:'Full Address *',orderNotes:'Order Notes (optional)',
             placeOrder:'Send Order via Telegram',allCategories:'All Categories',
@@ -2623,6 +2624,7 @@ function sendToTelegram(order, callback) {
             store:'ហាង',admin:'គ្រប់គ្រង',login:'ចូល',sync:'ធ្វើសមកាល',cart:'កន្ត្រកទំនិញ',
             emptyCart:'កន្ត្រកទំនិញទទេ',browseStore:'ចូលហាង',subtotal:'សរុបរង',
             shipping:'ថ្លៃដឹក',total:'សរុប',deliveryInfo:'ព័ត៌មានដឹកជញ្ជូន',
+            selectDelivery:'-- ជ្រើសរើសសេវាដឹកជញ្ជូន * --',deliveryPickup:'មកយកផ្ទាល់នៅហាង - ឥតគិតថ្លៃ ($0.00)',deliveryPhnomPenh:'ភ្នំពេញ - $1.50',deliveryProvince:'តាមខេត្ត - $2.00',
             fullName:'ឈ្មោះពេញ *',phoneNumber:'លេខទូរស័ព្ទ *',city:'ទីក្រុង / ខេត្ត',
             address:'អាសយដ្ឋានពេញ *',orderNotes:'កំណត់ចំណាំ',
             placeOrder:'ផ្ញើការបញ្ជាទិញតាម Telegram',allCategories:'គ្រប់ប្រភេទ',
@@ -2707,6 +2709,8 @@ function sendToTelegram(order, callback) {
                 else el.textContent = translations[STATE.language][key];
             }
         });
+        var _shipMsg = document.getElementById('shippingRequiredTxt');
+        if (_shipMsg) _shipMsg.textContent = STATE.language === 'kh' ? 'សូមជ្រើសរើសសេវាដឹកជញ្ជូន' : 'Please choose a delivery option';
         renderProducts(); renderCart(); renderPending(); renderHistory(); renderRefunds();
         if (document.getElementById('adminInventoryTab') && document.getElementById('adminInventoryTab').classList.contains('active')) renderInventory();
     }
@@ -3259,8 +3263,9 @@ function sendToTelegram(order, callback) {
             // can take up to 20s on Safari/iOS; a customer placing an order in that
             // window would otherwise have their order silently skipped and lost.
             // This write is also what triggers notifyNewOrder server-side.
+            var _gkSaveP = null;
             if (db) {
-                db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order)
+                (_gkSaveP = db.collection('stores').doc(STATE.storeId).collection('orders').doc(oid).set(order))
                 .then(function() {
                     // Remove from the retry queue if a previous attempt had queued it
                     try {
@@ -3307,7 +3312,9 @@ function sendToTelegram(order, callback) {
             document.getElementById('orderSuccessScreen').classList.remove('hidden');
             document.getElementById('successOrderId').textContent = '📦 ' + oid;
             // Customers only — staff placing an order from the admin view don't need the Messenger step
-            if (!STATE.isAdmin) { try { showMessengerPopup(order); } catch(e) { console.warn('Messenger popup failed:', e); } }
+            // Customers go straight to a Telegram chat with the store (order already typed in);
+            // if Telegram doesn't open, the Messenger popup shows instead.
+            if (!STATE.isAdmin) { try { _gkContactAfterOrder(order, _gkSaveP); } catch(e) { console.warn('After-order contact failed:', e); try { showMessengerPopup(order); } catch(e2) {} } }
         })(oid, order);
     }
 
@@ -3433,6 +3440,49 @@ function sendToTelegram(order, callback) {
             if (!left && !document.hidden) window.location.href = webUrl;
         }, 1800);
         return true;
+    }
+
+    // =============================================
+    // AFTER ORDER → open a Telegram chat with the store, order text pre-filled.
+    // Change this one line to switch to the store's own Telegram account later.
+    // =============================================
+    var GK_TELEGRAM_USER = 'Sophorn_Goatkids';
+
+    function _gkContactAfterOrder(order, saveP) {
+        var ua = navigator.userAgent || '';
+        var isPhone = /Android|iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        // Computers: no reliable way to open the Telegram app, keep the Messenger popup.
+        if (!isPhone || !GK_TELEGRAM_USER) { showMessengerPopup(order); return; }
+
+        var text = _gkOrderMessage(order);
+        _gkCopy(text); // also on the clipboard, in case the pre-filled text doesn't come through
+
+        var launched = false;
+        function launch() {
+            if (launched) return; launched = true;
+            var left = false;
+            var onHide = function() { if (document.hidden) left = true; };
+            document.addEventListener('visibilitychange', onHide);
+            window.addEventListener('pagehide', function() { left = true; }, { once: true });
+            try { if (typeof fbq !== 'undefined') fbq('track', 'Contact'); } catch (e) {}
+            window.location.href = 'tg://resolve?domain=' + encodeURIComponent(GK_TELEGRAM_USER) + '&text=' + encodeURIComponent(text);
+            // Still on the page after a moment → Telegram isn't installed (or was blocked) → Messenger instead.
+            setTimeout(function() {
+                document.removeEventListener('visibilitychange', onHide);
+                if (!left && !document.hidden) showMessengerPopup(order);
+            }, 2000);
+        }
+        // Leaving for Telegram can pause this page, so wait for the order to finish saving first
+        // (at most ~2.5s). If it isn't saved by then, keep it in the retry queue so it's never lost.
+        var timer = setTimeout(function() {
+            try {
+                var q = JSON.parse(localStorage.getItem('goatNewOrderQueue') || '[]');
+                if (!q.some(function(x){ return x.orderId === order.orderId; })) q.push(order);
+                localStorage.setItem('goatNewOrderQueue', JSON.stringify(q));
+            } catch (e) {}
+            launch();
+        }, 2500);
+        if (saveP && saveP.then) saveP.then(function() { clearTimeout(timer); launch(); }, function() { clearTimeout(timer); launch(); });
     }
 
     function showMessengerPopup(o) {
