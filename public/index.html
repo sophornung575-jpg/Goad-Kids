@@ -5882,6 +5882,15 @@ function sendToTelegram(order, callback) {
         return String(name || '').toLowerCase().replace(/[\s_\-]+/g, ' ').trim();
     }
 
+    // Document ID for a product that is NEW to a store, used by transfers. It comes from
+    // the product name, so two approvals running at the same time (two size rows tapped
+    // quickly, two devices, single + bulk) land on the SAME document instead of each
+    // making its own fresh copy — that is what created two "Cutie Dresses_274" at 271.
+    function transferNewProductId(name) {
+        var k = productNameKey(name).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        return 'trf_' + (k || 'item');
+    }
+
     // Finds the SAME product in another store for a transfer. Deleted records are
     // skipped (stock used to land in a hidden deleted copy, which later came back as
     // a second copy). Order: slug → exact name → loose name → same ID. Returns
@@ -13349,15 +13358,15 @@ function sendToTelegram(order, callback) {
             var productSlug = src0.slug || makeSlug(src0.name);
             // Slug → exact name → loose name → ID, never a deleted copy
             var destHit = await findTransferDestProduct(t.toStoreId, productSlug, src0.name, t.productId);
-            var destProductRef = destHit ? destHit.ref : db.collection('stores').doc(t.toStoreId).collection('products').doc();
-            if (!destHit) console.log('ℹ️ Creating new product in destination with fresh ID:', destProductRef.id);
+            var destProductRef = destHit ? destHit.ref : db.collection('stores').doc(t.toStoreId).collection('products').doc(transferNewProductId(src0.name || t.productName));
+            if (!destHit) console.log('ℹ️ Product new to destination, using ID:', destProductRef.id);
 
             // ...then read-check-write all three documents in ONE transaction. Two approvals
             // running at the same time (quick taps, two devices, single + bulk) used to each
             // read the same sizes and the later save wiped the earlier deduction — Main Store
             // kept stock that had already left. A transaction re-reads and retries instead.
             var tRef = db.collection('transfers').doc(transferId);
-            var p, destData;
+            var p, destData, destIsNew;
             var txResult = await db.runTransaction(async function(tx) {
                 var tSnap = await tx.get(tRef);
                 var sSnap = await tx.get(sourceRef);
@@ -13381,7 +13390,10 @@ function sendToTelegram(order, callback) {
                     p.stock = getTotalStock(p);
                 } else { p.stock = (p.stock || 0) - t.qty; }
 
-                if (dSnap.exists) {
+                // An existing, non-deleted document = the item is already there (possibly
+                // created a moment ago by another approval of the same product) → add to it.
+                destIsNew = !(dSnap.exists && !isDeletedProductDoc(dSnap.data()));
+                if (!destIsNew) {
                     destData = JSON.parse(JSON.stringify(dSnap.data()));
                 } else {
                     // Genuinely new product in destination — fresh auto-generated ID, never reuse source ID.
@@ -13413,7 +13425,9 @@ function sendToTelegram(order, callback) {
 
                 var pWrite = Object.assign({}, p); delete pWrite.id;
                 tx.set(sourceRef, pWrite, { merge: true });
-                tx.set(destProductRef, destData, { merge: true });
+                // A new item replaces any old deleted record with this ID completely
+                if (destIsNew) tx.set(destProductRef, destData);
+                else tx.set(destProductRef, destData, { merge: true });
                 tx.update(tRef, {
                     status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
                     approvedAtStr: new Date().toLocaleString(),
@@ -13552,7 +13566,7 @@ function sendToTelegram(order, callback) {
             // 4. Genuinely new — fresh auto-generated ID, never reuse source ID
             if (!destProductCache[destKey]) {
                 if (srcP2) {
-                    var newRef2 = db.collection('stores').doc(t.toStoreId).collection('products').doc();
+                    var newRef2 = db.collection('stores').doc(t.toStoreId).collection('products').doc(transferNewProductId(srcP2.name || t.productName));
                     destProductCache[destKey] = {
                         ref: newRef2,
                         data: Object.assign({}, srcP2, {
@@ -13614,7 +13628,8 @@ function sendToTelegram(order, callback) {
                         if (srcSnaps[sp2].exists) srcLive[sp2] = Object.assign({ id: srcByPath[sp2].id, _storeId: srcByPath[sp2]._storeId }, JSON.parse(JSON.stringify(srcSnaps[sp2].data())));
                     }
                     for (var dp2 in destRefsByPath) {
-                        destLive[dp2] = { ref: destRefsByPath[dp2], data: destSnaps[dp2].exists ? JSON.parse(JSON.stringify(destSnaps[dp2].data())) : JSON.parse(JSON.stringify(destTemplates[dp2])) };
+                        var dIsNew = !(destSnaps[dp2].exists && !isDeletedProductDoc(destSnaps[dp2].data()));
+                        destLive[dp2] = { ref: destRefsByPath[dp2], isNew: dIsNew, data: dIsNew ? JSON.parse(JSON.stringify(destTemplates[dp2])) : JSON.parse(JSON.stringify(destSnaps[dp2].data())) };
                     }
 
                     transfers.forEach(function(t) {
@@ -13673,7 +13688,8 @@ function sendToTelegram(order, callback) {
                         if (!destDone[t._destPath]) {
                             destDone[t._destPath] = true;
                             var dd = destLive[t._destPath]; delete dd.data.id;
-                            tx.set(dd.ref, dd.data, { merge: true });
+                            if (dd.isNew) tx.set(dd.ref, dd.data);
+                            else tx.set(dd.ref, dd.data, { merge: true });
                         }
                         tx.update(db.collection('transfers').doc(t.transferId), {
                             status: 'approved', approvedAt: Date.now(), approvedBy: STATE.adminRole,
