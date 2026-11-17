@@ -284,5 +284,11 @@ async function adResultsByPost(sinceKey){
   await db.collection(COL).doc('postStats').set({
     updatedAt: Date.now(), posts: results, lastRun: { checked: posts.length, found, adsErr }
   }, { merge: true });
+  // Daily snapshot per post (same format the Marketing page writes), for the Trend / Per day columns.
+  const todayKey = dayKeyOf(new Date()), hist = {};
+  Object.entries(results).forEach(([k, r]) => { if (r.status !== 'ok') return;
+    hist[k] = { [todayKey]: [Number(r.views != null ? r.views : r.reach) || 0, Number(r.reach) || 0,
+      (Number(r.reactions) || 0) + (Number(r.comments) || 0) + (Number(r.shares) || 0), Math.round((Number(r.adSpend) || 0) * 100) / 100] }; });
+  if (Object.keys(hist).length) await db.collection('marketing_settings').doc('statHistory').set({ p: hist }, { merge: true });
   console.log(`Done: ${found}/${posts.length} posts matched and saved to ${COL}/postStats.`);
 })().catch(e => { console.error('FAILED: ' + (e.message || e)); process.exit(1); });
