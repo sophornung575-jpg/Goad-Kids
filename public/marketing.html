@@ -390,7 +390,7 @@ var TASKS=[{id:'video',n:'Video post',s:'Video',c:COL.video,sum:'video'},{id:'ph
 var posts=ld(PKEY,{}),tDay=iso(new Date());
 var tg=ld(TGKEY,{video:1,photo:1,live:1});
 function rowsOf(d,t){return((posts[d]||{})[t])||[]}
-function postedN(d,t){return rowsOf(d,t).filter(function(r){return r.link}).length}
+function postedN(d,t){return rowsOf(d,t).filter(function(r){return r.link&&r.by}).length}
 function nDone(d){return TASKS.filter(function(t){return postedN(d,t.id)>0}).length}
 var liveOff=ld('goatLiveOff',{});
 function isOff(d,t){return t==='live'&&!!liveOff[d]}
@@ -426,13 +426,16 @@ function snapshotStats(){if(!SYNC.on||!fdb)return;var today=iso(new Date()),upd=
   savedPosts(winStart()).forEach(function(x){var st=pstat[x.key];if(!st||st.status!=='ok')return;var v=snapNum(st),h=(hist[x.key]||{})[today];
     if(h&&h.join()===v.join())return;upd[x.key]={};upd[x.key][today]=v;n++;hist[x.key]=hist[x.key]||{};hist[x.key][today]=v});
   if(n)fdb.collection('marketing_settings').doc('statHistory').set({p:upd},{merge:true}).catch(function(){})}
-function postBreakdown(){
+function postBreakdown(){var el=$('cPosts');if(!el)return;try{postBreakdown0()}catch(e){el.innerHTML='<div class="empty">'+L('Could not show the breakdown')+': '+esc(e&&e.message||e)+'</div>'}}
+function unsavedIn(dl){var n=0;dl.forEach(function(d){TASKS.forEach(function(t){((posts[d]||{})[t.id]||[]).forEach(function(r){if(r.link&&!r.by&&!r.sample)n++})})});return n}
+function postBreakdown0(){
   var el=$('cPosts');if(!el)return;var dl=dayList(days),from=dl[0],m=$('metric').value;
   var useM={reach:1,views:1,eng:2,spend:3}[m];if(useM===undefined)useM=0;var mLbl=useM===3?'spend':useM===2?'engagement':'views / reach';
   var list=savedPosts(from).filter(function(x){return dl.indexOf(x.day)>-1});
   // hand-typed results that have a link but were not saved in Daily Tasks
   var typedL=data.filter(function(x){return x.link&&x.type!=='ad'&&dl.indexOf(x.date)>-1&&!list.some(function(y){return y.r.link===x.link})});
-  if(!list.length&&!typedL.length){el.innerHTML='<div class="empty">'+L('No saved post links in this range yet.')+'</div>';return}
+  var uns=unsavedIn(dl),unsH=uns?'<div class="pnote" style="color:#b0524f">'+uns+' '+L('post(s) were picked but never saved, so they have no results. Open Daily Tasks, pick the product, then press Save.')+'</div>':'';
+  if(!list.length&&!typedL.length){el.innerHTML='<div class="empty">'+L('No saved post links in this range yet.')+'</div>'+unsH;return}
   var T={views:0,eng:0,spend:0,adReach:0};
   var rows=list.map(function(x){var r=x.r,st=pstat[x.key]||{},h=hist[x.key]||{},P=r.products||[],img=P[0]&&P[0].img;
     var name=P.map(function(p){return p.name}).join(', ')||r.title||'(no name)';
@@ -454,7 +457,7 @@ function postBreakdown(){
   var acct=0;dl.forEach(function(d){var a=pdaily[d];if(a)acct+=+a.adSpend||0});
   el.innerHTML='<div style="overflow-x:auto"><table class="ptab"><thead><tr><th>'+L('Post')+'</th><th>'+L('Trend')+' <small>('+L(mLbl)+')</small></th><th>'+L('Per day')+' <small>('+L('gain each day')+')</small></th><th>'+L('Spend')+'</th></tr></thead><tbody>'+rows.join('')+'</tbody>'+
     '<tfoot><tr><td>'+L('Total')+' · '+(list.length+typedL.length)+' '+L('posts')+'</td><td colspan="2">'+fmt(T.views)+' '+L('views')+' · '+fmt(T.eng)+' '+L('reactions')+'</td><td>$'+(Math.round(T.spend*100)/100)+'</td></tr></tfoot></table></div>'+
-    '<div class="pnote">'+L('Whole ad account spend in this range')+': <b>$'+(Math.round(acct*100)/100)+'</b>'+(acct>T.spend+0.01?' · $'+(Math.round((acct-T.spend)*100)/100)+' '+L('is from ads not linked to a saved post'):'')+'</div>'}
+    '<div class="pnote">'+L('Whole ad account spend in this range')+': <b>$'+(Math.round(acct*100)/100)+'</b>'+(acct>T.spend+0.01?' · $'+(Math.round((acct-T.spend)*100)/100)+' '+L('is from ads not linked to a saved post'):'')+'</div>'+unsH}
 function miniLine(vals,c){var w=150,h=40,pts=[],n=vals.length,mx=Math.max.apply(null,vals.map(function(v){return v||0}))||1;
   vals.forEach(function(v,i){if(v!=null)pts.push([4+(w-8)*(n>1?i/(n-1):.5),h-5-(h-10)*v/mx,v])});
   var s='<svg viewBox="0 0 '+w+' '+h+'"><line x1="4" x2="'+(w-4)+'" y1="'+(h-5)+'" y2="'+(h-5)+'" stroke="var(--bd)"/>';
@@ -475,7 +478,7 @@ var liveOpen={};
 function liveRow(t,r,i){
   var P=r.products||[],key='live|'+r.id;
   var items=P.map(function(p,k){return '<div class="lvi">'+thumb(p,key,k,true)+'<textarea rows="2" data-ps="'+key+'|'+k+'" placeholder="No script yet">'+esc(p.script||'')+'</textarea></div>'}).join('');
-  return '<div class="row"><div class="rh"><b>Live #'+(i+1)+'</b>'+(r.link?'<span class="ok">Posted by '+esc(r.by||'?')+' at '+esc(r.at||'')+'</span>':'<span class="todo">Not posted yet</span>')+
+  return '<div class="row"><div class="rh"><b>Live #'+(i+1)+'</b>'+(r.link&&r.by?'<span class="ok">Posted by '+esc(r.by||'?')+' at '+esc(r.at||'')+'</span>':r.link?'<span class="todo" style="color:#b0524f">'+L('Not saved - press Save')+'</span>':'<span class="todo">Not posted yet</span>')+
     '<button class="x" data-delrow="'+key+'" title="Delete this row">✕</button></div>'+
     '<div class="lvh"><b>Plan - before the live</b><span class="todo">'+P.length+' item'+(P.length===1?'':'s')+' planned</span><button data-lload="'+key+'">Load from Live Desk</button></div>'+
     '<div class="srch"><input data-s="'+key+'" placeholder="Search products (add as many as you need)'+(products.length?'':' - products not loaded, see Settings')+'" autocomplete="off"><div class="dd" hidden></div></div>'+
@@ -491,7 +494,7 @@ function rowHTML(t,r,i){
   var P=r.products||[],multi=t.id==='live',key=t.id+'|'+r.id;
   var th=P.map(function(p,k){return thumb(p,key,k,true)}).join('')+(!P.length&&r.title?'<div class="pth"><div class="noimg"></div><div class="pn"><div>'+esc(r.title)+'</div><small>typed</small></div></div>':'');
   var canSearch=multi||(!P.length&&!r.title);
-  return '<div class="row"><div class="rh"><b>'+t.s+' #'+(i+1)+'</b>'+(r.link?'<span class="ok">Posted by '+esc(r.by||'?')+' at '+esc(r.at||'')+'</span>':'<span class="todo">Not posted yet</span>')+
+  return '<div class="row"><div class="rh"><b>'+t.s+' #'+(i+1)+'</b>'+(r.link&&r.by?'<span class="ok">Posted by '+esc(r.by||'?')+' at '+esc(r.at||'')+'</span>':r.link?'<span class="todo" style="color:#b0524f">'+L('Not saved - press Save')+'</span>':'<span class="todo">Not posted yet</span>')+
     '<button class="x" data-delrow="'+key+'" title="Delete this row">✕</button></div>'+
     (canSearch?'<div class="srch"><input data-s="'+key+'" placeholder="'+(multi?'Search products (add as many as you need)':'Search the product')+(products.length?'':' - products not loaded, see Settings')+'" autocomplete="off"><div class="dd" hidden></div></div>':'')+
     '<div class="acts"><button data-gen="'+key+'">Write script'+(r.script?' (saved)':'')+'</button>'+
@@ -647,6 +650,8 @@ function openPicker(t,rid){
     [].forEach.call(m.querySelectorAll('[data-pf]'),function(b){b.onclick=function(){filt=b.getAttribute('data-pf');draw()}});
     [].forEach.call(m.querySelectorAll('[data-pk]'),function(b){b.onclick=function(){
       var it=all[+b.getAttribute('data-pk')];if(!it)return;
+      if(!(r.products||[]).length&&!r.title){alert(L('Please pick the product first.'));return}
+      if(!$('tUser').value.trim()){alert(L('Please type your name first (top right).'));return}
       r.link=it.link;r.postId=it.postId;if(!r.script&&it.text)r.pickedText=it.text;sv(PKEY,posts);
       m.hidden=true;m.innerHTML='';saveLink(t,rid);renderTasks()}})}
   draw()}
@@ -1085,7 +1090,7 @@ KM['stock age']='អាយុស្តុក';KM['unknown']='មិនដឹង'
 KM['Only the master account can change rules']='មានតែគណនីមេប៉ុណ្ណោះដែលអាចប្តូរច្បាប់';
 KM['Rule details']='ព័ត៌មានលម្អិតនៃច្បាប់';KM['Use for marketing']='ប្រើសម្រាប់ទីផ្សារ';KM['top']='កំពូល';KM['rank']='លំដាប់';KM['of']='ក្នុងចំណោម';KM['items with an arrival date']='ទំនិញមានថ្ងៃមកដល់';KM['items that sold']='ទំនិញដែលបានលក់';KM['items with big stock']='ទំនិញស្តុកច្រើន';KM['turned off']='បានបិទ';KM['Show top']='បង្ហាញកំពូល';KM['Show all']='បង្ហាញទាំងអស់';KM['Items to show per rule']='ចំនួនទំនិញបង្ហាញក្នុងមួយច្បាប់';
 KM['Event: Birthday party']='ព្រឹត្តិការណ៍៖ ពិធីខួបកំណើត';KM['Event: Wedding party']='ព្រឹត្តិការណ៍៖ មង្គលការ';KM['Items tagged Birthday or Both, during the birthday dates you set (same every year).']='ទំនិញដាក់ប្រភេទ ខួបកំណើត ឬ ទាំងពីរ ក្នុងថ្ងៃដែលអ្នកកំណត់ (ដូចគ្នារៀងរាល់ឆ្នាំ)។';KM['Items tagged Wedding or Both, during the wedding season you set (same every year).']='ទំនិញដាក់ប្រភេទ មង្គលការ ឬ ទាំងពីរ ក្នុងរដូវដែលអ្នកកំណត់ (ដូចគ្នារៀងរាល់ឆ្នាំ)។';KM['From (MM-DD, every year)']='ពី (ខែ-ថ្ងៃ រៀងរាល់ឆ្នាំ)';KM['To (MM-DD, every year)']='ដល់ (ខែ-ថ្ងៃ រៀងរាល់ឆ្នាំ)';KM['In season now']='កំពុងក្នុងរដូវ';KM['Not in season now']='មិនទាន់ដល់រដូវ';KM['tagged items']='ទំនិញដាក់ប្រភេទ';KM['Birthday']='ខួបកំណើត';KM['Wedding']='មង្គលការ';KM['Both']='ទាំងពីរ';KM['No type']='គ្មានប្រភេទ';KM['Marketing types']='ប្រភេទទីផ្សារ';KM['only shown here, never in the store app']='បង្ហាញតែទីនេះ មិនបង្ហាញក្នុងកម្មវិធីហាងទេ';KM['Staff set the type at receiving (restock tool). Use this list to tag older items.']='បុគ្គលិកកំណត់ប្រភេទពេលទទួលទំនិញ (Restock tool)។ ប្រើបញ្ជីនេះដើម្បីដាក់ប្រភេទទំនិញចាស់។';KM['Show']='បង្ហាញ';KM['Search']='ស្វែងរក';KM['All']='ទាំងអស់';KM['Select all']='ជ្រើសទាំងអស់';KM['selected']='បានជ្រើស';KM['Clear']='លុប';KM['Showing']='បង្ហាញ';KM['use Search or Show to narrow it']='ប្រើ ស្វែងរក ឬ បង្ហាញ ដើម្បីបង្រួម';KM['Tick the items first']='សូមជ្រើសទំនិញជាមុន';KM['items saved']='ទំនិញបានរក្សាទុក';KM['Use MM-DD, e.g. 11-01']='សូមប្រើ ខែ-ថ្ងៃ ឧ. 11-01';
-KM['Back to store']='ត្រឡប់ទៅហាង';
+KM['Back to store']='ត្រឡប់ទៅហាង';KM['Not saved - press Save']='មិនទាន់រក្សាទុក – ចុចរក្សាទុក';KM['post(s) were picked but never saved, so they have no results. Open Daily Tasks, pick the product, then press Save.']='ការផុសត្រូវបានជ្រើស តែមិនបានរក្សាទុក ដូច្នេះគ្មានលទ្ធផល។ បើកកិច្ចការប្រចាំថ្ងៃ ជ្រើសផលិតផល រួចចុចរក្សាទុក។';KM['Could not show the breakdown']='មិនអាចបង្ហាញលទ្ធផលតាមការផុស';
 var WORDS={spend:'ចំណាយ',reach:'ការទៅដល់',views:'ចំនួនមើល',clicks:'ចុច',likes:'ចូលចិត្ត',msgs:'សារ',orders:'កុម្ម៉ង់'};
 var SRCH={'Search the product':'ស្វែងរកផលិតផល','Search products (add as many as you need)':'ស្វែងរកផលិតផល (បន្ថែមបានច្រើន)'};
 var NW='(?:spend|reach|views|clicks|likes|msgs|orders)',NUM='\\$?[\\d.,k]+';
