@@ -437,7 +437,7 @@ function postBreakdown0(){
   var uns=unsavedIn(dl),unsH=uns?'<div class="pnote" style="color:#b0524f">'+uns+' '+L('post(s) were picked but never saved, so they have no results. Open Daily Tasks, pick the product, then press Save.')+'</div>':'';
   if(!list.length&&!typedL.length){el.innerHTML='<div class="empty">'+L('No saved post links in this range yet.')+'</div>'+unsH;return}
   var T={views:0,eng:0,spend:0,adReach:0};
-  var rows=list.map(function(x){var r=x.r,st=pstat[x.key]||{},h=hist[x.key]||{},P=r.products||[],img=P[0]&&P[0].img;
+  var rows=list.map(function(x){var r=x.r,st=pstat[x.key]||{},h=hist[x.key]||{},P=r.products||[],img=P[0]&&P[0].img,more=P.length>1?P.slice(1,4).filter(function(p){return p.img}).map(function(p){return '<img src="'+esc(p.img)+'" alt="" loading="lazy" style="width:28px;height:28px">'}).join(''):'';
     var name=P.map(function(p){return p.name}).join(', ')||r.title||'(no name)';
     var hd=Object.keys(h).sort(),cum=dl.map(function(d){var k=hd.filter(function(z){return z<=d}).pop();return k?h[k][useM]:null});
     var gains=[],prev=null;dl.forEach(function(d,i){var v=h[d]?h[d][useM]:null;if(v!=null){gains.push([d,prev==null?v:v-prev]);prev=v}else if(cum[i]!=null)prev=cum[i]});
@@ -449,7 +449,7 @@ function postBreakdown0(){
     var spH=st.boosted?'<b>$'+(Math.round(sp*100)/100)+'</b><small class="mut" style="display:block">'+fmt(st.adReach||0)+' '+L('paid reach')+'</small>':'<span class="mut">'+L('Not boosted')+'</span>';
     return '<tr><td data-h="'+L('Post')+'"><div class="ppost">'+(img?'<img src="'+esc(img)+'" alt="" loading="lazy">':'<div class="noimg"></div>')+'<div><span class="tag" style="background:'+(TASKS.filter(function(t){return t.id===x.type})[0].c)+'">'+L(x.type==='photo'?'Photo':x.type==='live'?'Live':'Video')+'</span> '+esc(name)+
       '<small>'+dateStr(x.day)+' · '+esc(r.by||'')+' · <a href="'+esc(r.link)+'" target="_blank" rel="noopener">'+L('Open')+'</a></small>'+
-      (ok?'<small>'+fmt(vw)+' '+L('views')+' · '+fmt(eg)+' '+L('reactions')+'</small>':'')+'</div></div></td>'+
+      (more?'<div style="display:flex;gap:3px;margin-top:3px">'+more+'</div>':'')+(P.length>1?'<small>'+P.length+' '+L('items in this post')+'</small>':'')+(ok?'<small>'+fmt(vw)+' '+L('views')+' · '+fmt(eg)+' '+L('reactions')+'</small>':'')+'</div></div></td>'+
       '<td data-h="'+L('Trend')+'" class="ptrend">'+trend+'</td><td data-h="'+L('Per day')+'"><div class="pday">'+per+'</div></td><td data-h="'+L('Spend')+'">'+spH+'</td></tr>'});
   rows=rows.concat(typedL.map(function(x){T.views+=+x.reach||0;T.eng+=+x.eng||0;T.spend+=+x.spend||0;
     return '<tr><td data-h="'+L('Post')+'"><div class="ppost"><div class="noimg"></div><div><span class="tag" style="background:'+COL[x.type]+'">'+LBL[x.type]+'</span> '+esc(x.name||'(no name)')+'<small>'+dateStr(x.date)+' · '+L('typed by hand')+' · <a href="'+esc(x.link)+'" target="_blank" rel="noopener">'+L('Open')+'</a></small></div></div></td>'+
@@ -491,7 +491,7 @@ function liveRow(t,r,i){
     '<button class="pri" data-save="'+key+'">Save result</button></div></div>'}
 function rowHTML(t,r,i){
   if(t.id==='live')return liveRow(t,r,i);
-  var P=r.products||[],multi=t.id==='live',key=t.id+'|'+r.id;
+  var P=r.products||[],multi=true,key=t.id+'|'+r.id;
   var th=P.map(function(p,k){return thumb(p,key,k,true)}).join('')+(!P.length&&r.title?'<div class="pth"><div class="noimg"></div><div class="pn"><div>'+esc(r.title)+'</div><small>typed</small></div></div>':'');
   var canSearch=multi||(!P.length&&!r.title);
   return '<div class="row"><div class="rh"><b>'+t.s+' #'+(i+1)+'</b>'+(r.link&&r.by?'<span class="ok">Posted by '+esc(r.by||'?')+' at '+esc(r.at||'')+'</span>':r.link?'<span class="todo" style="color:#b0524f">'+L('Not saved - press Save')+'</span>':'<span class="todo">Not posted yet</span>')+
@@ -533,7 +533,7 @@ $('tBlocks').addEventListener('input',function(e){
     '<div data-pickt="'+sk+'" class="typed">Use “'+esc(el.value.trim())+'” as typed</div>';
   dd.hidden=false});
 function pickProduct(t,rid,pid){var r=getRow(t,rid),p=products.filter(function(x){return x.id===pid})[0]||sugP.filter(function(x){return x.id===pid}).map(function(x){return{id:x.id,pid:x.pid,name:x.name,price:x.price,img:x.img,category:x.category,sizes:x.sizes,stock:x.stock}})[0];if(!r||!p)return;
-  r.products=r.products||[];if(t==='live'){if(!r.products.some(function(x){return x.id===pid}))r.products.push(p)}else r.products=[p];
+  r.products=r.products||[];if(!r.products.some(function(x){return x.id===pid}))r.products.push(p);
   r.title='';sv(PKEY,posts);renderTasks()}
 function openPreview(url){
   url=String(url||'').trim();
@@ -1090,7 +1090,7 @@ KM['stock age']='អាយុស្តុក';KM['unknown']='មិនដឹង'
 KM['Only the master account can change rules']='មានតែគណនីមេប៉ុណ្ណោះដែលអាចប្តូរច្បាប់';
 KM['Rule details']='ព័ត៌មានលម្អិតនៃច្បាប់';KM['Use for marketing']='ប្រើសម្រាប់ទីផ្សារ';KM['top']='កំពូល';KM['rank']='លំដាប់';KM['of']='ក្នុងចំណោម';KM['items with an arrival date']='ទំនិញមានថ្ងៃមកដល់';KM['items that sold']='ទំនិញដែលបានលក់';KM['items with big stock']='ទំនិញស្តុកច្រើន';KM['turned off']='បានបិទ';KM['Show top']='បង្ហាញកំពូល';KM['Show all']='បង្ហាញទាំងអស់';KM['Items to show per rule']='ចំនួនទំនិញបង្ហាញក្នុងមួយច្បាប់';
 KM['Event: Birthday party']='ព្រឹត្តិការណ៍៖ ពិធីខួបកំណើត';KM['Event: Wedding party']='ព្រឹត្តិការណ៍៖ មង្គលការ';KM['Items tagged Birthday or Both, during the birthday dates you set (same every year).']='ទំនិញដាក់ប្រភេទ ខួបកំណើត ឬ ទាំងពីរ ក្នុងថ្ងៃដែលអ្នកកំណត់ (ដូចគ្នារៀងរាល់ឆ្នាំ)។';KM['Items tagged Wedding or Both, during the wedding season you set (same every year).']='ទំនិញដាក់ប្រភេទ មង្គលការ ឬ ទាំងពីរ ក្នុងរដូវដែលអ្នកកំណត់ (ដូចគ្នារៀងរាល់ឆ្នាំ)។';KM['From (MM-DD, every year)']='ពី (ខែ-ថ្ងៃ រៀងរាល់ឆ្នាំ)';KM['To (MM-DD, every year)']='ដល់ (ខែ-ថ្ងៃ រៀងរាល់ឆ្នាំ)';KM['In season now']='កំពុងក្នុងរដូវ';KM['Not in season now']='មិនទាន់ដល់រដូវ';KM['tagged items']='ទំនិញដាក់ប្រភេទ';KM['Birthday']='ខួបកំណើត';KM['Wedding']='មង្គលការ';KM['Both']='ទាំងពីរ';KM['No type']='គ្មានប្រភេទ';KM['Marketing types']='ប្រភេទទីផ្សារ';KM['only shown here, never in the store app']='បង្ហាញតែទីនេះ មិនបង្ហាញក្នុងកម្មវិធីហាងទេ';KM['Staff set the type at receiving (restock tool). Use this list to tag older items.']='បុគ្គលិកកំណត់ប្រភេទពេលទទួលទំនិញ (Restock tool)។ ប្រើបញ្ជីនេះដើម្បីដាក់ប្រភេទទំនិញចាស់។';KM['Show']='បង្ហាញ';KM['Search']='ស្វែងរក';KM['All']='ទាំងអស់';KM['Select all']='ជ្រើសទាំងអស់';KM['selected']='បានជ្រើស';KM['Clear']='លុប';KM['Showing']='បង្ហាញ';KM['use Search or Show to narrow it']='ប្រើ ស្វែងរក ឬ បង្ហាញ ដើម្បីបង្រួម';KM['Tick the items first']='សូមជ្រើសទំនិញជាមុន';KM['items saved']='ទំនិញបានរក្សាទុក';KM['Use MM-DD, e.g. 11-01']='សូមប្រើ ខែ-ថ្ងៃ ឧ. 11-01';
-KM['Back to store']='ត្រឡប់ទៅហាង';KM['Not saved - press Save']='មិនទាន់រក្សាទុក – ចុចរក្សាទុក';KM['post(s) were picked but never saved, so they have no results. Open Daily Tasks, pick the product, then press Save.']='ការផុសត្រូវបានជ្រើស តែមិនបានរក្សាទុក ដូច្នេះគ្មានលទ្ធផល។ បើកកិច្ចការប្រចាំថ្ងៃ ជ្រើសផលិតផល រួចចុចរក្សាទុក។';KM['Could not show the breakdown']='មិនអាចបង្ហាញលទ្ធផលតាមការផុស';
+KM['Back to store']='ត្រឡប់ទៅហាង';KM['items in this post']='ទំនិញក្នុងការផុសនេះ';KM['Not saved - press Save']='មិនទាន់រក្សាទុក – ចុចរក្សាទុក';KM['post(s) were picked but never saved, so they have no results. Open Daily Tasks, pick the product, then press Save.']='ការផុសត្រូវបានជ្រើស តែមិនបានរក្សាទុក ដូច្នេះគ្មានលទ្ធផល។ បើកកិច្ចការប្រចាំថ្ងៃ ជ្រើសផលិតផល រួចចុចរក្សាទុក។';KM['Could not show the breakdown']='មិនអាចបង្ហាញលទ្ធផលតាមការផុស';
 var WORDS={spend:'ចំណាយ',reach:'ការទៅដល់',views:'ចំនួនមើល',clicks:'ចុច',likes:'ចូលចិត្ត',msgs:'សារ',orders:'កុម្ម៉ង់'};
 var SRCH={'Search the product':'ស្វែងរកផលិតផល','Search products (add as many as you need)':'ស្វែងរកផលិតផល (បន្ថែមបានច្រើន)'};
 var NW='(?:spend|reach|views|clicks|likes|msgs|orders)',NUM='\\$?[\\d.,k]+';
