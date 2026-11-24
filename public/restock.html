@@ -333,6 +333,11 @@
   .plan-table img{ width:40px; height:40px; object-fit:cover; border-radius:4px; display:block; }
   .plan-table .t{ max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .plan-table .nm{ font-weight:700; white-space:nowrap; }
+  .plan-table .grp select, .plan-table .grp input{ width:130px; padding:3px 5px; border:2px solid var(--gray-light); border-radius:5px; font-size:0.72rem; font-family:inherit; display:block; }
+  .plan-table .grp input{ margin-top:4px; }
+  .plan-table tr.own-grp .grp select, .plan-table tr.own-grp .grp input{ border-color:var(--primary); }
+  .plan-groups{ margin:6px 0; padding:0; list-style:none; }
+  .plan-groups li{ margin:2px 0; }
   .plan-badge{ display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.72rem; font-weight:700; white-space:nowrap; }
   .plan-badge.new{ background:#dcfce7; color:#166534; }
   .plan-badge.have{ background:#e0e7ff; color:#3730a3; }
@@ -500,7 +505,7 @@
                     <input type="checkbox" id="storePushToggle"> Also create these items in the Goat Kids store app
                   </label>
                   <div id="storePushFields" class="hidden" style="margin-top:10px">
-                    <label class="hint" for="storePushCategory">Category for every item in this file</label>
+                    <label class="hint" for="storePushCategory">Default category (change single items in the preview below)</label>
                     <select class="form-control" id="storePushCategory" style="max-width:260px">
                       <option value="Dresses">Dresses</option>
                       <option value="Girl Clothes">Girl Clothes</option>
@@ -509,7 +514,7 @@
                       <option value="Baby Shoes">Baby Shoes</option>
                       <option value="Baby Accessories">Baby Accessories</option>
                     </select>
-                    <label class="hint" for="storePushPrefix" style="margin-top:8px;display:block">Name prefix — each item becomes "prefix + next number"</label>
+                    <label class="hint" for="storePushPrefix" style="margin-top:8px;display:block">Default name prefix — each item becomes "prefix + next number"</label>
                     <input class="form-control" id="storePushPrefix" style="max-width:260px" placeholder="e.g. cutie dress">
                     <div class="hint" id="storePushPreview" style="margin-top:8px"></div>
                     <button class="btn btn-outline btn-small" id="storePushPreviewBtn" style="margin-top:6px" type="button">Check next numbers</button>
@@ -2414,7 +2419,19 @@ function pricingCalc(yuan, p){
   return { cost, price: Math.round(sell * 100) / 100 };
 }
 
+// Per-item category + prefix chosen in the preview (one supplier file can hold
+// several categories). key = entry.key -> { category, prefix }. Items not in
+// here use the default category/prefix boxes above.
+let storeItemGroup = {};
+function storeGroupFor(e, defPrefix, defCategory){
+  const g = storeItemGroup[e.key];
+  return { prefix: ((g && g.prefix) || defPrefix || '').trim(), category: (g && g.category) || defCategory };
+}
+function storePrefixMemGet(){ try{ return JSON.parse(localStorage.getItem('restockTool_catPrefix') || '{}') || {}; }catch(e){ return {}; } }
+function storePrefixMemSet(m){ try{ localStorage.setItem('restockTool_catPrefix', JSON.stringify(m)); }catch(e){} }
+
 function storePushReset(show){
+  storeItemGroup = {};
   document.getElementById('storePushBox').classList.toggle('hidden', !show);
   document.getElementById('storePushToggle').checked = false;
   document.getElementById('storePushFields').classList.add('hidden');
@@ -2534,8 +2551,8 @@ function importLinkedProduct(hd, docs){
   return null;
 }
 
-async function storeBuildPlan(entries, prefixRaw){
-  const prefix = prefixRaw.trim();
+async function storeBuildPlan(entries, prefixRaw, defCategory){
+  const defPrefix = (prefixRaw || '').trim();
   await pricingRefresh();  // always use the latest rule from the store app
   const snap = await db.collection('stores').doc(STORE_MAIN_ID).collection('products').get();
   const existing = [];
@@ -2546,22 +2563,29 @@ async function storeBuildPlan(entries, prefixRaw){
   const existingIds = new Set(existing.filter(p => p.active).map(p => p.id));
   const existingNames = new Set(existing.map(p => p.name.toLowerCase()));
 
-  // Highest number already used with this prefix (deleted-but-kept items count
-  // too, so a number is never reused). Copies the existing spelling/spacing.
-  const re = new RegExp('^(' + storeEscapeRegExp(prefix) + ')(\\s*)(\\d+)$', 'i');
-  let max = 0, lastName = '', namePrefix = prefix, sep = ' ';
-  existing.forEach(p => {
-    const m = p.name.match(re);
-    if(m && parseInt(m[3], 10) >= max){
-      max = parseInt(m[3], 10); lastName = p.name; namePrefix = m[1]; sep = m[2];
-    }
-  });
+  // One counter per prefix: highest number already used with that prefix
+  // (deleted-but-kept items count too, so a number is never reused). Copies
+  // the existing spelling/spacing.
+  const counters = {};
+  const counterFor = (prefix, category) => {
+    const k = prefix.toLowerCase();
+    if(counters[k]) return counters[k];
+    const re = new RegExp('^(' + storeEscapeRegExp(prefix) + ')(\\s*)(\\d+)$', 'i');
+    let max = 0, lastName = '', namePrefix = prefix, sep = ' ';
+    existing.forEach(p => {
+      const m = p.name.match(re);
+      if(m && parseInt(m[3], 10) >= max){
+        max = parseInt(m[3], 10); lastName = p.name; namePrefix = m[1]; sep = m[2];
+      }
+    });
+    counters[k] = { prefix, category, next: max + 1, lastName, namePrefix, sep, names: [] };
+    return counters[k];
+  };
 
   // Skip products this catalog already created in the store earlier.
   const plan = [];
   const skipped = [];
   const rows = [];  // every file item in order, for the preview table
-  let next = max + 1;
   for(const e of entries){
     const hist = await db.collection('restockTool_history').doc(e.key).get();
     const hd = hist.exists ? (hist.data() || {}) : {};
@@ -2577,33 +2601,55 @@ async function storeBuildPlan(entries, prefixRaw){
     }
     // Photos from this colour's Home card, else from the offer's main card.
     const catalogImgs = restockOwnImages(hd).length ? restockOwnImages(hd) : orderBaseImages(e);
-    let name = namePrefix + sep + next;
-    while(existingNames.has(name.toLowerCase())){ next++; name = namePrefix + sep + next; }
+    const grp = storeGroupFor(e, defPrefix, defCategory);
+    const own = !!storeItemGroup[e.key];
+    if(!grp.prefix){
+      rows.push({ entry: e, name: '(type a prefix)', isNew: true, img: catalogImgs[0] || '', category: grp.category, prefix: '', own });
+      continue;
+    }
+    const c = counterFor(grp.prefix, grp.category);
+    let name = c.namePrefix + c.sep + c.next;
+    while(existingNames.has(name.toLowerCase())){ c.next++; name = c.namePrefix + c.sep + c.next; }
     existingNames.add(name.toLowerCase());
-    plan.push({ entry: e, name, sizes: storeSizesFromVariants(e.sizes), images: catalogImgs,
+    c.names.push(name);
+    plan.push({ entry: e, name, category: grp.category, sizes: storeSizesFromVariants(e.sizes), images: catalogImgs,
                 pricing: pricingCalc(yuanFrom(e.price)) });
-    rows.push({ entry: e, name, isNew: true, img: catalogImgs[0] || '', pricing: plan[plan.length - 1].pricing });
-    next++;
+    rows.push({ entry: e, name, isNew: true, img: catalogImgs[0] || '', pricing: plan[plan.length - 1].pricing,
+                category: grp.category, prefix: grp.prefix, own });
+    c.next++;
   }
-  return { plan, skipped, lastName, rows };
+  const groups = Object.values(counters).filter(c => c.names.length);
+  const missing = rows.filter(r => r.isNew && !r.prefix).length;
+  return { plan, skipped, rows, groups, missing };
 }
 
 // The same check as a table, one row per item in the file.
-function storePlanTable(result, category){
-  const { plan, skipped, lastName, rows } = result;
+function storeGroupsHtml(groups){
+  return '<ul class="plan-groups">' + groups.map(g =>
+    `<li><b>${escapeHtml(g.category)}</b> · "${escapeHtml(g.prefix)}": <b>${g.names.length}</b> new ` +
+    `(${escapeHtml(g.names[0])}${g.names.length > 1 ? ' → ' + escapeHtml(g.names[g.names.length - 1]) : ''}) · ` +
+    (g.lastName ? `last existing: <b>${escapeHtml(g.lastName)}</b>` : '<b>no existing item uses this prefix — numbering starts at 1, check the spelling</b>') +
+    '</li>').join('') + '</ul>';
+}
+const STORE_CATEGORIES = ['Dresses', 'Girl Clothes', 'Boy Clothes', 'Baby Shirt', 'Baby Shoes', 'Baby Accessories'];
+function storePlanTable(result){
+  const { plan, skipped, rows, groups, missing } = result;
   const sizesTxt = e => Object.entries(e.qtyBySize || {}).filter(([, q]) => q > 0)
     .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }))
     .map(([sz, q]) => (sz || '—') + '×' + q).join(', ') || '—';
-  let head = `<div><b>${plan.length}</b> new in "${escapeHtml(category)}" · <b>${skipped.length}</b> already in the app · ` +
-    (lastName ? `last existing item: <b>${escapeHtml(lastName)}</b>` : '<b>no existing item uses this prefix — numbering starts at 1, check the spelling</b>') + '</div>';
+  let head = `<div><b>${plan.length}</b> new · <b>${skipped.length}</b> already in the app</div>` + storeGroupsHtml(groups || []) +
+    (missing ? `<div style="color:#b91c1c"><b>${missing}</b> item${missing === 1 ? ' has' : 's have'} no prefix yet — type one in its row.</div>` : '') +
+    '<div class="hint">Different category in the same file? Change the Category and Prefix in that item\'s row — each prefix keeps its own numbering.</div>';
   if(plan.length && !plan.some(p => p.pricing)) head += '<div>No pricing rule set in the store app — new items start at $0.</div>';
   const body = (rows || []).map((r, i) => {
     const e = r.entry;
     const title = (e.title || '') + (e.colour ? ' · ' + e.colour : '');
-    return `<tr>
+    return `<tr class="${r.own ? 'own-grp' : ''}">
       <td>${i + 1}</td>
       <td>${r.img ? `<img src="${escapeHtml(r.img)}" alt="" loading="lazy">` : ''}</td>
       <td class="nm">${escapeHtml(r.name)}</td>
+      <td class="grp">${r.isNew ? `<select data-key="${escapeHtml(e.key)}" data-f="category">${STORE_CATEGORIES.map(c => `<option value="${escapeHtml(c)}"${r.category === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select>
+        <input data-key="${escapeHtml(e.key)}" data-f="prefix" value="${escapeHtml(r.prefix || '')}" placeholder="prefix">` : '—'}</td>
       <td><span class="plan-badge ${r.isNew ? 'new' : 'have'}">${r.isNew ? 'New' : 'Already in app'}</span></td>
       <td style="white-space:nowrap">${e.qtyTotal || 0}</td>
       <td>${escapeHtml(sizesTxt(e))}</td>
@@ -2612,16 +2658,17 @@ function storePlanTable(result, category){
     </tr>`;
   }).join('');
   return head + `<div class="plan-wrap"><table class="plan-table"><thead><tr>
-      <th>#</th><th>Photo</th><th>Store item</th><th>Status</th><th>Qty</th><th>Sizes</th><th>Price</th><th>1688 item</th>
+      <th>#</th><th>Photo</th><th>Store item</th><th>Category / Prefix</th><th>Status</th><th>Qty</th><th>Sizes</th><th>Price</th><th>1688 item</th>
     </tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
-function storePlanSummary(result, category){
-  const { plan, skipped, lastName } = result;
+function storePlanSummary(result){
+  const { plan, skipped, groups } = result;
   let txt = '';
   if(plan.length){
-    txt += `Will create ${plan.length} new item${plan.length === 1 ? '' : 's'} in "${category}": ` +
-           (plan.length === 1 ? plan[0].name : `${plan[0].name} → ${plan[plan.length - 1].name}`) + '. ';
+    txt += `Will create ${plan.length} new item${plan.length === 1 ? '' : 's'}:\n` + groups.map(g =>
+      `• ${g.category}: ${g.names.length === 1 ? g.names[0] : g.names[0] + ' → ' + g.names[g.names.length - 1]}` +
+      (g.lastName ? ` (last existing ${g.lastName})` : ' (NEW prefix, starts at 1 — check spelling)')).join('\n') + '\n';
   } else {
     txt += 'Nothing new to create. ';
   }
@@ -2631,9 +2678,6 @@ function storePlanSummary(result, category){
       ? `Prices from your rule: ${priced.slice(0, 3).map(p => p.name + ' $' + p.pricing.price.toFixed(2)).join(', ')}${priced.length > 3 ? ', ...' : ''}. `
       : 'No pricing rule set in the store app — items start at $0. ';
   }
-  txt += lastName
-    ? `Last existing item: ${lastName}.`
-    : 'No existing item uses this prefix, so numbering starts at 1 — check the spelling.';
   if(skipped.length) txt += ` Skipping ${skipped.length} already in the app (${skipped.slice(0, 3).join(', ')}${skipped.length > 3 ? ', ...' : ''}).`;
   return txt;
 }
@@ -2646,20 +2690,43 @@ document.getElementById('storePushPreviewBtn').onclick = async () => {
   if(!csvOrderEntries){ return; }
   out.textContent = 'Checking...';
   try{
-    const result = await storeBuildPlan(csvOrderEntries, prefix);
-    out.innerHTML = storePlanTable(result, document.getElementById('storePushCategory').value);
+    const result = await storeBuildPlan(csvOrderEntries, prefix, document.getElementById('storePushCategory').value);
+    out.innerHTML = storePlanTable(result);
   }catch(err){
     out.textContent = 'Could not read the store products: ' + err.message;
   }
 };
 
+// Category / prefix changed in one row of the preview -> that item gets its
+// own group, then the numbers are worked out again.
+document.getElementById('storePushPreview').addEventListener('change', (ev) => {
+  const el = ev.target;
+  const key = el && el.dataset ? el.dataset.key : null;
+  if(!key) return;
+  const row = el.closest('tr');
+  const catEl = row.querySelector('[data-f="category"]');
+  const preEl = row.querySelector('[data-f="prefix"]');
+  if(el.dataset.f === 'category'){
+    // Fill the prefix last used for this category, if remembered.
+    const mem = storePrefixMemGet()[catEl.value];
+    if(mem) preEl.value = mem;
+  }
+  const defCat = document.getElementById('storePushCategory').value;
+  const defPre = document.getElementById('storePushPrefix').value.trim();
+  const g = { category: catEl.value, prefix: preEl.value.trim() };
+  if(g.category === defCat && g.prefix.toLowerCase() === defPre.toLowerCase()) delete storeItemGroup[key];
+  else storeItemGroup[key] = g;
+  document.getElementById('storePushPreviewBtn').click();
+});
+
 // Writes all new store products in ONE batch: either every item is created
 // or none are. Each product is tagged with importBatch so a whole import can
 // be found (and removed) later if something looks wrong.
 async function storePushEntries(entries, prefix, category){
-  const result = await storeBuildPlan(entries, prefix);
+  const result = await storeBuildPlan(entries, prefix, category);
+  if(result.missing) throw new Error(result.missing + ' item(s) have no name prefix — fill them in the preview');
   if(!result.plan.length) return { created: 0, skipped: result.skipped.length, cancelled: false };
-  if(!confirm(storePlanSummary(result, category) + '\n\nCreate these in the Goat Kids store app (Main Store)?')){
+  if(!confirm(storePlanSummary(result) + '\n\nCreate these in the Goat Kids store app (Main Store)?')){
     return { created: 0, skipped: result.skipped.length, cancelled: true };
   }
   const now = Date.now();
@@ -2672,7 +2739,7 @@ async function storePushEntries(entries, prefix, category){
       slug: item.name.trim().toLowerCase().replace(/\s+/g, '_'),
       price: item.pricing ? item.pricing.price : 0,
       costPrice: item.pricing ? item.pricing.cost : null, stock: 0,
-      category, images: item.images.length ? item.images : [STORE_PLACEHOLDER_IMG], sizes: item.sizes,
+      category: item.category || category, images: item.images.length ? item.images : [STORE_PLACEHOLDER_IMG], sizes: item.sizes,
       active: true, addedAt: now, lastRestockDate: now,
       updatedAt: new Date().toISOString(), importBatch
     });
@@ -2683,15 +2750,19 @@ async function storePushEntries(entries, prefix, category){
         linkedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
   });
   await batch.commit();
+  const mem = storePrefixMemGet();
+  result.groups.forEach(g => { mem[g.category] = g.prefix; });
+  storePrefixMemSet(mem);
   return { created: result.plan.length, skipped: result.skipped.length, cancelled: false,
-           first: result.plan[0].name, last: result.plan[result.plan.length - 1].name };
+           first: result.plan[0].name, last: result.plan[result.plan.length - 1].name,
+           groupsText: result.groups.map(g => g.names.length === 1 ? g.names[0] : g.names[0] + ' → ' + g.names[g.names.length - 1]).join(', ') };
 }
 
 document.getElementById('csvImportBtn').onclick = async () => {
   const storePush = !!csvOrderEntries && document.getElementById('storePushToggle').checked;
   const storePrefix = document.getElementById('storePushPrefix').value;
   const storeCategory = document.getElementById('storePushCategory').value;
-  if(storePush && !storePrefix.trim()){ alert('Type a name prefix for the store items first (e.g. cutie dress).'); return; }
+  if(storePush && !storePrefix.trim() && csvOrderEntries.some(e => !(storeItemGroup[e.key] && storeItemGroup[e.key].prefix))){ alert('Type a name prefix for the store items first (e.g. cutie dress).'); return; }
   if(storePush && !db){ alert('Not connected to the database, so items cannot be created in the store app.'); return; }
   let importCount = 0;
   let failCount = 0;
@@ -2736,7 +2807,7 @@ document.getElementById('csvImportBtn').onclick = async () => {
       try{
         const r = await storePushEntries(csvOrderEntries, storePrefix, storeCategory);
         if(r.cancelled) resultEl.textContent += ' Store app: cancelled, nothing created.';
-        else if(r.created) resultEl.textContent += ` Store app: created ${r.created} item${r.created === 1 ? '' : 's'} (${r.first}${r.created > 1 ? ' → ' + r.last : ''}) with stock 0.` + (r.skipped ? ` ${r.skipped} already existed, skipped.` : '');
+        else if(r.created) resultEl.textContent += ` Store app: created ${r.created} item${r.created === 1 ? '' : 's'} (${r.groupsText}) with stock 0.` + (r.skipped ? ` ${r.skipped} already existed, skipped.` : '');
         else resultEl.textContent += ` Store app: nothing new to create${r.skipped ? ' (' + r.skipped + ' already exist)' : ''}.`;
       }catch(err){
         console.warn('Store push failed:', err);
