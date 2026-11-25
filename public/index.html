@@ -17059,6 +17059,37 @@ window.GK_TG = null;
     else start();
 })();
 </script>
+
+<script>
+// =====================================================================
+// OPEN ONE PRODUCT FROM A LINK — used by the Telegram AI photo cards.
+//   https://goat-kids-store.web.app/?product=<id>   (or Telegram start_param)
+// Waits until the products have loaded, then opens that item's detail
+// window so the customer only has to pick a size and add to cart.
+// =====================================================================
+(function () {
+    var pid = '';
+    try { pid = new URLSearchParams(location.search).get('product') || ''; } catch (e) {}
+    try {
+        var wa = window.Telegram && window.Telegram.WebApp;
+        var sp = wa && wa.initDataUnsafe && wa.initDataUnsafe.start_param;
+        if (!pid && sp && sp.indexOf('p_') === 0) pid = sp.slice(2);
+    } catch (e) {}
+    if (!pid) return;
+    var tries = 0;
+    (function waitAndOpen() {
+        tries++;
+        var ok = typeof findProduct === 'function' && typeof openProductDetail === 'function' &&
+                 typeof STATE !== 'undefined' && STATE.products && findProduct(pid);
+        if (ok) {
+            try { if (typeof showTab === 'function') showTab('store'); } catch (e) {}
+            try { openProductDetail(pid); } catch (e) { console.warn('Open product from link failed:', e); }
+            return;
+        }
+        if (tries < 60) setTimeout(waitAndOpen, 500); // up to 30 seconds while products load
+    })();
+})();
+</script>
 </body>
 </html><script>
 // =============================================
