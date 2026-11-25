@@ -51,6 +51,8 @@
     <script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-firestore-compat.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-auth-compat.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Telegram Mini App: only does something when the shop is opened inside Telegram -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
         // =============================================
         // FIREBASE INIT
@@ -719,6 +721,13 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                                 <input type="number" id="shippingFeeInput" class="form-control" min="0" step="0.25" inputmode="decimal" oninput="onCustomShippingFee()" style="max-width:120px">
                                 <button type="button" class="btn btn-outline btn-small" onclick="resetShippingFee()" title="Back to the standard price">Reset</button>
                             </div>
+                        </div>
+                        <div class="form-group hidden" id="tgPaymentGroup">
+                            <select id="tgPaymentMethod" class="form-control" style="font-weight:600">
+                                <option value="" id="tgPayPick">-- Choose payment * --</option>
+                                <option value="qr" id="tgPayQr">KHQR (pay by bank app)</option>
+                                <option value="cash" id="tgPayCod">Cash on Delivery</option>
+                            </select>
                         </div>
                         <div class="form-group"><input type="text" id="customerName" class="form-control" data-translate="fullName" placeholder="Full Name *"></div>
                         <div class="form-group"><input type="tel" id="customerPhone" class="form-control" data-translate="phoneNumber" placeholder="Phone Number *"></div>
@@ -3176,6 +3185,7 @@ function sendToTelegram(order, callback) {
             return;
         }
         if (!n || !ph || !ad) { showToast('Fill Name, Phone & Address', 'error'); return; }
+        if (typeof gkTgCheckoutOk === 'function' && !gkTgCheckoutOk()) return;
 
         // ── DOUBLE-SUBMIT LOCK ──
         if (_placingOrder) { showToast('Order is being sent, please wait...', 'warning'); return; }
@@ -3236,6 +3246,7 @@ function sendToTelegram(order, callback) {
             discount: disc, discountType: discountType, discountValue: discountValue,
             total: total
         };
+        try { if (typeof gkTgAddToOrder === 'function') gkTgAddToOrder(order); } catch (e) { console.warn('Telegram order info skipped:', e); }
 
         // ── Send Telegram notification directly from browser ──
         STATE.pendingOrders.push(order);
@@ -3480,6 +3491,7 @@ function sendToTelegram(order, callback) {
     function _gkOpenTelegram(text) {
         var user = encodeURIComponent(GK_TELEGRAM_USER);
         var webUrl = 'https://t.me/' + user + '?text=' + encodeURIComponent(text);
+        if (window.GK_TG) { try { window.GK_TG.openTelegramLink(webUrl); return; } catch (e) {} }
         var ua = navigator.userAgent || '';
         var isPhone = /Android|iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         if (!isPhone) { window.open(webUrl, '_blank', 'noopener'); return; }
@@ -7227,7 +7239,7 @@ function sendToTelegram(order, callback) {
             var pmVal = o.paymentMethod;
             h += '<div class="order-card-mini">' +
                 '<div class="oc-head"><div class="oc-id">⏳ ' + escHtml(o.orderId) + (o.editedAt ? ' <span style="font-size:0.7rem;background:#eef2ff;color:#3730a3;border-radius:4px;padding:1px 5px">✏️ ' + (STATE.language === 'kh' ? 'បានកែ' : 'edited') + '</span>' : '') + '<br><span style="font-weight:400;color:var(--gray)">' + escHtml(o.orderDate||'') + '</span></div><div class="oc-total">$' + (o.total||0).toFixed(2) + discBadge + '</div></div>' +
-                '<div class="oc-info">👤 ' + escHtml(o.customerName||'N/A') + ' · 📞 ' + escHtml(o.customerPhone||'') + '<br>📍 ' + escHtml((o.customerAddress||'') + (o.customerCity ? ', '+o.customerCity : '')) + '<br>🚚 ' + escHtml(o.shippingMethod||'N/A') + (o.customerNotes ? ' · 📝 ' + escHtml(o.customerNotes) : '') + '</div>' +
+                '<div class="oc-info">' + (o.orderSource === 'telegram_miniapp' ? '<span style="display:inline-block;background:#e0f2fe;color:#0369a1;border-radius:4px;padding:1px 6px;font-size:0.75rem;margin-bottom:2px">✈️ Telegram app' + (o.telegramUsername ? ' · @' + escHtml(o.telegramUsername) : (o.telegramName ? ' · ' + escHtml(o.telegramName) : '')) + (o.customerPaymentChoice ? ' · ' + (o.customerPaymentChoice === 'qr' ? 'KHQR' : 'COD') : '') + '</span><br>' : '') + '👤 ' + escHtml(o.customerName||'N/A') + ' · 📞 ' + escHtml(o.customerPhone||'') + '<br>📍 ' + escHtml((o.customerAddress||'') + (o.customerCity ? ', '+o.customerCity : '')) + '<br>🚚 ' + escHtml(o.shippingMethod||'N/A') + (o.customerNotes ? ' · 📝 ' + escHtml(o.customerNotes) : '') + '</div>' +
                 '<div class="oc-items">' + escHtml(itemsSummary) + '</div>' + shortHtml +
                 '<div class="oc-payment" style="display:flex;align-items:center;gap:0.4rem;margin:0.4rem 0;font-size:0.85rem">' +
                     '<span style="font-weight:600;color:var(--gray-dark)"><i class="fas fa-money-bill-wave"></i> ' + t('payment') + ':</span>' +
@@ -16931,6 +16943,122 @@ function sendToTelegram(order, callback) {
             </div>
         </div>
     </div>
+
+<script>
+// =====================================================================
+// TELEGRAM MINI APP — the same customer shop, opened inside Telegram.
+// Outside Telegram nothing here changes (window.GK_TG stays null).
+//   • Delivery: Phnom Penh $1.50 or Province $2.00 (no shop pickup)
+//   • Payment: KHQR or Cash on Delivery (customer must choose)
+//   • Phone + address required (same as the website)
+//   • Each order saves the customer's Telegram name, username and ID
+// =====================================================================
+window.GK_TG = null;
+(function () {
+    var wa = window.Telegram && window.Telegram.WebApp;
+    if (!wa || !wa.initData) return;            // not opened inside Telegram
+    window.GK_TG = wa;
+    try { wa.ready(); wa.expand(); } catch (e) {}
+    var tgUser = (wa.initDataUnsafe && wa.initDataUnsafe.user) || {};
+
+    function kh() { return typeof STATE !== 'undefined' && STATE.language === 'kh'; }
+
+    function setTexts() {
+        var k = kh();
+        var t = function (id, s) { var el = document.getElementById(id); if (el) el.textContent = s; };
+        t('tgPayPick', k ? '-- ជ្រើសរើសការបង់ប្រាក់ * --' : '-- Choose payment * --');
+        t('tgPayQr', k ? 'KHQR (បង់តាមកម្មវិធីធនាគារ)' : 'KHQR (pay by bank app)');
+        t('tgPayCod', k ? 'បង់ប្រាក់ពេលទទួលទំនិញ' : 'Cash on Delivery');
+    }
+
+    function setupCheckout() {
+        // Delivery only — remove shop pickup inside Telegram
+        var loc = document.getElementById('shippingLocation');
+        if (loc) {
+            var pick = loc.querySelector('option[value="pickup"]');
+            if (pick) { if (loc.value === 'pickup') { loc.value = ''; } pick.remove(); }
+        }
+        var pg = document.getElementById('tgPaymentGroup');
+        if (pg) pg.classList.remove('hidden');
+        setTexts();
+        // Fill the name from Telegram if the box is empty (customer can change it)
+        var nm = document.getElementById('customerName');
+        var full = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ');
+        if (nm && !nm.value && full) nm.value = full;
+        var ph = document.getElementById('customerPhone');
+        if (ph) ph.setAttribute('inputmode', 'tel');
+    }
+
+    function flag(el, on) {
+        if (!el) return;
+        el.style.borderColor = on ? '#e53e3e' : '';
+        el.style.boxShadow = on ? '0 0 0 3px rgba(229,62,62,0.2)' : '';
+    }
+
+    // Called by placeOrder() before anything is sent
+    window.gkTgCheckoutOk = function () {
+        var loc = document.getElementById('shippingLocation');
+        if (loc && loc.value === 'pickup') { loc.value = ''; }
+        var pay = document.getElementById('tgPaymentMethod');
+        if (!pay || !pay.value) {
+            flag(pay, true);
+            if (pay) { pay.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+            showToast(kh() ? 'សូមជ្រើសរើសការបង់ប្រាក់ (KHQR ឬ បង់ពេលទទួល)' : 'Please choose payment: KHQR or Cash on Delivery', 'error');
+            return false;
+        }
+        flag(pay, false);
+        return true;
+    };
+
+    // Called by placeOrder() to add Telegram details to the order
+    window.gkTgAddToOrder = function (order) {
+        var pay = document.getElementById('tgPaymentMethod');
+        var choice = pay && pay.value === 'qr' ? 'qr' : 'cash';
+        order.paymentMethod = choice;            // staff screen already understands 'qr' / 'cash'
+        order.customerPaymentChoice = choice;    // what the customer picked (staff may change paymentMethod later)
+        order.orderSource = 'telegram_miniapp';
+        order.telegramUserId = tgUser.id ? String(tgUser.id) : '';
+        order.telegramName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ');
+        order.telegramUsername = tgUser.username || '';
+        order.telegramLanguage = tgUser.language_code || '';
+        if (choice === 'qr') {
+            order.customerNotes = ((order.customerNotes ? order.customerNotes + ' | ' : '') + 'Pay by KHQR').trim();
+        }
+        try { wa.HapticFeedback && wa.HapticFeedback.notificationOccurred('success'); } catch (e) {}
+    };
+
+    // After the order: tell KHQR customers what happens next
+    var _origPopup = window.showMessengerPopup;
+    if (typeof _origPopup === 'function') {
+        window.showMessengerPopup = showMessengerPopup = function (o) {
+            _origPopup.apply(this, arguments);
+            var note = document.getElementById('gkmNote');
+            if (note && o && o.customerPaymentChoice === 'qr') {
+                note.textContent = kh()
+                    ? 'យើងនឹងផ្ញើ KHQR មកអ្នកក្នុង Telegram ដើម្បីបង់ប្រាក់។'
+                    : 'We will send you our KHQR in Telegram to pay.';
+            }
+        };
+    }
+
+    // Light Telegram look
+    var st = document.createElement('style');
+    st.textContent = 'body.gk-in-telegram{overscroll-behavior-y:none}';
+    document.head.appendChild(st);
+
+    function start() {
+        document.body.classList.add('gk-in-telegram');
+        setupCheckout();
+        // Re-apply after the language switch rewrites texts
+        if (typeof applyTranslations === 'function') {
+            var _origApply = applyTranslations;
+            window.applyTranslations = applyTranslations = function () { var r = _origApply.apply(this, arguments); try { setTexts(); } catch (e) {} return r; };
+        }
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(start, 0); });
+    else start();
+})();
+</script>
 </body>
 </html><script>
 // =============================================
