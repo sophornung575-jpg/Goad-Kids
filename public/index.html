@@ -3420,7 +3420,10 @@ function sendToTelegram(order, callback) {
             var kh = STATE.language === 'kh';
             _gkCopy(_gkMsgrText); // full order, in case Telegram doesn't pre-fill it
             _gkKeepOrderSafe();
-            document.getElementById('gkmNote').textContent = kh ? '✅ កំពុងបើក Telegram — ចុច Send' : '✅ Opening Telegram — just tap Send';
+            var _gkBot = GK_TELEGRAM_BOT && GK_TELEGRAM_BOT.indexOf('__') !== 0;
+            document.getElementById('gkmNote').textContent = _gkBot
+                ? (kh ? '✅ កំពុងបើក Telegram — ចុច Start' : '✅ Opening Telegram — tap Start')
+                : (kh ? '✅ កំពុងបើក Telegram — ចុច Send' : '✅ Opening Telegram — just tap Send');
             try { if (typeof fbq !== 'undefined') fbq('track', 'Contact'); } catch (er) {}
             _gkOpenTelegram(_gkMsgrText);
         });
@@ -3469,6 +3472,10 @@ function sendToTelegram(order, callback) {
     // Store's own Telegram account (customer orders only).
     // =============================================
     var GK_TELEGRAM_USER = 'Goat_Kids';
+    // Shop bot (AI assistant). When set, the after-order "Telegram" button opens this bot
+    // with the order attached; the order chat then goes to the staff "Confirm orders" group.
+    // Leave '' to keep the old way (chat with @Goat_Kids).
+    var GK_TELEGRAM_BOT = 'Goatkids002_bot';
 
     // After an order the customer picks Telegram or Messenger (no automatic jump).
     var _gkPendingOrder = null, _gkOrderSaved = true;
@@ -3491,6 +3498,13 @@ function sendToTelegram(order, callback) {
     function _gkOpenTelegram(text) {
         var user = encodeURIComponent(GK_TELEGRAM_USER);
         var webUrl = 'https://t.me/' + user + '?text=' + encodeURIComponent(text);
+        var appUrl = 'tg://resolve?domain=' + user + '&text=' + encodeURIComponent(text);
+        if (GK_TELEGRAM_BOT && GK_TELEGRAM_BOT.indexOf('__') !== 0 && _gkPendingOrder && _gkPendingOrder.orderId) {
+            var startParam = ('order_' + _gkPendingOrder.orderId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+            user = encodeURIComponent(GK_TELEGRAM_BOT);
+            webUrl = 'https://t.me/' + user + '?start=' + startParam;
+            appUrl = 'tg://resolve?domain=' + user + '&start=' + startParam;
+        }
         if (window.GK_TG) { try { window.GK_TG.openTelegramLink(webUrl); return; } catch (e) {} }
         var ua = navigator.userAgent || '';
         var isPhone = /Android|iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -3500,7 +3514,7 @@ function sendToTelegram(order, callback) {
         var onHide = function() { if (document.hidden) left = true; };
         document.addEventListener('visibilitychange', onHide);
         window.addEventListener('pagehide', function() { left = true; }, { once: true });
-        window.location.href = 'tg://resolve?domain=' + user + '&text=' + encodeURIComponent(text);
+        window.location.href = appUrl;
         setTimeout(function() {
             document.removeEventListener('visibilitychange', onHide);
             if (!left && !document.hidden) window.location.href = webUrl;
