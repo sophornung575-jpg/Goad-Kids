@@ -18,6 +18,8 @@ const CURRENCY    = 'USD';
 const STORE_URL   = 'https://goat-kids-store.web.app/';   // live store (old github.io page is no longer updated)
 const CONDITION   = 'new';
 const MAIN_STORE  = 'GOAT-1979';
+// Only these stores' stock is sold to customers — same list as SHOP_STORES in index.html.
+const SELLING_STORES = ['GOAT-GOAT-KIDS-271-0889', 'GOAT-GOAT-KIDS-PH-6012'];
 // Used only if the branch list can't be read, so branch stock is never silently left out.
 const FALLBACK_BRANCHES = [
     { id: 'GOAT-GOAT-KIDS-271-0889', name: 'Goat Kids 271' },
@@ -119,6 +121,7 @@ async function main() {
 
     // Fetch and merge products across all stores by slug/name
     const bySlug = {};
+    const mainLeftovers = [];
     for (const store of stores) {
         try {
             const snap = await getDocs(collection(db, 'stores', store.id, 'products'));
@@ -156,24 +159,40 @@ async function main() {
 
                 liveKeys.forEach(k => { if (!bySlug[slug].liveKeys.includes(k)) bySlug[slug].liveKeys.push(k); });
 
-                // Merge sizes — each store's quantities are added exactly once
+                // Main Store holds no sellable stock (received items are transferred out to the
+                // branches). The customer shop only counts Goat Kids 271 + PH, so the feed must too —
+                // otherwise leftover Main Store numbers keep sold-out items "in stock" on Facebook.
+                // Main Store is still read above so its product id / price keep Facebook ids stable.
+                const sells = SELLING_STORES.includes(store.id);
+                if (!sells) {
+                    const left = (p.sizes && p.sizes.length)
+                        ? p.sizes.reduce((a, s) => a + (Number(s && s.qty) || 0), 0) : (Number(p.stock) || 0);
+                    if (left > 0) mainLeftovers.push(`${p.name} (${left})`);
+                }
+
+                // Merge sizes — each selling store's quantities are added exactly once
                 (Array.isArray(p.sizes) ? p.sizes : []).forEach(sz => {
                     if (!sz || !String(sz.name || '').trim()) return;
                     // 90 and 90cm are the same size → merged. The first raw name keeps the Facebook variant id stable.
                     const label = normalizeSizeName(sz.name);
                     const existing = bySlug[slug].sizes.find(x => x.label === label);
-                    if (existing) existing.qty = (existing.qty || 0) + (Number(sz.qty) || 0);
-                    else bySlug[slug].sizes.push({ name: sz.name, label, qty: Number(sz.qty) || 0 });
+                    const q = sells ? (Number(sz.qty) || 0) : 0;
+                    if (existing) existing.qty = (existing.qty || 0) + q;
+                    else bySlug[slug].sizes.push({ name: sz.name, label, qty: q });
                 });
 
                 const stk = (p.sizes && p.sizes.length)
                     ? p.sizes.reduce((a, s) => a + (Number(s && s.qty) || 0), 0)
                     : (p.stock || 0);
-                bySlug[slug].stock += stk;
+                if (sells) bySlug[slug].stock += stk;
             });
         } catch (e) {
             console.warn(`Failed to load products for ${store.id}:`, e.message);
         }
+    }
+
+    if (mainLeftovers.length) {
+        console.warn(`⚠️ ${mainLeftovers.length} product(s) still show stock in Main Store (not counted on Facebook): ` + mainLeftovers.join(', '));
     }
 
     // Filter: only in-stock, priced products
