@@ -50,6 +50,7 @@
     <script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-app-compat.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-firestore-compat.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-auth-compat.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-storage-compat.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <!-- Telegram Mini App: only does something when the shop is opened inside Telegram -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -1827,11 +1828,12 @@ src="https://www.facebook.com/tr?id=545753881872487&ev=PageView&noscript=1"
                 </div>
                 <div style="display:flex;gap:0.5rem;margin-top:1rem">
                     <button class="btn btn-outline" onclick="closeRefundModal()" style="flex:1">Cancel</button>
-                    <button class="btn btn-danger" onclick="confirmRefund()" style="flex:2"><i class="fas fa-undo"></i> Confirm Refund</button>
+                    <button class="btn btn-danger" id="refundConfirmBtn" onclick="confirmRefund()" style="flex:2"><i class="fas fa-undo"></i> Confirm Refund</button>
                 </div>
             </div>
         </div>
     </div>
+    <input type="file" accept="image/*" capture="environment" id="refundPhotoInput" style="display:none" onchange="onRefundPhotoPicked(this)">
     <!-- EXPENSE ENTRY MODAL -->
     <div class="modal-overlay" id="expenseModal" onclick="if(event.target===this)closeExpenseModal()">
         <div class="modal" style="max-width:420px;width:94%" onclick="event.stopPropagation()">
@@ -11159,7 +11161,103 @@ function sendToTelegram(order, callback) {
     // =============================================
     // REFUND SYSTEM
     // =============================================
-    var _refundState = { order: null, idx: -1 };
+    var _refundState = { order: null, idx: -1, photos: {}, photoIdx: null, busy: false };
+    // ── Refund photo (required) ──
+    // Staff must photograph the returned items before a refund can be confirmed.
+    // Photos are shrunk on the device, uploaded to Firebase Storage, and the links
+    // are saved on the refund record + sent with the Telegram refund alert.
+    function _refundShrinkPhoto(file, maxDim, quality) {
+        return new Promise(function(resolve, reject) {
+            var reader = new FileReader();
+            reader.onerror = function(){ reject(new Error('Could not read photo')); };
+            reader.onload = function() {
+                var img = new Image();
+                img.onerror = function(){ reject(new Error('Could not open photo')); };
+                img.onload = function() {
+                    var w = img.width, h = img.height, scale = Math.min(1, maxDim / Math.max(w, h));
+                    var c = document.createElement('canvas');
+                    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+                    var ctx = c.getContext('2d');
+                    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+                    ctx.drawImage(img, 0, 0, c.width, c.height);
+                    resolve(c.toDataURL('image/jpeg', quality));
+                };
+                img.src = reader.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // One photo per selected item, taken from the "Take photo" button under that item.
+    function takeRefundItemPhoto(i) {
+        _refundState.photoIdx = i;
+        document.getElementById('refundPhotoInput').click();
+    }
+
+    function onRefundPhotoPicked(input) {
+        var file = input.files && input.files[0];
+        input.value = ''; // allow taking the photo again
+        var i = _refundState.photoIdx;
+        if (!file || i == null) return;
+        _refundShrinkPhoto(file, 1024, 0.65).then(function(dataUrl) {
+            _refundState.photos[i] = dataUrl;
+            renderRefundItemPhoto(i);
+        }).catch(function(e) { showToast('Photo failed: ' + e.message, 'error'); });
+    }
+
+    function removeRefundItemPhoto(i) {
+        delete _refundState.photos[i];
+        renderRefundItemPhoto(i);
+    }
+
+    function renderRefundItemPhoto(i) {
+        var box = document.querySelector('.refund-item-photo[data-idx="' + i + '"]'); if (!box) return;
+        var cb = document.querySelector('.refund-item-cb[data-idx="' + i + '"]');
+        var selected = !cb || cb.checked;
+        var src = _refundState.photos[i];
+        box.style.display = selected ? 'flex' : 'none';
+        box.style.borderColor = src ? 'var(--success)' : 'var(--danger)';
+        box.innerHTML = src
+            ? '<div style="position:relative;width:56px;height:56px;flex-shrink:0">' +
+                  '<img src="' + src + '" style="width:56px;height:56px;object-fit:cover;border-radius:6px">' +
+                  '<button type="button" onclick="removeRefundItemPhoto(' + i + ')" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:none;background:var(--danger);color:#fff;font-size:11px;cursor:pointer;line-height:20px;padding:0">✕</button>' +
+              '</div>' +
+              '<span style="font-size:0.78rem;color:var(--success);flex:1">✅ Photo taken</span>' +
+              '<button type="button" class="btn btn-outline btn-small" onclick="takeRefundItemPhoto(' + i + ')"><i class="fas fa-camera"></i> Retake</button>'
+            : '<span style="font-size:0.78rem;color:var(--danger);flex:1"><i class="fas fa-camera"></i> Photo of this item required</span>' +
+              '<button type="button" class="btn btn-danger btn-small" onclick="takeRefundItemPhoto(' + i + ')"><i class="fas fa-camera"></i> Take photo</button>';
+    }
+
+    function renderAllRefundItemPhotos() {
+        document.querySelectorAll('.refund-item-photo').forEach(function(el) { renderRefundItemPhoto(el.getAttribute('data-idx')); });
+    }
+
+    // Upload each photo to Firebase Storage. Resolves to { urls: [...], embedded: [...] }.
+    // If Storage can't be reached, the (small) photo is kept inside the refund record
+    // instead, so a refund is never blocked and the photo is never lost.
+    function _uploadRefundPhotos(refundId, photos) {
+        var store = null;
+        try { store = (typeof firebase !== 'undefined' && firebase.storage) ? firebase.storage() : null; } catch (e) { store = null; }
+        var jobs = photos.map(function(dataUrl, i) {
+            if (!store) return Promise.resolve({ embedded: dataUrl });
+            var path = 'refunds/' + (STATE.storeId || 'unknown') + '/' + refundId + '_' + (i + 1) + '.jpg';
+            var up = store.ref(path).putString(dataUrl, 'data_url', { contentType: 'image/jpeg' })
+                .then(function(snap){ return snap.ref.getDownloadURL(); })
+                .then(function(url){ return { url: url }; });
+            var timeout = new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 25000); });
+            return Promise.race([up, timeout]).catch(function(e) {
+                console.warn('Refund photo upload failed (' + (e && e.message) + ') — keeping it in the refund record');
+                return { embedded: dataUrl };
+            });
+        });
+        return Promise.all(jobs).then(function(res) {
+            return {
+                perItem: res,
+                urls: res.filter(function(r){ return r.url; }).map(function(r){ return r.url; }),
+                embedded: res.filter(function(r){ return r.embedded; }).map(function(r){ return r.embedded; })
+            };
+        });
+    }
 
     function refundOrder(oid) {
         var order = null, idx = -1;
@@ -11183,8 +11281,9 @@ function sendToTelegram(order, callback) {
         var h = '';
         (order.cart||[]).forEach(function(it, i) {
             var lineTotal = Math.max(0, (it.price * it.quantity) - (it.discountAmt || 0));
-            h += '<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--light);border-radius:8px;margin-bottom:6px">' +
-                '<input type="checkbox" class="refund-item-cb" data-idx="' + i + '" checked onchange="recalcRefundTotal()" style="width:16px;height:16px;accent-color:var(--danger);flex-shrink:0">' +
+            h += '<div style="background:var(--light);border-radius:8px;margin-bottom:6px">' +
+                '<div style="display:flex;align-items:center;gap:8px;padding:8px">' +
+                '<input type="checkbox" class="refund-item-cb" data-idx="' + i + '" checked onchange="recalcRefundTotal();renderRefundItemPhoto(' + i + ')" style="width:16px;height:16px;accent-color:var(--danger);flex-shrink:0">' +
                 (it.image ? '<img referrerpolicy="no-referrer" src="' + escHtml(it.image) + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0">' : '') +
                 '<div style="flex:1;min-width:0">' +
                     '<div style="font-size:0.85rem;font-weight:600">' + escHtml(it.name) + '</div>' +
@@ -11200,9 +11299,15 @@ function sendToTelegram(order, callback) {
                     '<span style="font-size:0.78rem;color:var(--gray)">/' + it.quantity + '</span>' +
                 '</div>' +
                 '<div class="refund-item-line-total" data-idx="' + i + '" style="font-size:0.88rem;font-weight:700;min-width:50px;text-align:right;flex-shrink:0">$' + lineTotal.toFixed(2) + '</div>' +
+                '</div>' +
+                '<div class="refund-item-photo" data-idx="' + i + '" style="display:flex;align-items:center;gap:8px;margin:0 8px 8px;padding:6px 8px;border:2px dashed var(--danger);border-radius:6px;background:#fff"></div>' +
             '</div>';
         });
         document.getElementById('refundItemsList').innerHTML = h;
+        _refundState.photos = {}; _refundState.photoIdx = null; _refundState.busy = false;
+        renderAllRefundItemPhotos();
+        var cBtn = document.getElementById('refundConfirmBtn');
+        if (cBtn) { cBtn.disabled = false; cBtn.innerHTML = '<i class="fas fa-undo"></i> Confirm Refund'; }
         document.getElementById('refundAmountOverride').value = '';
         document.getElementById('refundReason').value = 'Customer return';
         document.getElementById('refundReasonCustom').value = '';
@@ -11267,16 +11372,16 @@ function sendToTelegram(order, callback) {
 
     function closeRefundModal() {
         document.getElementById('refundModal').classList.remove('active');
-        _refundState = { order: null, idx: -1 };
+        _refundState = { order: null, idx: -1, photos: {}, photoIdx: null, busy: false };
     }
 
     async function confirmRefund() {
         var order = _refundState.order;
         var idx = _refundState.idx;
-        if (!order) return;
+        if (!order || _refundState.busy) return;
 
-        // Collect selected items + quantities
-        var refundItems = [];
+        // Collect selected items + quantities (+ each item's photo)
+        var refundItems = [], refundItemPhotos = [];
         var cbs = document.querySelectorAll('.refund-item-cb');
         var qtys = document.querySelectorAll('.refund-item-qty');
         cbs.forEach(function(cb, i) {
@@ -11285,9 +11390,17 @@ function sendToTelegram(order, callback) {
                 var origItem = order.cart[itemIdx];
                 var refundQty = Math.min(parseInt(qtys[i].value)||1, origItem.quantity);
                 refundItems.push(Object.assign({}, origItem, { quantity: refundQty }));
+                refundItemPhotos.push(_refundState.photos[itemIdx] || null);
             }
         });
         if (!refundItems.length) { showToast('Select at least one item to refund', 'error'); return; }
+        var missingPhoto = refundItems.filter(function(it, k){ return !refundItemPhotos[k]; });
+        if (missingPhoto.length) {
+            showToast('📷 Take a photo for every item: ' + missingPhoto.map(function(it){ return it.name; }).join(', '), 'error');
+            var firstMissing = document.querySelector('.refund-item-photo[style*="var(--danger)"]');
+            if (firstMissing && firstMissing.style.display !== 'none') firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
 
         // Get refund amount
         var overrideVal = parseFloat(document.getElementById('refundAmountOverride').value);
@@ -11310,7 +11423,27 @@ function sendToTelegram(order, callback) {
         var confirmText = 'Confirm refund?\n\nItems:\n' + itemSummary +
             (shippingFeeRefunded > 0 ? '\n\nDelivery fee also refunded: $' + shippingFeeRefunded.toFixed(2) : '') +
             '\n\nRefund: $' + refundAmount.toFixed(2) + '\nReason: ' + reason;
+        confirmText += '\nPhotos: ' + refundItems.length + ' (one per item)';
         if (!confirm(confirmText)) return;
+
+        // Upload the refund photos BEFORE anything is changed, so a failed upload
+        // can never leave a half-done refund.
+        var refundId = 'REF-' + Date.now();
+        _refundState.busy = true;
+        var confirmBtn = document.getElementById('refundConfirmBtn');
+        if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading photo...'; }
+
+        var photoResult;
+        try {
+            photoResult = await _uploadRefundPhotos(refundId, refundItemPhotos);
+        } catch (pe) {
+            photoResult = { urls: [], embedded: refundItemPhotos.slice(), perItem: refundItemPhotos.map(function(d){ return { embedded: d }; }) };
+        }
+        // Each refunded item keeps its own photo link
+        refundItems.forEach(function(it, k) {
+            var pr = photoResult.perItem && photoResult.perItem[k];
+            if (pr && pr.url) it.refundPhoto = pr.url;
+        });
 
         // NOTE: Do NOT restore stock in local STATE here.
         // Firebase restore (below) fetches fresh from Firestore and applies exactly +qty once.
@@ -11318,7 +11451,7 @@ function sendToTelegram(order, callback) {
 
         // Create refund record
         var refundRecord = {
-            refundId: 'REF-' + Date.now(),
+            refundId: refundId,
             orderId: order.orderId,
             originalOrder: JSON.parse(JSON.stringify(order)),
             refundAmount: refundAmount,
@@ -11330,7 +11463,9 @@ function sendToTelegram(order, callback) {
             customerPhone: order.customerPhone,
             cart: refundItems,  // only refunded items
             isPartial: refundItems.length < order.cart.length,
-            shippingFeeRefunded: shippingFeeRefunded
+            shippingFeeRefunded: shippingFeeRefunded,
+            refundPhotos: photoResult.urls,                 // staff photos (Firebase Storage links)
+            refundPhotosEmbedded: photoResult.embedded      // only if Storage upload failed
         };
 
         // Determine if full or partial refund
@@ -11455,13 +11590,23 @@ function sendToTelegram(order, callback) {
             '📦 Refunded items:\n' + itemLines + '\n' +
             '📝 Reason: ' + reason + '\n' +
             '🕐 ' + new Date().toLocaleString();
-        var refundImages = refundItems.map(function(it){ return it.image; }).filter(Boolean);
+        if (photoResult.embedded.length) refundCaption += '\n📷 ' + photoResult.embedded.length + ' refund photo(s) saved in the app (upload failed)';
+        // Staff refund photos first, then the product photos (Telegram max 10)
+        var refundImages = photoResult.urls.concat(refundItems.map(function(it){ return it.image; }).filter(Boolean));
         // Refunds go to the Goat_Kids (orders) bot, with the refunded items' photos —
         // no longer to the Inventory bot / delivery group.
         _sendTelegramMediaGroup(refundImages, refundCaption, refundCaption, null);
     }
 
-    function saveRefunds() { localStorage.setItem('goatRefunds_' + STATE.storeId, JSON.stringify(STATE.refundedOrders.slice(-100))); }
+    function saveRefunds() {
+        // Embedded (fallback) photos stay in Firebase only — they'd fill up this device's storage.
+        var slim = STATE.refundedOrders.slice(-100).map(function(r) {
+            if (!r.refundPhotosEmbedded || !r.refundPhotosEmbedded.length) return r;
+            var c = Object.assign({}, r); c.refundPhotosEmbeddedCount = r.refundPhotosEmbedded.length; delete c.refundPhotosEmbedded; return c;
+        });
+        try { localStorage.setItem('goatRefunds_' + STATE.storeId, JSON.stringify(slim)); }
+        catch (e) { console.warn('Refunds local save failed:', e.message); }
+    }
     function loadRefunds() { var saved = localStorage.getItem('goatRefunds_' + STATE.storeId); STATE.refundedOrders = saved ? JSON.parse(saved) : []; }
 
     function renderRefunds() {
@@ -11475,12 +11620,24 @@ function sendToTelegram(order, callback) {
             var itemsHtml = '';
             if (r.cart && r.cart.length > 0) { for (var j = 0; j < r.cart.length; j++) { var it = r.cart[j]; itemsHtml += '<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:0.15rem 0"><span>↩️ ' + it.quantity + 'x ' + it.name + ' (' + (it.size || 'N/A') + ')</span><span>' + t('restoredLbl') + '</span></div>'; } }
             var originalTotal = r.originalOrder ? r.originalOrder.total : 0;
+            var rPhotos = (r.refundPhotos || []).concat(r.refundPhotosEmbedded || []);
+            var photosHtml = '';
+            if (rPhotos.length) {
+                photosHtml = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0.4rem 0">';
+                rPhotos.forEach(function(src) {
+                    var safe = escHtml(src);
+                    photosHtml += '<img referrerpolicy="no-referrer" src="' + safe + '" onclick="window.open(this.src,\'_blank\')" style="width:56px;height:56px;object-fit:cover;border-radius:6px;cursor:pointer;border:1px solid var(--gray-light)">';
+                });
+                photosHtml += '</div>';
+            } else if (r.refundPhotosEmbeddedCount) {
+                photosHtml = '<div style="font-size:0.75rem;color:var(--gray);margin:0.3rem 0">📷 ' + r.refundPhotosEmbeddedCount + ' photo(s) saved in Firebase</div>';
+            }
             html += '<div class="order-card" style="border-left-color:var(--danger);margin-bottom:0.5rem;padding:0.75rem">' +
                 '<div style="display:flex;justify-content:space-between;align-items:center">' +
                 '<div><strong style="color:var(--danger)">💰 ' + t('refundedLbl') + '</strong><br><small>' + r.refundId + ' | ' + (r.refundDate || '') + '</small><br><small>' + t('originalOrderLbl') + ': ' + r.orderId + '</small></div>' +
                 '<div style="text-align:right"><strong style="font-size:1.1rem;color:var(--danger)">-$' + (r.refundAmount || 0).toFixed(2) + '</strong><br><small style="color:var(--gray)">' + t('originalLbl') + ': $' + originalTotal.toFixed(2) + '</small></div></div>' +
                 '<div style="background:#fff5f5;padding:0.5rem;border-radius:var(--radius);margin:0.5rem 0;font-size:0.85rem">👤 ' + (r.customerName || 'N/A') + ' | 📞 ' + (r.customerPhone || 'N/A') + '<br>📝 ' + t('reasonLbl') + ': ' + (r.refundReason || 'N/A') + '</div>' +
-                itemsHtml +
+                itemsHtml + photosHtml +
                 '<div style="display:flex;gap:0.5rem;margin-top:0.5rem"><button class="btn btn-receipt btn-small" onclick="printRefundReceipt(\'' + r.refundId + '\')" style="flex:1"><i class="fas fa-print"></i> ' + t('printReceipt') + '</button></div></div>';
         }
         container.innerHTML = html;
